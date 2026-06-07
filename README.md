@@ -1,14 +1,15 @@
 # xverif
 
-`xverif` 是面向芯片验证 debug agent 的本地工具仓库，当前包含五个互补工具：
+`xverif` 是面向芯片验证 debug agent 的本地工具仓库，当前包含六个互补工具：
 
 - [`xdebug`](xdebug/README.md)：查询设计数据库和波形数据库里的事实。
 - [`xbit`](xbit/README.md)：确定性计算 bit、literal、slice、表达式和 expected value。
 - [`xentry`](xentry/README.md)：按配置解析多拍 byte fragments，输出 raw entry 域段。
 - [`xloc`](xloc/README.md)：UVM 日志位置压缩与恢复，降低 LLM token 噪声。
 - [`xberif`](xberif/README.md)：生成和查询项目 summary cards/detail context，给 agent 提供可控上下文。
+- [`xsva`](xsva/README.md)：把 SystemVerilog Assertion 编译为结构化 IR，并生成确定性解释和可视化。
 
-简单说：`xdebug` 负责“事实从哪里来、某时刻发生了什么”，`xbit` 负责“这些值按 SystemVerilog 规则算出来到底是多少”，`xentry` 负责“这个 entry 的 bit 域段按配置切出来是什么”，`xloc` 负责“这条 log 在哪个文件的哪一行，但只在需要时才查”，`xberif` 负责“项目知识先用短卡片喂给 agent，细节按 topic 再展开”。
+简单说：`xdebug` 负责“事实从哪里来、某时刻发生了什么”，`xbit` 负责“这些值按 SystemVerilog 规则算出来到底是多少”，`xentry` 负责“这个 entry 的 bit 域段按配置切出来是什么”，`xloc` 负责“这条 log 在哪个文件的哪一行，但只在需要时才查”，`xberif` 负责“项目知识先用短卡片喂给 agent，细节按 topic 再展开”，`xsva` 负责“assertion 的 temporal 语义先降成 IR，再解释给人和 agent”。
 
 ## 工具概览
 
@@ -126,6 +127,29 @@ tools/xberif brief --mode debug
 
 完整说明见 [`xberif/README.md`](xberif/README.md)。
 
+### xsva
+
+`xsva` 是 SystemVerilog Assertion 语义编译工具。它不替代 VCS/Formal，也不让 LLM 直接自由解释 SVA 原文；它把 property/assertion 从文本 lowering 成 Surface IR、Sequence IR、Timeline IR，再从 IR 生成文本、Markdown、JSON、Mermaid 或 SVG 输出。
+
+适合的问题：
+
+- 列出 `.sva/.sv` 文件中的 property/assert/assume/cover。
+- 检查 `|->`、`|=>`、`##N`、`##[m:n]`、range suffix path expansion 等 temporal 语义。
+- 查看 local variable capture、per-attempt binding 和后续 `depends_on_captures`。
+- 对 `first_match`、`intersect` 等高级 sequence 做保守 lowering，明确 `partial/opaque/unsupported` 边界。
+- 为 SVA review、agent debug 和 golden regression 生成确定性 IR/解释。
+
+入口示例：
+
+```bash
+tools/xsva list --file xsva/tests/golden_ir/simple_impl/input.sva
+tools/xsva parse --file xsva/tests/golden_ir/ranged_delay/input.sva --property p_ranged --emit timeline-ir
+tools/xsva explain --file xsva/tests/golden_ir/path_expand/input.sva --property p_path
+tools/xsva render --file xsva/tests/golden_ir/path_expand/input.sva --property p_path --format mermaid
+```
+
+完整说明见 [`xsva/README.md`](xsva/README.md)，设计规范见 [`xsva/xsva_design_spec.md`](xsva/xsva_design_spec.md)。
+
 ## 推荐 Shell 入口
 
 为了在任意目录和非交互 shell 中稳定调用，建议把统一 wrapper 目录加入 `PATH`。示例中的 `<xverif-root>` 表示本仓库根目录，请按本机实际路径替换。
@@ -155,6 +179,7 @@ xbit conv "8'shff" --json
 xentry '{"api_version":"xentry.v1","action":"explain","config_path":"xentry/examples/entry.yaml"}'
 xloc resolve L_00000001 --map out/sim.log.xloc.jsonl
 xberif config init --kind bt
+xsva list --file xsva/tests/golden_ir/simple_impl/input.sva
 ```
 
 兼容旧入口仍保留转发：`tools/xdebug-env`、`xbit/xbit`、`xentry/xentry` 都会转到新的 `tools/<tool>`。
@@ -173,6 +198,7 @@ make -C xbit test
 make -C xentry test
 make -C xloc test
 make -C xberif test
+make -C xsva test
 
 make test
 make full-test
@@ -192,3 +218,6 @@ make full-test
 - xloc 用户文档：[`xloc/README.md`](xloc/README.md)
 - xloc agent skill：[`xloc/skill/SKILL.md`](xloc/skill/SKILL.md)
 - xberif 用户文档：[`xberif/README.md`](xberif/README.md)
+- xsva 用户文档：[`xsva/README.md`](xsva/README.md)
+- xsva agent skill：[`xsva/skill/SKILL.md`](xsva/skill/SKILL.md)
+- xsva 设计规范：[`xsva/xsva_design_spec.md`](xsva/xsva_design_spec.md)
