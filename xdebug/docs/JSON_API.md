@@ -166,6 +166,41 @@ examples/responses/<action>.basic.json
 
 传 `format:"array_indexed"` 可把 FSDB 聚合数组值转成 `elements/by_index`。传 `slice_hint` 会返回 `xbit_hints.commands[]`，用于后续确定性 bit slice。
 
+### 生成 signal.rc
+
+```json
+{
+  "api_version": "xdebug.v1",
+  "action": "rc.generate",
+  "target": {"fsdb": "waves.fsdb"},
+  "args": {
+    "config_path": "wave_view.json",
+    "rc_path": "signal.rc",
+    "include_preview": true
+  }
+}
+```
+
+`config_path` 是 JSON 配置，不是 YAML。配置里的信号用点分路径，例如 `top.u.sig[3:0]`；生成 rc 时会转换成 `/top/u/sig[3:0]`。支持 `addSignal`、`addSignal -w analog`、`addExprSig`、`addGroup/addSubGroup` 和 `userMarker`。该 action 不写 `openDirFile` / `activeDirFile`。
+slice 信号会先校验完整路径；若 FSDB signal lookup 不接受 slice，则回退校验 base signal。
+
+`addExprSig` 推荐使用 `$alias`：
+
+```json
+{
+  "name": "aw_fire",
+  "bit_size": 1,
+  "notation": "UUU",
+  "expr": "$valid & $ready",
+  "signals": {
+    "valid": "top.u_axi.awvalid",
+    "ready": "top.u_axi.awready"
+  }
+}
+```
+
+校验失败默认不写 rc；`allow_invalid:true` 才会带 warning 生成。
+
 ### 查找 inline event
 
 ```json

@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "xdebug.rc.generate.request.v1",
+  "title": "rc.generate request",
+  "type": "object",
+  "required": [
+    "api_version",
+    "action",
+    "target",
+    "args"
+  ],
+  "properties": {
+    "api_version": {
+      "type": "string",
+      "enum": [
+        "xdebug.v1"
+      ]
+    },
+    "request_id": {
+      "type": "string"
+    },
+    "action": {
+      "type": "string",
+      "enum": [
+        "rc.generate"
+      ]
+    },
+    "target": {
+      "type": "object"
+    },
+    "args": {
+      "type": "object",
+      "properties": {
+        "config_path": {
+          "type": "string"
+        },
+        "json_path": {
+          "type": "string"
+        },
+        "rc_path": {
+          "type": "string"
+        },
+        "output_path": {
+          "type": "string"
+        },
+        "allow_invalid": {
+          "type": "boolean"
+        },
+        "include_preview": {
+          "type": "boolean"
+        },
+        "max_preview_lines": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "config_path",
+        "rc_path"
+      ],
+      "additionalProperties": true
+    },
+    "limits": {
+      "type": "object"
+    },
+    "output": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": true
+}

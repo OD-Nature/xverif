@@ -114,7 +114,7 @@ Common actions
       counter.explain, sequential.update
 
   Waveform:
-      scope.list, value.at, value.batch_at, list.value_at,
+      scope.list, rc.generate, value.at, value.batch_at, list.value_at,
       event.find, event.export, verify.conditions, expr.eval_at,
       window.verify, signal.changes, signal.statistics, signal.trend,
       signal.stability, handshake.inspect, detect_anomaly

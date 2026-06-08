@@ -228,6 +228,38 @@ xdebug/examples/responses/<action>.basic.json
 
 响应里的 `xbit_hints.commands[]` 可直接交给 `tools/xbit`。
 
+### rc.generate
+
+```json
+{
+  "api_version": "xdebug.v1",
+  "action": "rc.generate",
+  "target": {"fsdb": "waves.fsdb", "auto_open": true},
+  "args": {
+    "config_path": "wave_view.json",
+    "rc_path": "signal.rc",
+    "include_preview": true
+  }
+}
+```
+
+`config_path` 指向 JSON 配置。配置中信号写点分路径，如 `top.u.sig[3:0]`；生成 rc 时转成 `/top/u/sig[3:0]`。支持普通 `addSignal`、`addSignal -w analog`、`addExprSig`、group/subgroup 和 user marker。不写 `openDirFile` / `activeDirFile`。
+
+`addExprSig` 推荐：
+
+```json
+{
+  "name": "aw_fire",
+  "bit_size": 1,
+  "notation": "UUU",
+  "expr": "$valid & $ready",
+  "signals": {
+    "valid": "top.u_axi.awvalid",
+    "ready": "top.u_axi.awready"
+  }
+}
+```
+
 ### event.find inline
 
 ```json

@@ -1515,6 +1515,29 @@
       ]
     },
     {
+      "name": "rc.generate",
+      "category": "waveform",
+      "status": "stable",
+      "requires": "waveform",
+      "handler_kind": "engine_forward",
+      "schemas": {
+        "request": "schemas/v1/actions/rc.generate.request.schema.json",
+        "response": "schemas/v1/actions/rc.generate.response.schema.json"
+      },
+      "examples": {
+        "request": [
+          "examples/requests/rc.generate.basic.json"
+        ],
+        "response": [
+          "examples/responses/rc.generate.basic.json"
+        ]
+      },
+      "required_args": [
+        "config_path",
+        "rc_path"
+      ]
+    },
+    {
       "name": "value.at",
       "category": "waveform",
       "status": "stable",

@@ -37,7 +37,7 @@ const char* fallback_help_text() {
         "Common actions\n"
         "--------------\n"
         "  actions, schema, session.open, session.doctor, trace.driver,\n"
-        "  trace.graph, trace.path, value.at, value.batch_at, event.export,\n"
+        "  trace.graph, trace.path, rc.generate, value.at, value.batch_at, event.export,\n"
         "  verify.conditions, apb.query, axi.query, axi.analysis,\n"
         "  trace.active_driver.\n\n"
         "Action choice guidance\n"

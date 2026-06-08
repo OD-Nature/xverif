@@ -941,6 +941,77 @@ xdebug 默认写结构化日志，不打印到 stdout/stderr，也不影响 JSON
 }
 ```
 
+### `rc.generate`
+
+从 JSON 配置生成 nWave `signal.rc`。当用户要把一组波形信号、analog 显示、表达式信号和 marker 固化为可加载的 rc 文件时使用。配置里的信号路径必须用点分层次，例如 `top.u.sig[3:0]`；xdebug 会用 FSDB 校验点分路径是否存在，并在 rc 中生成 `/top/u/sig[3:0]`。该 action 不写 `openDirFile` / `activeDirFile`，只生成 signal list/view 内容。
+
+```json
+{
+  "api_version": "xdebug.v1",
+  "action": "rc.generate",
+  "target": {
+    "fsdb": "waves.fsdb",
+    "auto_open": true
+  },
+  "args": {
+    "config_path": "wave_view.json",
+    "rc_path": "signal.rc",
+    "include_preview": true
+  }
+}
+```
+
+配置文件是 JSON，不是 YAML。常用结构：
+
+```json
+{
+  "file_time_scale": "1ns",
+  "window_time_unit": "1ns",
+  "cursor": "120ns",
+  "main_marker": "120ns",
+  "zoom": {"begin": "0ns", "end": "500ns"},
+  "groups": [
+    {
+      "name": "Analog",
+      "signals": [
+        {
+          "path": "top.u_adc.sample[11:0]",
+          "waveform": "analog",
+          "height": 40,
+          "analog": {"display_style": "pwl", "grid_x": true, "grid_y": true}
+        }
+      ]
+    },
+    {
+      "name": "AXI",
+      "signals": ["top.u_axi.awvalid", "top.u_axi.awready"],
+      "expr_signals": [
+        {
+          "name": "aw_fire",
+          "bit_size": 1,
+          "notation": "UUU",
+          "expr": "$valid & $ready",
+          "signals": {
+            "valid": "top.u_axi.awvalid",
+            "ready": "top.u_axi.awready"
+          }
+        }
+      ]
+    }
+  ],
+  "user_markers": [
+    {"name": "reset_done", "time": "120ns", "color": "ID_YELLOW5", "linestyle": "solid"}
+  ]
+}
+```
+
+AI 使用准则：
+
+- 先用点分 FSDB path；不要把 slash rc path 写进配置。
+- `addExprSig` 优先用 `$alias` + `signals` map，让 xdebug 能校验每个参与信号。
+- analog 用 `waveform:"analog"`，常见选项在 `analog.display_style/grid_x/grid_y/unit/options`。
+- 校验失败默认不写 rc；只有用户明确要草稿时才传 `allow_invalid:true`。
+
 ### `value.at`
 
 查询单个信号单个时间点。compact 默认 `data.value` 是字符串，`data.known` 表示是否非 X/Z。

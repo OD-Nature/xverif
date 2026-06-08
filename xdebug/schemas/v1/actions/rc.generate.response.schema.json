@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "xdebug.rc.generate.response.v1",
+  "title": "rc.generate response",
+  "type": "object",
+  "required": [
+    "api_version",
+    "ok",
+    "action",
+    "summary",
+    "data"
+  ],
+  "properties": {
+    "api_version": {
+      "type": "string",
+      "enum": [
+        "xdebug.v1"
+      ]
+    },
+    "request_id": {
+      "type": "string"
+    },
+    "ok": {
+      "type": "boolean"
+    },
+    "action": {
+      "type": "string",
+      "enum": [
+        "rc.generate"
+      ]
+    },
+    "summary": {
+      "type": "object",
+      "properties": {
+        "config_path": {
+          "type": "string"
+        },
+        "rc_path": {
+          "type": "string"
+        },
+        "group_count": {
+          "type": "integer"
+        },
+        "signal_count": {
+          "type": "integer"
+        },
+        "expr_signal_count": {
+          "type": "integer"
+        },
+        "marker_count": {
+          "type": "integer"
+        },
+        "written": {
+          "type": "boolean"
+        },
+        "valid": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": true
+    },
+    "data": {
+      "type": "object",
+      "properties": {
+        "config_path": {
+          "type": "string"
+        },
+        "rc_path": {
+          "type": "string"
+        },
+        "validation": {
+          "type": "object"
+        },
+        "rc_preview": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "warnings": {
+      "type": "array"
+    },
+    "error": {},
+    "meta": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": true
+}

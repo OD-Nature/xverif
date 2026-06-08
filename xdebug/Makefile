@@ -82,6 +82,7 @@ WAVEFORM_SRCS = src/waveform/main.cpp \
                 src/waveform/service/response_support.cpp \
                 src/waveform/service/config_support.cpp \
                 src/waveform/service/query_expression_support.cpp \
+                src/waveform/service/rc_generator.cpp \
                 src/waveform/service/session_actions.cpp \
                 src/waveform/service/protocol_actions.cpp \
                 src/waveform/service/router.cpp \
@@ -135,7 +136,7 @@ $(BUILD)/%.o: %.cpp
 	mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -DXDEBUG_INTERNAL_ENGINE -c -o $@ $<
 
-unit-test: $(CORE_OBJS) $(API_SUPPORT_OBJS) $(BUILD)/src/api/response.o $(BUILD)/src/api/text_response_builder.o $(BUILD)/src/api/xout_renderer.o
+unit-test: $(CORE_OBJS) $(API_SUPPORT_OBJS) $(BUILD)/src/api/response.o $(BUILD)/src/api/text_response_builder.o $(BUILD)/src/api/xout_renderer.o $(BUILD)/src/waveform/service/rc_generator.o
 	mkdir -p $(BUILD)/tests
 	$(CXX) $(CXXFLAGS) -o $(BUILD)/tests/test_core_types tests/unit/test_core_types.cpp $(CORE_OBJS)
 	$(BUILD)/tests/test_core_types
@@ -145,6 +146,8 @@ unit-test: $(CORE_OBJS) $(API_SUPPORT_OBJS) $(BUILD)/src/api/response.o $(BUILD)
 	$(BUILD)/tests/test_action_registry
 	$(CXX) $(CXXFLAGS) -o $(BUILD)/tests/test_text_response_builder tests/unit/test_text_response_builder.cpp $(BUILD)/src/api/text_response_builder.o $(BUILD)/src/api/xout_renderer.o
 	$(BUILD)/tests/test_text_response_builder
+	$(CXX) $(CXXFLAGS) -o $(BUILD)/tests/test_rc_generator tests/unit/test_rc_generator.cpp $(BUILD)/src/waveform/service/rc_generator.o
+	$(BUILD)/tests/test_rc_generator
 
 schema-test:
 	python3 tools/validate_schema.py schemas/v1

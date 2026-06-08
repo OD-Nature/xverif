@@ -767,6 +767,40 @@ full 或 `include_all_signals:true`：
 | --- | --- | --- |
 | `data.signals[]` | array | scope dump 字符串全集或限集 |
 
+### `rc.generate`
+
+成功：
+
+| 路径 | 类型 | 含义 |
+| --- | --- | --- |
+| `summary.config_path` | string | 输入 JSON 配置路径 |
+| `summary.rc_path` | string | 输出 rc 路径 |
+| `summary.group_count` | number | group/subgroup 总数 |
+| `summary.signal_count` | number | 普通 `addSignal` 数量 |
+| `summary.expr_signal_count` | number | `addExprSig` 数量 |
+| `summary.marker_count` | number | `userMarker` 数量 |
+| `summary.written` | boolean | 是否已写 rc |
+| `summary.valid` | boolean | 信号和时间校验是否全部通过 |
+| `summary.missing_signal_count` | number | 缺失信号数 |
+| `summary.invalid_time_count` | number | 非法时间数 |
+| `data.validation.signals[]` | array | 每个普通信号和 expr alias 信号的校验结果 |
+| `data.validation.times[]` | array | cursor/main_marker/zoom/user_marker 时间校验结果 |
+| `data.rc_preview[]` | array | `include_preview:true` 时的 rc 前若干行 |
+
+`data.validation.signals[]` item：`kind`、`owner`、`input_path`、`rc_path`、`exists`、可选 `error`。
+
+`data.validation.times[]` item：`kind`、`owner`、`spec`、`valid`、可选 `resolved_time` 或 `error`。
+
+失败：
+
+| 错误码 | 含义 |
+| --- | --- |
+| `RC_CONFIG_INVALID` | 配置文件不是 JSON、字段非法、信号路径不是点分格式、expr alias 不存在等 |
+| `RC_VALIDATION_FAILED` | FSDB 信号或时间校验失败，默认不写 rc |
+| `RC_WRITE_FAILED` | 输出路径无法创建或写入 |
+
+注意：`rc.generate` 不写 `openDirFile` / `activeDirFile`；它只生成 nWave signal list/view rc。
+
 ### `value.at`
 
 compact：

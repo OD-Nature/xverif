@@ -1,0 +1,13 @@
+{
+  "api_version": "xdebug.v1",
+  "action": "rc.generate",
+  "target": {
+    "fsdb": "waves.fsdb",
+    "auto_open": true
+  },
+  "args": {
+    "config_path": "wave_view.json",
+    "rc_path": "signal.rc",
+    "include_preview": true
+  }
+}

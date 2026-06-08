@@ -13,7 +13,7 @@ void print_actions() {
     Json actions = Json::array({
         "session.open", "session.list", "session.doctor", "session.gc", "session.kill",
         "cursor.set", "cursor.get", "cursor.list", "cursor.delete", "cursor.use",
-        "scope.list",
+        "scope.list", "rc.generate",
         "value.at", "value.batch_at",
         "list.create", "list.add", "list.delete", "list.show", "list.value_at", "list.validate", "list.diff",
         "apb.config.load", "apb.config.list", "apb.query", "apb.cursor",
@@ -31,7 +31,7 @@ void print_actions() {
     out["implemented"] = Json::array({
         "session.open", "session.list", "session.doctor", "session.gc", "session.kill",
         "cursor.set", "cursor.get", "cursor.list", "cursor.delete", "cursor.use",
-        "scope.list", "value.at", "value.batch_at",
+        "scope.list", "rc.generate", "value.at", "value.batch_at",
         "list.create", "list.add", "list.delete", "list.show", "list.value_at", "list.validate", "list.diff",
         "apb.config.load", "apb.config.list", "apb.query", "apb.cursor",
         "axi.config.load", "axi.config.list", "axi.query", "axi.cursor", "axi.analysis",
@@ -116,7 +116,7 @@ bool action_known(const std::string& action) {
     static const std::vector<std::string> implemented = {
         "session.open", "session.list", "session.doctor", "session.gc", "session.kill",
         "cursor.set", "cursor.get", "cursor.list", "cursor.delete", "cursor.use",
-        "scope.list", "value.at", "value.batch_at",
+        "scope.list", "rc.generate", "value.at", "value.batch_at",
         "list.create", "list.add", "list.delete", "list.show", "list.value_at", "list.validate", "list.diff",
         "apb.config.load", "apb.config.list", "apb.query", "apb.cursor",
         "axi.config.load", "axi.config.list", "axi.query", "axi.cursor", "axi.analysis",

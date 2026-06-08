@@ -398,6 +398,77 @@ unpacked/聚合数组可显式请求结构化显示：
 }
 ```
 
+### 生成 nWave signal.rc：rc.generate
+
+`rc.generate` 从 JSON 配置生成 nWave `signal.rc`。配置中信号路径使用点分层次，xdebug 会校验信号存在于 FSDB，并在生成 rc 时转换成 `/top/u/sig` 风格路径。该 action 只生成 signal list/view rc，不写 `openDirFile` / `activeDirFile`，打开 FSDB 仍由 nWave 会话或外部脚本负责。语法背景见 [signal_rc_syntax.md](../doc/signal_rc_syntax.md)。
+对于 `top.u.bus[15:0]` 这类 slice，校验会先查完整路径；若 FSDB 不接受 slice handle，则回退校验 base signal `top.u.bus` 是否存在。
+
+请求：
+
+```json
+{
+  "api_version": "xdebug.v1",
+  "action": "rc.generate",
+  "target": {"fsdb": "waves.fsdb", "auto_open": true},
+  "args": {
+    "config_path": "wave_view.json",
+    "rc_path": "signal.rc",
+    "include_preview": true
+  }
+}
+```
+
+配置示例：
+
+```json
+{
+  "file_time_scale": "1ns",
+  "window_time_unit": "1ns",
+  "cursor": "120ns",
+  "main_marker": "120ns",
+  "zoom": {"begin": "0ns", "end": "500ns"},
+  "groups": [
+    {
+      "name": "Analog",
+      "signals": [
+        {
+          "path": "top.u_adc.sample[11:0]",
+          "waveform": "analog",
+          "height": 40,
+          "analog": {"display_style": "pwl", "grid_x": true, "grid_y": true}
+        }
+      ]
+    },
+    {
+      "name": "AXI",
+      "subgroups": [
+        {
+          "name": "AW",
+          "signals": ["top.u_axi.awvalid", "top.u_axi.awready"],
+          "expr_signals": [
+            {
+              "name": "aw_fire",
+              "bit_size": 1,
+              "notation": "UUU",
+              "expr": "$valid & $ready",
+              "signals": {
+                "valid": "top.u_axi.awvalid",
+                "ready": "top.u_axi.awready"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "user_markers": [
+    {"name": "reset_done", "time": "120ns", "color": "ID_YELLOW5", "linestyle": "solid"}
+  ]
+}
+```
+
+校验失败时默认不写 rc；确实需要生成草稿时传 `allow_invalid:true`，并检查响应里的 `warnings` 和 `data.validation`。
+
 ### 协议与事件：event / APB / AXI
 
 `event.find` 查 first/last/all occurrence。已有 event config 时传 `name`；临时查询可直接传 `expr` + `clk` + `signals`，不会留下持久 event config：
