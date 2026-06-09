@@ -159,10 +159,16 @@ schema-test:
 	$(PYTHON) tools/validate_examples.py examples schemas/v1
 
 mcp-test:
-	PYTHONPATH=$(CURDIR)/../xdebug_mcp/src:$(CURDIR)/.. $(PYTHON) -m pytest -q $(CURDIR)/../xdebug_mcp/tests $(CURDIR)/tests/mcp -v
+	PYTHONPATH=$(CURDIR)/../xdebug_mcp/src:$(CURDIR)/.. $(PYTHON) $(CURDIR)/../xdebug_mcp/tools/test_actions.py
+
+mcp-test-schema:
+	PYTHONPATH=$(CURDIR)/../xdebug_mcp/src:$(CURDIR)/.. $(PYTHON) $(CURDIR)/../xdebug_mcp/tools/test_actions.py --schema-only
+
+mcp-test-lsf:
+	PYTHONPATH=$(CURDIR)/../xdebug_mcp/src:$(CURDIR)/.. XDEBUG_MCP_BACKEND=lsf XDEBUG_MCP_FAKE_LSF=1 $(PYTHON) $(CURDIR)/../xdebug_mcp/tools/test_actions.py --schema-only
 
 mcp-sdk-test:
-	PYTHONPATH=$(CURDIR)/../xdebug_mcp/src:$(CURDIR)/.. $(PYTHON) -m pytest -q $(CURDIR)/../xdebug_mcp/tests/test_mcp_sdk_smoke.py -v
+	PYTHONPATH=$(CURDIR)/../xdebug_mcp/src:$(CURDIR)/.. $(PYTHON) -m pytest -q $(CURDIR)/../xdebug_mcp/tests/test_mcp_sdk_smoke.py $(CURDIR)/tests/mcp -v
 
 mcp-inspect:
 	cd $(CURDIR)/.. && PYTHONPATH=xdebug_mcp/src $(PYTHON) -m mcp dev xdebug_mcp/src/xdebug_mcp/server.py
