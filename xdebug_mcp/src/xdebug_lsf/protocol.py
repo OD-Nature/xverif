@@ -90,6 +90,12 @@ class JsonlProcess:
                 return msg
         raise ProtocolError(f"timeout waiting for ready protocol {protocol}")
 
+    def request(self, obj: Json, timeout_sec: float = 30.0) -> Json:
+        """Send a JSONL request and wait for the matching response."""
+        req_id = obj.get("request_id") or obj.get("id") or "unknown"
+        self.write_json(obj)
+        return self.read_json_response(req_id, timeout_sec)
+
     def write_json(self, msg: Json) -> None:
         if self.proc.stdin is None:
             raise ProtocolError("process stdin is closed")

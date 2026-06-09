@@ -8,9 +8,7 @@ import subprocess
 import time
 from typing import Any, Dict, List, Optional
 
-from xdebug_lsf.bsub import BsubOptions, BsubRunner
-from xdebug_lsf.router_client import RouterClient
-from xdebug_lsf.session_launcher import SessionInfo, SessionLauncher
+from .session_manager import McpSessionManager
 
 
 Json = Dict[str, Any]
@@ -608,7 +606,11 @@ class LsfBackend:
 
 
 class XDebugMcpBackend:
-    """Unified backend that dispatches to direct or LSF based on mode."""
+    """Unified backend using McpSessionManager for loop sessions.
+
+    - session_open / query / close  → McpSessionManager (direct or LSF via launcher)
+    - request (xdebug_direct_request) → one-shot XdebugRunner for backward compat
+    """
 
     def __init__(
         self,
@@ -616,39 +618,30 @@ class XDebugMcpBackend:
         runner: Optional[XdebugRunner] = None,
     ) -> None:
         self.mode = mode or os.environ.get("XDEBUG_MCP_BACKEND", "direct")
-        self.direct = DirectBackend(runner)
-        self.lsf = LsfBackend() if self.mode == "lsf" else None
+        self._runner = runner or XdebugRunner()
+        self._sessions = McpSessionManager(mode=self.mode)
+        # Backward compat: old server_legacy checks self.lsf
+        self.lsf = self._sessions if self.mode == "lsf" else None
+        self.direct = DirectBackend(self._runner)
 
     def ping(self) -> str:
-        if self.lsf:
-            return self.lsf.ping()
-        return self.direct.ping()
+        return "pong"
 
     def request(self, request: Json, output_format: str = "json") -> Any:
-        """Run a raw xdebug request (legacy compatibility — always uses direct backend)."""
-        return self.direct.request(request, output_format)
+        """Raw one-shot xdebug request (legacy compatibility)."""
+        return DirectBackend(self._runner).request(request, output_format)
 
-    def session_open(self, **kwargs: Any) -> Json:
-        if self.lsf:
-            return self.lsf.session_open(**kwargs)
-        return self.direct.session_open(**kwargs)
+    def session_open(self, name: str, **kwargs: Any) -> Json:
+        return self._sessions.open_session(name=name, **kwargs)
 
     def session_list(self, **kwargs: Any) -> Json:
-        if self.lsf:
-            return self.lsf.session_list(**kwargs)
-        return self.direct.session_list(**kwargs)
+        return self._sessions.list_sessions()
 
     def session_use(self, key: str) -> Json:
-        if self.lsf:
-            return self.lsf.session_use(key)
-        return self.direct.session_use(key)
+        return self._sessions.use_session(key)
 
     def session_close(self, key: str) -> Json:
-        if self.lsf:
-            return self.lsf.session_close(key)
-        return self.direct.session_close(key)
+        return self._sessions.close_session(key)
 
     def query(self, **kwargs: Any) -> Any:
-        if self.lsf:
-            return self.lsf.query(**kwargs)
-        return self.direct.query(**kwargs)
+        return self._sessions.query(**kwargs)
