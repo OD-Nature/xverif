@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
 import queue
+import signal
 import subprocess
 import threading
 import time
@@ -42,6 +44,7 @@ class JsonlProcess:
             stderr=subprocess.PIPE,
             text=True,
             bufsize=1,
+            start_new_session=True,  # isolate process group for clean kill of children
         )
         item = cls(args, proc)
         item._stdout_thread = threading.Thread(target=item._read_stdout, daemon=True)
@@ -130,11 +133,19 @@ class JsonlProcess:
         if self.proc.poll() is not None:
             self._close_pipes()
             return
-        self.proc.terminate()
+        # Kill the entire process group so that child engines (design/waveform)
+        # are also terminated, avoiding zombie orphan processes.
+        try:
+            os.killpg(os.getpgid(self.proc.pid), __import__("signal").SIGTERM)
+        except (ProcessLookupError, OSError):
+            self.proc.terminate()
         try:
             self.proc.wait(timeout=timeout_sec)
         except subprocess.TimeoutExpired:
-            self.proc.kill()
+            try:
+                os.killpg(os.getpgid(self.proc.pid), __import__("signal").SIGKILL)
+            except (ProcessLookupError, OSError):
+                self.proc.kill()
             self.proc.wait(timeout=timeout_sec)
         self._close_pipes()
 
