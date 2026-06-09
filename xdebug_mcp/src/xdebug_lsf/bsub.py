@@ -1,4 +1,4 @@
-"""bsub -Is command construction and startup."""
+"""bsub -I command construction and startup."""
 
 from __future__ import annotations
 

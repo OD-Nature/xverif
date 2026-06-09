@@ -94,7 +94,7 @@ direct 和 LSF 共用 `XdebugLoopSession`（session 生命周期、request/respo
 | --- | --- |
 | `XDEBUG_MCP_BACKEND` | `direct`（默认）或 `lsf` |
 | `XDEBUG_LSF_BSUB` | 覆盖 `bsub` 命令（默认 `bsub`） |
-| `XDEBUG_LSF_ROUTER_QUEUE` / `XDEBUG_LSF_SESSION_QUEUE` | router/session 的 LSF 队列（默认 `interactive`） |
+| `XDEBUG_LSF_SESSION_QUEUE` | session job 的 LSF 队列（默认 `interactive`） |
 | `XDEBUG_LSF_BKILL` | 覆盖 `bkill` 命令 |
 | `XDEBUG_MCP_FAKE_LSF=1` | 本地测试用 fake LSF runner |
 | `XDEBUG_MCP_TIMEOUT_SEC` | direct one-shot 请求超时 |
@@ -108,7 +108,7 @@ make -C xdebug PYTHON=python3 mcp-test
 PYTHON=python3 XDEBUG_MCP_FAKE_LSF=1 tools/xdebug-lsf-doctor --fake
 ```
 
-测试里的 fake LSF 不需要真实 `bsub`，但会覆盖 ready 噪声、router 恢复、多 session 并行、同 session 串行、session crash 隔离和 xout/json/envelope 返回。
+测试里的 fake LSF 不需要真实 `bsub`，但会覆盖 ready 噪声、多 session 并行、同 session 串行、session crash 隔离和 xout/json/envelope 返回。
 
 ## 配置 Claude Code MCP
 
@@ -139,7 +139,7 @@ PYTHON=python3 XDEBUG_MCP_FAKE_LSF=1 tools/xdebug-lsf-doctor --fake
 - `<verdi-install>`：Synopsys Verdi 安装根目录（`XDEBUG_MCP_BACKEND=lsf` 时不需要）
 
 `XDEBUG_MCP_BACKEND` 可选值：
-- `direct`：本机直接调用 `tools/xdebug --json -`
-- `lsf`：通过 bsub 在 LSF 集群内启动 router + per-session TCP endpoint
+- `direct`：本机启动 `tools/xdebug --stdio-loop`
+- `lsf`：通过 `bsub -I tools/xdebug --stdio-loop` 提交到 LSF
 
 Claude Code 在启动时会自动加载项目根目录下的 `.mcp.json`，无需额外配置。
