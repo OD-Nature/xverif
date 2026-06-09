@@ -7,7 +7,14 @@
 
 direct 和 LSF 共用 `XdebugLoopSession`，只在 `Launcher` 层分离。每 session 独立进程，同 session 串行（request_lock），多 session 可并行。
 
-**依赖**: Python 3.11+，`pip install mcp[cli]`（FastMCP + MCP Inspector）。
+## 环境要求
+
+| 组件 | 最低版本 | 说明 |
+|------|----------|------|
+| Verdi / VCS | V-2023.12-SP2 及以上 | 需 NPI 库，设置 `VERDI_HOME` |
+| GCC | 5.0+ | 编译 xdebug C++ 代码 |
+| Python | 3.11+ | 推荐 conda 环境 |
+| pip | `mcp[cli]` | FastMCP + MCP Inspector |
 
 ## 入口
 
@@ -16,11 +23,9 @@ tools/xdebug-mcp
 tools/xdebug-lsf-doctor
 ```
 
-建议使用 Python 3.11+：
-
 ```bash
-PYTHON=python3 tools/xdebug-mcp
-PYTHON=python3 tools/xdebug-lsf-doctor
+tools/xdebug-mcp
+tools/xdebug-lsf-doctor
 ```
 
 ## MCP 配置
