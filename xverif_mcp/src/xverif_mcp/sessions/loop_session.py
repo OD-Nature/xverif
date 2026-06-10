@@ -95,7 +95,7 @@ class XdebugLoopSession:
                        terminal_source=source, backend_response=backend_response,
                        cleanup=cleanup or self.last_cleanup,
                        recovery_hint={
-                           "action": "xverif_debug_session_open",
+                           "action": "xverif_session_open",
                            "reason": "session is no longer reusable; reopen explicitly",
                        })
 

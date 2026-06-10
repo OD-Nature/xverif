@@ -145,7 +145,7 @@ def _open_close(fn):
 async def _open_session(session, cfg):
     """Open session using config."""
     sn = cfg["session_name"]
-    rv = await session.call_tool("xverif_debug_session_open", {
+    rv = await session.call_tool("xverif_session_open", {
         "name": sn, "daidir": cfg["daidir"], "fsdb": cfg["fsdb"], "reuse": True,
     })
     d = json.loads(rv.content[0].text)
@@ -158,7 +158,7 @@ async def _open_session(session, cfg):
 
 
 async def _close_session(session, cfg):
-    await session.call_tool("xverif_debug_session_close", {"name": cfg["session_name"]})
+    await session.call_tool("xverif_session_close", {"name": cfg["session_name"]})
 
 
 # ---------------------------------------------------------------------------
@@ -174,7 +174,7 @@ async def test_all_schemas(session: ClientSession) -> tuple[int, int]:
 
     for kind in ["request", "response"]:
         for action in ALL_ACTIONS:
-            result = await session.call_tool("xverif_debug_schema", {
+            result = await session.call_tool("xverif_debug_get_schema", {
                 "action": action, "kind": kind,
             })
             data = json.loads(result.content[0].text)

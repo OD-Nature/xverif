@@ -26,18 +26,18 @@ Other tools (xbit, xentry, xloc, xberif, xsva) are stateless CLI adapters.
 
 Typical workflow:
 1. Call xverif_tools to discover available tools.
-2. For debug queries: xverif_debug_session_open → xverif_debug_query.
+2. For debug queries: xverif_session_open → xverif_debug_query.
 3. For stateless queries: call the tool directly (e.g., xverif_bit_eval).
 
 If xverif_debug_query returns error.code=SESSION_LOST:
   - the MCP server has already terminated the broken subprocess / LSF job
   - the session mapping has been evicted
-  - the agent must explicitly call xverif_debug_session_open before retrying
+  - the agent must explicitly call xverif_session_open before retrying
 No automatic retry or reopen is performed by the server.
 """
 
 mcp = FastMCP(
-    name="xverif-mcp",
+    name="xverif",
     instructions=INSTRUCTIONS,
 )
 
@@ -65,7 +65,7 @@ def xverif_ping() -> str:
 
 
 @mcp.tool()
-def xverif_debug_actions() -> dict:
+def xverif_debug_list_actions() -> dict:
     """Return the xdebug action catalog.
 
     Call this before xverif_debug_query when you are unsure which action to use.
@@ -75,7 +75,7 @@ def xverif_debug_actions() -> dict:
 
 
 @mcp.tool()
-def xverif_debug_schema(action: str, kind: str = "request") -> dict:
+def xverif_debug_get_schema(action: str, kind: str = "request") -> dict:
     """Return an action-specific xdebug JSON schema.
 
     Args:
@@ -88,7 +88,7 @@ def xverif_debug_schema(action: str, kind: str = "request") -> dict:
 
 
 @mcp.tool()
-def xverif_debug_request(request: dict, output_format: str = "json") -> dict:
+def xverif_debug_raw_request(request: dict, output_format: str = "json") -> dict:
     """Run a complete xdebug JSON request (one-shot, no session).
 
     This tool does NOT use sessions. For session-based queries, use
@@ -104,7 +104,7 @@ def xverif_debug_request(request: dict, output_format: str = "json") -> dict:
 
 
 @mcp.tool()
-def xverif_debug_session_open(
+def xverif_session_open(
     name: str,
     daidir: Optional[str] = None,
     fsdb: Optional[str] = None,
@@ -137,7 +137,7 @@ def xverif_debug_session_open(
 
 
 @mcp.tool()
-def xverif_debug_session_list(include_native: bool = False) -> dict:
+def xverif_session_list(include_native: bool = False) -> dict:
     """List xdebug sessions managed by this MCP server.
 
     Args:
@@ -147,14 +147,14 @@ def xverif_debug_session_list(include_native: bool = False) -> dict:
 
 
 @mcp.tool()
-def xverif_debug_session_use(
+def xverif_session_use(
     name: Optional[str] = None,
     session_id: Optional[str] = None,
 ) -> dict:
     """Set the default xdebug session used by xverif_debug_query.
 
     Args:
-        name: Session alias previously opened with xverif_debug_session_open.
+        name: Session alias previously opened with xverif_session_open.
         session_id: Raw session ID string.
     """
     key = session_id or name
@@ -164,7 +164,7 @@ def xverif_debug_session_use(
 
 
 @mcp.tool()
-def xverif_debug_session_close(
+def xverif_session_close(
     name: Optional[str] = None,
     session_id: Optional[str] = None,
 ) -> dict:
@@ -196,9 +196,9 @@ def xverif_debug_query(
     """Run an xdebug action through a loop session.
 
     Recommended workflow:
-    1. Call xverif_debug_actions if you don't know available actions.
-    2. Call xverif_debug_schema(action) if you need the exact request shape.
-    3. Call xverif_debug_session_open first for FSDB/daidir queries.
+    1. Call xverif_debug_list_actions if you don't know available actions.
+    2. Call xverif_debug_get_schema(action) if you need the exact request shape.
+    3. Call xverif_session_open first for FSDB/daidir queries.
     4. Call xverif_debug_query with action + args.
 
     Args:
@@ -233,7 +233,7 @@ def xverif_debug_query(
 
 
 @mcp.tool()
-def xverif_bit_conv(value: str, width: int = 0, signed: bool = False,
+def xverif_bit_convert(value: str, width: int = 0, signed: bool = False,
                      unsigned: bool = False, state: str = "2",
                      output_format: str = "json") -> Any:
     """Convert a value between radices and SV literal formats.
@@ -445,7 +445,7 @@ def xverif_context_status(project_root: Optional[str] = None,
 
 
 @mcp.tool()
-def xverif_context_list_topics(project_root: Optional[str] = None,
+def xverif_context_topics(project_root: Optional[str] = None,
                                 output_format: str = "json") -> Any:
     """List all known context topics."""
     return context_list_topics(project_root=project_root, output_format=output_format)
@@ -465,7 +465,7 @@ def xverif_context_brief(mode: str = "debug", project_root: Optional[str] = None
 
 
 @mcp.tool()
-def xverif_context_get(topic: str, detail: bool = False,
+def xverif_context_topic(topic: str, detail: bool = False,
                         project_root: Optional[str] = None,
                         output_format: str = "xout") -> Any:
     """Get a topic summary card, optionally with full detail.
@@ -480,7 +480,7 @@ def xverif_context_get(topic: str, detail: bool = False,
 
 
 @mcp.tool()
-def xverif_context_detail(topic: str, project_root: Optional[str] = None,
+def xverif_context_topic_detail(topic: str, project_root: Optional[str] = None,
                            output_format: str = "markdown") -> Any:
     """Get the full detail markdown for a topic.
 
@@ -500,19 +500,19 @@ def xverif_context_validate(project_root: Optional[str] = None,
 
 
 @mcp.tool()
-def xverif_context_config_init(kind: str, project_root: Optional[str] = None) -> Any:
+def xverif_context_init_config(kind: str, project_root: Optional[str] = None) -> Any:
     """Initialize xberif kind.toml config. Requires XVERIF_MCP_ENABLE_WRITE=1."""
     return context_config_init(kind, project_root=project_root)
 
 
 @mcp.tool()
-def xverif_context_init(model: str, project_root: Optional[str] = None) -> Any:
+def xverif_context_init_project(model: str, project_root: Optional[str] = None) -> Any:
     """Initialize xberif project structure. Requires XVERIF_MCP_ENABLE_WRITE=1."""
     return context_init(model, project_root=project_root)
 
 
 @mcp.tool()
-def xverif_context_repair(project_root: Optional[str] = None) -> Any:
+def xverif_context_repair_index(project_root: Optional[str] = None) -> Any:
     """Repair xberif catalog index. Requires XVERIF_MCP_ENABLE_WRITE=1."""
     return context_repair(project_root=project_root)
 
@@ -523,7 +523,7 @@ def xverif_context_repair(project_root: Optional[str] = None) -> Any:
 
 
 @mcp.tool()
-def xverif_sva_list(file: str, output_format: str = "json") -> Any:
+def xverif_sva_list_properties(file: str, output_format: str = "json") -> Any:
     """List all property/assertion names in a SVA source file.
 
     Args:
@@ -533,7 +533,7 @@ def xverif_sva_list(file: str, output_format: str = "json") -> Any:
 
 
 @mcp.tool()
-def xverif_sva_scan(file: str, output_format: str = "json") -> Any:
+def xverif_sva_scan_constructs(file: str, output_format: str = "json") -> Any:
     """Scan syntax constructs used in a SVA source file.
 
     Args:
@@ -543,7 +543,7 @@ def xverif_sva_scan(file: str, output_format: str = "json") -> Any:
 
 
 @mcp.tool()
-def xverif_sva_parse(file: str, property: str, emit: str = "timeline-ir",
+def xverif_sva_parse_property(file: str, property: str, emit: str = "timeline-ir",
                       output_format: str = "json") -> Any:
     """Parse a SVA property into IR.
 
@@ -556,7 +556,7 @@ def xverif_sva_parse(file: str, property: str, emit: str = "timeline-ir",
 
 
 @mcp.tool()
-def xverif_sva_explain(file: str, property: str, strict: bool = False,
+def xverif_sva_explain_property(file: str, property: str, strict: bool = False,
                         output_format: str = "xout") -> Any:
     """Generate a human-readable explanation of a SVA property.
 
@@ -570,7 +570,7 @@ def xverif_sva_explain(file: str, property: str, strict: bool = False,
 
 
 @mcp.tool()
-def xverif_sva_render(file: str, property: str, format: str = "mermaid",
+def xverif_sva_render_property(file: str, property: str, format: str = "mermaid",
                        output_format: str = "xout") -> Any:
     """Render a SVA property as mermaid or SVG.
 
@@ -598,25 +598,25 @@ TOOL_CATALOG = [
      "stateful": False, "requires_session": False,
      "description": "Get help for a specific tool."},
     # debug
-    {"name": "xverif_debug_actions", "category": "debug", "backend": "xdebug",
+    {"name": "xverif_debug_list_actions", "category": "debug", "backend": "xdebug",
      "stateful": False, "requires_session": False,
      "description": "Return the xdebug action catalog."},
-    {"name": "xverif_debug_schema", "category": "debug", "backend": "xdebug",
+    {"name": "xverif_debug_get_schema", "category": "debug", "backend": "xdebug",
      "stateful": False, "requires_session": False,
      "description": "Return an action-specific xdebug JSON schema."},
-    {"name": "xverif_debug_request", "category": "debug", "backend": "xdebug",
+    {"name": "xverif_debug_raw_request", "category": "debug", "backend": "xdebug",
      "stateful": False, "requires_session": False,
      "description": "Run a complete xdebug JSON request (one-shot, no session)."},
-    {"name": "xverif_debug_session_open", "category": "debug", "backend": "xdebug",
+    {"name": "xverif_session_open", "category": "debug", "backend": "xdebug",
      "stateful": True, "requires_session": True,
      "description": "Open a loop-backed xdebug session (direct or LSF)."},
-    {"name": "xverif_debug_session_list", "category": "debug", "backend": "xdebug",
+    {"name": "xverif_session_list", "category": "debug", "backend": "xdebug",
      "stateful": True, "requires_session": False,
      "description": "List xdebug sessions managed by this server."},
-    {"name": "xverif_debug_session_use", "category": "debug", "backend": "xdebug",
+    {"name": "xverif_session_use", "category": "debug", "backend": "xdebug",
      "stateful": True, "requires_session": False,
      "description": "Set the default xdebug session."},
-    {"name": "xverif_debug_session_close", "category": "debug", "backend": "xdebug",
+    {"name": "xverif_session_close", "category": "debug", "backend": "xdebug",
      "stateful": True, "requires_session": True,
      "description": "Close and cleanup an xdebug session."},
     {"name": "xverif_debug_query", "category": "debug", "backend": "xdebug",
@@ -626,17 +626,17 @@ TOOL_CATALOG = [
     {"name": "xverif_wave_value_at", "category": "debug", "backend": "xdebug",
      "stateful": True, "requires_session": True,
      "description": "Get signal value at a time (alias for value.at)."},
-    {"name": "xverif_wave_signal_changes", "category": "debug", "backend": "xdebug",
+    {"name": "xverif_wave_changes", "category": "debug", "backend": "xdebug",
      "stateful": True, "requires_session": True,
      "description": "Get all value changes in a time window (alias for signal.changes)."},
-    {"name": "xverif_wave_rc_generate", "category": "debug", "backend": "xdebug",
+    {"name": "xverif_wave_generate_rc", "category": "debug", "backend": "xdebug",
      "stateful": True, "requires_session": True,
      "description": "Generate RC from config (alias for rc.generate)."},
     {"name": "xverif_design_trace_driver", "category": "debug", "backend": "xdebug",
      "stateful": True, "requires_session": True,
      "description": "Trace the driver of a signal (alias for trace.driver)."},
     # bit
-    {"name": "xverif_bit_conv", "category": "bit", "backend": "xbit",
+    {"name": "xverif_bit_convert", "category": "bit", "backend": "xbit",
      "stateful": False, "requires_session": False,
      "description": "Convert a value between radices and SV literal formats."},
     {"name": "xverif_bit_eval", "category": "bit", "backend": "xbit",
@@ -675,44 +675,44 @@ TOOL_CATALOG = [
     {"name": "xverif_context_status", "category": "context", "backend": "xberif",
      "stateful": False, "requires_session": False,
      "description": "Check xberif project status."},
-    {"name": "xverif_context_list_topics", "category": "context", "backend": "xberif",
+    {"name": "xverif_context_topics", "category": "context", "backend": "xberif",
      "stateful": False, "requires_session": False,
      "description": "List all known context topics."},
     {"name": "xverif_context_brief", "category": "context", "backend": "xberif",
      "stateful": False, "requires_session": False,
      "description": "Generate a context summary brief."},
-    {"name": "xverif_context_get", "category": "context", "backend": "xberif",
+    {"name": "xverif_context_topic", "category": "context", "backend": "xberif",
      "stateful": False, "requires_session": False,
      "description": "Get a topic summary card, optionally with detail."},
-    {"name": "xverif_context_detail", "category": "context", "backend": "xberif",
+    {"name": "xverif_context_topic_detail", "category": "context", "backend": "xberif",
      "stateful": False, "requires_session": False,
      "description": "Get the full detail markdown for a topic."},
     {"name": "xverif_context_validate", "category": "context", "backend": "xberif",
      "stateful": False, "requires_session": False,
      "description": "Validate project cards and detail files."},
-    {"name": "xverif_context_config_init", "category": "context", "backend": "xberif",
+    {"name": "xverif_context_init_config", "category": "context", "backend": "xberif",
      "stateful": False, "requires_session": False,
      "description": "Initialize xberif kind.toml config (write)."},
-    {"name": "xverif_context_init", "category": "context", "backend": "xberif",
+    {"name": "xverif_context_init_project", "category": "context", "backend": "xberif",
      "stateful": False, "requires_session": False,
      "description": "Initialize xberif project structure (write)."},
-    {"name": "xverif_context_repair", "category": "context", "backend": "xberif",
+    {"name": "xverif_context_repair_index", "category": "context", "backend": "xberif",
      "stateful": False, "requires_session": False,
      "description": "Repair xberif catalog index (write)."},
     # sva
-    {"name": "xverif_sva_list", "category": "sva", "backend": "xsva",
+    {"name": "xverif_sva_list_properties", "category": "sva", "backend": "xsva",
      "stateful": False, "requires_session": False,
      "description": "List all property/assertion names in a SVA file."},
-    {"name": "xverif_sva_scan", "category": "sva", "backend": "xsva",
+    {"name": "xverif_sva_scan_constructs", "category": "sva", "backend": "xsva",
      "stateful": False, "requires_session": False,
      "description": "Scan syntax constructs in a SVA file."},
-    {"name": "xverif_sva_parse", "category": "sva", "backend": "xsva",
+    {"name": "xverif_sva_parse_property", "category": "sva", "backend": "xsva",
      "stateful": False, "requires_session": False,
      "description": "Parse a SVA property into IR."},
-    {"name": "xverif_sva_explain", "category": "sva", "backend": "xsva",
+    {"name": "xverif_sva_explain_property", "category": "sva", "backend": "xsva",
      "stateful": False, "requires_session": False,
      "description": "Generate a human-readable SVA property explanation."},
-    {"name": "xverif_sva_render", "category": "sva", "backend": "xsva",
+    {"name": "xverif_sva_render_property", "category": "sva", "backend": "xsva",
      "stateful": False, "requires_session": False,
      "description": "Render a SVA property as mermaid or SVG."},
 ]
@@ -770,7 +770,7 @@ def xverif_wave_value_at(signal: str, time: str = "0ns",
 
 
 @mcp.tool()
-def xverif_wave_signal_changes(signal: str, begin: str = "0ns",
+def xverif_wave_changes(signal: str, begin: str = "0ns",
                                 end: str = "100ns",
                                 session: Optional[str] = None,
                                 output_format: str = "xout") -> Any:
@@ -789,7 +789,7 @@ def xverif_wave_signal_changes(signal: str, begin: str = "0ns",
 
 
 @mcp.tool()
-def xverif_wave_rc_generate(config_path: str, rc_path: str,
+def xverif_wave_generate_rc(config_path: str, rc_path: str,
                               session: Optional[str] = None,
                               output_format: str = "json") -> Any:
     """Generate recovery context from config (alias for rc.generate).

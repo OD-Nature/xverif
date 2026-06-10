@@ -52,19 +52,19 @@ async def test_mcp_tools_list():
             names = {tool.name for tool in tools.tools}
             assert "xverif_ping" in names
             assert "xverif_debug_query" in names
-            assert "xverif_debug_session_open" in names
-            assert "xverif_debug_actions" in names
-            assert "xverif_debug_schema" in names
-            assert "xverif_debug_session_list" in names
-            assert "xverif_debug_session_use" in names
-            assert "xverif_debug_session_close" in names
-            assert "xverif_debug_request" in names
+            assert "xverif_session_open" in names
+            assert "xverif_debug_list_actions" in names
+            assert "xverif_debug_get_schema" in names
+            assert "xverif_session_list" in names
+            assert "xverif_session_use" in names
+            assert "xverif_session_close" in names
+            assert "xverif_debug_raw_request" in names
             assert "xverif_tools" in names
             assert "xverif_bit_eval" in names
             assert "xverif_entry_decode" in names
             assert "xverif_loc_resolve" in names
             assert "xverif_context_status" in names
-            assert "xverif_sva_explain" in names
+            assert "xverif_sva_explain_property" in names
 
 
 @pytest.mark.asyncio
