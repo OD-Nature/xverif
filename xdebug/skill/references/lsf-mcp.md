@@ -69,12 +69,12 @@ session_close("case_a")→ 发送 session.close + stdio.quit
 
 ```bash
 # fake LSF 本地自检
-PYTHONPATH=xverif_mcp/src XVERIF_MCP_FAKE_LSF=1 python -m xdebug_lsf.doctor --fake
+PYTHONPATH=xverif_mcp/src XVERIF_MCP_FAKE_LSF=1 python -m xverif_mcp.lsf.doctor --fake
 
 # 真实 LSF 自检
-PYTHONPATH=xverif_mcp/src python -m xdebug_lsf.doctor
+PYTHONPATH=xverif_mcp/src python -m xverif_mcp.lsf.doctor
 
 # 全量 action 测试
 PYTHONPATH=xverif_mcp/src XVERIF_MCP_BACKEND=lsf XVERIF_MCP_FAKE_LSF=1 \
-  python xdebug_mcp/tools/test_actions.py
+  python xverif_mcp/tools/test_actions.py
 ```
