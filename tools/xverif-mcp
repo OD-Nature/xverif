@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+root="$(cd "$script_dir/.." && pwd)"
+export XVERIF_HOME="${XVERIF_HOME:-$root}"
+export PYTHONPATH="$root/xverif_mcp/src:$root:${PYTHONPATH:-}"
+
+"${PYTHON:-python3}" -m xverif_mcp.server "$@"
