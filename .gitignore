@@ -1,5 +1,6 @@
 .agents/
 .codex/
+**/.xeda_runner/
 
 # Legacy unowned test and regression assets
 test/
