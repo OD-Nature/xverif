@@ -560,6 +560,245 @@ def xverif_sva_render(file: str, property: str, format: str = "mermaid",
 
 
 # ---------------------------------------------------------------------------
+# Tool catalog (meta-tools for AI discovery)
+# ---------------------------------------------------------------------------
+
+TOOL_CATALOG = [
+    {"name": "xverif_ping", "category": "common", "backend": "builtin",
+     "stateful": False, "requires_session": False,
+     "description": "Ping the xverif MCP server."},
+    {"name": "xverif_tools", "category": "common", "backend": "builtin",
+     "stateful": False, "requires_session": False,
+     "description": "List all available xverif tools."},
+    {"name": "xverif_tool_help", "category": "common", "backend": "builtin",
+     "stateful": False, "requires_session": False,
+     "description": "Get help for a specific tool."},
+    # debug
+    {"name": "xverif_debug_actions", "category": "debug", "backend": "xdebug",
+     "stateful": False, "requires_session": False,
+     "description": "Return the xdebug action catalog."},
+    {"name": "xverif_debug_schema", "category": "debug", "backend": "xdebug",
+     "stateful": False, "requires_session": False,
+     "description": "Return an action-specific xdebug JSON schema."},
+    {"name": "xverif_debug_request", "category": "debug", "backend": "xdebug",
+     "stateful": False, "requires_session": False,
+     "description": "Run a complete xdebug JSON request (one-shot, no session)."},
+    {"name": "xverif_debug_session_open", "category": "debug", "backend": "xdebug",
+     "stateful": True, "requires_session": True,
+     "description": "Open a loop-backed xdebug session (direct or LSF)."},
+    {"name": "xverif_debug_session_list", "category": "debug", "backend": "xdebug",
+     "stateful": True, "requires_session": False,
+     "description": "List xdebug sessions managed by this server."},
+    {"name": "xverif_debug_session_use", "category": "debug", "backend": "xdebug",
+     "stateful": True, "requires_session": False,
+     "description": "Set the default xdebug session."},
+    {"name": "xverif_debug_session_close", "category": "debug", "backend": "xdebug",
+     "stateful": True, "requires_session": True,
+     "description": "Close and cleanup an xdebug session."},
+    {"name": "xverif_debug_query", "category": "debug", "backend": "xdebug",
+     "stateful": True, "requires_session": True,
+     "description": "Run an xdebug action through a loop session."},
+    # wave aliases
+    {"name": "xverif_wave_value_at", "category": "debug", "backend": "xdebug",
+     "stateful": True, "requires_session": True,
+     "description": "Get signal value at a time (alias for value.at)."},
+    {"name": "xverif_wave_signal_changes", "category": "debug", "backend": "xdebug",
+     "stateful": True, "requires_session": True,
+     "description": "Get all value changes in a time window (alias for signal.changes)."},
+    {"name": "xverif_wave_rc_generate", "category": "debug", "backend": "xdebug",
+     "stateful": True, "requires_session": True,
+     "description": "Generate RC from config (alias for rc.generate)."},
+    {"name": "xverif_design_trace_driver", "category": "debug", "backend": "xdebug",
+     "stateful": True, "requires_session": True,
+     "description": "Trace the driver of a signal (alias for trace.driver)."},
+    # bit
+    {"name": "xverif_bit_conv", "category": "bit", "backend": "xbit",
+     "stateful": False, "requires_session": False,
+     "description": "Convert a value between radices and SV literal formats."},
+    {"name": "xverif_bit_eval", "category": "bit", "backend": "xbit",
+     "stateful": False, "requires_session": False,
+     "description": "Evaluate a deterministic bit/expression calculation."},
+    {"name": "xverif_bit_slice", "category": "bit", "backend": "xbit",
+     "stateful": False, "requires_session": False,
+     "description": "Extract a bit slice from a value."},
+    {"name": "xverif_bit_check", "category": "bit", "backend": "xbit",
+     "stateful": False, "requires_session": False,
+     "description": "Check a bit expression against expected values."},
+    # entry
+    {"name": "xverif_entry_decode", "category": "entry", "backend": "xentry",
+     "stateful": False, "requires_session": False,
+     "description": "Decode multi-beat fragments into raw field slices."},
+    {"name": "xverif_entry_explain", "category": "entry", "backend": "xentry",
+     "stateful": False, "requires_session": False,
+     "description": "Explain field layout defined by an entry config."},
+    {"name": "xverif_entry_validate", "category": "entry", "backend": "xentry",
+     "stateful": False, "requires_session": False,
+     "description": "Validate an entry config and optionally its input."},
+    # loc
+    {"name": "xverif_loc_resolve", "category": "loc", "backend": "xloc",
+     "stateful": False, "requires_session": False,
+     "description": "Resolve a loc_id to source file:line."},
+    {"name": "xverif_loc_context", "category": "loc", "backend": "xloc",
+     "stateful": False, "requires_session": False,
+     "description": "Resolve a loc_id and show surrounding source context."},
+    {"name": "xverif_loc_stats", "category": "loc", "backend": "xloc",
+     "stateful": False, "requires_session": False,
+     "description": "Count loc_id frequency in a simulation log."},
+    {"name": "xverif_loc_annotate", "category": "loc", "backend": "xloc",
+     "stateful": False, "requires_session": False,
+     "description": "Insert source location hints into a simulation log."},
+    # context
+    {"name": "xverif_context_status", "category": "context", "backend": "xberif",
+     "stateful": False, "requires_session": False,
+     "description": "Check xberif project status."},
+    {"name": "xverif_context_list_topics", "category": "context", "backend": "xberif",
+     "stateful": False, "requires_session": False,
+     "description": "List all known context topics."},
+    {"name": "xverif_context_brief", "category": "context", "backend": "xberif",
+     "stateful": False, "requires_session": False,
+     "description": "Generate a context summary brief."},
+    {"name": "xverif_context_get", "category": "context", "backend": "xberif",
+     "stateful": False, "requires_session": False,
+     "description": "Get a topic summary card, optionally with detail."},
+    {"name": "xverif_context_detail", "category": "context", "backend": "xberif",
+     "stateful": False, "requires_session": False,
+     "description": "Get the full detail markdown for a topic."},
+    {"name": "xverif_context_validate", "category": "context", "backend": "xberif",
+     "stateful": False, "requires_session": False,
+     "description": "Validate project cards and detail files."},
+    {"name": "xverif_context_config_init", "category": "context", "backend": "xberif",
+     "stateful": False, "requires_session": False,
+     "description": "Initialize xberif kind.toml config (write)."},
+    {"name": "xverif_context_init", "category": "context", "backend": "xberif",
+     "stateful": False, "requires_session": False,
+     "description": "Initialize xberif project structure (write)."},
+    {"name": "xverif_context_repair", "category": "context", "backend": "xberif",
+     "stateful": False, "requires_session": False,
+     "description": "Repair xberif catalog index (write)."},
+    # sva
+    {"name": "xverif_sva_list", "category": "sva", "backend": "xsva",
+     "stateful": False, "requires_session": False,
+     "description": "List all property/assertion names in a SVA file."},
+    {"name": "xverif_sva_scan", "category": "sva", "backend": "xsva",
+     "stateful": False, "requires_session": False,
+     "description": "Scan syntax constructs in a SVA file."},
+    {"name": "xverif_sva_parse", "category": "sva", "backend": "xsva",
+     "stateful": False, "requires_session": False,
+     "description": "Parse a SVA property into IR."},
+    {"name": "xverif_sva_explain", "category": "sva", "backend": "xsva",
+     "stateful": False, "requires_session": False,
+     "description": "Generate a human-readable SVA property explanation."},
+    {"name": "xverif_sva_render", "category": "sva", "backend": "xsva",
+     "stateful": False, "requires_session": False,
+     "description": "Render a SVA property as mermaid or SVG."},
+]
+
+
+@mcp.tool()
+def xverif_tools(category: Optional[str] = None,
+                  include_write: bool = False) -> dict:
+    """List all available xverif tools, optionally filtered by category.
+
+    Args:
+        category: Filter by category ("debug", "bit", "entry", "loc", "context", "sva").
+        include_write: If True, include write-protected tools.
+    """
+    tools = TOOL_CATALOG
+    if category:
+        tools = [t for t in tools if t["category"] == category]
+    if not include_write:
+        tools = [t for t in tools if "write" not in t.get("description", "").lower() or "(write)" not in t.get("description", "")]
+    return {"ok": True, "tools": tools}
+
+
+@mcp.tool()
+def xverif_tool_help(name: str) -> dict:
+    """Get detailed help for a specific xverif tool.
+
+    Args:
+        name: Exact tool name (e.g. "xverif_debug_query").
+    """
+    for t in TOOL_CATALOG:
+        if t["name"] == name:
+            return {"ok": True, "tool": t}
+    return _tool_error("TOOL_NOT_FOUND", f"tool not found: {name}")
+
+
+# ---------------------------------------------------------------------------
+# High-frequency debug aliases (shortcuts for xverif_debug_query)
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+def xverif_wave_value_at(signal: str, time: str = "0ns",
+                          session: Optional[str] = None,
+                          output_format: str = "xout") -> Any:
+    """Get a signal value at a specific time (alias for value.at).
+
+    Args:
+        signal: Full hierarchical signal path.
+        time: Target time string (e.g. "100ns", "1us").
+        session: Session alias (uses default if omitted).
+        output_format: "xout", "json", or "envelope".
+    """
+    return debug.query(action="value.at", args={"signal": signal, "time": time},
+                       session=session, output_format=output_format)
+
+
+@mcp.tool()
+def xverif_wave_signal_changes(signal: str, begin: str = "0ns",
+                                end: str = "100ns",
+                                session: Optional[str] = None,
+                                output_format: str = "xout") -> Any:
+    """Get all value changes for a signal in a time window.
+
+    Args:
+        signal: Full hierarchical signal path.
+        begin: Start time (e.g. "0ns").
+        end: End time (e.g. "100ns").
+        session: Session alias.
+        output_format: "xout", "json", or "envelope".
+    """
+    return debug.query(action="signal.changes",
+                       args={"signal": signal, "begin": begin, "end": end},
+                       session=session, output_format=output_format)
+
+
+@mcp.tool()
+def xverif_wave_rc_generate(config_path: str, rc_path: str,
+                              session: Optional[str] = None,
+                              output_format: str = "json") -> Any:
+    """Generate recovery context from config (alias for rc.generate).
+
+    Args:
+        config_path: Path to RC config file.
+        rc_path: Output path for generated RC.
+        session: Session alias.
+        output_format: "json" or "xout".
+    """
+    return debug.query(action="rc.generate",
+                       args={"config_path": config_path, "rc_path": rc_path},
+                       session=session, output_format=output_format)
+
+
+@mcp.tool()
+def xverif_design_trace_driver(signal: str, time: str = "0ns",
+                                session: Optional[str] = None,
+                                output_format: str = "xout") -> Any:
+    """Trace the active driver of a signal at a specific time.
+
+    Args:
+        signal: Full hierarchical signal path.
+        time: Target time string.
+        session: Session alias.
+        output_format: "xout", "json", or "envelope".
+    """
+    return debug.query(action="trace.driver",
+                       args={"signal": signal, "time": time},
+                       session=session, output_format=output_format)
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
