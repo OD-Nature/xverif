@@ -5,7 +5,6 @@
 
   "init_steps": [
     "source /proj/nic/env/setup.csh",
-    "cd /proj/nic/work",
     "module load gcc/9.3.0"
   ],
 
@@ -22,7 +21,11 @@
         "allowed": ["compile", "sim", "urg", "clean"]
       },
       "options": {
-        "TEST": { "emit": "make_var", "pattern": "^[A-Za-z0-9_./+-]+$" },
+        "TEST": {
+          "emit": "make_var",
+          "required": true,
+          "pattern": "^[A-Za-z0-9_./+-]+$"
+        },
         "SEED": { "emit": "make_var", "pattern": "^[0-9]+$" },
         "WAVES": { "emit": "make_var", "values": ["0", "1"] }
       }

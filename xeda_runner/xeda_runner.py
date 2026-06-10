@@ -10,6 +10,7 @@ import argparse
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -67,25 +68,60 @@ def _shell_cmd(shell: str) -> str:
     return {"tcsh": "tcsh", "bash": "bash", "zsh": "zsh"}[shell]
 
 
+def _fail_fast(shell: str, exit_code: int) -> str:
+    """Shell-specific error check after each init step."""
+    if shell in ("bash", "zsh"):
+        return ""  # hand by set -e
+    return f"if ($status != 0) exit {exit_code}"
+
+
 def generate_init_script(cfg: dict[str, Any]) -> str:
-    """Generate a shell script from init_steps + auto postamble."""
+    """Generate a shell script from init_steps + auto postamble.
+
+    - User init_steps: each followed by fail-fast status check
+    - Auto cd workdir (runner inserts, user does not need to write it)
+    - Auto checks: which <tool> with fail-fast
+    - Auto env dump + timestamp
+    """
     shell = cfg["shell"]
     workdir = cfg["workdir"]
     snapshot = env0_path(cfg, workdir)
     checks = cfg.get("checks", [])
 
     lines: list[str] = [_shebang(shell), ""]
+    exit_code = 10
+
+    # bash/zsh: global fail-fast
+    if shell in ("bash", "zsh"):
+        lines.append("set -e")
+        lines.append("")
 
     # user-defined init steps
     for step in cfg.get("init_steps", []):
         lines.append(step)
+        check = _fail_fast(shell, exit_code)
+        if check:
+            lines.append(check)
+        exit_code += 1
 
-    # auto postamble: checks
+    # auto cd workdir
+    lines.append("")
+    lines.append(f"cd {shlex.quote(workdir)}")
+    check = _fail_fast(shell, exit_code)
+    if check:
+        lines.append(check)
+    exit_code += 1
+
+    # auto checks
     if checks:
         lines.append("")
         lines.append('echo "[xeda-runner] checks"')
         for tool in checks:
             lines.append(f"which {tool}")
+            check = _fail_fast(shell, exit_code)
+            if check:
+                lines.append(check)
+            exit_code += 1
 
     # auto postamble: env dump + timestamp
     lines.append("")
@@ -116,7 +152,6 @@ def cmd_init(args: argparse.Namespace) -> int:
 
     snapshot.parent.mkdir(parents=True, exist_ok=True)
     init_log = snapshot.parent / "init.log"
-    timestamp_file = snapshot.parent / "timestamp"
 
     script = generate_init_script(cfg)
 
@@ -124,8 +159,6 @@ def cmd_init(args: argparse.Namespace) -> int:
         f.write(script)
         script_path = f.name
 
-    # If custom config path was used, the script's relative paths (cd workdir)
-    # must work from wherever we are — the script runs from the current dir.
     cwd = os.getcwd()
 
     try:
@@ -149,7 +182,7 @@ def cmd_init(args: argparse.Namespace) -> int:
             print(f"[xeda-runner] see log: {init_log}", file=sys.stderr)
             return result.returncode
 
-        # write summary.json
+        # write summary.json with check results
         summary: dict[str, Any] = {
             "shell": shell,
             "workdir": workdir,
@@ -159,6 +192,15 @@ def cmd_init(args: argparse.Namespace) -> int:
         }
         if snapshot.exists():
             summary["snapshot_size"] = snapshot.stat().st_size
+        # Resolve check tool paths from the env snapshot
+        if snapshot.exists():
+            env = load_env0(str(snapshot))
+            for tool in cfg.get("checks", []):
+                for path_dir in env.get("PATH", "").split(":"):
+                    candidate = os.path.join(path_dir, tool)
+                    if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+                        summary["checks"][tool] = candidate
+                        break
         summary_path = snapshot.parent / "summary.json"
         summary_path.write_text(json.dumps(summary, indent=2))
 
@@ -220,10 +262,8 @@ def cmd_describe_action(args: argparse.Namespace) -> int:
         print(f"[xeda-runner] action not found: {args.action}", file=sys.stderr)
         return 2
 
-    action_cfg = dict(actions[args.action])
-    action_cfg.pop("command", None)
-    action_cfg.pop("fixed_args", None)
-    print(json.dumps({"action": args.action, **action_cfg}, indent=2))
+    # Show full action config including command/fixed_args (for audit only)
+    print(json.dumps({"action": args.action, **actions[args.action]}, indent=2))
     return 0
 
 
@@ -279,6 +319,11 @@ def build_argv(action_cfg: dict[str, Any], target: str | None,
 
     # options
     option_specs = action_cfg.get("options", {})
+    # Check required options
+    for name, spec in option_specs.items():
+        if spec.get("required") and name not in options:
+            raise ValueError(f"required option missing: {name}")
+
     for name, value in options.items():
         if name not in option_specs:
             raise ValueError(f"option not allowed: {name}")
@@ -312,16 +357,8 @@ def build_argv(action_cfg: dict[str, Any], target: str | None,
 def cmd_run(args: argparse.Namespace) -> int:
     cfg = load_config(args.config)
     workdir = cfg["workdir"]
-    snapshot = env0_path(cfg, workdir)
 
-    if not snapshot.exists():
-        print(
-            f"[xeda-runner] env snapshot not found: {snapshot}\n"
-            f"[xeda-runner] run: xeda-runner init",
-            file=sys.stderr,
-        )
-        return 2
-
+    # validate action + options first (no snapshot needed)
     actions = cfg.get("actions", {})
     if args.action not in actions:
         print(f"[xeda-runner] action not found: {args.action}",
@@ -332,10 +369,22 @@ def cmd_run(args: argparse.Namespace) -> int:
     options = parse_options(args.option)
     argv = build_argv(action_cfg, args.target, options)
 
+    # dry-run: no snapshot needed
     if args.dry_run:
         print(f"[xeda-runner] DRY-RUN cwd={workdir}", file=sys.stderr)
-        print(f"[xeda-runner] DRY-RUN argv={argv}", file=sys.stderr)
+        print(f"[xeda-runner] DRY-RUN argv={shlex.join(argv)}",
+              file=sys.stderr)
         return 0
+
+    # real run: snapshot required
+    snapshot = env0_path(cfg, workdir)
+    if not snapshot.exists():
+        print(
+            f"[xeda-runner] env snapshot not found: {snapshot}\n"
+            f"[xeda-runner] run: xeda-runner init",
+            file=sys.stderr,
+        )
+        return 2
 
     env = load_env0(str(snapshot))
 
@@ -344,7 +393,7 @@ def cmd_run(args: argparse.Namespace) -> int:
               f"target={args.target or ''}",
               file=sys.stderr)
         print(f"[xeda-runner] cwd={workdir}", file=sys.stderr)
-        print(f"[xeda-runner] argv={' '.join(argv)}", file=sys.stderr)
+        print(f"[xeda-runner] argv={shlex.join(argv)}", file=sys.stderr)
 
     result = subprocess.run(argv, cwd=workdir, env=env)
     return result.returncode

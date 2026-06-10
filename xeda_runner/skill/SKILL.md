@@ -25,10 +25,13 @@ xeda-runner init
 # 2. 查看可用 action
 xeda-runner list-actions
 
-# 3. 了解 action 支持的 target 和 option（可选）
+# 3. 了解 action 支持的 target 和 option（含 command/fixed_args，仅供审计）
 xeda-runner describe-action --action <name>
 
-# 4. 执行命令
+# 4. 预览命令（不需要 init）
+xeda-runner run --action <name> --target <t> --option KEY=VALUE --dry-run
+
+# 5. 执行命令
 xeda-runner run --action <name> --target <t> --option KEY=VALUE
 ```
 
@@ -43,3 +46,4 @@ xeda-runner run --action <name> --target <t> --option KEY=VALUE
 - 禁止自行设置环境变量
 - 禁止自行拼接底层 EDA command
 - 禁止绕过 xeda-runner 调用 make/vcs/simv/urg 等命令
+- `describe-action` 输出的 `command`/`fixed_args` 仅供审计，不可绕过 runner 直接使用
