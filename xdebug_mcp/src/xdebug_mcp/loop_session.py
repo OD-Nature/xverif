@@ -8,9 +8,10 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
-from xdebug_lsf.protocol import JsonlProcess
+from xdebug_lsf.protocol import JsonlProcess, ProtocolError
 
 from .launchers import LaunchConfig, Launcher, default_xdebug_bin
+from .session_errors import response_says_session_terminal
 
 Json = Dict[str, Any]
 
@@ -20,8 +21,10 @@ def _safe_name(s: str, max_len: int = 64) -> str:
     return (x or "unnamed")[:max_len]
 
 
-def _error(code: str, message: str) -> Json:
-    return {"ok": False, "error": {"code": code, "message": message}}
+def _error(code: str, message: str, **extra: Any) -> Json:
+    err: Json = {"code": code, "message": message}
+    err.update(extra)
+    return {"ok": False, "error": err}
 
 
 def _extract_session_id(response: Json, fallback: str) -> str:
@@ -54,8 +57,74 @@ class XdebugLoopSession:
     state: str = "new"
     handle: Optional[JsonlProcess] = None
     pid: Optional[int] = None
+    last_error: Optional[str] = None
+    last_cleanup: Json = field(default_factory=dict)
     _seq: int = 0
     _lock: threading.Lock = field(default_factory=threading.Lock)
+
+    # ------------------------------------------------------------------
+    # process status
+    # ------------------------------------------------------------------
+
+    def process_alive(self) -> bool:
+        """Check whether the underlying subprocess is still running."""
+        h = self.handle
+        if h is None:
+            return False
+        proc = getattr(h, "proc", None)
+        return proc is not None and proc.poll() is None
+
+    # ------------------------------------------------------------------
+    # abort (fatal cleanup without protocol handshake)
+    # ------------------------------------------------------------------
+
+    def abort(self, reason: str, source: str = "transport") -> Json:
+        """Force-kill the process without sending session.close / stdio.quit.
+
+        Used when the JSONL protocol is no longer trustworthy.
+        """
+        self.state = "dead"
+        self.last_error = reason
+
+        cleanup: Json = {"source": source, "subprocess": "not_started", "lsf_job": "not_applicable"}
+
+        handle = self.handle
+        self.handle = None
+        if handle is not None:
+            try:
+                self.launcher.terminate(handle)
+                cleanup["subprocess"] = "terminated"
+                if getattr(handle, "job_id", None) or getattr(handle, "job_name", None):
+                    cleanup["lsf_job"] = "kill_requested"
+            except Exception as exc:
+                cleanup["subprocess"] = "cleanup_failed"
+                cleanup["cleanup_error"] = str(exc)
+
+        self.last_cleanup = cleanup
+        return cleanup
+
+    def _session_lost_error(
+        self,
+        message: str,
+        *,
+        source: str,
+        backend_response: Optional[Json] = None,
+        cleanup: Optional[Json] = None,
+    ) -> Json:
+        return _error(
+            "SESSION_LOST",
+            message,
+            alias=self.alias,
+            session_id=self.session_id,
+            mode=self.launcher.mode,
+            terminal_source=source,
+            backend_response=backend_response,
+            cleanup=cleanup or self.last_cleanup,
+            recovery_hint={
+                "action": "xdebug_session_open",
+                "reason": "session is no longer reusable; reopen explicitly before retrying the query",
+            },
+        )
 
     # ------------------------------------------------------------------
     # open / close
@@ -103,9 +172,8 @@ class XdebugLoopSession:
             self.state = "alive"
             return {"ok": True, "session": self.public_json()}
         except Exception as e:
-            self.state = "dead"
-            self.close(force=True)
-            return _error("SESSION_OPEN_FAILED", str(e))
+            cleanup = self.abort(str(e), source="open")
+            return _error("SESSION_OPEN_FAILED", str(e), cleanup=cleanup)
 
     def close(self, force: bool = False) -> Json:
         if self.handle and self.state == "alive" and self.session_id and not force:
@@ -165,9 +233,46 @@ class XdebugLoopSession:
         if output_format in ("json", "envelope"):
             req["output"]["format"] = "json"
 
-        rsp = self._call_raw(req)
+        # --- transport call (can fail at protocol level) ---
+        try:
+            rsp = self._call_raw(req)
+        except ProtocolError as exc:
+            cleanup = self.abort(str(exc), source="transport")
+            return self._session_lost_error(
+                f"xdebug stdio-loop transport lost: {exc}",
+                source="transport", cleanup=cleanup,
+            )
+        except OSError as exc:
+            cleanup = self.abort(str(exc), source="io")
+            return self._session_lost_error(
+                f"xdebug stdio-loop io error: {exc}",
+                source="io", cleanup=cleanup,
+            )
+        except Exception as exc:
+            cleanup = self.abort(str(exc), source="unexpected")
+            return self._session_lost_error(
+                f"xdebug stdio-loop unexpected failure: {exc}",
+                source="unexpected", cleanup=cleanup,
+            )
+
+        # --- terminal session detected via backend response ---
+        if response_says_session_terminal(rsp):
+            cleanup = self.abort(
+                f"backend reported terminal session after action {action}",
+                source="backend_response",
+            )
+            return self._session_lost_error(
+                f"xdebug backend reported terminal session after action {action}",
+                source="backend_response",
+                backend_response=rsp,
+                cleanup=cleanup,
+            )
+
+        # --- ordinary business error (not terminal) ---
         if not rsp.get("ok"):
             return rsp
+
+        # --- success ---
         if output_format == "xout":
             return rsp.get("xout", "")
         if output_format == "json":

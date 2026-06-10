@@ -33,6 +33,12 @@ Backends:
 - direct: starts local tools/xdebug --stdio-loop.
 - lsf: starts one bsub -I tools/xdebug --stdio-loop job per session.
 Both backends share the same JSONL loop protocol. No router, no TCP endpoint.
+
+If xdebug_query returns error.code=SESSION_LOST:
+  - the MCP server has already terminated the broken subprocess / LSF job
+  - the session mapping has been evicted
+  - the agent must explicitly call xdebug_session_open before retrying
+No automatic retry or reopen is performed by the server.
 """
 
 mcp = FastMCP(

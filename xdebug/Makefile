@@ -167,6 +167,9 @@ mcp-test-schema:
 mcp-test-lsf:
 	PYTHONPATH=$(CURDIR)/../xdebug_mcp/src:$(CURDIR)/.. XDEBUG_MCP_BACKEND=lsf XDEBUG_MCP_FAKE_LSF=1 $(PYTHON) $(CURDIR)/../xdebug_mcp/tools/test_actions.py
 
+mcp-session-test:
+	PYTHONPATH=$(CURDIR)/../xdebug_mcp/src:$(CURDIR)/.. $(PYTHON) -m pytest -q $(CURDIR)/../xdebug_mcp/tests/test_stdio_loop_session_lifecycle.py $(CURDIR)/../xdebug_mcp/tests/test_backend_wiring.py $(CURDIR)/../xdebug_mcp/tests/test_session_errors.py -v
+
 mcp-sdk-test:
 	PYTHONPATH=$(CURDIR)/../xdebug_mcp/src:$(CURDIR)/.. $(PYTHON) -m pytest -q $(CURDIR)/../xdebug_mcp/tests/test_mcp_sdk_smoke.py $(CURDIR)/tests/mcp -v
 

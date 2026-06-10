@@ -80,7 +80,10 @@ class McpSessionManager:
         if name in self.sessions:
             existing = self.sessions[name]
             if existing.state == "alive":
-                return _error("SESSION_EXISTS", f"session already exists: {name}")
+                if existing.process_alive():
+                    return _error("SESSION_EXISTS", f"session already exists: {name}")
+                existing.abort("stale alive session process is not running", source="stale_open")
+                self._evict_session(existing)
 
         job_name = None
         actual_queue = queue or (self._session_queue if self.mode == "lsf" else None)
@@ -133,7 +136,7 @@ class McpSessionManager:
         s = self.sessions.get(key)
         if not s:
             return _error("SESSION_NOT_FOUND", f"session not found: {key}")
-        return s.query(
+        rsp = s.query(
             action=action,
             args=args,
             target=kwargs.get("target"),
@@ -141,18 +144,22 @@ class McpSessionManager:
             output=kwargs.get("output"),
             output_format=output_format,
         )
+        if s.state == "dead":
+            self._evict_session(s)
+        return rsp
 
     def close_session(self, session: str) -> Json:
         s = self.sessions.get(session)
         if not s:
             return _error("SESSION_NOT_FOUND", f"session not found: {session}")
-        result = s.close()
-        self.sessions.pop(s.alias, None)
-        if s.session_id:
-            self.sessions.pop(s.session_id, None)
-        if self.default_session in (s.alias, s.session_id):
-            self.default_session = None
-        return {"ok": True, "closed": s.public_json(), "default_session": self.default_session}
+        old_state = s.state
+        if s.state == "alive":
+            result = s.close()
+        else:
+            s.abort(f"close requested for non-alive session: {old_state}", source="close_dead")
+            result = {"ok": True, "closed": s.public_json(), "previous_state": old_state}
+        self._evict_session(s)
+        return {"ok": True, "closed": s.public_json(), "default_session": self.default_session, "previous_state": old_state}
 
     def list_sessions(self) -> Json:
         seen = set()
@@ -170,6 +177,21 @@ class McpSessionManager:
             return _error("SESSION_NOT_FOUND", f"session not alive: {key}")
         self.default_session = s.session_id or s.alias
         return {"ok": True, "default_session": self.default_session, "session": s.public_json()}
+
+    # ------------------------------------------------------------------
+    # session eviction
+    # ------------------------------------------------------------------
+
+    def _evict_session(self, s: XdebugLoopSession) -> None:
+        """Remove all mappings for a dead/lost session."""
+        self.sessions.pop(s.alias, None)
+        if s.session_id:
+            self.sessions.pop(s.session_id, None)
+        for key, value in list(self.sessions.items()):
+            if value is s:
+                self.sessions.pop(key, None)
+        if self.default_session in (s.alias, s.session_id):
+            self.default_session = None
 
     # ------------------------------------------------------------------
     # backward-compat aliases (old server_legacy calls these)
