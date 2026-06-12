@@ -1,6 +1,8 @@
 """xverif-mcp — unified MCP server for all xverif tools."""
-from __future__ import annotations
 
+import inspect
+import json
+import time
 from typing import Any, Optional
 
 from mcp.server.fastmcp import FastMCP
@@ -43,6 +45,40 @@ If xverif_debug_query returns error.code=SESSION_LOST:
   - the agent must explicitly call xverif_debug_session_open before retrying
 No automatic retry or reopen is performed by the server.
 
+Batch execution (xverif_batch):
+  Use xverif_batch when you need to run multiple tools in strict serial order,
+  especially for stateful workflows like session.open → query → session.close.
+  This avoids race conditions where a query might execute before the session is
+  ready.
+
+  Step 1 — write the batch file (bash inline):
+    cat > /tmp/batch.ndjson << 'EOF'
+    {"tool": "xverif_cov_session_open", "args": {"name": "s0", "vdb": "/path/to/merged.vdb"}}
+    {"tool": "xverif_cov_query", "args": {"session": "s0", "action": "cov.holes", "args": {"metrics": ["line"], "limits": {"max_items": 5}}, "output_format": "json"}}
+    {"tool": "xverif_cov_session_close", "args": {"name": "s0"}}
+    EOF
+
+  Or Python inline:
+    import json
+    reqs = [
+        {"tool": "xverif_cov_session_open", "args": {"name": "s0", "vdb": "/path/to/merged.vdb"}},
+        {"tool": "xverif_cov_query", "args": {"session": "s0", "action": "cov.holes", "args": {"metrics": ["line"], "limits": {"max_items": 5}}, "output_format": "json"}},
+        {"tool": "xverif_cov_session_close", "args": {"name": "s0"}},
+    ]
+    with open("/tmp/batch.ndjson", "w") as f:
+        for r in reqs: f.write(json.dumps(r) + "\\n")
+
+  Step 2 — call xverif_batch(batch_file="/tmp/batch.ndjson", output_file="/tmp/batch_results.ndjson").
+  Returns {total, ok_count, failed_count, output_file}.
+
+  Step 3 — read results (Python inline):
+    import json
+    with open("/tmp/batch_results.ndjson") as f:
+        for line in f:
+            r = json.loads(line)
+            # r["tool"], r["ok"], r["elapsed_ms"], r["error"]
+  Format errors (invalid JSON, missing tool field) appear as tool=null with ok=false.
+
 Output format: all tools default to output_format="xout" (compact AI-readable
 structured text, saves tokens vs JSON). Use output_format="json" only when you
 need structured data for programmatic analysis.
@@ -61,9 +97,62 @@ def _tool_error(code: str, message: str) -> dict:
     return error_payload(code, message)
 
 
+def _write_output(result: Any, path: str, append: bool) -> None:
+    mode = "a" if append else "w"
+    with open(path, mode, encoding="utf-8") as f:
+        if isinstance(result, str):
+            f.write(result)
+        else:
+            f.write(str(result))
+
+
+def _wrap_with_output(fn):
+    """Wrap a tool function so it accepts ``xverif_output_path`` and
+    ``xverif_output_append`` keyword arguments.  When *output_path* is
+    given the raw return value is also written to that file."""
+    sig = inspect.signature(fn)
+    new_params = list(sig.parameters.values()) + [
+        inspect.Parameter("xverif_output_path", inspect.Parameter.KEYWORD_ONLY,
+                          default=None),
+        inspect.Parameter("xverif_output_append", inspect.Parameter.KEYWORD_ONLY,
+                          default=False),
+    ]
+    new_sig = sig.replace(parameters=new_params)
+
+    if inspect.iscoroutinefunction(fn):
+        async def wrapper(*args, **kwargs):
+            output_path = kwargs.pop("xverif_output_path", None)
+            output_append = kwargs.pop("xverif_output_append", False)
+            result = await fn(*args, **kwargs)
+            if output_path:
+                try:
+                    _write_output(result, output_path, output_append)
+                except Exception:
+                    pass
+            return result
+    else:
+        def wrapper(*args, **kwargs):
+            output_path = kwargs.pop("xverif_output_path", None)
+            output_append = kwargs.pop("xverif_output_append", False)
+            result = fn(*args, **kwargs)
+            if output_path:
+                try:
+                    _write_output(result, output_path, output_append)
+                except Exception:
+                    pass
+            return result
+
+    wrapper.__signature__ = new_sig
+    wrapper.__name__ = fn.__name__
+    wrapper.__doc__ = fn.__doc__
+    wrapper.__annotations__ = {}
+    return wrapper
+
+
 def xverif_tool(group: str, write: bool = False):
     """Conditionally register a FastMCP tool according to env policy."""
     def decorator(fn):
+        fn = _wrap_with_output(fn)
         if tool_enabled(group, write=write):
             return mcp.tool()(fn)
         return fn
@@ -79,6 +168,98 @@ def xverif_tool(group: str, write: bool = False):
 def xverif_ping() -> str:
     """Ping the xverif MCP server. Use this to check whether the server is alive."""
     return debug.ping()
+
+
+def _append_result(output_file: str, tool: str | None, ok: bool,
+                   error: str | None, elapsed_ms: int) -> None:
+    entry = {
+        "tool": tool,
+        "ok": ok,
+        "elapsed_ms": elapsed_ms,
+        "error": error,
+    }
+    with open(output_file, "a", encoding="utf-8") as f:
+        f.write(json.dumps(entry, ensure_ascii=False, sort_keys=True) + "\n")
+
+
+async def _execute_one(name: str, args: dict) -> tuple[bool, str | None, int]:
+    t0 = time.monotonic()
+    try:
+        result = await mcp.call_tool(name, args)
+        content = result[0] if isinstance(result, tuple) else result
+        text = content[0].text if content else ""
+        try:
+            j = json.loads(text)
+            return j.get("ok", False), None, int((time.monotonic() - t0) * 1000)
+        except (json.JSONDecodeError, AttributeError):
+            # non-JSON response — treat known success patterns
+            ok = ("pong" in str(text).lower()
+                  or "XOUT_BEGIN" in text
+                  or (text.startswith("@") and ".error." not in text))
+            return ok, None, int((time.monotonic() - t0) * 1000)
+    except Exception as e:
+        return False, str(e), int((time.monotonic() - t0) * 1000)
+
+
+@xverif_tool("common")
+async def xverif_batch(batch_file: str, output_file: str) -> dict:
+    """Execute multiple MCP tool requests from an NDJSON file in serial order.
+
+    Each line of *batch_file* must be a JSON object with ``tool`` (tool name)
+    and ``args`` (arguments dict).  Results are appended to *output_file* as
+    NDJSON, one line per request (including parse errors).  Returns a summary
+    with total / ok / failed counts.
+    """
+    stats = {"total": 0, "ok": 0, "failed": 0}
+
+    try:
+        with open(batch_file, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+
+                try:
+                    req = json.loads(line)
+                except json.JSONDecodeError as e:
+                    _append_result(output_file, None, False,
+                                   f"INVALID_JSON: {e}", 0)
+                    stats["failed"] += 1
+                    stats["total"] += 1
+                    continue
+
+                tool_name = req.get("tool")
+                if not tool_name:
+                    _append_result(output_file, None, False,
+                                   "MISSING_TOOL_FIELD", 0)
+                    stats["failed"] += 1
+                    stats["total"] += 1
+                    continue
+
+                tool_args = req.get("args", {})
+                if not isinstance(tool_args, dict):
+                    tool_args = {}
+
+                ok, error, elapsed_ms = await _execute_one(tool_name, tool_args)
+                _append_result(output_file, tool_name, ok, error, elapsed_ms)
+                if ok:
+                    stats["ok"] += 1
+                else:
+                    stats["failed"] += 1
+                stats["total"] += 1
+    except FileNotFoundError:
+        return _tool_error("FILE_NOT_FOUND",
+                           f"batch file not found: {batch_file}")
+    except Exception as e:
+        return _tool_error("BATCH_FAILED", str(e))
+
+    return {
+        "ok": True,
+        "total": stats["total"],
+        "ok_count": stats["ok"],
+        "failed_count": stats["failed"],
+        "output_file": output_file,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -690,6 +871,9 @@ TOOL_CATALOG = [
     {"name": "xverif_tool_help", "category": "common", "backend": "builtin",
      "stateful": False, "requires_session": False,
      "description": "Get help for a specific tool."},
+    {"name": "xverif_batch", "category": "common", "backend": "builtin",
+     "stateful": False, "requires_session": False,
+     "description": "Execute multiple MCP tool requests from an NDJSON batch file serially."},
     # debug
     {"name": "xverif_debug_list_actions", "category": "debug", "backend": "xdebug",
      "stateful": False, "requires_session": False,

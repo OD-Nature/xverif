@@ -103,6 +103,81 @@ tools/xverif-lsf-doctor
 - `direct`：本机启动 `tools/xdebug --stdio-loop` 或 `tools/xcov --stdio-loop`
 - `lsf`：通过 `bsub -I tools/<backend> --stdio-loop` 提交到 LSF
 
+### 通用参数
+
+所有 MCP tool 自动支持以下可选参数，无需每个 tool 单独声明：
+
+| 参数 | 类型 | 默认 | 说明 |
+|---|---|---|---|
+| `xverif_output_path` | `str \| None` | `None` | 指定文件路径时，tool 响应会额外写入该文件 |
+| `xverif_output_append` | `bool` | `False` | True 为追加写入，False（默认）为覆盖写入 |
+
+示例：
+```python
+# 将 cov.holes 响应写入 /tmp/holes.json
+xverif_cov_query(action="cov.holes", args={...},
+                 xverif_output_path="/tmp/holes.json")
+
+# 追加模式
+xverif_debug_query(action="value.at", args={...},
+                   xverif_output_path="/tmp/wave.log",
+                   xverif_output_append=True)
+```
+
+写文件失败不会影响 tool 正常返回。
+
+### 批量执行：`xverif_batch`
+
+`xverif_batch` 允许 AI 将多个 tool 请求写入 NDJSON 文件，一次提交批量串行执行，
+结果写入另一个 NDJSON 文件。适合需要按序执行 session.open → query → session.close
+的场景。
+
+**1. 生成批量请求文件（bash inline）：**
+
+```bash
+cat > /tmp/batch_requests.ndjson << 'EOF'
+{"tool": "xverif_cov_session_open", "args": {"name": "uart0", "vdb": "/path/to/merged.vdb"}}
+{"tool": "xverif_cov_query", "args": {"session": "uart0", "action": "cov.holes", "args": {"metrics": ["line"], "limits": {"max_items": 5}}, "output_format": "json"}}
+{"tool": "xverif_cov_query", "args": {"session": "uart0", "action": "cov.holes", "args": {"metrics": ["toggle"], "limits": {"max_items": 5}}, "output_format": "json"}}
+{"tool": "xverif_cov_session_close", "args": {"name": "uart0"}}
+EOF
+```
+
+或 Python inline：
+
+```python
+import json
+requests = [
+    {"tool": "xverif_cov_session_open", "args": {"name": "uart0", "vdb": "/path/to/merged.vdb"}},
+    {"tool": "xverif_cov_query", "args": {"session": "uart0", "action": "cov.holes",
+        "args": {"metrics": ["line"], "limits": {"max_items": 5}}, "output_format": "json"}},
+    {"tool": "xverif_cov_session_close", "args": {"name": "uart0"}},
+]
+with open("/tmp/batch_requests.ndjson", "w") as f:
+    for req in requests:
+        f.write(json.dumps(req) + "\n")
+```
+
+**2. 提交执行：**
+
+```
+xverif_batch(batch_file="/tmp/batch_requests.ndjson", output_file="/tmp/batch_results.ndjson")
+```
+
+**3. 查看结果：**
+
+```python
+import json
+with open("/tmp/batch_results.ndjson") as f:
+    for line in f:
+        r = json.loads(line)
+        status = "OK" if r["ok"] else f"FAIL: {r['error']}"
+        print(f"[{status}] {r['tool']} ({r['elapsed_ms']}ms)")
+```
+
+输出格式：每行 `{"tool": "...", "ok": true/false, "elapsed_ms": 123, "error": null}`。
+格式错误行 `tool` 为 `null`，`error` 包含错误原因。
+
 ### 通用 MCP client
 
 ```json

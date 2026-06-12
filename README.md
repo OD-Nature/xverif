@@ -51,6 +51,8 @@ tools/xverif-mcp
 可用 `XVERIF_MCP_ENABLE_DEBUG/BIT/ENTRY/LOC/CONTEXT/SVA` 等环境变量按工具组关闭 MCP 暴露面。
 如果不走 MCP 且本机无法直连计算节点 TCP 端口，xdebug 原生支持 `transport:"file"`，通过共享文件系统在 session 目录下交换 request/response。
 
+所有 MCP tool 通用支持 `xverif_output_path` / `xverif_output_append` 参数，可将响应同时写入文件。
+
 完整说明见 [`xdebug/README.md`](xdebug/README.md)。
 
 ### xbit

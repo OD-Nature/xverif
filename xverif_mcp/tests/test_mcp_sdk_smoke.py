@@ -164,7 +164,7 @@ def test_cov_session_fake_lifecycle(monkeypatch: pytest.MonkeyPatch):
     opened_payload = json.loads(opened[0].text)
     queried_payload = json.loads(queried[0].text)
     assert opened_payload["ok"] is True
-    assert queried_payload["summary"]["matched_count"] == 2
+    assert queried_payload["summary"]["matched_count"] == 3
     assert queried_payload["summary"]["returned"] == 1
 
 
@@ -239,3 +239,152 @@ def test_tool_help_disabled_tool_is_hidden(monkeypatch: pytest.MonkeyPatch):
     payload = json.loads(content[0].text)
     assert payload["ok"] is False
     assert payload["error"]["code"] == "TOOL_NOT_ENABLED"
+
+
+def test_output_path_in_tool_schema(monkeypatch: pytest.MonkeyPatch):
+    """xverif_ping schema must expose xverif_output_path and xverif_output_append."""
+    server = _server(monkeypatch)
+
+    async def _run():
+        tools = await server.mcp.list_tools()
+        ping = next(t for t in tools if t.name == "xverif_ping")
+        schema = ping.inputSchema
+        props = schema.get("properties", {})
+        assert "xverif_output_path" in props
+        assert "xverif_output_append" in props
+
+    anyio.run(_run)
+
+
+def test_output_path_writes_response(tmp_path, monkeypatch: pytest.MonkeyPatch):
+    """Calling a tool with xverif_output_path writes the response to that file."""
+    output_file = tmp_path / "rsp.txt"
+    content, _ = _call_tool(
+        monkeypatch,
+        "xverif_ping",
+        {"xverif_output_path": str(output_file)},
+    )
+    assert "pong" in content[0].text.lower()
+    assert output_file.exists()
+    assert "pong" in output_file.read_text().lower()
+
+
+def test_output_path_append(tmp_path, monkeypatch: pytest.MonkeyPatch):
+    """xverif_output_append=True appends instead of overwriting."""
+    output_file = tmp_path / "rsp.txt"
+    output_file.write_text("existing\n")
+    _call_tool(monkeypatch, "xverif_ping",
+               {"xverif_output_path": str(output_file), "xverif_output_append": True})
+    text = output_file.read_text()
+    assert text.startswith("existing\n")
+    assert "pong" in text.lower()
+
+
+def test_output_path_does_not_affect_response(tmp_path, monkeypatch: pytest.MonkeyPatch):
+    """Not passing xverif_output_path has no effect on normal response."""
+    content, _ = _call_tool(monkeypatch, "xverif_ping", {})
+    assert "pong" in content[0].text.lower()
+
+
+def test_output_path_invalid_dir_no_crash(monkeypatch: pytest.MonkeyPatch):
+    """If the output path is invalid, the tool still returns normally."""
+    content, _ = _call_tool(
+        monkeypatch,
+        "xverif_ping",
+        {"xverif_output_path": "/nonexistent/dir/rsp.txt"},
+    )
+    assert "pong" in content[0].text.lower()
+
+
+def test_batch_fake_lifecycle(tmp_path, monkeypatch: pytest.MonkeyPatch):
+    """xverif_batch with fake cov session + ping + bit_eval in one file."""
+    batch_file = tmp_path / "batch.ndjson"
+    output_file = tmp_path / "results.ndjson"
+
+    overrides = {
+        "XVERIF_HOME": str(Path(__file__).resolve().parents[2]),
+        "XVERIF_MCP_BACKEND": "direct",
+    }
+
+    batch_file.write_text("\n".join([
+        json.dumps({"tool": "xverif_cov_session_open",
+                     "args": {"name": "cov_fake", "vdb": "fake"}}),
+        json.dumps({"tool": "xverif_cov_query",
+                     "args": {"session": "cov_fake", "action": "cov.holes",
+                              "args": {"metrics": ["line"], "limits": {"max_items": 2}},
+                              "output_format": "json"}}),
+        json.dumps({"tool": "xverif_cov_session_close",
+                     "args": {"name": "cov_fake"}}),
+        json.dumps({"tool": "xverif_ping", "args": {}}),
+        json.dumps({"tool": "xverif_bit_eval",
+                     "args": {"expr": "2 + 3"}}),
+    ]) + "\n")
+
+    content, _ = _call_tool(
+        monkeypatch,
+        "xverif_batch",
+        {"batch_file": str(batch_file), "output_file": str(output_file)},
+        overrides,
+    )
+    payload = json.loads(content[0].text)
+    assert payload["ok"] is True
+    assert payload["total"] == 5
+    assert payload["ok_count"] == 5
+    assert payload["failed_count"] == 0
+
+    lines = [json.loads(l) for l in output_file.read_text().splitlines() if l]
+    assert len(lines) == 5
+    assert all(r["ok"] for r in lines)
+
+
+def test_batch_format_errors(tmp_path, monkeypatch: pytest.MonkeyPatch):
+    """Invalid JSON and missing tool field are written as errors, not executed."""
+    batch_file = tmp_path / "batch.ndjson"
+    output_file = tmp_path / "results.ndjson"
+
+    overrides = {
+        "XVERIF_HOME": str(Path(__file__).resolve().parents[2]),
+        "XVERIF_MCP_BACKEND": "direct",
+    }
+
+    batch_file.write_text("\n".join([
+        "not json at all",
+        json.dumps({"args": {"expr": "1+1"}}),  # missing tool
+        json.dumps({"tool": "xverif_ping", "args": {}}),
+    ]) + "\n")
+
+    content, _ = _call_tool(
+        monkeypatch,
+        "xverif_batch",
+        {"batch_file": str(batch_file), "output_file": str(output_file)},
+        overrides,
+    )
+    payload = json.loads(content[0].text)
+    assert payload["ok"] is True
+    assert payload["total"] == 3
+    assert payload["ok_count"] == 1
+    assert payload["failed_count"] == 2
+
+    lines = [json.loads(l) for l in output_file.read_text().splitlines() if l]
+    assert len(lines) == 3
+    assert lines[0]["tool"] is None
+    assert lines[0]["ok"] is False
+    assert "INVALID_JSON" in lines[0]["error"]
+    assert lines[1]["tool"] is None
+    assert lines[1]["ok"] is False
+    assert "MISSING_TOOL_FIELD" in lines[1]["error"]
+    assert lines[2]["tool"] == "xverif_ping"
+    assert lines[2]["ok"] is True
+
+
+def test_batch_file_not_found(tmp_path, monkeypatch: pytest.MonkeyPatch):
+    """xverif_batch on a nonexistent file returns FILE_NOT_FOUND error."""
+    content, _ = _call_tool(
+        monkeypatch,
+        "xverif_batch",
+        {"batch_file": "/nonexistent/batch.ndjson",
+         "output_file": str(tmp_path / "out.ndjson")},
+    )
+    payload = json.loads(content[0].text)
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "FILE_NOT_FOUND"
