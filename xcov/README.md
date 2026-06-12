@@ -2,6 +2,8 @@
 
 `xcov` is an AI/MCP-oriented query engine for VCS/Verdi coverage databases.
 It accepts `xcov.v1` JSON requests and returns compact `xout` by default.
+Set `output.response_format:"json"` or use `tools/xcov --json -` for machine
+JSON responses.
 
 xcov follows the same stateful split as xdebug: `tools/xcov --stdio-loop`
 hosts the real coverage database session and owns VDB handles, cached summary,
@@ -30,17 +32,16 @@ routed to stderr so stdout remains machine-readable.
 
 ## Real NPI Smoke
 
-The current verified Python runtime is:
+The verified runtime shape is:
 
 ```text
-/home/yian/miniconda3/envs/xdebug-mcp/bin/python
-Python 3.11.15
+Python 3.11
 ```
 
-Verified database:
+Verified database shape:
 
 ```text
-/home/yian/uart_example/sim/merged.vdb
+<project>/sim/merged.vdb
 ```
 
 Observed smoke results:
@@ -79,6 +80,26 @@ Use `XVERIF_MCP_ENABLE_COV=0` to hide coverage tools. `XVERIF_XCOV_BIN` and
 MCP `xverif_cov_query` accepts `limits` and `output` as top-level tool
 arguments. xcov merges those into action args unless `args.limits` or
 `args.output` is already set; action-local args win.
+
+`xverif_cov_get_schema` returns action-specific request/response schemas for
+all current P0 actions. The schema is meant for agent/tool guidance; runtime
+validation still uses xcov's explicit checks.
+
+## Logs
+
+xcov writes diagnostic logs without touching stdout protocol output:
+
+```text
+~/.xverif/xcov/sessions/<session_id>/session.json
+~/.xverif/xcov/sessions/<session_id>/logs/actions.ndjson
+~/.xverif/xcov/backend/sessions/<session_id>/logs/lifecycle.ndjson
+~/.xverif/xcov/backend/sessions/<session_id>/logs/transport.ndjson
+```
+
+Use `XVERIF_XCOV_LOG_DIR` to override the log root. Use
+`XVERIF_XCOV_LOG=0` to disable logging. Log events follow the xdebug-style
+fields `ts/event_id/pid/layer/component/session_id/action/phase/ok/context`
+and omit large coverage payloads such as full `items` arrays.
 
 ## Scope Semantics
 

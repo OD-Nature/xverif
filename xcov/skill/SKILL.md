@@ -61,9 +61,9 @@ xcov --json -
 tools/xcov --json -
 ```
 
-`tools/xcov` 优先使用 `$XVERIF_XCOV_PYTHON`，否则优先使用
-`~/miniconda3/envs/xdebug-mcp/bin/python`。真实 NPI 查询需要能访问 Synopsys
-license server；沙箱内 localhost license 可能不可达，应在沙箱外运行。
+`tools/xcov` 优先使用 `$XVERIF_XCOV_PYTHON`，否则使用当前可用的 Python 3.11
+环境。真实 NPI 查询需要能访问 Synopsys license server；沙箱内 localhost
+license 可能不可达，应在沙箱外运行。
 
 ## 常用 action
 
@@ -142,8 +142,10 @@ Source map:
 
 ## 输出读取规则
 
-- 默认 `xout` 只给 compact evidence；需要脚本字段时设 `output.format:"json"`
-  或 MCP `output_format="json"`。
+- 默认 `xout` 只给 compact evidence；需要脚本字段时设
+  `output.response_format:"json"` 或 MCP `output_format="json"`。
+- 需要确认 request 形状时用 `xverif_cov_get_schema`；当前 P0 action 都有
+  action-specific request/response schema。
 - 先看 `summary.matched_count/returned/truncated/output_path`。
 - coverage item 标准字段：`metric/type/name/full_name/covered/coverable/missing/count/status/evidence.file/evidence.line`。
 - `covered()` 和 `count()` 不是同义词；coverage pct 用 `covered/coverable`。
@@ -156,6 +158,13 @@ Source map:
 - `XVERIF_XCOV_BIN` 覆盖 `tools/xcov`。
 - `XVERIF_XCOV_PYTHON` 覆盖 xcov Python runtime。
 - `XVERIF_XCOV_VERDI_HOME` 覆盖 Verdi 安装路径。
+- `XVERIF_XCOV_LOG_DIR` 覆盖 xcov 日志目录，默认 `~/.xverif/xcov`。
+- `XVERIF_XCOV_LOG=0` 关闭日志。
+
+xcov 日志参考 xdebug：public action log 在
+`sessions/<session_id>/logs/actions.ndjson`，backend lifecycle/transport log
+在 `backend/sessions/<session_id>/logs/`。日志只记录 request/response 摘要，
+不会写完整 coverage `items` 大数组。
 
 若 `xverif_cov_query` 返回 `SESSION_LOST`，不要自动 retry；先重新
 `xverif_cov_session_open`，或缩小 query/limit 后再试。

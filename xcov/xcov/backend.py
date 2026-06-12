@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Optional
 
 from .errors import XcovError
+from .logging import log_lifecycle_event
 from .query import coverage_pct
 
 Json = Dict[str, Any]
@@ -143,24 +144,35 @@ class NpiCoverageBackend(CoverageBackend):
     test_map: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
+        log_lifecycle_event("adhoc", "npi.init.begin", True, {"vdb": self.vdb})
         verdi_home = os.environ.get("XVERIF_XCOV_VERDI_HOME") or os.environ.get("VERDI_HOME")
         if not verdi_home:
+            log_lifecycle_event("adhoc", "npi.init.failed", False,
+                                {"vdb": self.vdb, "reason": "VERDI_HOME is required"})
             raise XcovError("NPI_INIT_FAILED", "VERDI_HOME is required")
         sys.path.append(os.path.abspath(os.path.join(verdi_home, "share/NPI/python")))
         try:
             from pynpi import cov, npisys  # type: ignore
         except Exception as exc:
+            log_lifecycle_event("adhoc", "npi.import.failed", False,
+                                {"vdb": self.vdb, "error": str(exc)})
             raise XcovError("NPI_INIT_FAILED", f"failed to import pynpi: {exc}") from exc
         self.cov = cov
         self.npisys = npisys
         with _redirect_stdout_to_stderr():
             init_ok = npisys.init(sys.argv)
         if init_ok != 1:
+            log_lifecycle_event("adhoc", "npi.init.failed", False,
+                                {"vdb": self.vdb, "init_ok": init_ok})
             raise XcovError("NPI_INIT_FAILED", "npisys.init failed")
+        log_lifecycle_event("adhoc", "npi.init.ok", True, {"vdb": self.vdb})
+        log_lifecycle_event("adhoc", "vdb.open.begin", True, {"vdb": self.vdb})
         with _redirect_stdout_to_stderr():
             self.db = cov.open(self.vdb)
         if not self.db:
+            log_lifecycle_event("adhoc", "vdb.open.failed", False, {"vdb": self.vdb})
             raise XcovError("VDB_OPEN_FAILED", "cov.open returned empty handle", vdb=self.vdb)
+        log_lifecycle_event("adhoc", "vdb.open.ok", True, {"vdb": self.vdb})
         tests = self.db.test_handles()
         for test in tests:
             self.test_map[test.name()] = test
@@ -171,12 +183,16 @@ class NpiCoverageBackend(CoverageBackend):
     def close(self) -> None:
         try:
             if self.db:
+                log_lifecycle_event("adhoc", "vdb.close.begin", True, {"vdb": self.vdb})
                 with _redirect_stdout_to_stderr():
                     self.db.close()
+                log_lifecycle_event("adhoc", "vdb.close.ok", True, {"vdb": self.vdb})
         finally:
             if self.npisys:
+                log_lifecycle_event("adhoc", "npi.end.begin", True, {"vdb": self.vdb})
                 with _redirect_stdout_to_stderr():
                     self.npisys.end()
+                log_lifecycle_event("adhoc", "npi.end.ok", True, {"vdb": self.vdb})
 
     def tests(self) -> List[Json]:
         return [{"name": name} for name in sorted(self.test_map)]

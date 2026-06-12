@@ -8,6 +8,8 @@ from typing import Any, Dict
 
 from .actions import Dispatcher
 from .errors import XcovError, error_response
+from .logging import (log_action_event, log_transport_event,
+                      request_summary_for_log, response_summary_for_log)
 from .protocol import json_dumps, parse_request, render_xout, response_format
 
 Json = Dict[str, Any]
@@ -43,6 +45,8 @@ def run_once(text: str, dispatcher: Dispatcher) -> int:
     except XcovError as exc:
         req = {"request_id": "req-unknown", "action": ""}
         rsp = error_response("", "req-unknown", exc.code, exc.message, **exc.detail)
+        log_action_event("public", "adhoc", "", "parse_failed", False, 0,
+                         {"error": rsp.get("error")})
         _emit(req, rsp)
         return 1
     rsp = dispatcher.dispatch(req)
@@ -54,6 +58,7 @@ def stdio_loop(dispatcher: Dispatcher) -> int:
     ready = {"type": "ready", "protocol": "xcov-stdio-loop", "version": 1,
              "pid": os.getpid()}
     _protocol_write(json.dumps(ready, separators=(",", ":")) + "\n")
+    log_transport_event("adhoc", "ready", True, ready)
     seq = 0
     for line in sys.stdin:
         line = line.strip()
@@ -64,15 +69,19 @@ def stdio_loop(dispatcher: Dispatcher) -> int:
             req = parse_request(line)
             rid = req.get("request_id") or req.get("id") or f"req-{seq}"
             req["request_id"] = rid
+            sid = _log_session_id(req)
+            log_transport_event(sid, "request", True, {"request": request_summary_for_log(req)})
             if req.get("action") == "stdio.quit":
                 _protocol_write(json.dumps({"id": rid, "ok": True, "payload_format": "json",
                                             "json": {"ok": True, "action": "stdio.quit"}}) + "\n")
+                log_transport_event(sid, "stdio.quit", True, {"request_id": rid})
                 return 0
             rsp = dispatcher.dispatch(req)
         except XcovError as exc:
             rid = f"req-{seq}"
             req = {"request_id": rid, "action": ""}
             rsp = error_response("", rid, exc.code, exc.message, **exc.detail)
+            log_transport_event("adhoc", "parse_failed", False, {"error": rsp.get("error")})
         xout = render_xout(rsp)
         envelope = {"id": req.get("request_id", f"req-{seq}"),
                     "ok": bool(rsp.get("ok")),
@@ -80,6 +89,8 @@ def stdio_loop(dispatcher: Dispatcher) -> int:
                     "json": rsp,
                     "xout": xout}
         _protocol_write(json.dumps(envelope, ensure_ascii=False, separators=(",", ":")) + "\n")
+        log_transport_event(_log_session_id(req), "response", bool(rsp.get("ok")),
+                            {"response": response_summary_for_log(rsp)})
     return 0
 
 
@@ -106,11 +117,21 @@ def main(argv: list[str] | None = None) -> int:
     if ns.json:
         try:
             obj = json.loads(text)
-            obj.setdefault("output", {})["format"] = "json"
+            obj.setdefault("output", {})["response_format"] = "json"
             text = json.dumps(obj)
         except Exception:
             pass
     return run_once(text, dispatcher)
+
+
+def _log_session_id(req: Json) -> str:
+    target = req.get("target") if isinstance(req.get("target"), dict) else {}
+    args = req.get("args") if isinstance(req.get("args"), dict) else {}
+    if target.get("session_id"):
+        return str(target["session_id"])
+    if req.get("action") == "session.open" and args.get("name"):
+        return str(args["name"])
+    return "adhoc"
 
 
 if __name__ == "__main__":

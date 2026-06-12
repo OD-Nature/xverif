@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 from collections import defaultdict
+import time
 from typing import Any, Dict, Iterable, List, Optional
 
 from .backend import METRICS
 from .errors import XcovError, error_response
+from .logging import (log_action_event, request_summary_for_log,
+                      response_summary_for_log, update_session_manifest)
 from .protocol import ok_response
 from .query import (apply_output, coverage_pct, filter_items, filters_summary,
                     query_args, sort_items)
+from .schemas import schema_for_action
 from .session import SessionManager
 
 Json = Dict[str, Any]
@@ -28,40 +32,60 @@ class Dispatcher:
         self.sessions = sessions or SessionManager()
 
     def dispatch(self, req: Json) -> Json:
+        start = time.monotonic()
+        action = req.get("action", "")
+        sid = _log_session_id(req)
+        log_action_event("public", sid, action, "begin", True, 0,
+                         {"request": request_summary_for_log(req)})
         try:
             action = req["action"]
             if action == "actions":
-                return self._actions(req)
-            if action == "schema":
-                return self._schema(req)
-            if action == "session.open":
-                return self._session_open(req)
-            if action == "session.status":
-                return self._session_status(req)
-            if action == "session.close":
-                return self._session_close(req)
-            sess = self._session(req)
-            if action == "tests.list":
-                return self._tests_list(req, sess)
-            if action == "metrics.list":
-                return self._metrics_list(req, sess)
-            if action in ("scope.summary", "scope.children", "scope.search"):
-                return self._scope(req, sess)
-            if action in ("cov.summary", "cov.holes", "cov.object.search", "cov.object.get"):
-                return self._cov(req, sess)
-            if action in ("functional.summary", "functional.holes"):
-                return self._functional(req, sess)
-            if action == "source.map":
-                return self._source_map(req, sess)
-            if action.startswith("export."):
-                return self._export(req, sess)
-            raise XcovError("ACTION_NOT_FOUND", "unknown action", action=action)
+                rsp = self._actions(req)
+            elif action == "schema":
+                rsp = self._schema(req)
+            elif action == "session.open":
+                rsp = self._session_open(req)
+            elif action == "session.status":
+                rsp = self._session_status(req)
+            elif action == "session.close":
+                rsp = self._session_close(req)
+            else:
+                sess = self._session(req)
+                if action == "tests.list":
+                    rsp = self._tests_list(req, sess)
+                elif action == "metrics.list":
+                    rsp = self._metrics_list(req, sess)
+                elif action in ("scope.summary", "scope.children", "scope.search"):
+                    rsp = self._scope(req, sess)
+                elif action in ("cov.summary", "cov.holes", "cov.object.search", "cov.object.get"):
+                    rsp = self._cov(req, sess)
+                elif action in ("functional.summary", "functional.holes"):
+                    rsp = self._functional(req, sess)
+                elif action == "source.map":
+                    rsp = self._source_map(req, sess)
+                elif action.startswith("export."):
+                    rsp = self._export(req, sess)
+                else:
+                    raise XcovError("ACTION_NOT_FOUND", "unknown action", action=action)
+            elapsed = int((time.monotonic() - start) * 1000)
+            log_action_event("public", _response_log_session_id(req, rsp), action, "end",
+                             bool(rsp.get("ok")), elapsed,
+                             {"response": response_summary_for_log(rsp)})
+            return rsp
         except XcovError as exc:
-            return error_response(req.get("action", ""), req.get("request_id", "req-unknown"),
-                                  exc.code, exc.message, **exc.detail)
+            rsp = error_response(req.get("action", ""), req.get("request_id", "req-unknown"),
+                                 exc.code, exc.message, **exc.detail)
+            elapsed = int((time.monotonic() - start) * 1000)
+            log_action_event("public", sid, action, "end", False, elapsed,
+                             {"response": response_summary_for_log(rsp)})
+            return rsp
         except Exception as exc:
-            return error_response(req.get("action", ""), req.get("request_id", "req-unknown"),
-                                  "INTERNAL_ERROR", str(exc))
+            rsp = error_response(req.get("action", ""), req.get("request_id", "req-unknown"),
+                                 "INTERNAL_ERROR", str(exc))
+            elapsed = int((time.monotonic() - start) * 1000)
+            log_action_event("public", sid, action, "end", False, elapsed,
+                             {"response": response_summary_for_log(rsp)})
+            return rsp
 
     def _session(self, req: Json):
         sid = req.get("target", {}).get("session_id")
@@ -83,18 +107,11 @@ class Dispatcher:
         action = merged_action_args(req).get("action")
         if action not in P0_ACTIONS and action not in ("actions", "schema"):
             raise XcovError("ACTION_NOT_FOUND", "schema action not found", action=action)
-        schema = {
-            "type": "object",
-            "required": ["api_version", "action"],
-            "properties": {
-                "api_version": {"const": "xcov.v1"},
-                "action": {"const": action},
-                "target": {"type": "object"},
-                "args": {"type": "object"},
-                "limits": {"type": "object"},
-                "output": {"type": "object"},
-            },
-        }
+        kind = str(merged_action_args(req).get("kind", "request"))
+        try:
+            schema = schema_for_action(str(action), kind)
+        except KeyError:
+            raise XcovError("ACTION_NOT_FOUND", "schema action not found", action=action, kind=kind)
         return ok_response(req, {"matched_count": 1, "returned": 1,
                                  "truncated": False, "output_path": None},
                            {"schema": schema})
@@ -111,7 +128,9 @@ class Dispatcher:
         summary = sess.public_json()
         summary.update({"matched_count": 1, "returned": 1,
                         "truncated": False, "output_path": None})
-        return ok_response(req, summary, {"session": sess.public_json()})
+        session_json = sess.public_json()
+        update_session_manifest(sess.session_id, session_json)
+        return ok_response(req, summary, {"session": session_json})
 
     def _session_status(self, req: Json) -> Json:
         sess = self._session(req)
@@ -126,7 +145,9 @@ class Dispatcher:
         summary = sess.public_json()
         summary.update({"matched_count": 1, "returned": 1,
                         "truncated": False, "output_path": None})
-        return ok_response(req, summary, {"session": sess.public_json()})
+        session_json = sess.public_json()
+        update_session_manifest(sess.session_id, session_json)
+        return ok_response(req, summary, {"session": session_json})
 
     def _tests_list(self, req: Json, sess) -> Json:
         args = merged_action_args(req)
@@ -278,6 +299,24 @@ def merged_action_args(req: Json) -> Json:
     if "output" in req and "output" not in args:
         args["output"] = req["output"]
     return args
+
+
+def _log_session_id(req: Json) -> str:
+    target = req.get("target") if isinstance(req.get("target"), dict) else {}
+    args = req.get("args") if isinstance(req.get("args"), dict) else {}
+    if target.get("session_id"):
+        return str(target["session_id"])
+    if req.get("action") == "session.open" and args.get("name"):
+        return str(args["name"])
+    return "adhoc"
+
+
+def _response_log_session_id(req: Json, rsp: Json) -> str:
+    data = rsp.get("data") if isinstance(rsp.get("data"), dict) else {}
+    session = data.get("session") if isinstance(data.get("session"), dict) else {}
+    if session.get("session_id"):
+        return str(session["session_id"])
+    return _log_session_id(req)
 
 
 def _scope_name(full_name: str) -> str:

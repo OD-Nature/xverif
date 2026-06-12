@@ -45,9 +45,9 @@ class XverifCoverageAdapter:
         req.setdefault("api_version", "xcov.v1")
         req.setdefault("output", {})
         if output_format in ("json", "envelope"):
-            req["output"]["format"] = "json"
+            req["output"]["response_format"] = "json"
         else:
-            req["output"].pop("format", None)
+            req["output"].pop("response_format", None)
         raw = StatelessCliRunner()._run_raw("xcov", ["-"], json.dumps(req))
         if output_format == "xout":
             return raw["stdout"]
@@ -61,7 +61,7 @@ class XverifCoverageAdapter:
     def _one_shot(self, req: Json) -> Json:
         from xverif_mcp.runner import StatelessCliRunner
         req = dict(req)
-        req.setdefault("output", {})["format"] = "json"
+        req.setdefault("output", {})["response_format"] = "json"
         return StatelessCliRunner().run_json("xcov", ["--json", "-"],
                                              json.dumps(req))
 

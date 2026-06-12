@@ -179,7 +179,7 @@ printf '%s\n' '{"api_version":"xcov.v1","action":"session.open","target":{"vdb":
 tools/xcov --stdio-loop
 ```
 
-MCP 工具入口使用 `xverif_cov_session_open`、`xverif_cov_query`、`xverif_cov_session_close`。真实 NPI coverage 查询需要可访问 Synopsys license server；当前用 `/home/yian/miniconda3/envs/xdebug-mcp/bin/python` 的 Python 3.11 环境验证通过。
+MCP 工具入口使用 `xverif_cov_session_open`、`xverif_cov_query`、`xverif_cov_session_close`。真实 NPI coverage 查询需要可访问 Synopsys license server；优先使用 Python 3.11 环境，必要时再切换到 Verdi 自带 Python。
 
 完整说明见 [`xcov/README.md`](xcov/README.md)，skill 见 [`xcov/skill/SKILL.md`](xcov/skill/SKILL.md)。
 

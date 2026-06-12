@@ -94,7 +94,7 @@ tools/xverif-lsf-doctor
 > **关键**：MCP server 子进程**不会自动继承**父进程（shell / IDE）的环境变量。`bsub` 提交的 LSF job 从 MCP server 子进程继承环境，因此**所有**必须在计算节点上生效的变量都要显式列在 `.mcp.json` 的 `env` 中——包括 `VERDI_HOME`、`LD_LIBRARY_PATH`、LSF 路径、EDA license 等。`PATH` 尤其重要，必须确保 `bsub`、`bkill` 等命令在其中。
 
 替换说明：
-- `<conda-env>`：安装了 `mcp[cli]` 的 Python 环境路径（如 `~/miniconda3/envs/xdebug-mcp`）
+- `<conda-env>`：安装了 `mcp[cli]` 的 Python 3.11 环境路径
 - `<xverif>`：xverif 仓库根目录
 - `<verdi-install>`：Synopsys Verdi 安装根目录
 - `<lsf-install>`：LSF 安装根目录
@@ -166,6 +166,8 @@ AI MCP client
 | `XVERIF_XCOV_BIN` | 覆盖 xcov 可执行文件路径，默认 `tools/xcov` |
 | `XVERIF_XCOV_PYTHON` | 覆盖 xcov 使用的 Python runtime |
 | `XVERIF_XCOV_VERDI_HOME` | 覆盖 xcov 使用的 Verdi 安装路径 |
+| `XVERIF_XCOV_LOG_DIR` | 覆盖 xcov 日志目录，默认 `~/.xverif/xcov` |
+| `XVERIF_XCOV_LOG=0` | 关闭 xcov 日志 |
 | `XVERIF_MCP_FAKE_LSF=1` | 本地测试用 fake LSF runner |
 | `VERDI_HOME` | Verdi 安装目录 |
 | `LD_LIBRARY_PATH` | 需包含 `<verdi-install>/share/NPI/lib/LINUX64` |

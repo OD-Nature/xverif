@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
 
 from xcov.actions import Dispatcher
 from xcov.backend import CoverageBackend
+from xcov.logging import sanitize_for_log
+from xcov.schemas import schema_actions
 from xcov.session import XcovSession
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -14,12 +17,51 @@ XCOV = ROOT / "tools" / "xcov"
 
 
 def _run(req: dict) -> dict:
-    req.setdefault("output", {})["format"] = "json"
+    req.setdefault("output", {})["response_format"] = "json"
     proc = subprocess.run([str(XCOV), "--json", "-"], input=json.dumps(req),
                           text=True, capture_output=True, check=False,
                           cwd=str(ROOT))
     assert proc.returncode == 0, proc.stderr + proc.stdout
     return json.loads(proc.stdout)
+
+
+def _run_proc(req: dict, args: list[str] | None = None, env: dict | None = None):
+    merged_env = os.environ.copy()
+    if env:
+        merged_env.update(env)
+    return subprocess.run([str(XCOV), *(args or ["-"])], input=json.dumps(req),
+                          text=True, capture_output=True, check=False,
+                          cwd=str(ROOT), env=merged_env)
+
+
+def _read_last_json_line(path: Path) -> dict:
+    lines = [line for line in path.read_text(encoding="utf-8").splitlines() if line]
+    assert lines
+    return json.loads(lines[-1])
+
+
+def test_cli_json_flag_outputs_json_not_xout(tmp_path):
+    proc = _run_proc({
+        "api_version": "xcov.v1",
+        "request_id": "actions",
+        "action": "actions",
+    }, ["--json", "-"], {"XVERIF_XCOV_LOG_DIR": str(tmp_path / "logs")})
+    assert proc.returncode == 0, proc.stderr + proc.stdout
+    assert proc.stdout.lstrip().startswith("{")
+    assert "XOUT_BEGIN" not in proc.stdout
+    assert json.loads(proc.stdout)["ok"] is True
+
+
+def test_output_response_format_json_outputs_json(tmp_path):
+    proc = _run_proc({
+        "api_version": "xcov.v1",
+        "request_id": "actions",
+        "action": "actions",
+        "output": {"response_format": "json"},
+    }, ["-"], {"XVERIF_XCOV_LOG_DIR": str(tmp_path / "logs")})
+    assert proc.returncode == 0, proc.stderr + proc.stdout
+    assert proc.stdout.lstrip().startswith("{")
+    assert "XOUT_BEGIN" not in proc.stdout
 
 
 def test_session_open_fake_json():
@@ -33,6 +75,51 @@ def test_session_open_fake_json():
     assert rsp["ok"] is True
     assert rsp["summary"]["session_id"] == "cov0"
     assert rsp["summary"]["worker"] == "fake"
+
+
+def test_schema_registry_covers_all_p0_actions():
+    dispatcher = Dispatcher()
+    for action in schema_actions():
+        rsp = dispatcher.dispatch({
+            "api_version": "xcov.v1",
+            "request_id": f"schema-{action}",
+            "action": "schema",
+            "args": {"action": action},
+            "output": {"response_format": "json"},
+        })
+        assert rsp["ok"] is True, action
+        schema = rsp["data"]["schema"]
+        assert schema["properties"]["action"]["const"] == action
+
+
+def test_schema_required_fields_are_action_specific():
+    dispatcher = Dispatcher()
+    source = dispatcher.dispatch({
+        "api_version": "xcov.v1", "request_id": "schema-source",
+        "action": "schema", "args": {"action": "source.map"},
+        "output": {"response_format": "json"},
+    })["data"]["schema"]
+    session_open = dispatcher.dispatch({
+        "api_version": "xcov.v1", "request_id": "schema-open",
+        "action": "schema", "args": {"action": "session.open"},
+        "output": {"response_format": "json"},
+    })["data"]["schema"]
+    object_get = dispatcher.dispatch({
+        "api_version": "xcov.v1", "request_id": "schema-object",
+        "action": "schema", "args": {"action": "cov.object.get"},
+        "output": {"response_format": "json"},
+    })["data"]["schema"]
+    assert set(source["properties"]["args"]["required"]) == {"file", "line"}
+    assert session_open["properties"]["target"]["required"] == ["vdb"]
+    assert object_get["properties"]["args"]["required"] == ["name"]
+
+
+def test_logging_sanitize_omits_heavy_fields():
+    sanitized = sanitize_for_log({"data": {"items": [{"x": i} for i in range(100)]},
+                                  "small": True})
+    assert sanitized["data"] == "<omitted:large-field>"
+    assert sanitized["small"] is True
+    assert sanitized["log_truncated"] is True
 
 
 def test_stdio_loop_fake_holes():
@@ -55,6 +142,49 @@ def test_stdio_loop_fake_holes():
     assert out[2]["ok"] is True
     assert "@xcov.v1 ok action=cov.holes" in out[2]["xout"]
     assert out[2]["json"]["summary"]["matched_count"] == 2
+
+
+def test_logging_writes_action_manifest_lifecycle_and_transport(tmp_path):
+    log_dir = tmp_path / "xcov_logs"
+    reqs = [
+        {"api_version": "xcov.v1", "request_id": "open",
+         "action": "session.open", "target": {"vdb": "fake"},
+         "args": {"name": "cov0", "fake": True}},
+        {"api_version": "xcov.v1", "request_id": "holes",
+         "action": "cov.holes", "target": {"session_id": "cov0"},
+         "args": {"metrics": ["toggle"]}},
+        {"api_version": "xcov.v1", "request_id": "close",
+         "action": "session.close", "target": {"session_id": "cov0"}},
+    ]
+    proc = subprocess.run([str(XCOV), "--stdio-loop"],
+                          input="\n".join(json.dumps(x) for x in reqs) + "\n",
+                          text=True, capture_output=True, check=False,
+                          cwd=str(ROOT),
+                          env={**os.environ, "XVERIF_XCOV_LOG_DIR": str(log_dir)})
+    assert proc.returncode == 0
+    action_log = log_dir / "sessions" / "cov0" / "logs" / "actions.ndjson"
+    manifest = log_dir / "sessions" / "cov0" / "session.json"
+    lifecycle = log_dir / "backend" / "sessions" / "cov0" / "logs" / "lifecycle.ndjson"
+    transport = log_dir / "backend" / "sessions" / "cov0" / "logs" / "transport.ndjson"
+    assert action_log.exists()
+    assert manifest.exists()
+    assert lifecycle.exists()
+    assert transport.exists()
+    assert _read_last_json_line(action_log)["component"] == "xcov"
+    assert json.loads(manifest.read_text(encoding="utf-8"))["session_id"] == "cov0"
+
+
+def test_logging_can_be_disabled(tmp_path):
+    log_dir = tmp_path / "disabled_logs"
+    proc = _run_proc({
+        "api_version": "xcov.v1",
+        "request_id": "open",
+        "action": "session.open",
+        "target": {"vdb": "fake"},
+        "args": {"name": "cov0", "fake": True},
+    }, ["--json", "-"], {"XVERIF_XCOV_LOG_DIR": str(log_dir), "XVERIF_XCOV_LOG": "0"})
+    assert proc.returncode == 0
+    assert not log_dir.exists()
 
 
 def test_regex_rejected():

@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 
 from .backend import CoverageBackend, FakeCoverageBackend, NpiCoverageBackend
 from .errors import XcovError
+from .logging import log_lifecycle_event
 
 Json = Dict[str, Any]
 
@@ -43,11 +44,15 @@ class SessionManager:
         sid = name or "cov0"
         if sid in self.sessions and self.sessions[sid].state == "alive":
             if reopen:
+                log_lifecycle_event(sid, "session.open.reopen", True, {"vdb": vdb})
                 self.sessions[sid].close()
             elif reuse:
+                log_lifecycle_event(sid, "session.open.reuse", True, {"vdb": vdb})
                 return self.sessions[sid]
             else:
+                log_lifecycle_event(sid, "session.open.exists", False, {"vdb": vdb})
                 raise XcovError("SESSION_EXISTS", "session already exists", session_id=sid)
+        log_lifecycle_event(sid, "session.open.begin", True, {"vdb": vdb, "fake": fake})
         if fake or vdb == "fake":
             backend: CoverageBackend = FakeCoverageBackend(vdb)
             worker = "fake"
@@ -56,6 +61,7 @@ class SessionManager:
             worker = "npi_python"
         sess = XcovSession(session_id=sid, vdb=vdb, backend=backend, worker=worker)
         self.sessions[sid] = sess
+        log_lifecycle_event(sid, "session.open.ok", True, {"vdb": vdb, "worker": worker})
         return sess
 
     def get(self, session_id: str) -> XcovSession:
@@ -67,6 +73,8 @@ class SessionManager:
 
     def close(self, session_id: str) -> XcovSession:
         sess = self.get(session_id)
+        log_lifecycle_event(session_id, "session.close.begin", True, {"vdb": sess.vdb})
         sess.close()
         self.sessions.pop(session_id, None)
+        log_lifecycle_event(session_id, "session.close.ok", True, {"vdb": sess.vdb})
         return sess

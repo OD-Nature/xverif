@@ -34,8 +34,8 @@ def parse_request(text: str) -> Json:
 
 def response_format(req: Json) -> str:
     out = req.get("output")
-    if isinstance(out, dict) and out.get("format") == "json":
-        return "json"
+    if isinstance(out, dict):
+        return str(out.get("response_format") or "xout")
     args = req.get("args", {})
     if isinstance(args, dict):
         output = args.get("output", {})

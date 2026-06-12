@@ -143,7 +143,8 @@ class XdebugLoopSession:
                 "target": {self.target_key: self.fsdb},
                 "args": {"name": self.alias, "reuse": self.reuse,
                          "reopen": self.reopen},
-                "output": {"format": "json"},
+                "output": {"response_format": "json"} if self.backend == "xcov"
+                else {"format": "json"},
             }
             if self.backend == "xdebug":
                 open_req["args"]["transport"] = "uds"
@@ -169,7 +170,8 @@ class XdebugLoopSession:
                     "request_id": f"close-{_safe_name(self.alias)}",
                     "api_version": self.api_version, "action": "session.close",
                     "target": {"session_id": self.session_id},
-                    "output": {"format": "json"},
+                    "output": {"response_format": "json"} if self.backend == "xcov"
+                    else {"format": "json"},
                 }, timeout=close_timeout())
             except Exception:
                 pass
@@ -208,7 +210,10 @@ class XdebugLoopSession:
             req["limits"] = limits
         req["output"] = dict(output or {})
         if output_format in ("json", "envelope"):
-            req["output"]["format"] = "json"
+            if self.backend == "xcov":
+                req["output"]["response_format"] = "json"
+            else:
+                req["output"]["format"] = "json"
         try:
             rsp = self._call_raw(req)
         except ProtocolError as exc:
