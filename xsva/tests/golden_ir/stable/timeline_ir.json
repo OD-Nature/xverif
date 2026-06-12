@@ -34,6 +34,12 @@
     }
   ],
   "failure_conditions": [],
-  "semantic_notes": [],
+  "semantic_notes": [
+    {
+      "kind": "summary",
+      "expr": "##1 valid & & $stable ( data )",
+      "text": "valid & & $stable ( data ) must be true at cycle +1."
+    }
+  ],
   "diagnostics": []
 }

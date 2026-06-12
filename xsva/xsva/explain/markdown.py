@@ -44,8 +44,11 @@ def render_timeline_markdown(timeline: TimelineIR) -> str:
         for note in timeline.semantic_notes:
             lines.append(f"- {note.text}")
         lines.append("")
+        _append_failure_conditions(lines, timeline)
+        _append_diagnostics(lines, timeline)
+        return "\n".join(lines)
 
-    # Obligations
+    # Obligations fallback for timelines without user-facing summaries.
     lines.append("## Obligations")
 
     if len(timeline.match_paths) == 1 and timeline.match_paths[0].obligations:
@@ -65,18 +68,23 @@ def render_timeline_markdown(timeline: TimelineIR) -> str:
             lines.append("")
     lines.append("")
 
-    # Failure conditions
+    _append_failure_conditions(lines, timeline)
+    _append_diagnostics(lines, timeline)
+
+    return "\n".join(lines)
+
+
+def _append_failure_conditions(lines: list[str], timeline: TimelineIR) -> None:
     if timeline.failure_conditions:
         lines.append("## Failure Conditions")
         for fc in timeline.failure_conditions:
             lines.append(f"- `{fc.condition}`")
         lines.append("")
 
-    # Diagnostics
+
+def _append_diagnostics(lines: list[str], timeline: TimelineIR) -> None:
     if timeline.diagnostics:
         lines.append("## Diagnostics")
         for d in timeline.diagnostics:
             lines.append(f"- [{d.severity}] **{d.code}**: {d.message}")
         lines.append("")
-
-    return "\n".join(lines)

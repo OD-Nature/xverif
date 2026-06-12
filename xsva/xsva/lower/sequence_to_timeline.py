@@ -72,8 +72,9 @@ def lower_sequence_to_timeline(
         obligation_nodes = []
         offset = 0
 
-    # 3. 高级语法摘要 + 路径展开
-    semantic_notes = _collect_semantic_notes(nodes)
+    # 3. 用户语义摘要 + 路径展开
+    summary_nodes = obligation_nodes if impl_idx >= 0 else nodes
+    semantic_notes = _collect_semantic_notes(summary_nodes)
     has_first_match_summary = any(n.kind == "first_match" for n in semantic_notes)
 
     from .path_expand import expand_paths, expand_first_match
@@ -402,19 +403,24 @@ def _collect_semantic_notes(nodes: list[SeqNode]) -> list[SemanticNoteIR]:
     for idx, node in enumerate(nodes):
         if node.kind == SeqNodeKind.FIRST_MATCH:
             suffix_delay = _fixed_delay_at(nodes, idx + 1)
+            suffix_expr = _expr_at(nodes, idx + 2) if suffix_delay is not None else ""
             _append_unique_note(notes, SemanticNoteIR(
-                kind="first_match", expr=_node_raw(node), text=_first_match_text(node, suffix_delay)))
+                kind="first_match", expr=_node_raw(node),
+                text=_first_match_text(node, suffix_delay, suffix_expr)))
         elif node.kind == SeqNodeKind.INTERSECT:
-            raw = _node_raw(node)
-            _append_unique_note(notes, SemanticNoteIR(kind="intersect", expr=raw, text=_intersect_text(raw)))
+            for note in _binary_sequence_notes("intersect", node):
+                _append_unique_note(notes, note)
         elif node.kind == SeqNodeKind.THROUGHOUT:
             raw = _node_raw(node)
-            text = (f"{node.expr.raw} must hold for the entire matched interval of the sequence on the right."
-                    if node.expr else _throughout_text(raw))
-            _append_unique_note(notes, SemanticNoteIR(kind="throughout", expr=raw, text=text))
+            seq_summary = _summarize_sequence(node.children[0], absolute=False) if node.children else "the sequence must match"
+            _append_unique_note(notes, SemanticNoteIR(kind="throughout_sequence", expr=raw,
+                                                      text=f"Sequence: {seq_summary}"))
+            expr = node.expr.raw if node.expr else "The expression"
+            _append_unique_note(notes, SemanticNoteIR(kind="throughout", expr=raw,
+                                                      text=f"Relation: {expr} must hold throughout the entire matched interval of the sequence."))
         elif node.kind == SeqNodeKind.WITHIN:
-            raw = _node_raw(node)
-            _append_unique_note(notes, SemanticNoteIR(kind="within", expr=raw, text=_within_text(raw)))
+            for note in _binary_sequence_notes("within", node):
+                _append_unique_note(notes, note)
         elif node.kind == SeqNodeKind.REPEAT:
             _append_unique_note(notes, SemanticNoteIR(
                 kind=f"repeat_{node.repeat_kind}", expr=_node_raw(node),
@@ -424,9 +430,10 @@ def _collect_semantic_notes(nodes: list[SeqNode]) -> list[SemanticNoteIR]:
             note = _semantic_note_from_raw(node.expr.raw)
             if note:
                 _append_unique_note(notes, note)
-        for child in node.children:
-            for note in _collect_semantic_notes([child]):
-                _append_unique_note(notes, note)
+    if not notes:
+        summary = _summarize_sequence(nodes, absolute=True)
+        if summary:
+            _append_unique_note(notes, SemanticNoteIR(kind="summary", expr=_nodes_raw(nodes), text=summary))
     return notes
 
 
@@ -476,16 +483,19 @@ def _repeat_text(expr: str, repeat_kind: str, min_c: int, max_c: int = 0) -> str
     return f"{clean_expr} uses {repeat_kind} repetition."
 
 
-def _first_match_text(node: SeqNode, suffix_delay: int | None = None) -> str:
+def _first_match_text(node: SeqNode, suffix_delay: int | None = None, suffix_expr: str = "") -> str:
     raw = _node_raw(node)
     window = _first_delay_window(node)
     first_expr = _first_expr_after_delay(node)
     suffix_delay = suffix_delay if suffix_delay is not None else _suffix_delay_after_first_match(raw)
+    if window and first_expr and suffix_delay is not None and suffix_expr:
+        return (f"{first_expr} must be the first match at cycle +{window[0]} to +{window[1]}; "
+                f"{suffix_expr} must be true {suffix_delay} clk after that first {first_expr}.")
     if window and first_expr and suffix_delay is not None:
-        return (f"{first_expr} must be the first match within {window[0]} to {window[1]} clk cycles; "
+        return (f"{first_expr} must be the first match at cycle +{window[0]} to +{window[1]}; "
                 f"the following sequence is checked {suffix_delay} clk after that first match.")
     if window and first_expr:
-        return f"{first_expr} must be the first match within {window[0]} to {window[1]} clk cycles."
+        return f"{first_expr} must be the first match at cycle +{window[0]} to +{window[1]}."
     return "The first_match sequence selects the earliest matching path, and later checks are relative to that first match."
 
 
@@ -523,6 +533,32 @@ def _fixed_delay_at(nodes: list[SeqNode], idx: int) -> int | None:
     return None
 
 
+def _expr_at(nodes: list[SeqNode], idx: int) -> str:
+    if idx >= len(nodes):
+        return ""
+    return _match_expr(nodes[idx])
+
+
+def _binary_sequence_notes(kind: str, node: SeqNode) -> list[SemanticNoteIR]:
+    if len(node.children) < 2:
+        raw = _node_raw(node)
+        text = _intersect_text(raw) if kind == "intersect" else _within_text(raw)
+        return [SemanticNoteIR(kind=kind, expr=raw, text=f"Relation: {text}")]
+
+    raw = _node_raw(node)
+    left = _summarize_sequence(node.children[0], absolute=False)
+    right = _summarize_sequence(node.children[1], absolute=False)
+    if kind == "intersect":
+        relation = "sequence 1 and sequence 2 must start on the same clk and end on the same clk."
+    else:
+        relation = "sequence 1's matched interval must be contained within sequence 2's matched interval."
+    return [
+        SemanticNoteIR(kind=f"{kind}_sequence_1", expr=raw, text=f"Sequence 1: {left}"),
+        SemanticNoteIR(kind=f"{kind}_sequence_2", expr=raw, text=f"Sequence 2: {right}"),
+        SemanticNoteIR(kind=kind, expr=raw, text=f"Relation: {relation}"),
+    ]
+
+
 def _intersect_text(raw: str) -> str:
     return "The left and right sequences must start on the same clk and finish on the same clk."
 
@@ -551,6 +587,140 @@ def _node_raw(node: SeqNode) -> str:
     if node.children:
         return " ".join(_node_raw(c) for c in node.children if _node_raw(c))
     return node.kind.value
+
+
+def _nodes_raw(nodes: list[SeqNode]) -> str:
+    return " ".join(_node_raw(n) for n in nodes if _node_raw(n))
+
+
+def _summarize_sequence(node_or_nodes, absolute: bool = False) -> str:
+    nodes = node_or_nodes if isinstance(node_or_nodes, list) else [node_or_nodes]
+    nodes = _flatten_concat(nodes)
+
+    if len(nodes) == 1:
+        node = nodes[0]
+        if node.kind == SeqNodeKind.CONCAT:
+            return _summarize_sequence(node.children, absolute=absolute)
+        if node.kind == SeqNodeKind.REPEAT:
+            return _repeat_text(_node_raw(node.children[0]) if node.children else node.raw,
+                                node.repeat_kind, node.repeat_min, node.repeat_max)
+        if node.kind == SeqNodeKind.FIRST_MATCH:
+            return _first_match_text(node)
+        if node.kind in (SeqNodeKind.EXPR, SeqNodeKind.EXPR_MATCH, SeqNodeKind.MATCH_ITEM):
+            expr = _match_expr(node)
+            if not expr:
+                return ""
+            if absolute:
+                return f"{expr} must be true at cycle +0."
+            return f"{expr} must be true."
+        if node.kind == SeqNodeKind.THROUGHOUT:
+            expr = node.expr.raw if node.expr else "The expression"
+            seq = _summarize_sequence(node.children[0], absolute=False) if node.children else "the sequence must match"
+            return f"Sequence: {seq} Relation: {expr} must hold throughout the entire matched interval of the sequence."
+        if node.kind in (SeqNodeKind.INTERSECT, SeqNodeKind.WITHIN):
+            return " ".join(note.text for note in _binary_sequence_notes(node.kind.value, node))
+
+    parts: list[str] = []
+    cycle = 0
+    last_expr = ""
+    i = 0
+    while i < len(nodes):
+        node = nodes[i]
+        if node.kind == SeqNodeKind.DELAY and node.delay and i + 1 < len(nodes):
+            target = nodes[i + 1]
+            expr = _match_expr(target)
+            if not expr:
+                cycle += node.delay.min_cycles
+                i += 1
+                continue
+            min_c = cycle + node.delay.min_cycles
+            max_c = cycle + (node.delay.max_cycles if node.delay.max_cycles is not None else node.delay.min_cycles)
+            fixed_delay = node.delay.min_cycles == (node.delay.max_cycles if node.delay.max_cycles is not None else node.delay.min_cycles)
+            if last_expr and fixed_delay:
+                phrase = f"{expr} must be true {_clk_count(node.delay.min_cycles)} after {last_expr}"
+            elif last_expr:
+                phrase = f"{expr} must be true {node.delay.min_cycles} to {max_c - cycle} clk after {last_expr}"
+            elif absolute:
+                phrase = _absolute_delay_phrase(expr, min_c, max_c)
+            else:
+                phrase = _relative_delay_phrase(expr, node.delay.min_cycles,
+                                                node.delay.max_cycles if node.delay.max_cycles is not None else node.delay.min_cycles)
+            capture = _capture_phrase(target)
+            if capture:
+                phrase += f", {capture}"
+            parts.append(phrase)
+            last_expr = expr
+            cycle = max_c
+            i += 2
+            continue
+
+        expr = _match_expr(node)
+        if expr:
+            phrase = f"{expr} must be true" if not absolute else f"{expr} must be true at cycle +{cycle}"
+            capture = _capture_phrase(node)
+            if capture:
+                phrase += f", {capture}"
+            parts.append(phrase)
+            last_expr = expr
+        i += 1
+
+    if not parts:
+        return ""
+    return _join_summary_parts(parts) + "."
+
+
+def _match_expr(node: SeqNode) -> str:
+    if node.kind in (SeqNodeKind.EXPR, SeqNodeKind.EXPR_MATCH) and node.expr:
+        return _clean_raw(node.expr.raw)
+    if node.kind == SeqNodeKind.MATCH_ITEM:
+        if node.guard_expr and node.guard_expr.raw and node.guard_expr.raw != "1":
+            return _clean_raw(node.guard_expr.raw)
+        if node.capture_var:
+            return _clean_raw(node.capture_expr.raw) if node.capture_expr else ""
+    return ""
+
+
+def _capture_phrase(node: SeqNode) -> str:
+    if node.kind != SeqNodeKind.MATCH_ITEM:
+        return ""
+    captures = []
+    if node.capture_var and node.capture_expr:
+        captures.append(f"capturing {node.capture_var} = {_clean_raw(node.capture_expr.raw)} at that matching cycle")
+    for action in node.actions:
+        if action.action_kind == "capture":
+            captures.append(f"capturing {action.lhs} = {_clean_raw(action.rhs)} at that matching cycle")
+        else:
+            captures.append(f"updating {action.lhs} = {_clean_raw(action.rhs)} at that matching cycle")
+    return "; ".join(captures)
+
+
+def _absolute_delay_phrase(expr: str, min_c: int, max_c: int) -> str:
+    if min_c == max_c:
+        return f"{expr} must be true at cycle +{min_c}"
+    return f"{expr} must be true at cycle +{min_c} to +{max_c}"
+
+
+def _relative_delay_phrase(expr: str, min_c: int, max_c: int) -> str:
+    if min_c == max_c:
+        return f"{expr} must be true {_clk_count(min_c)} later"
+    return f"{expr} must be true {min_c} to {max_c} clk later"
+
+
+def _clk_count(count: int) -> str:
+    return f"{count} clk"
+
+
+def _join_summary_parts(parts: list[str]) -> str:
+    if len(parts) <= 1:
+        return parts[0]
+    first, rest = parts[0], parts[1:]
+    joined = first
+    for part in rest:
+        if part.startswith("then "):
+            joined += f", {part}"
+        else:
+            joined += f"; {part}"
+    return joined
 
 
 def _walk_nodes(node: SeqNode):

@@ -48,6 +48,12 @@
   "failure_conditions": [
     "ack & & rsp == v is never true from cycle +1 to +4"
   ],
-  "semantic_notes": [],
+  "semantic_notes": [
+    {
+      "kind": "summary",
+      "expr": "##[1:4] ack & & rsp == v",
+      "text": "ack & & rsp == v must be true at cycle +1 to +4."
+    }
+  ],
   "diagnostics": []
 }

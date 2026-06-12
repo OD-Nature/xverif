@@ -108,6 +108,12 @@
     "ack is false at cycle +3",
     "done is false at cycle +4"
   ],
-  "semantic_notes": [],
+  "semantic_notes": [
+    {
+      "kind": "summary",
+      "expr": "##[1:3] ack ##1 done",
+      "text": "ack must be true at cycle +1 to +3; done must be true 1 clk after ack."
+    }
+  ],
   "diagnostics": []
 }

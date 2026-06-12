@@ -15,7 +15,7 @@ from xverif_mcp.adapters.xloc import loc_resolve, loc_context, loc_stats, loc_an
 from xverif_mcp.adapters.xberif import (context_status, context_list_topics, context_brief,
                                          context_get, context_detail, context_validate,
                                          context_config_init, context_init, context_repair)
-from xverif_mcp.adapters.xsva import sva_list, sva_scan, sva_parse, sva_explain, sva_render
+from xverif_mcp.adapters.xsva import sva_list, sva_scan, sva_parse, sva_explain
 from xverif_mcp.errors import error_payload
 from xverif_mcp.tool_policy import filtered_catalog, policy_summary, tool_enabled
 
@@ -855,20 +855,6 @@ def xverif_sva_explain_property(file: str, property: str, strict: bool = False,
     return sva_explain(file, property, strict=strict, output_format=output_format)
 
 
-@xverif_tool("sva")
-def xverif_sva_render_property(file: str, property: str, format: str = "mermaid",
-                       output_format: str = "xout") -> Any:
-    """Render a SVA property as mermaid or SVG.
-
-    Args:
-        file: Path to SVA source file.
-        property: Property/assertion name.
-        format: "mermaid" or "svg".
-        output_format: "xout" (rendered text).
-    """
-    return sva_render(file, property, format=format, output_format=output_format)
-
-
 # ---------------------------------------------------------------------------
 # Tool catalog (meta-tools for AI discovery)
 # ---------------------------------------------------------------------------
@@ -1030,9 +1016,6 @@ TOOL_CATALOG = [
     {"name": "xverif_sva_explain_property", "category": "sva", "backend": "xsva",
      "stateful": False, "requires_session": False,
      "description": "Generate a human-readable SVA property explanation."},
-    {"name": "xverif_sva_render_property", "category": "sva", "backend": "xsva",
-     "stateful": False, "requires_session": False,
-     "description": "Render a SVA property as mermaid or SVG."},
 ]
 
 _WRITE_TOOL_NAMES = {

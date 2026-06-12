@@ -34,6 +34,12 @@
     }
   ],
   "failure_conditions": [],
-  "semantic_notes": [],
+  "semantic_notes": [
+    {
+      "kind": "summary",
+      "expr": "##2 rsp == $past ( data , 2 )",
+      "text": "rsp == $past ( data , 2 ) must be true at cycle +2."
+    }
+  ],
   "diagnostics": []
 }

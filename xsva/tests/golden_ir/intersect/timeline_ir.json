@@ -23,9 +23,19 @@
   "failure_conditions": [],
   "semantic_notes": [
     {
+      "kind": "intersect_sequence_1",
+      "expr": "a ##[1:3] b c ##2 d",
+      "text": "Sequence 1: a must be true; b must be true 1 to 3 clk after a."
+    },
+    {
+      "kind": "intersect_sequence_2",
+      "expr": "a ##[1:3] b c ##2 d",
+      "text": "Sequence 2: c must be true; d must be true 2 clk after c."
+    },
+    {
       "kind": "intersect",
       "expr": "a ##[1:3] b c ##2 d",
-      "text": "The left and right sequences must start on the same clk and finish on the same clk."
+      "text": "Relation: sequence 1 and sequence 2 must start on the same clk and end on the same clk."
     }
   ],
   "diagnostics": [

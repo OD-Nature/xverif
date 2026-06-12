@@ -23,9 +23,14 @@
   "failure_conditions": [],
   "semantic_notes": [
     {
+      "kind": "throughout_sequence",
+      "expr": "valid",
+      "text": "Sequence: ack must be true; done must be true 1 clk after ack."
+    },
+    {
       "kind": "throughout",
       "expr": "valid",
-      "text": "valid must hold for the entire matched interval of the sequence on the right."
+      "text": "Relation: valid must hold throughout the entire matched interval of the sequence."
     }
   ],
   "diagnostics": [

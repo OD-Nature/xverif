@@ -25,7 +25,7 @@
     {
       "kind": "first_match",
       "expr": "first_match(##[1:4] ack)",
-      "text": "ack must be the first match within 1 to 4 clk cycles; the following sequence is checked 1 clk after that first match."
+      "text": "ack must be the first match at cycle +1 to +4; done must be true 1 clk after that first ack."
     }
   ],
   "diagnostics": [

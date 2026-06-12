@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from xsva.ir.timeline import TimelineIR, PathIR, ObligationIR, ObligationKind
+from xsva.ir.timeline import TimelineIR
 
 
 def render_timeline_text(timeline: TimelineIR) -> str:
@@ -35,8 +35,11 @@ def render_timeline_text(timeline: TimelineIR) -> str:
         for note in timeline.semantic_notes:
             lines.append(f"  - {note.text}")
         lines.append("")
+        _append_diagnostics(lines, timeline)
+        lines.append(sep)
+        return "\n".join(lines)
 
-    # Obligations / Paths
+    # Obligations / Paths fallback for timelines without user-facing summaries.
     if len(timeline.paths) == 1 and len(timeline.paths[0].obligations) == 1:
         # 单 obligation — 简化输出
         ob = timeline.paths[0].obligations[0]
@@ -67,15 +70,18 @@ def render_timeline_text(timeline: TimelineIR) -> str:
         for fc in timeline.failure_conditions:
             lines.append(f"  {fc.condition}")
 
-    # Diagnostics
+    _append_diagnostics(lines, timeline)
+
+    lines.append(sep)
+    return "\n".join(lines)
+
+
+def _append_diagnostics(lines: list[str], timeline: TimelineIR) -> None:
     if timeline.diagnostics:
         lines.append("")
         lines.append("Diagnostics:")
         for d in timeline.diagnostics:
             lines.append(f"  [{d.severity}] {d.code}: {d.message}")
-
-    lines.append(sep)
-    return "\n".join(lines)
 
 
 def _describe_trigger(timeline: TimelineIR) -> str:

@@ -23,9 +23,19 @@
   "failure_conditions": [],
   "semantic_notes": [
     {
+      "kind": "within_sequence_1",
+      "expr": "a ## 1 b c ## [ 1 : 3 ] d",
+      "text": "Sequence 1: a must be true; b must be true 1 clk after a."
+    },
+    {
+      "kind": "within_sequence_2",
+      "expr": "a ## 1 b c ## [ 1 : 3 ] d",
+      "text": "Sequence 2: c must be true; d must be true 1 to 3 clk after c."
+    },
+    {
       "kind": "within",
-      "expr": "( a ## 1 b ) ( c ## [ 1 : 3 ] d )",
-      "text": "The left sequence must match entirely within the matched interval of the sequence on the right."
+      "expr": "a ## 1 b c ## [ 1 : 3 ] d",
+      "text": "Relation: sequence 1's matched interval must be contained within sequence 2's matched interval."
     }
   ],
   "diagnostics": [

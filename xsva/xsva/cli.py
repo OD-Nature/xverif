@@ -6,7 +6,6 @@
   xsva lint    --file <file>
   xsva explain --file <file> --property <name> [--json] [--markdown] [--strict]
   xsva parse   --file <file> --property <name> --emit surface-ir|sequence-ir|timeline-ir
-  xsva render  --file <file> --property <name> --format mermaid|svg
 
 Exit code (对齐 spec 5.7):
   0 = success, 1 = parse error, 2 = unsupported in strict mode,
@@ -31,8 +30,6 @@ from xsva.lower.surface_to_sequence import lower_surface_to_sequence
 from xsva.lower.sequence_to_timeline import lower_sequence_to_timeline
 from xsva.explain.text import render_timeline_text
 from xsva.explain.markdown import render_timeline_markdown
-from xsva.explain.mermaid import render_timeline_mermaid
-from xsva.explain.svg import render_timeline_svg
 
 EXIT_SUCCESS = 0
 EXIT_PARSE_ERROR = 1
@@ -204,24 +201,6 @@ def cmd_parse(args: argparse.Namespace) -> None:
     print(json.dumps(output, indent=2, ensure_ascii=False, default=str))
 
 
-def cmd_render(args: argparse.Namespace) -> None:
-    try:
-        timeline, surface, diag = _parse_and_lower(args)
-    except SystemExit:
-        raise
-    except Exception as e:
-        print(f"xsva error: parse failed: {e}", file=sys.stderr)
-        sys.exit(EXIT_PARSE_ERROR)
-
-    if args.format == "mermaid":
-        print(render_timeline_mermaid(timeline))
-    elif args.format == "svg":
-        print(render_timeline_svg(timeline))
-    else:
-        print(f"xsva error: unknown format: {args.format}", file=sys.stderr)
-        sys.exit(EXIT_INTERNAL_ERROR)
-
-
 # ── 序列化 helpers ──
 
 def _output_json(timeline: TimelineIR, diag: DiagnosticBag) -> None:
@@ -332,13 +311,6 @@ def main() -> None:
                          choices=["surface-ir", "sequence-ir", "timeline-ir"],
                          help="输出 IR 层级")
 
-    # render
-    render_p = subparsers.add_parser("render", help="可视化输出")
-    render_p.add_argument("--file", required=True, help="SVA 源文件路径")
-    render_p.add_argument("--property", required=True, help="property 名称")
-    render_p.add_argument("--format", required=True, choices=["mermaid", "svg"],
-                          help="输出格式")
-
     args = parser.parse_args()
 
     if args.command is None:
@@ -352,7 +324,6 @@ def main() -> None:
             "lint": cmd_lint,
             "explain": cmd_explain,
             "parse": cmd_parse,
-            "render": cmd_render,
         }
         dispatch[args.command](args)
     except SystemExit:

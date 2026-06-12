@@ -111,6 +111,11 @@ class SequenceParser:
                     nodes.append(match_node)
                     continue
 
+                seq_node = self._parse_parenthesized_sequence()
+                if seq_node:
+                    nodes.append(seq_node)
+                    continue
+
                 node = self._parse_expr_node()
                 if node:
                     nodes.append(node)
@@ -171,6 +176,52 @@ class SequenceParser:
             guard_expr = ExprParser(Scanner("1", file="<match_guard>")).parse_expr()
 
         return SeqNode.match_item(guard_expr, actions, raw=self._reconstruct_raw(inner_tokens))
+
+    def _parse_parenthesized_sequence(self) -> SeqNode | None:
+        """解析 `(a ##1 b)` 这类括号包裹的 sequence。"""
+        saved = (self._scanner._pos, self._scanner._line, self._scanner._col)
+        self._scanner.expect(TokenKind.LPAREN)
+
+        inner_tokens = []
+        depth = 1
+        while depth > 0:
+            tk = self._scanner.peek()
+            if tk.kind == TokenKind.EOF:
+                self._scanner._pos, self._scanner._line, self._scanner._col = saved
+                return None
+            tk = self._scanner.advance()
+            if tk.kind == TokenKind.LPAREN:
+                depth += 1
+            elif tk.kind == TokenKind.RPAREN:
+                depth -= 1
+                if depth == 0:
+                    break
+            inner_tokens.append(tk)
+
+        if not self._tokens_look_like_sequence(inner_tokens):
+            self._scanner._pos, self._scanner._line, self._scanner._col = saved
+            return None
+
+        raw = self._reconstruct_raw(inner_tokens)
+        parser = SequenceParser(Scanner(raw, file="<paren_sequence>"), self._diag)
+        inner_nodes = parser.parse_sequence()
+        if not inner_nodes:
+            self._scanner._pos, self._scanner._line, self._scanner._col = saved
+            return None
+        return SeqNode.sequence(inner_nodes, raw=raw)
+
+    def _tokens_look_like_sequence(self, tokens) -> bool:
+        sequence_tokens = {
+            TokenKind.HASH_HASH,
+            TokenKind.KW_FIRST_MATCH,
+            TokenKind.KW_THROUGHOUT,
+            TokenKind.KW_INTERSECT,
+            TokenKind.KW_WITHIN,
+            TokenKind.REPEAT_CONSEC,
+            TokenKind.REPEAT_NONCONSEC,
+            TokenKind.REPEAT_GOTO,
+        }
+        return any(t.kind in sequence_tokens for t in tokens)
 
     def _split_top_level_commas(self, tokens) -> list[list]:
         parts: list[list] = [[]]

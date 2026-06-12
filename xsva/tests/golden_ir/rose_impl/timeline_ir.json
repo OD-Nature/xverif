@@ -36,6 +36,12 @@
   "failure_conditions": [
     "ack is false at cycle +1"
   ],
-  "semantic_notes": [],
+  "semantic_notes": [
+    {
+      "kind": "summary",
+      "expr": "##1 ack",
+      "text": "ack must be true at cycle +1."
+    }
+  ],
   "diagnostics": []
 }

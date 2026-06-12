@@ -102,8 +102,8 @@ property p;
 endproperty
 """, "p")
     note_text = " ".join(n.text for n in timeline.semantic_notes)
-    assert "first match within 1 to 4 clk cycles" in note_text
-    assert "1 clk after that first match" in note_text
+    assert "first match at cycle +1 to +4" in note_text
+    assert "done must be true 1 clk after that first ack" in note_text
     assert all(ob.expr != "done" or ob.cycle != 5 for ob in timeline.obligations)
 
 
@@ -147,6 +147,54 @@ endproperty
         assert any(n.kind == kind for n in timeline.semantic_notes)
         assert expected in note_text
         assert not timeline.obligations
+
+
+def test_range_suffix_has_user_summary_while_preserving_paths():
+    timeline = _timeline("""
+property p;
+    req |-> ##[1:3] ack ##1 done;
+endproperty
+""", "p")
+    note_text = " ".join(n.text for n in timeline.semantic_notes)
+    cycles = [[ob.cycle for ob in path.obligations] for path in timeline.match_paths]
+    assert "ack must be true at cycle +1 to +3" in note_text
+    assert "done must be true 1 clk after ack" in note_text
+    assert cycles == [[1, 2], [2, 3], [3, 4]]
+
+
+def test_local_capture_range_suffix_summary():
+    timeline = _timeline("""
+property p;
+  logic [7:0] v;
+  req |-> ##[1:3] (ack, v = id) ##1 done_id == v;
+endproperty
+""", "p")
+    note_text = " ".join(n.text for n in timeline.semantic_notes)
+    assert "ack must be true at cycle +1 to +3" in note_text
+    assert "capturing v = id at that matching cycle" in note_text
+    assert "done_id == v must be true 1 clk after ack" in note_text
+
+
+def test_binary_advanced_sequence_summaries_name_each_sequence_and_relation():
+    timeline = _timeline("""
+property p;
+  req |-> (a ##1 b) within (c ##[1:3] d);
+endproperty
+""", "p")
+    texts = [n.text for n in timeline.semantic_notes]
+    assert "Sequence 1: a must be true; b must be true 1 clk after a." in texts
+    assert "Sequence 2: c must be true; d must be true 1 to 3 clk after c." in texts
+    assert "Relation: sequence 1's matched interval must be contained within sequence 2's matched interval." in texts
+
+    timeline = _timeline("""
+property p;
+  req |-> (a ##1 b) intersect (c ##1 d);
+endproperty
+""", "p")
+    texts = [n.text for n in timeline.semantic_notes]
+    assert "Sequence 1: a must be true; b must be true 1 clk after a." in texts
+    assert "Sequence 2: c must be true; d must be true 1 clk after c." in texts
+    assert "Relation: sequence 1 and sequence 2 must start on the same clk and end on the same clk." in texts
 
 
 def test_disable_obligation_is_preserved():

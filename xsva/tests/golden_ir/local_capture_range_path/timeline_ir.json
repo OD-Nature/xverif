@@ -114,6 +114,12 @@
     "ack is false at cycle +3",
     "done_id == v is false at cycle +4"
   ],
-  "semantic_notes": [],
+  "semantic_notes": [
+    {
+      "kind": "summary",
+      "expr": "##[1:3] ack , v = id ##1 done_id == v",
+      "text": "ack must be true at cycle +1 to +3, capturing v = id at that matching cycle; done_id == v must be true 1 clk after ack."
+    }
+  ],
   "diagnostics": []
 }

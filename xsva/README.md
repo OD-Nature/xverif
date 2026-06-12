@@ -3,8 +3,9 @@
 SystemVerilog Assertion 语义编译工具。
 
 把 SVA 从文本语法编译为结构化 IR（Surface → Sequence → Timeline），所有解释从 IR 生成。
-高级 sequence（如 `first_match`、`throughout`、`intersect`、`within`、`[*]`、`[->]`、`[=]`）
-会在 Timeline IR 的 `semantic_notes` 中生成自然语言语义摘要，避免把复杂语义误写成固定周期检查。
+`explain` 默认展示面向用户的英文语义摘要。内部仍保留精确
+`match_paths` / `obligations`，但范围 delay、range suffix、repeat 和高级 sequence
+不会在用户解释里展开成多条候选 path。
 
 ## 命令
 
@@ -23,7 +24,7 @@ python -m xsva explain --file tests/golden_ir/simple_impl/input.sva --property p
 python -m xsva parse --file tests/golden_ir/simple_impl/input.sva --property p_test --emit timeline-ir
 ```
 
-高级语法示例：
+范围和高级语法示例：
 
 ```systemverilog
 property p_first;
@@ -31,7 +32,15 @@ property p_first;
 endproperty
 ```
 
-解释输出会说明：`ack` 需要在 1 到 4 个 clk 内第一次匹配到，后续 sequence 在这个第一次匹配点之后继续检查。
+解释输出会说明：`ack must be the first match at cycle +1 to +4; done must be true 1 clk after that first ack.`
+
+```systemverilog
+property p_intersect;
+  req |-> (a ##1 b) intersect (c ##1 d);
+endproperty
+```
+
+解释输出会按 `Sequence 1`、`Sequence 2` 和 `Relation` 分别说明两个 sequence 的内部时序以及二者必须同时开始、同时结束。
 
 ## 测试
 

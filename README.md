@@ -140,14 +140,14 @@ tools/xberif brief --mode debug
 
 ### xsva
 
-`xsva` 是 SystemVerilog Assertion 语义编译工具。它不替代 VCS/Formal，也不让 LLM 直接自由解释 SVA 原文；它把 property/assertion 从文本 lowering 成 Surface IR、Sequence IR、Timeline IR，再从 IR 生成文本、Markdown、JSON、Mermaid 或 SVG 输出。
+`xsva` 是 SystemVerilog Assertion 语义编译工具。它不替代 VCS/Formal，也不让 LLM 直接自由解释 SVA 原文；它把 property/assertion 从文本 lowering 成 Surface IR、Sequence IR、Timeline IR，再从 IR 生成文本、Markdown 或 JSON 输出。
 
 适合的问题：
 
 - 列出 `.sva/.sv` 文件中的 property/assert/assume/cover。
 - 检查 `|->`、`|=>`、`##N`、`##[m:n]`、range suffix path expansion 等 temporal 语义。
 - 查看 local variable capture、per-attempt binding 和后续 `depends_on_captures`。
-- 对 `first_match`、`intersect` 等高级 sequence 做保守 lowering，明确 `partial/opaque/unsupported` 边界。
+- 对 `first_match`、`intersect` 等高级 sequence 输出语义摘要，内部保留保守状态但不在用户解释中暴露。
 - 为 SVA review、agent debug 和 golden regression 生成确定性 IR/解释。
 
 入口示例：
@@ -156,7 +156,6 @@ tools/xberif brief --mode debug
 tools/xsva list --file xsva/tests/golden_ir/simple_impl/input.sva
 tools/xsva parse --file xsva/tests/golden_ir/ranged_delay/input.sva --property p_ranged --emit timeline-ir
 tools/xsva explain --file xsva/tests/golden_ir/path_expand/input.sva --property p_path
-tools/xsva render --file xsva/tests/golden_ir/path_expand/input.sva --property p_path --format mermaid
 ```
 
 完整说明见 [`xsva/README.md`](xsva/README.md)。
