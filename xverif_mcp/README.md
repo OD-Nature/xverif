@@ -132,6 +132,12 @@ xverif_debug_query(action="value.at", args={...},
 结果写入另一个 NDJSON 文件。适合需要按序执行 session.open → query → session.close
 的场景。
 
+**注意嵌套 args**：`xverif_debug_query` / `xverif_cov_query` 自身有 `args` 参数，
+在 batch 行中需要再嵌套一层：
+```jsonl
+{"tool":"xverif_debug_query","args":{"action":"value.at","args":{"signal":"top.clk","time":"10ns"}}}
+```
+
 **1. 生成批量请求文件（bash inline）：**
 
 ```bash

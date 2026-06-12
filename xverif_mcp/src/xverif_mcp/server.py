@@ -51,6 +51,11 @@ Batch execution (xverif_batch):
   This avoids race conditions where a query might execute before the session is
   ready.
 
+  IMPORTANT — nested args: tools like xverif_debug_query and xverif_cov_query
+  have their own "args" parameter.  In a batch line, the outer "args" maps to
+  the tool's MCP parameters, and the inner "args" maps to the action's arguments:
+    {"tool":"xverif_debug_query","args":{"action":"value.at","args":{"signal":"top.clk","time":"10ns"}}}
+
   Step 1 — write the batch file (bash inline):
     cat > /tmp/batch.ndjson << 'EOF'
     {"tool": "xverif_cov_session_open", "args": {"name": "s0", "vdb": "/path/to/merged.vdb"}}
@@ -171,18 +176,21 @@ def xverif_ping() -> str:
 
 
 def _append_result(output_file: str, tool: str | None, ok: bool,
-                   error: str | None, elapsed_ms: int) -> None:
-    entry = {
+                   error: str | None, elapsed_ms: int,
+                   response: str | None = None) -> None:
+    entry: dict = {
         "tool": tool,
         "ok": ok,
         "elapsed_ms": elapsed_ms,
         "error": error,
     }
+    if response is not None:
+        entry["response"] = response
     with open(output_file, "a", encoding="utf-8") as f:
         f.write(json.dumps(entry, ensure_ascii=False, sort_keys=True) + "\n")
 
 
-async def _execute_one(name: str, args: dict) -> tuple[bool, str | None, int]:
+async def _execute_one(name: str, args: dict) -> tuple[bool, str | None, int, str | None]:
     t0 = time.monotonic()
     try:
         result = await mcp.call_tool(name, args)
@@ -190,25 +198,29 @@ async def _execute_one(name: str, args: dict) -> tuple[bool, str | None, int]:
         text = content[0].text if content else ""
         try:
             j = json.loads(text)
-            return j.get("ok", False), None, int((time.monotonic() - t0) * 1000)
+            return j.get("ok", False), None, int((time.monotonic() - t0) * 1000), text
         except (json.JSONDecodeError, AttributeError):
-            # non-JSON response — treat known success patterns
             ok = ("pong" in str(text).lower()
                   or "XOUT_BEGIN" in text
                   or (text.startswith("@") and ".error." not in text))
-            return ok, None, int((time.monotonic() - t0) * 1000)
+            return ok, None, int((time.monotonic() - t0) * 1000), text
     except Exception as e:
-        return False, str(e), int((time.monotonic() - t0) * 1000)
+        return False, str(e), int((time.monotonic() - t0) * 1000), None
 
 
 @xverif_tool("common")
 async def xverif_batch(batch_file: str, output_file: str) -> dict:
-    """Execute multiple MCP tool requests from an NDJSON file in serial order.
+    """Execute multiple MCP tool requests from an NDJSON batch file serially.
 
-    Each line of *batch_file* must be a JSON object with ``tool`` (tool name)
-    and ``args`` (arguments dict).  Results are appended to *output_file* as
-    NDJSON, one line per request (including parse errors).  Returns a summary
-    with total / ok / failed counts.
+    Each line is a JSON object with ``tool`` (tool name) and ``args``
+    (arguments dict passed to that tool).  Results are written to
+    ``output_file`` as NDJSON, one line per request (including parse errors).
+
+    For tools that have their own nested ``args`` parameter (e.g.
+    xverif_debug_query, xverif_cov_query), the inner args must be nested:
+    ``{"tool":"xverif_debug_query","args":{"action":"value.at","args":{"signal":"top.clk","time":"10ns"}}}``
+
+    Returns ``{total, ok_count, failed_count, output_file}``.
     """
     stats = {"total": 0, "ok": 0, "failed": 0}
 
@@ -240,8 +252,8 @@ async def xverif_batch(batch_file: str, output_file: str) -> dict:
                 if not isinstance(tool_args, dict):
                     tool_args = {}
 
-                ok, error, elapsed_ms = await _execute_one(tool_name, tool_args)
-                _append_result(output_file, tool_name, ok, error, elapsed_ms)
+                ok, error, elapsed_ms, response = await _execute_one(tool_name, tool_args)
+                _append_result(output_file, tool_name, ok, error, elapsed_ms, response)
                 if ok:
                     stats["ok"] += 1
                 else:
@@ -873,7 +885,11 @@ TOOL_CATALOG = [
      "description": "Get help for a specific tool."},
     {"name": "xverif_batch", "category": "common", "backend": "builtin",
      "stateful": False, "requires_session": False,
-     "description": "Execute multiple MCP tool requests from an NDJSON batch file serially."},
+     "description": "Execute MCP tools from NDJSON batch file serially. "
+                    "Line: {\"tool\":\"<name>\",\"args\":{<params>}}. "
+                    "Nested args for debug_query/cov_query: "
+                    "{\"tool\":\"xverif_debug_query\",\"args\":"
+                    "{\"action\":\"value.at\",\"args\":{\"signal\":\"top.clk\",\"time\":\"10ns\"}}}"},
     # debug
     {"name": "xverif_debug_list_actions", "category": "debug", "backend": "xdebug",
      "stateful": False, "requires_session": False,
