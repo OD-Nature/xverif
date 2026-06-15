@@ -29,23 +29,197 @@
         "trace.active_driver"
       ]
     },
+    "tool": {
+      "type": "object"
+    },
+    "session": {
+      "type": "object"
+    },
     "summary": {
       "type": "object",
+      "required": [
+        "signal",
+        "requested_time",
+        "driver_status"
+      ],
+      "properties": {
+        "signal": {
+          "type": "string"
+        },
+        "requested_time": {
+          "type": "string"
+        },
+        "active_time": {
+          "type": "string"
+        },
+        "driver_status": {
+          "type": "string",
+          "enum": [
+            "resolved",
+            "control_only",
+            "unresolved",
+            "ambiguous"
+          ]
+        },
+        "statement_count": {
+          "type": "integer"
+        },
+        "trace_node_count": {
+          "type": "integer"
+        },
+        "root_driver": {
+          "type": "object",
+          "required": ["kind", "file", "line"],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": ["assignment", "force", "constant", "primary_input", "unknown"]
+            },
+            "file": { "type": "string" },
+            "line": { "type": "integer" }
+          }
+        }
+      },
       "additionalProperties": true
     },
     "data": {
       "type": "object",
+      "properties": {
+        "signal": { "type": "string" },
+        "requested_time": { "type": "string" },
+        "active_time": { "type": "string" },
+        "driver_status": {
+          "type": "string",
+          "enum": ["resolved", "control_only", "unresolved", "ambiguous"]
+        },
+        "driver": {
+          "type": ["object", "null"],
+          "properties": {
+            "kind": { "type": "string" },
+            "file": { "type": "string" },
+            "line": { "type": "integer" },
+            "text": { "type": "string" },
+            "signals": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "root_driver": {
+          "type": ["object", "null"],
+          "required": ["kind", "file", "line"],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": ["assignment", "force", "constant", "primary_input", "unknown"]
+            },
+            "file": { "type": "string" },
+            "line": { "type": "integer" }
+          }
+        },
+        "controls": {
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "events": {
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "values": {
+          "type": "object",
+          "properties": {
+            "requested": { "type": "object" },
+            "active": { "type": "object" }
+          }
+        },
+        "trace": {
+          "type": "object",
+          "properties": {
+            "nodes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["id", "role", "kind", "signal"],
+                "properties": {
+                  "id": { "type": "string" },
+                  "role": { "type": "string" },
+                  "kind": { "type": "string" },
+                  "signal": { "type": "string" },
+                  "signals": {
+                    "type": "array",
+                    "items": { "type": "string" }
+                  },
+                  "file": { "type": "string" },
+                  "line": { "type": "integer" },
+                  "text": { "type": "string" },
+                  "active_time": { "type": "string" },
+                  "next_signal": { "type": "string" },
+                  "alias_kind": { "type": "string" }
+                }
+              }
+            },
+            "edges": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["from", "to", "relation"],
+                "properties": {
+                  "from": { "type": "string" },
+                  "to": { "type": "string" },
+                  "relation": { "type": "string" },
+                  "confidence": { "type": "string" }
+                }
+              }
+            },
+            "selected_path": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "termination": {
+              "type": "string",
+              "enum": [
+                "assignment",
+                "force",
+                "constant",
+                "primary_input",
+                "ambiguous",
+                "limit",
+                "unresolved"
+              ]
+            }
+          }
+        },
+        "alias_candidates": {
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "limitations": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "parity": { "type": "object" }
+      },
       "additionalProperties": true
     },
     "findings": {
       "type": "array"
     },
+    "suggested_next_actions": {
+      "type": "array"
+    },
     "warnings": {
       "type": "array"
     },
-    "error": {},
+    "error": {
+      "type": ["object", "null"]
+    },
     "meta": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "truncated": {
+          "type": "boolean"
+        }
+      }
     }
   },
   "additionalProperties": true

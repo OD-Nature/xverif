@@ -1,23 +1,62 @@
 {
   "api_version": "xdebug.v1",
+  "request_id": "req-003",
   "ok": true,
   "action": "trace.active_driver",
+  "tool": {
+    "name": "xdebug",
+    "version": "1.0.0"
+  },
+  "session": {
+    "mode": "combined",
+    "daidir": "simv.daidir",
+    "fsdb": "waves.fsdb"
+  },
   "summary": {
     "signal": "top.u.state",
     "requested_time": "100ns",
     "active_time": "100ns",
     "driver_status": "control_only",
-    "confidence": "medium"
+    "statement_count": 1,
+    "trace_node_count": 1,
+    "root_driver": {
+      "kind": "unknown",
+      "file": "",
+      "line": 0
+    }
   },
   "data": {
-    "control_context": [
+    "signal": "top.u.state",
+    "requested_time": "100ns",
+    "active_time": "100ns",
+    "driver_status": "control_only",
+    "driver": null,
+    "root_driver": null,
+    "controls": [
       {
         "kind": "case_item",
         "file": "rtl/foo.sv",
-        "line": 88
+        "line": 88,
+        "text": "2'b11: state = next_state",
+        "signals": ["top.u.mode"]
       }
+    ],
+    "events": [],
+    "values": {
+      "requested": {
+        "top.u.state": {"value": "xx", "known": false}
+      },
+      "active": {}
+    },
+    "alias_candidates": [],
+    "limitations": [
+      "control context confirmed but NPI active evidence did not confirm specific assignment"
     ]
   },
+  "findings": [],
+  "suggested_next_actions": [],
+  "warnings": [],
+  "error": null,
   "meta": {
     "truncated": false
   }

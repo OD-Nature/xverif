@@ -26,177 +26,93 @@
       ]
     },
     "target": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "daidir": { "type": "string" },
+        "fsdb": { "type": "string" },
+        "session_id": { "type": "string" }
+      }
     },
     "args": {
       "type": "object",
       "properties": {
         "signal": {
-          "type": "string"
-        },
-        "signals": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "time": {
-          "type": "string"
+          "type": "string",
+          "description": "Exact hierarchical signal path to trace the active driver for"
         },
         "requested_time": {
-          "type": "string"
+          "type": "string",
+          "description": "Waveform time to query the active driver, e.g. '120ns'"
         },
-        "time_a": {
-          "type": "string"
+        "include_control": {
+          "type": "boolean",
+          "description": "Report control context (if/case) when no assignment confirmed (default true)"
         },
-        "time_b": {
-          "type": "string"
-        },
-        "from_signal": {
-          "type": "string"
-        },
-        "to_signal": {
-          "type": "string"
-        },
-        "file": {
-          "type": "string"
-        },
-        "line": {
-          "type": "integer"
-        },
-        "expr": {
-          "type": "string"
-        },
-        "scope": {
-          "type": "string"
-        },
-        "name": {
-          "type": "string"
-        },
-        "op": {
-          "type": "string"
-        },
-        "conditions": {
-          "type": "array",
-          "items": {
-            "type": "object"
-          }
-        },
-        "time_range": {
-          "type": "object"
-        },
-        "requests": {
-          "type": "array",
-          "items": {
-            "type": "object"
-          }
-        },
-        "session_id": {
-          "type": "string"
-        },
-        "valid": {
-          "type": "string"
-        },
-        "ready": {
-          "type": "string"
-        },
-        "port": {
-          "type": "string"
-        },
-        "instance": {
-          "type": "string"
-        },
-        "interface": {
-          "type": "string"
-        },
-        "format": {
-          "type": "string"
-        },
-        "direction": {
-          "type": "string"
-        },
-        "mode": {
-          "type": "string"
-        },
-        "include_source": {
-          "type": "boolean"
-        },
-        "include_ast": {
-          "type": "boolean"
-        },
-        "include_candidates": {
-          "type": "boolean"
+        "include_parity": {
+          "type": "boolean",
+          "description": "Run parity check: compare active trace vs static driver candidates"
         },
         "include_trace": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Return full data.trace with nodes, edges, selected_path (default false for compact)"
         },
-        "include_expanded_queries": {
-          "type": "boolean"
+        "include_alias_candidates": {
+          "type": "boolean",
+          "description": "Include alias_candidates even when a unique alias was resolved"
         },
-        "include_raw_edges": {
-          "type": "boolean"
-        },
-        "include_graph": {
-          "type": "boolean"
-        },
-        "include_debug": {
-          "type": "boolean"
-        },
-        "include_raw": {
-          "type": "boolean"
-        },
-        "include_signal_meta": {
-          "type": "boolean"
-        },
-        "include_rows": {
-          "type": "boolean"
-        },
-        "include_samples": {
-          "type": "boolean"
-        },
-        "include_all_changes": {
-          "type": "boolean"
-        },
-        "include_transactions": {
-          "type": "boolean"
-        },
-        "include_beats": {
-          "type": "boolean"
-        },
-        "include_accesses": {
-          "type": "boolean"
-        },
-        "max_items": {
-          "type": "integer"
-        },
-        "max_examples": {
-          "type": "integer"
-        },
-        "recursive": {
-          "type": "boolean"
-        },
-        "include_all_signals": {
-          "type": "boolean"
-        },
-        "auto_open": {
-          "type": "boolean"
-        },
-        "auto_ensure": {
-          "type": "boolean"
+        "include_compat_fields": {
+          "type": "boolean",
+          "description": "Return backward-compatible statements/path/active_values/requested_values fields"
         }
       },
-      "additionalProperties": true,
+      "additionalProperties": false,
       "required": [
         "signal",
         "requested_time"
       ]
     },
     "limits": {
-      "type": "object"
+      "type": "object",
+      "description": "Resource limits for the recursive active trace",
+      "properties": {
+        "max_depth": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum recursion depth through pass-through assignments and aliases (default 8)"
+        },
+        "max_nodes": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum number of trace nodes before truncation (default 50)"
+        },
+        "max_alias_candidates": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum number of alias candidates to explore (default 8)"
+        },
+        "max_trace_signals": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum signal count for value lookup (default 64)"
+        }
+      },
+      "additionalProperties": false
     },
     "output": {
-      "type": "object"
+      "type": "object",
+      "description": "Output format controls. verbosity=full|debug implies include_trace=true",
+      "properties": {
+        "format": {
+          "type": "string",
+          "enum": ["json", "xout"]
+        },
+        "verbosity": {
+          "type": "string",
+          "enum": ["compact", "full", "debug"]
+        }
+      },
+      "additionalProperties": false
     }
   },
-  "additionalProperties": true
+  "additionalProperties": false
 }

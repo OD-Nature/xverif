@@ -1,29 +1,115 @@
 {
   "api_version": "xdebug.v1",
+  "request_id": "req-002",
   "ok": true,
   "action": "trace.active_driver",
+  "tool": {
+    "name": "xdebug",
+    "version": "1.0.0"
+  },
+  "session": {
+    "mode": "combined",
+    "daidir": "simv.daidir",
+    "fsdb": "waves.fsdb"
+  },
   "summary": {
     "signal": "top.u.ready",
     "requested_time": "100ns",
     "active_time": "95ns",
     "driver_status": "resolved",
-    "confidence": "high"
+    "statement_count": 2,
+    "trace_node_count": 2,
+    "root_driver": {
+      "kind": "assignment",
+      "file": "rtl/foo.sv",
+      "line": 123
+    }
   },
   "data": {
-    "selected_driver": {
+    "signal": "top.u.ready",
+    "requested_time": "100ns",
+    "active_time": "95ns",
+    "driver_status": "resolved",
+    "driver": {
       "kind": "assignment",
       "file": "rtl/foo.sv",
       "line": 123,
-      "rhs_signals": [
-        "top.u.valid",
-        "top.u.full"
-      ]
+      "text": "ready <= valid & ~full",
+      "signals": ["top.u.valid", "top.u.full"]
     },
-    "waveform": {
-      "requested_value": "1",
-      "active_value": "1"
-    }
+    "root_driver": {
+      "kind": "assignment",
+      "file": "rtl/foo.sv",
+      "line": 123
+    },
+    "controls": [
+      {
+        "kind": "if",
+        "file": "rtl/foo.sv",
+        "line": 120,
+        "text": "if (state == IDLE)",
+        "signals": ["top.u.state"]
+      }
+    ],
+    "events": [],
+    "values": {
+      "requested": {
+        "top.u.ready": {"value": "1", "known": true},
+        "top.u.valid": {"value": "1", "known": true}
+      },
+      "active": {
+        "top.u.ready": {"value": "1", "known": true}
+      }
+    },
+    "trace": {
+      "nodes": [
+        {
+          "id": "n0",
+          "role": "assignment",
+          "kind": "assignment",
+          "signal": "top.u.ready",
+          "signals": ["top.u.valid", "top.u.full"],
+          "file": "rtl/foo.sv",
+          "line": 123,
+          "text": "ready <= valid & ~full",
+          "active_time": "95ns",
+          "value": {"value": "1", "known": true},
+          "next_signal": "",
+          "alias_kind": "none"
+        },
+        {
+          "id": "n1",
+          "role": "control",
+          "kind": "if",
+          "signal": "top.u.ready",
+          "signals": ["top.u.state"],
+          "file": "rtl/foo.sv",
+          "line": 120,
+          "text": "if (state == IDLE)",
+          "active_time": "95ns",
+          "value": null,
+          "next_signal": "",
+          "alias_kind": "none"
+        }
+      ],
+      "edges": [
+        {
+          "from": "n0",
+          "to": "n1",
+          "relation": "control",
+          "confidence": "high"
+        }
+      ],
+      "selected_path": ["n0", "n1"],
+      "termination": "assignment"
+    },
+    "alias_candidates": [],
+    "limitations": []
   },
+  "findings": [],
+  "suggested_next_actions": [],
+  "warnings": [],
+  "error": null,
   "meta": {
     "truncated": false
   }

@@ -118,7 +118,7 @@ APP_OBJS = $(APP_SRCS:%.cpp=$(BUILD)/%.o)
 DESIGN_OBJS = $(DESIGN_SRCS:%.cpp=$(BUILD)/%.o)
 WAVEFORM_OBJS = $(WAVEFORM_SRCS:%.cpp=$(BUILD)/%.o)
 
-.PHONY: all internal-engines unit-test mcp-test schema-test contract-test clean
+.PHONY: all internal-engines unit-test mcp-test schema-test contract-test combined-test clean
 
 all: $(EXE) internal-engines
 
@@ -182,6 +182,9 @@ mcp-run:
 contract-test: $(EXE) schema-test
 	$(PYTHON) tools/audit_action_schema_coverage.py $(CURDIR)
 	$(PYTHON) tools/check_action_contract.py specs/actions $(CURDIR)/$(EXE)
+
+combined-test: $(EXE)
+	$(PYTHON) tests/combined/run_active_driver_fixture.py
 
 clean:
 	rm -rf $(BUILD) $(LIBEXEC) $(EXE)

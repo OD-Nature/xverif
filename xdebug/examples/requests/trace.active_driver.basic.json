@@ -2,8 +2,7 @@
   "api_version": "xdebug.v1",
   "action": "trace.active_driver",
   "target": {
-    "daidir": "simv.daidir",
-    "fsdb": "waves.fsdb"
+    "session_id": "my_debug_session"
   },
   "args": {
     "signal": "top.u.ready",
