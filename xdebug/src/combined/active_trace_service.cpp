@@ -1,4 +1,5 @@
 #include "combined/active_trace_service.h"
+#include "combined/active_trace_common.h"
 #include "api/response.h"
 #include "runtime/work_dir.h"
 
@@ -20,135 +21,6 @@
 namespace xdebug {
 
 namespace {
-
-// ─── NPI stdout suppression ────────────────────────────────────────────────
-
-class ScopedStdoutSilence {
-public:
-    ScopedStdoutSilence() : saved_(-1), sink_(-1) {
-        std::fflush(stdout);
-        saved_ = dup(STDOUT_FILENO);
-        sink_ = open("/dev/null", O_WRONLY);
-        if (saved_ >= 0 && sink_ >= 0) dup2(sink_, STDOUT_FILENO);
-    }
-
-    ~ScopedStdoutSilence() {
-        std::fflush(stdout);
-        if (saved_ >= 0) {
-            dup2(saved_, STDOUT_FILENO);
-            close(saved_);
-        }
-        if (sink_ >= 0) close(sink_);
-    }
-
-private:
-    int saved_;
-    int sink_;
-};
-
-class NpiSessionGuard {
-public:
-    NpiSessionGuard() = default;
-    NpiSessionGuard(const NpiSessionGuard&) = delete;
-    NpiSessionGuard& operator=(const NpiSessionGuard&) = delete;
-
-    ~NpiSessionGuard() {
-        if (loaded_) npi_end();
-    }
-
-    bool init(int argc, char** argv) {
-        if (!npi_init(argc, argv)) return false;
-        loaded_ = true;
-        return true;
-    }
-
-    bool load_design(int argc, char** argv) {
-        return loaded_ && npi_load_design(argc, argv) != 0;
-    }
-
-private:
-    bool loaded_ = false;
-};
-
-class FsdbFileGuard {
-public:
-    explicit FsdbFileGuard(const std::string& path)
-        : handle_(npi_fsdb_open(path.c_str())) {}
-    FsdbFileGuard(const FsdbFileGuard&) = delete;
-    FsdbFileGuard& operator=(const FsdbFileGuard&) = delete;
-
-    ~FsdbFileGuard() {
-        if (handle_) npi_fsdb_close(handle_);
-    }
-
-    npiFsdbFileHandle get() const { return handle_; }
-    explicit operator bool() const { return handle_ != nullptr; }
-
-private:
-    npiFsdbFileHandle handle_ = nullptr;
-};
-
-class NpiHandleGuard {
-public:
-    explicit NpiHandleGuard(npiHandle handle = nullptr) : handle_(handle) {}
-    NpiHandleGuard(const NpiHandleGuard&) = delete;
-    NpiHandleGuard& operator=(const NpiHandleGuard&) = delete;
-
-    ~NpiHandleGuard() {
-        if (handle_) npi_release_handle(handle_);
-    }
-
-    npiHandle get() const { return handle_; }
-    explicit operator bool() const { return handle_ != nullptr; }
-
-private:
-    npiHandle handle_ = nullptr;
-};
-
-// ─── NPI helpers ────────────────────────────────────────────────────────────
-
-std::string npi_string(int property, npiHandle handle) {
-    const char* value = handle ? npi_get_str(property, handle) : nullptr;
-    return value ? value : "";
-}
-
-std::string current_executable() {
-    char path[4096] = {};
-    ssize_t length = readlink("/proc/self/exe", path, sizeof(path) - 1);
-    return length > 0 ? std::string(path, static_cast<size_t>(length)) : std::string("xdebug");
-}
-
-std::string handle_info(npiHandle handle) {
-    const char* value = handle ? npi_ut_get_hdl_info(handle, true, false) : nullptr;
-    return value ? value : "";
-}
-
-std::string statement_kind(int type) {
-    switch (type) {
-    case npiAssignment:   return "assignment";
-    case npiForce:        return "force";
-    case npiPort:         return "port_boundary";
-    case npiIf:           return "if";
-    case npiIfElse:       return "if_else";
-    case npiCase:         return "case";
-    case npiCaseItem:     return "case_item";
-    case npiEventControl: return "event_control";
-    case npiRelease:      return "release_candidate";
-    // npiMpPort and npiRefObj may not be in all NPI headers; use numeric
-    // constants from observed runtime values as fallback.
-#ifdef npiMpPort
-    case npiMpPort:       return "modport_port";
-#endif
-#ifdef npiRefObj
-    case npiRefObj:       return "ref_obj";
-#endif
-    default:
-        // Numeric fallbacks for environments where these constants are missing.
-        if (type == 697) return "modport_port";    // npiMpPort
-        if (type == 608) return "ref_obj";          // npiRefObj
-        return "other";
-    }
-}
 
 bool is_control_kind(const std::string& kind) {
     return kind == "if" || kind == "if_else" ||
@@ -236,20 +108,6 @@ std::string passthrough_sigvec_candidate(const drvLoadStmt_s& statement,
         }
     }
     return candidates.size() == 1 ? candidates.front() : "";
-}
-
-bool parse_time(const std::string& text, double& value, std::string& unit) {
-    char* end = nullptr;
-    value = std::strtod(text.c_str(), &end);
-    if (!end || end == text.c_str()) return false;
-    while (*end && std::isspace(static_cast<unsigned char>(*end))) ++end;
-    unit = end;
-    if (unit == "f") unit = "fs";
-    else if (unit == "p") unit = "ps";
-    else if (unit == "n") unit = "ns";
-    else if (unit == "u") unit = "us";
-    else if (unit == "m") unit = "ms";
-    return !unit.empty();
 }
 
 Json value_map(npiFsdbFileHandle fsdb,
