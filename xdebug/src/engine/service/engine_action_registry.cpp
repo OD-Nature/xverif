@@ -205,6 +205,15 @@ extern EventAnalyzer g_event_analyzer;
 extern ApbAnalyzer g_apb_analyzer;
 extern AxiAnalyzer g_axi_analyzer;
 std::string format_time(npiFsdbTime t);
+bool read_list_from_storage(const std::string& session_id,
+                            const char* list_name, SignalList& out_list);
+bool find_list_diff(npiFsdbFileHandle file,
+                    const std::vector<std::string>& signals,
+                    npiFsdbTime begin_time, npiFsdbTime end_time,
+                    npiFsdbTime& diff_time);
+bool read_sig_vec_value_at_with_status(npiFsdbFileHandle file,
+    const std::vector<std::string>& signals, npiFsdbTime time, char fmt,
+    std::vector<std::string>& out_values, std::vector<bool>& out_found);
 }
 
 namespace xdebug_design {
@@ -609,6 +618,299 @@ public:
     }
 };
 
+// ── list.* handlers ────────────────────────────────────────────────────
+
+static bool read_list_storage(const std::string& name,
+                               xdebug_waveform::SignalList& lst) {
+    return xdebug_waveform::read_list_from_storage(
+        xdebug_waveform::g_session_id, name.c_str(), lst);
+}
+
+class ListCreateHandler : public EngineActionHandler {
+public:
+    const char* action_name() const override { return "list.create"; }
+    bool needs_design() const override { return false; }
+    bool needs_waveform() const override { return true; }
+    Json run(const Json& r) const override {
+        Json a = r.value("args", Json::object());
+        std::string n = a.value("name", "");
+        if (n.empty()) return Json({{"error","MISSING_FIELD"},{"message","args.name"}});
+        xdebug_waveform::ListManager lm;
+        if (!lm.create_list(xdebug_waveform::g_session_id, n))
+            return Json({{"error","CREATE_FAILED"},{"message",n}});
+        Json out; out["name"] = n; out["created"] = true;
+        // Optionally add initial signals
+        Json sigs = a.value("signals", Json::array());
+        for (auto& s : sigs) if (s.is_string())
+            lm.add_signal(xdebug_waveform::g_session_id, n, s.get<std::string>());
+        return out;
+    }
+};
+
+class ListAddHandler : public EngineActionHandler {
+public:
+    const char* action_name() const override { return "list.add"; }
+    bool needs_design() const override { return false; }
+    bool needs_waveform() const override { return true; }
+    Json run(const Json& r) const override {
+        Json a = r.value("args", Json::object());
+        std::string n = a.value("name", ""), sig = a.value("signal", "");
+        if (n.empty() || sig.empty())
+            return Json({{"error","MISSING_FIELD"},{"message","args.name+signal"}});
+        xdebug_waveform::ListManager lm;
+        if (!lm.add_signal(xdebug_waveform::g_session_id, n, sig))
+            return Json({{"error","ADD_FAILED"},{"message",sig}});
+        Json out; out["name"] = n; out["signal"] = sig; out["added"] = true; return out;
+    }
+};
+
+class ListDeleteHandler : public EngineActionHandler {
+public:
+    const char* action_name() const override { return "list.delete"; }
+    bool needs_design() const override { return false; }
+    bool needs_waveform() const override { return true; }
+    Json run(const Json& r) const override {
+        Json a = r.value("args", Json::object());
+        std::string n = a.value("name", "");
+        if (n.empty()) return Json({{"error","MISSING_FIELD"},{"message","args.name"}});
+        xdebug_waveform::ListManager lm;
+        if (a.contains("signal")) {
+            if (!lm.del_signal(xdebug_waveform::g_session_id, n, a["signal"].get<std::string>()))
+                return Json({{"error","DEL_FAILED"}});
+        } else {
+            if (!lm.delete_list(xdebug_waveform::g_session_id, n))
+                return Json({{"error","DEL_FAILED"}});
+        }
+        Json out; out["name"] = n; out["deleted"] = true; return out;
+    }
+};
+
+class ListShowHandler : public EngineActionHandler {
+public:
+    const char* action_name() const override { return "list.show"; }
+    bool needs_design() const override { return false; }
+    bool needs_waveform() const override { return true; }
+    Json run(const Json& r) const override {
+        Json a = r.value("args", Json::object());
+        std::string n = a.value("name", "");
+        if (n.empty()) return Json({{"error","MISSING_FIELD"},{"message","args.name"}});
+        xdebug_waveform::SignalList lst;
+        if (!read_list_storage(n, lst))
+            return Json({{"error","LIST_NOT_FOUND"},{"message",n}});
+        Json out; out["name"] = n;
+        Json arr = Json::array(); for (auto& s : lst.signals) arr.push_back(s);
+        out["signals"] = arr; out["count"] = static_cast<int>(lst.signals.size());
+        return out;
+    }
+};
+
+class ListValueAtHandler : public EngineActionHandler {
+public:
+    const char* action_name() const override { return "list.value_at"; }
+    bool needs_design() const override { return false; }
+    bool needs_waveform() const override { return true; }
+    Json run(const Json& r) const override {
+        Json a = r.value("args", Json::object());
+        std::string n = a.value("name", ""), ts = a.value("time", "");
+        if (n.empty() || ts.empty())
+            return Json({{"error","MISSING_FIELD"},{"message","args.name+time"}});
+        xdebug_waveform::SignalList lst;
+        if (!read_list_storage(n, lst))
+            return Json({{"error","LIST_NOT_FOUND"},{"message",n}});
+        double tv; std::string unit; char* e = nullptr;
+        tv = std::strtod(ts.c_str(), &e);
+        while (e && *e && std::isspace(*e)) ++e; unit = e;
+        npiFsdbTime ft = 0;
+        if (!unit.empty() && !npi_fsdb_convert_time_in(xdebug_waveform::g_fsdb_file, tv, unit.c_str(), ft))
+            return Json({{"error","TIME_SPEC_INVALID"}});
+        std::vector<std::string> vals; std::vector<bool> found;
+        xdebug_waveform::read_sig_vec_value_at_with_status(
+            xdebug_waveform::g_fsdb_file, lst.signals, ft, 'h', vals, found);
+        Json out; out["name"] = n; out["time"] = ts;
+        Json sv = Json::object();
+        for (size_t i = 0; i < lst.signals.size(); i++)
+            sv[lst.signals[i]] = found[i] ? vals[i] : "NOT_FOUND";
+        out["values"] = sv;
+        return out;
+    }
+};
+
+class ListValidateHandler : public EngineActionHandler {
+public:
+    const char* action_name() const override { return "list.validate"; }
+    bool needs_design() const override { return false; }
+    bool needs_waveform() const override { return true; }
+    Json run(const Json& r) const override {
+        Json a = r.value("args", Json::object());
+        std::string n = a.value("name", "");
+        if (n.empty()) return Json({{"error","MISSING_FIELD"},{"message","args.name"}});
+        xdebug_waveform::SignalList lst;
+        if (!read_list_storage(n, lst))
+            return Json({{"error","LIST_NOT_FOUND"},{"message",n}});
+        Json arr = Json::array();
+        for (auto& sig : lst.signals) {
+            Json item; item["signal"] = sig;
+            item["status"] = npi_fsdb_sig_by_name(xdebug_waveform::g_fsdb_file, sig.c_str(), NULL)
+                ? "ok" : "not_found";
+            arr.push_back(item);
+        }
+        Json out; out["name"] = n; out["signals"] = arr; return out;
+    }
+};
+
+class ListDiffHandler : public EngineActionHandler {
+public:
+    const char* action_name() const override { return "list.diff"; }
+    bool needs_design() const override { return false; }
+    bool needs_waveform() const override { return true; }
+    Json run(const Json& r) const override {
+        Json a = r.value("args", Json::object());
+        std::string n = a.value("name", ""), bs = a.value("begin", ""), es = a.value("end", "");
+        if (n.empty() || bs.empty() || es.empty())
+            return Json({{"error","MISSING_FIELD"},{"message","args.name+begin+end"}});
+        xdebug_waveform::SignalList lst;
+        if (!read_list_storage(n, lst))
+            return Json({{"error","LIST_NOT_FOUND"},{"message",n}});
+        auto ptime = [](const std::string& s, npiFsdbTime& t) -> bool {
+            double v; std::string u; char* e = nullptr;
+            v = std::strtod(s.c_str(), &e);
+            while (e && *e && std::isspace(*e)) ++e; u = e;
+            return !u.empty() && npi_fsdb_convert_time_in(xdebug_waveform::g_fsdb_file, v, u.c_str(), t);
+        };
+        npiFsdbTime bt = 0, et = 0;
+        if (!ptime(bs, bt) || !ptime(es, et))
+            return Json({{"error","TIME_SPEC_INVALID"}});
+        npiFsdbTime dt = 0;
+        bool found = xdebug_waveform::find_list_diff(
+            xdebug_waveform::g_fsdb_file, lst.signals, bt, et, dt);
+        Json out; out["name"] = n; out["diff_found"] = found;
+        if (found) out["diff_time"] = dt;
+        return out;
+    }
+};
+
+// ── rc.generate ────────────────────────────────────────────────────────
+
+class RcGenerateHandler : public EngineActionHandler {
+public:
+    const char* action_name() const override { return "rc.generate"; }
+    bool needs_design() const override { return false; }
+    bool needs_waveform() const override { return true; }
+    Json run(const Json&) const override {
+        return Json({{"error","NOT_IMPLEMENTED"},{"message","rc.generate pending"}});
+    }
+};
+
+// ── apb.* / axi.* config handlers ──────────────────────────────────────
+
+class ApbConfigLoadHandler : public EngineActionHandler {
+public:
+    const char* action_name() const override { return "apb.config.load"; }
+    bool needs_design() const override { return false; }
+    bool needs_waveform() const override { return true; }
+    Json run(const Json&) const override {
+        return Json({{"error","NOT_IMPLEMENTED"},{"message","apb.config.load pending config parsing"}});
+    }
+};
+
+class ApbConfigListHandler : public EngineActionHandler {
+public:
+    const char* action_name() const override { return "apb.config.list"; }
+    bool needs_design() const override { return false; }
+    bool needs_waveform() const override { return true; }
+    Json run(const Json& r) const override {
+        Json a = r.value("args", Json::object());
+        std::string name = a.value("name", "");
+        xdebug_waveform::ApbManager am;
+        if (name.empty()) { am.get_latest_apb(xdebug_waveform::g_session_id, name); }
+        xdebug_waveform::ApbConfig cfg;
+        if (name.empty() || !am.get_apb(xdebug_waveform::g_session_id, name, cfg))
+            return Json({{"error","CONFIG_NOT_FOUND"}});
+        Json out; out["name"] = name;
+        out["clk"] = cfg.clk; out["rst_n"] = cfg.rst_n;
+        return out;
+    }
+};
+
+class ApbQueryHandler : public EngineActionHandler {
+public:
+    const char* action_name() const override { return "apb.query"; }
+    bool needs_design() const override { return false; }
+    bool needs_waveform() const override { return true; }
+    Json run(const Json& r) const override {
+        return Json({{"error","NOT_IMPLEMENTED"},{"message","apb.query pending"}});
+    }
+};
+
+class ApbCursorHandler : public EngineActionHandler {
+public:
+    const char* action_name() const override { return "apb.cursor"; }
+    bool needs_design() const override { return false; }
+    bool needs_waveform() const override { return true; }
+    Json run(const Json& r) const override {
+        return Json({{"error","NOT_IMPLEMENTED"},{"message","apb.cursor pending"}});
+    }
+};
+
+class AxiConfigLoadHandler : public EngineActionHandler {
+public:
+    const char* action_name() const override { return "axi.config.load"; }
+    bool needs_design() const override { return false; }
+    bool needs_waveform() const override { return true; }
+    Json run(const Json&) const override {
+        return Json({{"error","NOT_IMPLEMENTED"},{"message","axi.config.load pending config parsing"}});
+    }
+};
+
+class AxiConfigListHandler : public EngineActionHandler {
+public:
+    const char* action_name() const override { return "axi.config.list"; }
+    bool needs_design() const override { return false; }
+    bool needs_waveform() const override { return true; }
+    Json run(const Json& r) const override {
+        Json a = r.value("args", Json::object());
+        std::string name = a.value("name", "");
+        xdebug_waveform::AxiManager am;
+        if (name.empty()) { am.get_latest_axi(xdebug_waveform::g_session_id, name); }
+        xdebug_waveform::AxiConfig cfg;
+        if (name.empty() || !am.get_axi(xdebug_waveform::g_session_id, name, cfg))
+            return Json({{"error","CONFIG_NOT_FOUND"}});
+        Json out; out["name"] = name;
+        out["clk"] = cfg.clk; out["rst_n"] = cfg.rst_n;
+        return out;
+    }
+};
+
+class AxiQueryHandler : public EngineActionHandler {
+public:
+    const char* action_name() const override { return "axi.query"; }
+    bool needs_design() const override { return false; }
+    bool needs_waveform() const override { return true; }
+    Json run(const Json& r) const override {
+        return Json({{"error","NOT_IMPLEMENTED"},{"message","axi.query pending"}});
+    }
+};
+
+class AxiCursorHandler : public EngineActionHandler {
+public:
+    const char* action_name() const override { return "axi.cursor"; }
+    bool needs_design() const override { return false; }
+    bool needs_waveform() const override { return true; }
+    Json run(const Json& r) const override {
+        return Json({{"error","NOT_IMPLEMENTED"},{"message","axi.cursor pending"}});
+    }
+};
+
+class AxiAnalysisHandler : public EngineActionHandler {
+public:
+    const char* action_name() const override { return "axi.analysis"; }
+    bool needs_design() const override { return false; }
+    bool needs_waveform() const override { return true; }
+    Json run(const Json& r) const override {
+        return Json({{"error","NOT_IMPLEMENTED"},{"message","axi.analysis pending"}});
+    }
+};
+
 // ═══════════════════════════════════════════════════════════════════════
 // Not-yet-implemented action handlers (return NOT_IMPLEMENTED)
 // ═══════════════════════════════════════════════════════════════════════
@@ -684,14 +986,14 @@ const EngineActionRegistry& engine_action_registry() {
         r->add(std::unique_ptr<EngineActionHandler>(new ValueBatchAtHandler));
         r->add(std::unique_ptr<EngineActionHandler>(new ScopeListHandler));
 
-        add_ni(*r, "list.create",            false, true);
-        add_ni(*r, "list.add",               false, true);
-        add_ni(*r, "list.delete",            false, true);
-        add_ni(*r, "list.show",              false, true);
-        add_ni(*r, "list.value_at",          false, true);
-        add_ni(*r, "list.validate",          false, true);
-        add_ni(*r, "list.diff",              false, true);
-        add_ni(*r, "rc.generate",            false, true);
+        r->add(std::unique_ptr<EngineActionHandler>(new ListCreateHandler));
+        r->add(std::unique_ptr<EngineActionHandler>(new ListAddHandler));
+        r->add(std::unique_ptr<EngineActionHandler>(new ListDeleteHandler));
+        r->add(std::unique_ptr<EngineActionHandler>(new ListShowHandler));
+        r->add(std::unique_ptr<EngineActionHandler>(new ListValueAtHandler));
+        r->add(std::unique_ptr<EngineActionHandler>(new ListValidateHandler));
+        r->add(std::unique_ptr<EngineActionHandler>(new ListDiffHandler));
+        r->add(std::unique_ptr<EngineActionHandler>(new RcGenerateHandler));
         r->add(std::unique_ptr<EngineActionHandler>(new VerifyConditionsHandler));
 
         // Cursor actions
@@ -718,15 +1020,15 @@ const EngineActionRegistry& engine_action_registry() {
         r->add(std::unique_ptr<EngineActionHandler>(new AiActionHandler("axi.request_response_pair", false, true)));
         r->add(std::unique_ptr<EngineActionHandler>(new AiActionHandler("axi.latency_outlier",   false, true)));
 
-        add_ni(*r, "apb.config.load",        false, true);
-        add_ni(*r, "apb.config.list",        false, true);
-        add_ni(*r, "apb.query",              false, true);
-        add_ni(*r, "apb.cursor",             false, true);
-        add_ni(*r, "axi.config.load",        false, true);
-        add_ni(*r, "axi.config.list",        false, true);
-        add_ni(*r, "axi.query",              false, true);
-        add_ni(*r, "axi.cursor",             false, true);
-        add_ni(*r, "axi.analysis",           false, true);
+        r->add(std::unique_ptr<EngineActionHandler>(new ApbConfigLoadHandler));
+        r->add(std::unique_ptr<EngineActionHandler>(new ApbConfigListHandler));
+        r->add(std::unique_ptr<EngineActionHandler>(new ApbQueryHandler));
+        r->add(std::unique_ptr<EngineActionHandler>(new ApbCursorHandler));
+        r->add(std::unique_ptr<EngineActionHandler>(new AxiConfigLoadHandler));
+        r->add(std::unique_ptr<EngineActionHandler>(new AxiConfigListHandler));
+        r->add(std::unique_ptr<EngineActionHandler>(new AxiQueryHandler));
+        r->add(std::unique_ptr<EngineActionHandler>(new AxiCursorHandler));
+        r->add(std::unique_ptr<EngineActionHandler>(new AxiAnalysisHandler));
         // (axi.* analysis and apb.transfer_window handled by AiActionHandler above)
 
         r->add(std::unique_ptr<EngineActionHandler>(new EventConfigLoadHandler));
