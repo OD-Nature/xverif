@@ -173,6 +173,7 @@ Json parity_json(npiHandle signal,
     drvLoadStmtVec_t candidates;
     npi_trace_driver_by_hdl2(signal, candidates, true, nullptr, options);
     for (const auto& candidate : candidates) {
+        if (!candidate.useHdl) continue;
         std::vector<std::string> ignored;
         Json item = statement_json(candidate, ignored);
         int rc = npi_check_active_handle(candidate.useHdl, pvc);
@@ -798,8 +799,8 @@ TraceBuildResult build_active_trace(
             break;
         }
 
-        // Get handle for the signal
-        npiHandle signal_hdl = npi_handle_by_name(current.signal.c_str(), nullptr);
+        // Get handle for the signal (RAII via NpiHandleGuard).
+        NpiHandleGuard signal_hdl(npi_handle_by_name(current.signal.c_str(), nullptr));
         if (!signal_hdl) {
             result.limitations.push_back("SIGNAL_NOT_FOUND: " + current.signal);
             if (result.node_count == 0) {
@@ -809,12 +810,20 @@ TraceBuildResult build_active_trace(
             continue;
         }
 
-        int signal_type = npi_get(npiType, signal_hdl);
+        int signal_type = npi_get(npiType, signal_hdl.get());
 
         // Run active trace driver at this time
         actTrcRes_t active = {};
         int active_count = npi_active_trace_driver_by_hdl(
-            signal_hdl, active, current.time.c_str(), options);
+            signal_hdl.get(), active, current.time.c_str(), options);
+
+        if (active_count < 0) {
+            result.termination = "active_trace_failed";
+            result.limitations.push_back(
+                "npi_active_trace_driver_by_hdl error " + std::to_string(active_count)
+                + " for " + current.signal);
+            break;
+        }
 
         if (active_count == 0) {
             // No active driver found.  Check if this is an alias-type signal
@@ -822,7 +831,7 @@ TraceBuildResult build_active_trace(
             std::string alias_kind_str = statement_kind(signal_type);
             if (is_alias_kind(alias_kind_str)) {
                 std::vector<AliasCandidate> candidates =
-                    resolve_alias_candidates(signal_hdl, current.signal, limits);
+                    resolve_alias_candidates(signal_hdl.get(), current.signal, limits);
                 if (candidates.size() == 1) {
                     std::string target = candidates[0].to;
                     if (!target.empty() && visited.find(target) == visited.end() &&
@@ -850,7 +859,6 @@ TraceBuildResult build_active_trace(
                             "alias",
                             candidates[0].confidence.empty() ? "medium" : candidates[0].confidence
                         });
-                        npi_release_handle(signal_hdl);
                         continue;
                     }
                 } else if (candidates.size() > 1) {
@@ -858,14 +866,12 @@ TraceBuildResult build_active_trace(
                     for (const auto& c : candidates) {
                         result.alias_candidates.push_back(c);
                     }
-                    npi_release_handle(signal_hdl);
-                    continue;
+                                        continue;
                 }
             }
 
             // Terminal: primary input, constant, or truly unresolved
-            npi_release_handle(signal_hdl);
-            if (result.node_count == 0) {
+                        if (result.node_count == 0) {
                 result.termination = "unresolved";
                 result.limitations.push_back("active trace returned no driver evidence for " + current.signal);
             }
@@ -897,8 +903,7 @@ TraceBuildResult build_active_trace(
             continue;
         }
 
-        npi_release_handle(signal_hdl);
-
+        
         // Process statements from active trace
         Json driver_item = nullptr;
 
@@ -1298,7 +1303,7 @@ Json ActiveTraceService::run(const Json& request, const Json& target) const {
     return response;
 }
 
-Json ActiveTraceService::run_engine(const Json& request,
+nlohmann::ordered_json ActiveTraceService::run_engine(const Json& request,
                                      const std::string& daidir,
                                      const std::string& fsdb_path,
                                      npiFsdbFileHandle fsdb) const {
@@ -1311,16 +1316,15 @@ Json ActiveTraceService::run_engine(const Json& request,
         return make_error(request, action, "MISSING_FIELD",
                           "args.signal and args.requested_time are required");
     }
-
-    ActiveTraceOptions request_options = parse_options(request, args);
-
-    // Signal validation (NPI is already loaded by the engine).
-    NpiHandleGuard signal(npi_handle_by_name(signal_name.c_str(), nullptr));
-    if (!signal) {
-        return make_error(request, action, "SIGNAL_NOT_FOUND",
-                          "exact design signal was not found: " + signal_name);
+    if (!fsdb) {
+        return make_error(request, action, "FSDB_NOT_OPEN", "FSDB handle is null");
     }
 
+    ActiveTraceOptions request_options = parse_options(request, args);
+    NpiHandleGuard signal(npi_handle_by_name(signal_name.c_str(), nullptr));
+    if (!signal) {
+        return nlohmann::ordered_json{{"error","SIGNAL_NOT_FOUND"}};
+    }
     trcOption_t options = trcOptionDefault;
     options.reportControl = request_options.include_control;
 
@@ -1328,7 +1332,6 @@ Json ActiveTraceService::run_engine(const Json& request,
         fsdb, signal_name, requested_time, options,
         request_options.limits, request_options.include_control);
 
-    // Collect values
     std::vector<std::string> limitations = trace_result.limitations;
     std::vector<std::string> value_signals;
     value_signals.push_back(signal_name);
@@ -1345,47 +1348,41 @@ Json ActiveTraceService::run_engine(const Json& request,
         first_active_time.empty() ? requested_time : first_active_time, limitations);
     Json requested_values = value_map(fsdb, value_signals, requested_time, limitations);
 
-    Json response = make_response(request, action);
-    response["session"] = {{"mode", "combined"}, {"daidir", daidir}, {"fsdb", fsdb_path}};
-
     std::string driver_status = trace_result.termination;
     if (driver_status == "assignment" || driver_status == "force" || driver_status == "primary_input")
         driver_status = "resolved";
     else if (driver_status == "limit" && !trace_result.root_driver.is_null())
         driver_status = "resolved";
 
-    response["summary"] = {
-        {"signal", signal_name}, {"requested_time", requested_time},
-        {"active_time", first_active_time}, {"driver_status", driver_status},
-        {"statement_count", trace_result.node_count},
-        {"trace_node_count", trace_result.node_count},
-        {"root_driver", trace_result.root_driver.is_null() ? Json::object() : trace_result.root_driver}
-    };
+    nlohmann::ordered_json resp;
+    resp["signal"] = signal_name;
+    resp["requested_time"] = requested_time;
+    resp["active_time"] = first_active_time;
+    resp["driver_status"] = driver_status;
+    resp["driver"] = trace_result.current_driver.is_null()
+        ? nlohmann::ordered_json(nullptr) : trace_result.current_driver;
+    resp["root_driver"] = trace_result.root_driver.is_null()
+        ? nlohmann::ordered_json(nullptr) : trace_result.root_driver;
+    resp["controls"] = nodes_to_json(trace_result.controls);
+    resp["events"] = nodes_to_json(trace_result.events);
+    resp["values"] = {{"requested", requested_values}, {"active", active_values}};
+    resp["limitations"] = strings_to_json(limitations);
+    resp["statement_count"] = trace_result.node_count;
+    resp["trace_node_count"] = trace_result.node_count;
 
-    Json data;
-    data["signal"] = signal_name;
-    data["requested_time"] = requested_time;
-    data["active_time"] = first_active_time;
-    data["driver_status"] = driver_status;
-    data["driver"] = trace_result.current_driver.is_null() ? Json(nullptr) : trace_result.current_driver;
-    data["root_driver"] = trace_result.root_driver.is_null() ? Json(nullptr) : trace_result.root_driver;
-    data["controls"] = nodes_to_json(trace_result.controls);
-    data["events"] = nodes_to_json(trace_result.events);
-    data["values"] = {{"requested", requested_values}, {"active", active_values}};
-    data["limitations"] = strings_to_json(limitations);
-    data["alias_candidates"] = request_options.include_alias_candidates || !trace_result.alias_candidates.empty()
-        ? alias_candidates_to_json(trace_result.alias_candidates) : Json::array();
+    if (request_options.include_alias_candidates || !trace_result.alias_candidates.empty())
+        resp["alias_candidates"] = alias_candidates_to_json(trace_result.alias_candidates);
+    else
+        resp["alias_candidates"] = nlohmann::ordered_json::array();
 
     if (request_options.include_trace) {
-        data["trace"] = {{"nodes", nodes_to_json(trace_result.nodes)},
+        resp["trace"] = {{"nodes", nodes_to_json(trace_result.nodes)},
                          {"edges", edges_to_json(trace_result.edges)},
                          {"selected_path", strings_to_json(trace_result.selected_path)},
                          {"termination", trace_result.termination}};
     }
-
-    response["data"] = data;
-    response["meta"]["truncated"] = trace_result.truncated;
-    return response;
+    resp["truncated"] = trace_result.truncated;
+    return resp;
 }
 
 } // namespace xdebug

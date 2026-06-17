@@ -173,17 +173,17 @@ json handle_request_impl(const json& request) {
         return error_response(request, action, "SESSION_UNHEALTHY",
             message.empty() ? status : message);
     }
-    response["ok"] = result.value("ok", true);
-    response["summary"] = result.value("summary", json::object());
-    response["data"] = result.value("data", json::object());
-    if (!response["ok"].get<bool>()) {
-        json err = result.value("error", json::object());
-        response["error"] = {{"code", err.value("code", "ACTION_FAILED")},
-                             {"message", err.value("message", "action failed")},
-                             {"recoverable", true},
-                             {"candidates", json::array()},
-                             {"suggested_actions", json::array()}};
-    }
+    // send_json_command already extracts the "data" field from the
+    // server's ok_response envelope.  result IS the handler payload.
+    response["ok"] = true;
+    response["summary"] = {
+        {"driver_status", result.value("driver_status", "")},
+        {"statement_count", result.value("statement_count", 0)},
+        {"root_driver", result.value("root_driver", json::object())}
+    };
+    response["data"] = result;
+    if (result.contains("truncated") && result["truncated"].is_boolean())
+        response["meta"] = {{"truncated", result["truncated"].get<bool>()}};
     return response;
 }
 

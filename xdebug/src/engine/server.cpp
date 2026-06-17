@@ -300,7 +300,11 @@ static bool handle_client(int client_fd, bool& should_quit) {
         return send_response(client_fd, error_response(
             data.value("error", "ACTION_FAILED"),
             data.value("message", "action failed")));
-    return send_response(client_fd, ok_response(data));
+    Json resp = ok_response(data);
+    // Propagate truncation flag from handler to response envelope.
+    if (data.contains("truncated") && data["truncated"].is_boolean())
+        resp["meta"] = {{"truncated", data["truncated"].get<bool>()}};
+    return send_response(client_fd, resp);
 }
 
 int server_main(int argc, char** argv) {
@@ -363,12 +367,19 @@ int server_main(int argc, char** argv) {
     if (has_daidir && design_args.size() >= 2 && design_args[0] == "-dbdir")
         g_daidir_path = design_args[1];
 
-    // Build NPI argv: [exe, ...design_args...].  If no daidir, just exe.
-    int npi_argc = has_daidir ? (static_cast<int>(design_args.size()) + 1) : 1;
+    // Build NPI argv: [exe, ...design_args..., -ssf, fsdb_path]
+    // NPI requires -ssf at init/load_design time for active-trace binding.
+    int npi_argc = 1 + static_cast<int>(design_args.size())
+                   + (has_fsdb ? 2 : 0);
     char** npi_argv = new char*[npi_argc];
     npi_argv[0] = argv[0];
-    for (int i = 1; i < npi_argc; i++)
-        npi_argv[i] = const_cast<char*>(design_args[i - 1].c_str());
+    int npi_idx = 1;
+    for (size_t i = 0; i < design_args.size(); i++)
+        npi_argv[npi_idx++] = const_cast<char*>(design_args[i].c_str());
+    if (has_fsdb) {
+        npi_argv[npi_idx++] = const_cast<char*>("-ssf");
+        npi_argv[npi_idx++] = const_cast<char*>(fsdb_arg.c_str());
+    }
 
     daemonize_io();
 

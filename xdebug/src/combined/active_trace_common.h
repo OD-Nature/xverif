@@ -140,6 +140,7 @@ inline bool parse_time(const std::string& s, double& val, std::string& unit) {
 
 inline std::string fsdb_value_at(npiFsdbFileHandle fsdb,
                                   const std::string& sig, const std::string& t) {
+    if (!fsdb) return "";
     npiFsdbSigHandle sh = npi_fsdb_sig_by_name(fsdb, sig.c_str(), nullptr);
     if (!sh) return "";
     double tv; std::string unit;

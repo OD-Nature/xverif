@@ -136,7 +136,7 @@ ChainResult build_chain(npiFsdbFileHandle fsdb,
 
     while (depth <= max_depth && static_cast<int>(result.chain.size()) < max_nodes) {
         // ── trace ──
-        npiHandle hdl = npi_handle_by_name(cur_sig.c_str(), nullptr);
+        NpiHandleGuard hdl(npi_handle_by_name(cur_sig.c_str(), nullptr));
         if (!hdl) {
             result.termination = "signal_not_found";
             result.limitations.push_back("signal not found: " + cur_sig);
@@ -145,8 +145,14 @@ ChainResult build_chain(npiFsdbFileHandle fsdb,
 
         actTrcRes_t active = {};
         result.stats.calls++;
-        npi_active_trace_driver_by_hdl(hdl, active, cur_time.c_str(), opt);
-        npi_release_handle(hdl);
+        int rc = npi_active_trace_driver_by_hdl(hdl.get(), active, cur_time.c_str(), opt);
+        if (rc < 0) {
+            result.termination = "active_trace_failed";
+            result.limitations.push_back(
+                "npi_active_trace_driver_by_hdl error " + std::to_string(rc)
+                + " for " + cur_sig);
+            break;
+        }
 
         bool temporal = (active.activeTime != cur_time);
         if (temporal) result.stats.temporal_boundaries++;
@@ -364,7 +370,7 @@ Json ActiveTraceChainService::run(const Json& request, const Json& target) const
     return resp;
 }
 
-Json ActiveTraceChainService::run_engine(const Json& request,
+nlohmann::ordered_json ActiveTraceChainService::run_engine(const Json& request,
                                           const std::string& daidir,
                                           const std::string& fsdb_path,
                                           npiFsdbFileHandle fsdb) const {
@@ -375,8 +381,11 @@ Json ActiveTraceChainService::run_engine(const Json& request,
     std::string clk_period = args.value("clk_period", "10ns");
 
     if (signal.empty() || req_time.empty())
-        return make_error(request, action, "MISSING_FIELD",
-                          "requires args.signal and args.requested_time");
+        return nlohmann::ordered_json{{"error", "MISSING_FIELD"},
+            {"message", "requires args.signal and args.requested_time"}};
+    if (!fsdb)
+        return nlohmann::ordered_json{{"error", "FSDB_NOT_OPEN"},
+            {"message", "FSDB handle is null"}};
 
     Json limits_j = args.value("limits", Json::object());
     int max_depth = std::max(1, limits_j.value("max_depth", 20));
@@ -384,22 +393,21 @@ Json ActiveTraceChainService::run_engine(const Json& request,
 
     NpiHandleGuard sig_hdl(npi_handle_by_name(signal.c_str(), nullptr));
     if (!sig_hdl.get())
-        return make_error(request, action, "SIGNAL_NOT_FOUND", "signal not found: " + signal);
+        return nlohmann::ordered_json{{"error", "SIGNAL_NOT_FOUND"},
+            {"message", "signal not found: " + signal}};
 
     ChainResult result = build_chain(fsdb, signal, req_time, clk_period,
                                       max_depth, max_nodes);
 
-    Json resp = make_response(request, action);
-    resp["session"] = {{"mode", "combined"}, {"daidir", daidir}, {"fsdb", fsdb_path}};
-    resp["summary"] = {
-        {"signal", signal}, {"start_time", req_time},
-        {"chain_length", static_cast<int>(result.chain.size())},
-        {"termination", result.termination},
-        {"temporal_boundaries", result.stats.temporal_boundaries}
-    };
-    resp["data"] = chain_to_json(result);
+    nlohmann::ordered_json resp;
+    resp["signal"] = signal;
+    resp["start_time"] = req_time;
+    resp["chain_length"] = static_cast<int>(result.chain.size());
+    resp["termination"] = result.termination;
+    resp["temporal_boundaries"] = result.stats.temporal_boundaries;
+    resp["chain"] = chain_to_json(result);
     resp["text"] = chain_to_xout(signal, req_time, result);
-    resp["meta"]["truncated"] = result.truncated;
+    resp["truncated"] = result.truncated;
     return resp;
 }
 
