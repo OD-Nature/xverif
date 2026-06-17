@@ -515,10 +515,29 @@ public:
         using namespace xdebug_waveform;
         Json args = request.value("args", Json::object());
         std::string name = args.value("name", "");
-        EventManager em;
         EventConfig config;
-        if (!em.get_event(g_session_id, g_fsdb_file_path, name, config))
-            return Json({{"error","CONFIG_NOT_FOUND"},{"message",name}});
+
+        // Two modes: named config (pre-loaded via event.config.load) or
+        // inline config (clk + signals passed directly in args).
+        if (!name.empty()) {
+            EventManager em;
+            if (!em.get_event(g_session_id, g_fsdb_file_path, name, config))
+                return Json({{"error","CONFIG_NOT_FOUND"},{"message",name}});
+        } else {
+            // Inline mode: build config from args directly.
+            std::string clk = args.value("clk", "");
+            if (clk.empty())
+                return Json({{"error","MISSING_FIELD"},{"message","args.clk is required for inline event config"}});
+            config.clk = clk;
+            config.rst_n = args.value("rst_n", "");
+            config.posedge = args.value("edge", args.value("posedge", "posedge")) != "negedge";
+            Json sigs = args.value("signals", Json::object());
+            for (auto it = sigs.begin(); it != sigs.end(); ++it) {
+                if (it->is_string()) config.signals[it.key()] = it->get<std::string>();
+            }
+            if (config.signals.empty())
+                return Json({{"error","MISSING_FIELD"},{"message","args.signals is required for inline event config"}});
+        }
 
         // Parse time range from standard TimeSpec fields
         npiFsdbTime tbegin = 0, tend = ~0ULL;
