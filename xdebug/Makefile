@@ -18,6 +18,8 @@ NPI_LIB ?=
 
 CXXFLAGS = $(COMMON_CXXFLAGS) $(NPI_CXXFLAGS) -pthread -Isrc -Isrc/core -Isrc/design -Isrc/waveform -Ithird_party
 LDFLAGS  = $(NPI_LDFLAGS) -pthread $(if $(NPI_LIB),-Xlinker -rpath -Xlinker $(NPI_LIB),)
+# Frontend does not need NPI (all NPI is in the engine subprocess).
+FRONTEND_LDFLAGS = -pthread
 BUILD    = build
 LIBEXEC  = libexec
 EXE      = xdebug
@@ -51,10 +53,7 @@ APP_SRCS = src/main.cpp \
            $(API_SUPPORT_SRCS) \
            src/session/session_store.cpp \
            src/backend/engine_adapter.cpp \
-           src/backend/engine_request_mapper.cpp \
-           src/runtime/work_dir.cpp \
-           src/combined/active_trace_service.cpp \
-           src/combined/active_trace_chain.cpp
+           src/runtime/work_dir.cpp
 
 DESIGN_SRCS = src/design/main.cpp \
               src/design/session/session_registry.cpp \
@@ -75,7 +74,14 @@ DESIGN_SRCS = src/design/main.cpp \
               src/design/port/port_analyzer.cpp \
               src/design/control_dep/control_dep.cpp \
               src/design/trace/trace_engine.cpp \
-              src/design/signal/signal_finder.cpp
+              src/design/signal/signal_finder.cpp \
+              src/design/service/engine_action_registry.cpp \
+              src/api/response.cpp \
+              src/api/text_response_builder.cpp \
+              src/api/xout_renderer.cpp \
+              src/runtime/work_dir.cpp \
+              src/combined/active_trace_service.cpp \
+              src/combined/active_trace_chain.cpp
 
 WAVEFORM_SRCS = src/waveform/main.cpp \
                 src/waveform/session/session_registry.cpp \
@@ -132,18 +138,17 @@ WAVEFORM_OBJS = $(WAVEFORM_SRCS:%.cpp=$(BUILD)/%.o)
 
 all: $(EXE) internal-engines
 
-internal-engines: $(LIBEXEC)/xdebug-design-engine $(LIBEXEC)/xdebug-waveform-engine
+internal-engines: $(LIBEXEC)/xdebug-engine
+
+# Unified engine: all design + waveform objects EXCEPT waveform/main.o
+# (design/main.cpp is the entry point; waveform/main.cpp has its own main).
+UNIFIED_OBJS = $(DESIGN_OBJS) $(filter-out $(BUILD)/src/waveform/main.o,$(WAVEFORM_OBJS))
+$(LIBEXEC)/xdebug-engine: $(CORE_OBJS) $(UNIFIED_OBJS)
+	mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -DXDEBUG_INTERNAL_ENGINE -o $@ $^ $(LDFLAGS)
 
 $(EXE): $(CORE_OBJS) $(APP_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
-
-$(LIBEXEC)/xdebug-design-engine: $(CORE_OBJS) $(DESIGN_OBJS)
-	mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) -DXDEBUG_INTERNAL_ENGINE -o $@ $^ $(LDFLAGS)
-
-$(LIBEXEC)/xdebug-waveform-engine: $(CORE_OBJS) $(WAVEFORM_OBJS)
-	mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) -DXDEBUG_INTERNAL_ENGINE -o $@ $^ $(LDFLAGS)
 
 $(BUILD)/%.o: %.cpp
 	mkdir -p $(dir $@)

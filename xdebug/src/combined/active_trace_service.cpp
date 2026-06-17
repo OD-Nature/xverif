@@ -1298,4 +1298,94 @@ Json ActiveTraceService::run(const Json& request, const Json& target) const {
     return response;
 }
 
+Json ActiveTraceService::run_engine(const Json& request,
+                                     const std::string& daidir,
+                                     const std::string& fsdb_path,
+                                     npiFsdbFileHandle fsdb) const {
+    const std::string action = "trace.active_driver";
+    const Json args = request.value("args", Json::object());
+    const std::string signal_name = args.value("signal", std::string());
+    const std::string requested_time = args.value("requested_time", std::string());
+
+    if (signal_name.empty() || requested_time.empty()) {
+        return make_error(request, action, "MISSING_FIELD",
+                          "args.signal and args.requested_time are required");
+    }
+
+    ActiveTraceOptions request_options = parse_options(request, args);
+
+    // Signal validation (NPI is already loaded by the engine).
+    NpiHandleGuard signal(npi_handle_by_name(signal_name.c_str(), nullptr));
+    if (!signal) {
+        return make_error(request, action, "SIGNAL_NOT_FOUND",
+                          "exact design signal was not found: " + signal_name);
+    }
+
+    trcOption_t options = trcOptionDefault;
+    options.reportControl = request_options.include_control;
+
+    TraceBuildResult trace_result = build_active_trace(
+        fsdb, signal_name, requested_time, options,
+        request_options.limits, request_options.include_control);
+
+    // Collect values
+    std::vector<std::string> limitations = trace_result.limitations;
+    std::vector<std::string> value_signals;
+    value_signals.push_back(signal_name);
+    for (const auto& node : trace_result.nodes) {
+        if (!node.next_signal.empty()) {
+            if (std::find(value_signals.begin(), value_signals.end(), node.next_signal) == value_signals.end())
+                value_signals.push_back(node.next_signal);
+        }
+    }
+
+    const std::string first_active_time = trace_result.nodes.empty() ? "" :
+        trace_result.nodes.front().active_time;
+    Json active_values = value_map(fsdb, value_signals,
+        first_active_time.empty() ? requested_time : first_active_time, limitations);
+    Json requested_values = value_map(fsdb, value_signals, requested_time, limitations);
+
+    Json response = make_response(request, action);
+    response["session"] = {{"mode", "combined"}, {"daidir", daidir}, {"fsdb", fsdb_path}};
+
+    std::string driver_status = trace_result.termination;
+    if (driver_status == "assignment" || driver_status == "force" || driver_status == "primary_input")
+        driver_status = "resolved";
+    else if (driver_status == "limit" && !trace_result.root_driver.is_null())
+        driver_status = "resolved";
+
+    response["summary"] = {
+        {"signal", signal_name}, {"requested_time", requested_time},
+        {"active_time", first_active_time}, {"driver_status", driver_status},
+        {"statement_count", trace_result.node_count},
+        {"trace_node_count", trace_result.node_count},
+        {"root_driver", trace_result.root_driver.is_null() ? Json::object() : trace_result.root_driver}
+    };
+
+    Json data;
+    data["signal"] = signal_name;
+    data["requested_time"] = requested_time;
+    data["active_time"] = first_active_time;
+    data["driver_status"] = driver_status;
+    data["driver"] = trace_result.current_driver.is_null() ? Json(nullptr) : trace_result.current_driver;
+    data["root_driver"] = trace_result.root_driver.is_null() ? Json(nullptr) : trace_result.root_driver;
+    data["controls"] = nodes_to_json(trace_result.controls);
+    data["events"] = nodes_to_json(trace_result.events);
+    data["values"] = {{"requested", requested_values}, {"active", active_values}};
+    data["limitations"] = strings_to_json(limitations);
+    data["alias_candidates"] = request_options.include_alias_candidates || !trace_result.alias_candidates.empty()
+        ? alias_candidates_to_json(trace_result.alias_candidates) : Json::array();
+
+    if (request_options.include_trace) {
+        data["trace"] = {{"nodes", nodes_to_json(trace_result.nodes)},
+                         {"edges", edges_to_json(trace_result.edges)},
+                         {"selected_path", strings_to_json(trace_result.selected_path)},
+                         {"termination", trace_result.termination}};
+    }
+
+    response["data"] = data;
+    response["meta"]["truncated"] = trace_result.truncated;
+    return response;
+}
+
 } // namespace xdebug

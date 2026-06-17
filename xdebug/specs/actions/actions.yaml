@@ -1340,8 +1340,8 @@
       "name": "trace.active_driver",
       "category": "combined",
       "status": "stable",
-      "requires": "combined",
-      "handler_kind": "active_trace",
+      "requires": "any",
+      "handler_kind": "engine_forward",
       "schemas": {
         "request": "schemas/v1/actions/trace.active_driver.request.schema.json",
         "response": "schemas/v1/actions/trace.active_driver.response.schema.json"
@@ -1363,8 +1363,8 @@
       "name": "trace.active_driver_chain",
       "category": "combined",
       "status": "stable",
-      "requires": "combined",
-      "handler_kind": "active_trace_chain",
+      "requires": "any",
+      "handler_kind": "engine_forward",
       "schemas": {
         "request": "schemas/v1/actions/trace.active_driver_chain.request.schema.json",
         "response": "schemas/v1/actions/trace.active_driver_chain.response.schema.json"

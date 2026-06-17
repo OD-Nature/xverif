@@ -1,5 +1,4 @@
 #include "backend/engine_adapter.h"
-#include "backend/engine_request_mapper.h"
 #include "api/response.h"
 #include "core/process/process_runner.h"
 #include "logging/action_log.h"
@@ -10,10 +9,6 @@
 namespace xdebug {
 
 namespace {
-
-std::string engine_component(EngineKind kind) {
-    return kind == EngineKind::Design ? "design" : "waveform";
-}
 
 std::string request_session_id_for_log(const Json& request) {
     Json target = request.value("target", Json::object());
@@ -37,23 +32,21 @@ std::string request_session_id_for_log(const Json& request) {
 EngineAdapter::EngineAdapter(const std::string& executable_dir)
     : executable_dir_(executable_dir) {}
 
-std::string EngineAdapter::engine_path(EngineKind kind) const {
-    return executable_dir_ + "/libexec/" +
-           (kind == EngineKind::Design ? "xdebug-design-engine" : "xdebug-waveform-engine");
+std::string EngineAdapter::engine_path() const {
+    return executable_dir_ + "/libexec/xdebug-engine";
 }
 
-std::string EngineAdapter::engine_workdir(EngineKind kind) const {
-    return runtime_work_dir(kind == EngineKind::Design ? "design" : "waveform");
+std::string EngineAdapter::engine_workdir() const {
+    return runtime_work_dir("engine");
 }
 
-bool EngineAdapter::invoke(EngineKind kind,
-                           const Json& xdebug_request,
+bool EngineAdapter::invoke(const Json& xdebug_request,
                            Json& response,
                            std::string& error) const {
-    const std::string component = engine_component(kind);
+    const std::string component = "engine";
     const std::string log_sid = request_session_id_for_log(xdebug_request);
-    const std::string path = engine_path(kind);
-    const std::string workdir = engine_workdir(kind);
+    const std::string path = engine_path();
+    const std::string workdir = engine_workdir();
 
     if (!ensure_runtime_work_dir(workdir)) {
         error = std::string("failed to create engine working directory: ") + workdir;
@@ -62,13 +55,11 @@ bool EngineAdapter::invoke(EngineKind kind,
         return false;
     }
 
-    // Build internal request via EngineRequestMapper
-    EngineRequestMapper mapper;
-    Json internal_request = mapper.map(kind, xdebug_request);
-    std::string stdin_text = internal_request.dump();
+    // The unified engine accepts the full public request (daidir, fsdb, all fields).
+    // No field stripping needed.
+    std::string stdin_text = xdebug_request.dump();
     stdin_text.push_back('\n');
 
-    // Build process request
     ProcessRequest process_req;
     process_req.executable = path;
     process_req.argv = {"ai", "query", "-"};

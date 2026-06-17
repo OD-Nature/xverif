@@ -14,7 +14,7 @@ namespace {
 
 const xdebug_core::ToolConfig& tool_config() {
     static const xdebug_core::ToolConfig config =
-        xdebug_core::make_tool_config("xdebug-design", ".xdebug/design", "xdebug-design-engine", "1.2");
+        xdebug_core::make_tool_config("xdebug-engine", ".xdebug/engine", "xdebug-engine", "1.2");
     return config;
 }
 

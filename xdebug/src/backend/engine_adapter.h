@@ -6,23 +6,18 @@
 
 namespace xdebug {
 
-enum class EngineKind {
-    Design,
-    Waveform
-};
-
 class EngineAdapter {
 public:
     explicit EngineAdapter(const std::string& executable_dir);
 
-    bool invoke(EngineKind kind,
-                const Json& xdebug_request,
+    // Invoke the unified xdebug-engine subprocess.
+    bool invoke(const Json& xdebug_request,
                 Json& response,
                 std::string& error) const;
 
 private:
-    std::string engine_path(EngineKind kind) const;
-    std::string engine_workdir(EngineKind kind) const;
+    std::string engine_path() const;
+    std::string engine_workdir() const;
     std::string executable_dir_;
 };
 

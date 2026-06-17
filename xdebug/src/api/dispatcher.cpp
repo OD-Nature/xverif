@@ -115,7 +115,7 @@ Json Dispatcher::resolve_target(const Json& request) const {
     return target;
 }
 
-Json Dispatcher::forward_action(const Json& request, EngineKind kind) {
+Json Dispatcher::forward_action(const Json& request) {
     Json forwarded = request;
     Json target = forwarded.value("target", Json::object());
     Json args = forwarded.value("args", Json::object());
@@ -125,7 +125,7 @@ Json Dispatcher::forward_action(const Json& request, EngineKind kind) {
     forwarded["target"] = target;
     Json response;
     std::string error;
-    if (!adapter_.invoke(kind, forwarded, response, error)) {
+    if (!adapter_.invoke(forwarded, response, error)) {
         return engine_error(request, request.value("action", std::string()), error);
     }
     return response;
@@ -140,27 +140,23 @@ Json Dispatcher::resource_error(const Json& request, const ActionSpec& spec, con
     return make_error(request, spec.name, resolution.code, resolution.message);
 }
 
-Json Dispatcher::handle_engine_forward(const Json& request, const ActionSpec& spec, EngineKind kind) {
+Json Dispatcher::handle_engine_forward(const Json& request, const ActionSpec& spec) {
     Json target = resolve_target(request);
-    Json error_response = resource_error(request, spec, target);
-    if (!error_response.is_null()) return error_response;
+    Json err_resp = resource_error(request, spec, target);
+    if (!err_resp.is_null()) return err_resp;
     Json routed = request;
     routed["target"] = target;
-    Json response = forward_action(routed, kind);
+    Json response = forward_action(routed);
+    // Auto-register session for ad-hoc queries (no session_id).
     if (response.value("ok", false) && !has_string(target, "session_id") &&
         !requested_name(request).empty()) {
-        const bool design = has_string(target, "daidir");
-        const bool waveform = has_string(target, "fsdb");
-        if ((kind == EngineKind::Design && design) || (kind == EngineKind::Waveform && waveform)) {
-            SessionRecord record;
-            record.id = requested_name(request);
-            record.mode = mode_for_target(target);
-            if (record.mode.empty()) record.mode = kind == EngineKind::Design ? "design" : "waveform";
-            record.daidir = target.value("daidir", std::string());
-            record.fsdb = target.value("fsdb", std::string());
-            sessions_.put(record);
-            xdebug_core::update_public_session_manifest(record.id, record.mode, record.daidir, record.fsdb);
-        }
+        SessionRecord record;
+        record.id = requested_name(request);
+        record.mode = mode_for_target(target);
+        record.daidir = target.value("daidir", std::string());
+        record.fsdb = target.value("fsdb", std::string());
+        sessions_.put(record);
+        xdebug_core::update_public_session_manifest(record.id, record.mode, record.daidir, record.fsdb);
     }
     return response;
 }
@@ -207,19 +203,11 @@ Json Dispatcher::handle_session(const Json& request, const std::string& action) 
         Json removed = Json::array();
         Json kept = Json::array();
         for (const auto& record : sessions_.list()) {
-            Json health = Json::object();
-            bool healthy = true;
             Json doctor_req = request;
             doctor_req["action"] = "session.doctor";
             doctor_req["target"] = {{"session_id", record.id}};
-            if (record.mode == "design" || record.mode == "combined") {
-                health["design"] = forward_action(doctor_req, EngineKind::Design);
-                healthy = health["design"].value("ok", false) && healthy;
-            }
-            if (record.mode == "waveform" || record.mode == "combined") {
-                health["waveform"] = forward_action(doctor_req, EngineKind::Waveform);
-                healthy = health["waveform"].value("ok", false) && healthy;
-            }
+            Json health = forward_action(doctor_req);
+            bool healthy = health.value("ok", false);
             if (healthy) {
                 kept.push_back({{"session_id", record.id}, {"mode", record.mode}});
             } else {
@@ -233,16 +221,12 @@ Json Dispatcher::handle_session(const Json& request, const std::string& action) 
                                    {"kill_ok", kill_result.value("ok", false)}});
             }
         }
-        Json wave_request = request;
-        wave_request["action"] = "session.gc";
-        Json waveform_gc = forward_action(wave_request, EngineKind::Waveform);
         Json response = make_response(request, action);
         response["summary"] = {{"status", "completed"},
                                {"before_count", before.size()},
                                {"kept_count", kept.size()},
                                {"removed_count", removed.size()}};
-        response["data"] = {{"before", before}, {"kept", kept}, {"removed", removed},
-                            {"backends", {{"waveform", waveform_gc}}}};
+        response["data"] = {{"before", before}, {"kept", kept}, {"removed", removed}};
         return response;
     }
     if (action == "session.open" || action == "session.ensure") {
@@ -267,19 +251,11 @@ Json Dispatcher::handle_session(const Json& request, const std::string& action) 
                 if (!kill_result.value("ok", false)) return kill_result;
                 reopened_existing = true;
             } else if (reuse && resource_match) {
-                Json health = Json::object();
-                bool healthy = true;
                 Json doctor_req = request;
                 doctor_req["action"] = "session.doctor";
                 doctor_req["target"] = {{"session_id", name}};
-                if (existing.mode == "design" || existing.mode == "combined") {
-                    health["design"] = forward_action(doctor_req, EngineKind::Design);
-                    healthy = health["design"].value("ok", false) && healthy;
-                }
-                if (existing.mode == "waveform" || existing.mode == "combined") {
-                    health["waveform"] = forward_action(doctor_req, EngineKind::Waveform);
-                    healthy = health["waveform"].value("ok", false) && healthy;
-                }
+                Json health = forward_action(doctor_req);
+                bool healthy = health.value("ok", false);
                 if (healthy) {
                     xdebug_core::update_public_session_manifest(existing.id, existing.mode, existing.daidir, existing.fsdb);
                     Json response = make_response(request, action);
@@ -304,27 +280,12 @@ Json Dispatcher::handle_session(const Json& request, const std::string& action) 
                 return err;
             }
         }
+        // Spawn ONE unified engine (handles design, waveform, or both).
         Json open_request = request;
         open_request["action"] = "session.open";
         open_request["target"] = target;
-        Json design_result = nullptr;
-        Json wave_result = nullptr;
-        if (mode == "design" || mode == "combined") {
-            design_result = forward_action(open_request, EngineKind::Design);
-            if (!design_result.value("ok", false)) return design_result;
-        }
-        if (mode == "waveform" || mode == "combined") {
-            wave_result = forward_action(open_request, EngineKind::Waveform);
-            if (!wave_result.value("ok", false)) {
-                if (!design_result.is_null()) {
-                    Json cleanup = request;
-                    cleanup["action"] = "session.kill";
-                    cleanup["target"] = {{"session_id", name}};
-                    forward_action(cleanup, EngineKind::Design);
-                }
-                return wave_result;
-            }
-        }
+        Json result = forward_action(open_request);
+        if (!result.value("ok", false)) return result;
         SessionRecord record;
         record.id = name;
         record.mode = mode;
@@ -362,47 +323,28 @@ Json Dispatcher::handle_session(const Json& request, const std::string& action) 
     SessionRecord record;
     if (!sessions_.get(id, record)) return make_error(request, action, "SESSION_NOT_FOUND", "session not found: " + id);
     if (action == "session.kill" || action == "session.close") {
-        bool ok = true;
-        Json details = Json::object();
         Json inner = request;
         inner["action"] = "session.kill";
         inner["target"] = {{"session_id", id}};
-        if (record.mode == "design" || record.mode == "combined") {
-            Json r = forward_action(inner, EngineKind::Design);
-            details["design"] = r;
-            ok = backend_cleanup_ok(r) && ok;
-        }
-        if (record.mode == "waveform" || record.mode == "combined") {
-            Json r = forward_action(inner, EngineKind::Waveform);
-            details["waveform"] = r;
-            ok = backend_cleanup_ok(r) && ok;
-        }
+        Json r = forward_action(inner);
+        bool ok = backend_cleanup_ok(r);
         sessions_.remove(id);
         Json response = make_response(request, action, ok);
         response["summary"] = {{"session_id", id}, {"mode", record.mode}, {"removed", ok}};
-        response["data"] = {{"session", session_record_json(record)}, {"backends", details}};
-        if (!ok) response["error"] = {{"code", "SESSION_STALE"}, {"message", "session was removed from xdebug registry but one or more backend cleanup operations failed"}, {"recoverable", true}};
+        response["data"] = {{"session", session_record_json(record)}, {"backends", r}};
+        if (!ok) response["error"] = {{"code", "SESSION_STALE"}, {"message", "session was removed from xdebug registry but backend cleanup failed"}, {"recoverable", true}};
         return response;
     }
     if (action == "session.doctor") {
-        Json response = make_response(request, action);
-        Json health = Json::object();
-        bool healthy = true;
         Json inner = request;
         inner["target"] = {{"session_id", id}};
-        if (record.mode == "design" || record.mode == "combined") {
-            health["design"] = forward_action(inner, EngineKind::Design);
-            healthy = health["design"].value("ok", false) && healthy;
-        }
-        if (record.mode == "waveform" || record.mode == "combined") {
-            health["waveform"] = forward_action(inner, EngineKind::Waveform);
-            healthy = health["waveform"].value("ok", false) && healthy;
-        }
-        response["ok"] = healthy;
+        Json health = forward_action(inner);
+        Json response = make_response(request, action);
+        response["ok"] = health.value("ok", false);
         response["session"] = session_record_json(record);
-        response["summary"] = {{"session_id", id}, {"mode", record.mode}, {"healthy", healthy}};
+        response["summary"] = {{"session_id", id}, {"mode", record.mode}, {"healthy", health.value("ok", false)}};
         response["data"] = {{"health", health}};
-        if (!healthy) response["error"] = {{"code", "SESSION_UNHEALTHY"}, {"message", "one or more session engines are unhealthy"}, {"recoverable", true}};
+        if (!response["ok"].get<bool>()) response["error"] = {{"code", "SESSION_UNHEALTHY"}, {"message", "session engine is unhealthy"}, {"recoverable", true}};
         return response;
     }
     return make_error(request, action, "UNKNOWN_ACTION", "unknown session action: " + action);
@@ -424,21 +366,8 @@ Json Dispatcher::dispatch_impl(const Json& request) {
     if (spec->handler_kind == "actions") return catalog_actions_response(request);
     if (spec->handler_kind == "batch") return handle_batch(request);
     if (spec->handler_kind == "session") return handle_session(request, action);
-    if (spec->handler_kind == "active_trace") {
-        Json target = resolve_target(request);
-        Json error_response = resource_error(request, *spec, target);
-        if (!error_response.is_null()) return error_response;
-        return active_trace_.run(request, target);
-    }
-    if (spec->handler_kind == "active_trace_chain") {
-        Json target = resolve_target(request);
-        Json error_response = resource_error(request, *spec, target);
-        if (!error_response.is_null()) return error_response;
-        return active_trace_chain_.run(request, target);
-    }
     if (spec->handler_kind == "engine_forward") {
-        if (spec->category == "design") return handle_engine_forward(request, *spec, EngineKind::Design);
-        if (spec->category == "waveform") return handle_engine_forward(request, *spec, EngineKind::Waveform);
+        return handle_engine_forward(request, *spec);
     }
     return make_error(request, action, "NOT_IMPLEMENTED", "no handler registered for action: " + action);
 }

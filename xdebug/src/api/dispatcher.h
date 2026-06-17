@@ -3,8 +3,6 @@
 #include "api/json_types.h"
 #include "api/action_spec.h"
 #include "backend/engine_adapter.h"
-#include "combined/active_trace_service.h"
-#include "combined/active_trace_chain.h"
 #include "session/session_store.h"
 
 #include <string>
@@ -20,15 +18,13 @@ private:
     Json dispatch_impl(const Json& request);
     Json handle_session(const Json& request, const std::string& action);
     Json handle_batch(const Json& request);
-    Json forward_action(const Json& request, EngineKind kind);
-    Json handle_engine_forward(const Json& request, const ActionSpec& spec, EngineKind kind);
+    Json forward_action(const Json& request);
+    Json handle_engine_forward(const Json& request, const ActionSpec& spec);
     Json resource_error(const Json& request, const ActionSpec& spec, const Json& target) const;
     Json resolve_target(const Json& request) const;
     std::string mode_for_target(const Json& target) const;
 
     EngineAdapter adapter_;
-    ActiveTraceService active_trace_;
-    ActiveTraceChainService active_trace_chain_;
     SessionStore sessions_;
 };
 

@@ -148,7 +148,7 @@ void register_waveform(ActionRegistry& r) {
 }
 
 void register_combined(ActionRegistry& r) {
-    ActionSpec active = stable_spec("trace.active_driver", "combined", ResourceRequirement::Combined, "active_trace");
+    ActionSpec active = stable_spec("trace.active_driver", "combined", ResourceRequirement::Any, "engine_forward");
     active.args.required.push_back("signal");
     active.args.required.push_back("requested_time");
     active.response_examples.push_back("examples/responses/trace.active_driver.exact_assignment.json");
@@ -156,7 +156,7 @@ void register_combined(ActionRegistry& r) {
     register_spec(r, active);
 
     ActionSpec chain = stable_spec("trace.active_driver_chain", "combined",
-                                    ResourceRequirement::Combined, "active_trace_chain");
+                                    ResourceRequirement::Any, "engine_forward");
     chain.args.required.push_back("signal");
     chain.args.required.push_back("requested_time");
     register_spec(r, chain);
