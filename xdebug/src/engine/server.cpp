@@ -446,6 +446,8 @@ int server_main(int argc, char** argv) {
     // Set up signal handlers
     signal(SIGTERM, cleanup_and_exit);
     signal(SIGINT, cleanup_and_exit);
+    signal(SIGSEGV, cleanup_and_exit);
+    signal(SIGABRT, cleanup_and_exit);
 
     get_sock_path(g_sock_path, g_session_id);
     if (g_transport == "file") {

@@ -126,6 +126,12 @@ pid_t SessionManager::spawn_server(const std::string& session_id, const std::vec
         }
         signal(SIGHUP, SIG_IGN);
 
+        // Close inherited file descriptors (fds > 2) to avoid leaking
+        // pipe ends and other handles into the daemonised engine server.
+        int max_fd = sysconf(_SC_OPEN_MAX);
+        if (max_fd <= 0 || max_fd > 65536) max_fd = 256;
+        for (int i = 3; i < max_fd; ++i) close(i);
+
         // Child process - exec server
         execv(self_path, argv.data());
         perror("execv");

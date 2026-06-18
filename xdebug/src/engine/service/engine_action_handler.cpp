@@ -51,10 +51,23 @@ static void render_data_value(xdebug::TextResponseBuilder& out,
             for (const auto& k : keys) {
                 auto dot = k.find('.');
                 if (dot != std::string::npos) {
-                    std::string parent = k.substr(0, dot);
-                    std::string child = k.substr(dot + 1);
-                    row.push_back(xdebug::json_to_xout_value(
-                        val[i].value(parent, Json()).value(child, Json())));
+                    // Walk nested path safely: "parent.child" -> obj["parent"]["child"]
+                    const Json* node = &val[i];
+                    std::string remain = k;
+                    while (node != nullptr && node->is_object()) {
+                        auto d = remain.find('.');
+                        std::string seg = remain.substr(0, d);
+                        if (d == std::string::npos) {
+                            row.push_back(xdebug::json_to_xout_value(
+                                node->value(seg, Json())));
+                            node = nullptr;  // done
+                        } else {
+                            auto it = node->find(seg);
+                            node = (it != node->end()) ? &(*it) : nullptr;
+                            remain = remain.substr(d + 1);
+                        }
+                    }
+                    if (node != nullptr) row.push_back("");  // unresolvable
                 } else {
                     row.push_back(xdebug::json_to_xout_value(
                         val[i].value(k, Json())));
