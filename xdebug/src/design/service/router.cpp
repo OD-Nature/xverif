@@ -169,7 +169,13 @@ json handle_request_impl(const json& request) {
     json args = request.value("args", json::object());
     json result;
     std::string status, message;
-    if (!send_json_command(session_id, action, args, result, status, message)) {
+    json engine_error;
+    if (!send_json_command(session_id, action, args, result, status, message, engine_error)) {
+        if (!engine_error.is_null()) {
+            response["ok"] = false;
+            response["error"] = engine_error;
+            return response;
+        }
         return error_response(request, action, "SESSION_UNHEALTHY",
             message.empty() ? status : message);
     }

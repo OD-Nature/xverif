@@ -243,7 +243,8 @@ json enrich_trace_payload(const json& request, const json& trace) {
         if (!rhs.empty()) {
             out["assignment"] = {{"kind", assignment_kind_from_source(source)},
                 {"lhs", {{"type", "signal"}, {"name", query}}},
-                {"rhs", parse_expr_ast(rhs)}, {"source", source}};
+                {"rhs", parse_expr_ast(rhs)}, {"source", source},
+                {"ast_confidence", "heuristic"}};
         }
     }
     return out;
@@ -271,8 +272,15 @@ json run_trace_action(const json& request, const std::string& mode) {
     if (limits.contains("max_rows") && !rpc_args.contains("limit")) rpc_args["limit"] = limits["max_rows"];
     json trace;
     std::string status, message;
+    json engine_error;
     if (!send_json_command(session_id, mode == "load" ? "trace.load" : "trace.driver",
-                           rpc_args, trace, status, message)) {
+                           rpc_args, trace, status, message, engine_error)) {
+        if (!engine_error.is_null()) {
+            json resp = base_response(request, request.value("action", ""));
+            resp["ok"] = false;
+            resp["error"] = engine_error;
+            return resp;
+        }
         return error_response(request, request.value("action", ""), "SESSION_UNHEALTHY", message.empty() ? status : message);
     }
     json enriched = trace.contains("dependency_edges") ? trace : enrich_trace_payload(request, trace);
@@ -306,7 +314,8 @@ json run_signal_resolve_action(const json& request) {
     if (query.empty()) return error_response(request, request.value("action", ""), "MISSING_FIELD", "args.signal or args.query is required");
     json payload;
     std::string status, message;
-    if (!send_json_command(session_id, "signal.resolve", {{"signal", query}}, payload, status, message)) {
+    json engine_error;
+    if (!send_json_command(session_id, "signal.resolve", {{"signal", query}}, payload, status, message, engine_error)) {
         return error_response(request, request.value("action", ""), "SESSION_UNHEALTHY", message.empty() ? status : message);
     }
     response["ok"] = payload.value("ok", true);

@@ -19,6 +19,8 @@ const char* database_kind_name(DatabaseKind kind) {
         return "fsdb";
     case DatabaseKind::Daidir:
         return "daidir";
+    case DatabaseKind::Combined:
+        return "combined";
     }
     return "unknown";
 }

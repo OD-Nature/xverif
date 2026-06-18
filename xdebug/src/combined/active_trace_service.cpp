@@ -775,9 +775,10 @@ TraceBuildResult build_active_trace(
     std::vector<QueueItem> queue;
     queue.push_back({root_signal, requested_time, 0, "", "", ""});
 
-    // Visited set to prevent loops: (signal, time_approx)
+    // Visited set to prevent loops but allow temporal revisits.
+    auto vkey = [](const std::string& sig, const std::string& t) { return sig + "\x1f" + t; };
     std::set<std::string> visited;
-    visited.insert(root_signal);
+    visited.insert(vkey(root_signal, requested_time));
 
     while (!queue.empty()) {
         QueueItem current = queue.front();
@@ -832,11 +833,11 @@ TraceBuildResult build_active_trace(
             if (is_alias_kind(alias_kind_str)) {
                 std::vector<AliasCandidate> candidates =
                     resolve_alias_candidates(signal_hdl.get(), current.signal, limits);
-                if (candidates.size() == 1) {
+                if (candidates.size() == 1 && candidates[0].confidence == "high") {
                     std::string target = candidates[0].to;
-                    if (!target.empty() && visited.find(target) == visited.end() &&
+                    if (!target.empty() && visited.find(vkey(target, current.time)) == visited.end() &&
                         current.depth < limits.max_depth) {
-                        visited.insert(target);
+                        visited.insert(vkey(target, current.time));
                         // Create an alias node
                         std::string nid = "n" + std::to_string(result.node_count);
                         TraceNode alias_node;
@@ -988,7 +989,7 @@ TraceBuildResult build_active_trace(
                             {"file", node.file},
                             {"line", node.line}
                         };
-                    } else if (visited.find(next) == visited.end() && current.depth < limits.max_depth) {
+                    } else if (visited.find(vkey(next, active.activeTime)) == visited.end() && current.depth < limits.max_depth) {
                         // Pass-through: update root_driver to this assignment.
                         // If recursion stops at a primary input, this is the
                         // correct root.  If recursion finds a deeper assignment,
@@ -998,7 +999,7 @@ TraceBuildResult build_active_trace(
                             {"file", node.file},
                             {"line", node.line}
                         };
-                        visited.insert(next);
+                        visited.insert(vkey(next, active.activeTime));
                         queue.push_back({
                             next,
                             active.activeTime,
@@ -1007,7 +1008,7 @@ TraceBuildResult build_active_trace(
                             "rhs_dependency",
                             "high"
                         });
-                    } else if (visited.find(next) != visited.end()) {
+                    } else if (visited.find(vkey(next, active.activeTime)) != visited.end()) {
                         result.limitations.push_back("cycle detected: " + current.signal + " → " + next);
                         result.termination = result.termination == "unresolved" ? "assignment" : result.termination;
                         result.root_driver = {
@@ -1055,11 +1056,11 @@ TraceBuildResult build_active_trace(
                 if (stmt_hdl) {
                     std::vector<AliasCandidate> candidates =
                         resolve_alias_candidates(stmt_hdl, current.signal, limits);
-                    if (candidates.size() == 1) {
+                    if (candidates.size() == 1 && candidates[0].confidence == "high") {
                         std::string target = candidates[0].to;
 
-                        if (visited.find(target) == visited.end() && current.depth < limits.max_depth) {
-                            visited.insert(target);
+                        if (visited.find(vkey(target, active.activeTime)) == visited.end() && current.depth < limits.max_depth) {
+                            visited.insert(vkey(target, active.activeTime));
                             queue.push_back({
                                 target,
                                 active.activeTime,

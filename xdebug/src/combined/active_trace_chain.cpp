@@ -125,8 +125,9 @@ ChainResult build_chain(npiFsdbFileHandle fsdb,
                          const std::string& clk_period,
                          int max_depth, int max_nodes) {
     ChainResult result;
+    auto vkey = [](const std::string& sig, const std::string& t) { return sig + "\x1f" + t; };
     std::set<std::string> visited;
-    visited.insert(signal);
+    visited.insert(vkey(signal, time));
 
     std::string cur_sig = signal, cur_time = time;
     int depth = 0;
@@ -216,12 +217,12 @@ ChainResult build_chain(npiFsdbFileHandle fsdb,
         node.next = d.next_signal;
         result.chain.push_back(node);
 
-        if (visited.count(d.next_signal)) {
+        if (visited.count(vkey(d.next_signal, active_time))) {
             result.termination = "loop_detected";
             result.limitations.push_back("loop: " + cur_sig + " -> " + d.next_signal);
             break;
         }
-        visited.insert(d.next_signal);
+        visited.insert(vkey(d.next_signal, active_time));
         cur_sig = d.next_signal;
         cur_time = active_time;
         depth++;

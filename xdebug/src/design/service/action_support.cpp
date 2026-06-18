@@ -273,9 +273,10 @@ bool send_json_command(const std::string& session_id,
                        const json& args,
                        json& parsed,
                        std::string& error_status,
-                       std::string& error_message) {
+                       std::string& error_message,
+                       json& engine_error) {
     json request = {{"api_version", API_VERSION}, {"action", action}, {"args", args}};
-    return send_request_capture(session_id, request, parsed, error_status, error_message);
+    return send_request_capture(session_id, request, parsed, error_status, error_message, engine_error);
 }
 
 } // namespace xdebug_design

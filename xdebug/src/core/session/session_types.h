@@ -9,7 +9,8 @@ namespace xdebug_core {
 
 enum class DatabaseKind {
     Fsdb,
-    Daidir
+    Daidir,
+    Combined
 };
 
 struct Fingerprint {
@@ -62,6 +63,7 @@ struct SessionInfo {
     // Legacy alias for compatibility
     std::string database_path() const { return dbdir_path.empty() ? fsdb_file : dbdir_path; }
     DatabaseKind database_kind() const {
+        if (!dbdir_path.empty() && !fsdb_file.empty()) return DatabaseKind::Combined;
         return dbdir_path.empty() ? DatabaseKind::Fsdb : DatabaseKind::Daidir;
     }
 };

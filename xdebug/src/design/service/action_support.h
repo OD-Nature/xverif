@@ -52,7 +52,8 @@ bool send_json_command(const std::string& session_id,
                        const json& args,
                        json& parsed,
                        std::string& error_status,
-                       std::string& error_message);
+                       std::string& error_message,
+                       json& engine_error);
 
 json parse_expr_ast(const std::string& expr);
 std::string expr_op(const json& expr);

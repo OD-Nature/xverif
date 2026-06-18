@@ -48,7 +48,9 @@ bool send_request_capture(const std::string& session_id,
                           const Json& request,
                           Json& data,
                           std::string& status,
-                          std::string& message) {
+                          std::string& message,
+                          Json& engine_error) {
+    engine_error = Json();  // null by default
     SessionManager manager;
     SessionInfo session;
     if (!manager.get_session(session_id, session)) {
@@ -73,6 +75,7 @@ bool send_request_capture(const std::string& session_id,
         if (!response.value("ok", false)) {
             status = response.value("status", std::string("server_error"));
             message = response.value("error", Json::object()).value("message", std::string("server request failed"));
+            engine_error = response.value("error", Json::object());
             xdebug_core::log_transport_event("design", session_id, "send_request.server_error", false,
                                              {{"action", request.value("action", std::string())},
                                               {"status", status}, {"message", message},
@@ -116,6 +119,7 @@ bool send_request_capture(const std::string& session_id,
     if (!response.value("ok", false)) {
         status = response.value("status", std::string("server_error"));
         message = response.value("error", Json::object()).value("message", std::string("server request failed"));
+        engine_error = response.value("error", Json::object());
         xdebug_core::log_transport_event("design", session_id, "send_request.server_error", false,
                                          {{"action", request.value("action", std::string())},
                                           {"status", status}, {"message", message},
@@ -135,11 +139,12 @@ bool session_ping(const std::string& session_id) {
     Json data;
     std::string status;
     std::string message;
+    Json engine_error;
     return send_request_capture(session_id,
                                 {{"api_version", INTERNAL_API_VERSION},
                                  {"action", "server.ping"},
                                  {"args", Json::object()}},
-                                data, status, message) &&
+                                data, status, message, engine_error) &&
            data.value("pong", false);
 }
 

@@ -17,7 +17,13 @@ json run_port_like_action(const json& request, const std::string& action) {
     if (limit > 0) rpc_args["limit"] = limit;
     json payload;
     std::string status, message;
-    if (!send_json_command(session_id, action, rpc_args, payload, status, message)) {
+    json engine_error;
+    if (!send_json_command(session_id, action, rpc_args, payload, status, message, engine_error)) {
+        if (!engine_error.is_null()) {
+            response["ok"] = false;
+            response["error"] = engine_error;
+            return response;
+        }
         return error_response(request, action, "SESSION_UNHEALTHY", message.empty() ? status : message);
     }
     response["ok"] = payload.value("ok", true);
