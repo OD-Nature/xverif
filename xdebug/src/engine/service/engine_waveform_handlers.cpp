@@ -17,12 +17,81 @@
 
 #include <fstream>
 #include <memory>
+#include <algorithm>
 
 namespace xdebug_design {
 namespace {
 
 static bool contains_xz(const std::string& v) {
     return v.find_first_of("xXzZ") != std::string::npos;
+}
+
+static std::string trim_copy(const std::string& text) {
+    size_t begin = 0;
+    while (begin < text.size() && std::isspace(static_cast<unsigned char>(text[begin]))) ++begin;
+    size_t end = text.size();
+    while (end > begin && std::isspace(static_cast<unsigned char>(text[end - 1]))) --end;
+    return text.substr(begin, end - begin);
+}
+
+static Json value_object(const std::string& raw) {
+    return Json{{"value", trim_copy(raw)}, {"known", !contains_xz(raw)}};
+}
+
+static std::string with_value_prefix(const std::string& raw, char fmt) {
+    std::string text = trim_copy(raw);
+    if (text.size() >= 2 && text[0] == '\'') return text;
+    return std::string("'") + static_cast<char>(std::tolower(static_cast<unsigned char>(fmt))) + text;
+}
+
+static std::string normalize_numeric(const std::string& text) {
+    std::string s = trim_copy(text);
+    size_t tick = s.find('\'');
+    int base = 10;
+    std::string body = s;
+    if (tick != std::string::npos && tick + 1 < s.size()) {
+        char radix = static_cast<char>(std::tolower(static_cast<unsigned char>(s[tick + 1])));
+        base = radix == 'h' ? 16 : radix == 'b' ? 2 : 10;
+        body = s.substr(tick + 2);
+    } else if (s.size() > 2 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X')) {
+        base = 16;
+        body = s.substr(2);
+    } else if (s.size() > 2 && s[0] == '0' && (s[1] == 'b' || s[1] == 'B')) {
+        base = 2;
+        body = s.substr(2);
+    }
+    body.erase(std::remove(body.begin(), body.end(), '_'), body.end());
+    char* end = nullptr;
+    unsigned long long value = std::strtoull(body.c_str(), &end, base);
+    if (!end || *end != '\0') return s;
+    return std::to_string(value);
+}
+
+static Json make_xbit_hints(const Json& args,
+                            const std::string& signal,
+                            const std::string& raw) {
+    if (!args.contains("slice_hint") || !args["slice_hint"].is_object()) return Json();
+    Json hint = args["slice_hint"];
+    long long width = hint.value("chunk_width", 0LL);
+    long long count = hint.value("count", 1LL);
+    if (width <= 0) {
+        return Json{{"status", "needs_slice_hint"}, {"signal", signal},
+                    {"raw_value", trim_copy(raw)}};
+    }
+    if (count <= 0) count = 1;
+    Json slices = Json::array();
+    Json commands = Json::array();
+    for (long long i = 0; i < count; ++i) {
+        long long lo = i * width;
+        long long hi = lo + width - 1;
+        slices.push_back({{"index", i},
+                          {"range", "[" + std::to_string(hi) + ":" + std::to_string(lo) + "]"}});
+        commands.push_back("tools/xbit slice \"" + trim_copy(raw) + "\" " +
+                           std::to_string(hi) + " " + std::to_string(lo) + " --json");
+    }
+    return Json{{"status", "ready"}, {"signal", signal}, {"raw_value", trim_copy(raw)},
+                {"chunk_width", width}, {"count", count}, {"slices", slices},
+                {"commands", commands}};
 }
 
 // Parse TimeSpec string (e.g. "100ns") via waveform's parse_user_time with
@@ -51,7 +120,7 @@ public:
     Json run(const Json& request) const override {
         Json args = request.value("args", Json::object());
         std::string signal = args.value("signal", std::string());
-        std::string time_str = args.value("time", std::string());
+        std::string time_str = args.value("time", args.value("at", std::string()));
         std::string fmt_str = args.value("format", std::string("h"));
         if (signal.empty() || time_str.empty())
             return err("MISSING_FIELD", "args.signal and args.time are required");
@@ -68,12 +137,26 @@ public:
         std::string raw;
         if (!npi_fsdb_sig_value_at(g_fsdb_file, signal.c_str(), fsdb_time, raw, vtype))
             return err("SIGNAL_NOT_FOUND", "failed to read value: " + signal);
+        raw = with_value_prefix(raw, fmt);
 
         Json out;
         out["signal"] = signal;
         out["time"] = time_str;
-        out["value"] = raw;
+        std::string requested_format = args.value("format", "");
+        if (requested_format == "array_indexed" && raw.find('{') == std::string::npos) {
+            out["status"] = "unsupported_format";
+            out["value"] = value_object(raw);
+            out["raw_value"] = trim_copy(raw);
+            out["reason"] = "format:array_indexed requires an FSDB aggregate value";
+        } else {
+            out["status"] = "ok";
+            out["value"] = value_object(raw);
+        }
         out["known"] = !contains_xz(raw);
+        Json hints = make_xbit_hints(args, signal, raw);
+        if (!hints.is_null()) out["xbit_hints"] = hints;
+        out["summary"] = {{"signal", signal}, {"time", time_str},
+                          {"known", !contains_xz(raw)}, {"status", out["status"]}};
         return out;
     }
 
@@ -105,7 +188,7 @@ public:
     Json run(const Json& request) const override {
         Json args = request.value("args", Json::object());
         Json signals_j = args.value("signals", Json::array());
-        std::string time_str = args.value("time", std::string());
+        std::string time_str = args.value("time", args.value("at", std::string()));
         std::string fmt_str = args.value("format", std::string("h"));
         if (!signals_j.is_array() || signals_j.empty() || time_str.empty())
             return err("MISSING_FIELD", "args.signals[] and args.time are required");
@@ -129,16 +212,34 @@ public:
 
         Json out;
         out["time"] = time_str;
-        Json batch = Json::object();
+        Json batch = Json::array();
+        Json missing_by_reason = Json::object();
+        int missing_count = 0;
+        int unknown_count = 0;
         for (size_t i = 0; i < names.size(); ++i) {
             Json item;
             item["signal"] = names[i];
-            item["value"] = found[i] ? values[i] : "";
-            item["known"] = found[i] && !contains_xz(values[i]);
-            if (!found[i]) item["status"] = "signal_not_found";
-            batch[names[i]] = item;
+            item["time"] = time_str;
+            if (found[i]) {
+                values[i] = with_value_prefix(values[i], fmt);
+                item["status"] = "ok";
+                item["value"] = value_object(values[i]);
+                if (contains_xz(values[i])) unknown_count++;
+            } else {
+                item["status"] = "signal_not_found";
+                item["value"] = nullptr;
+                item["reason"] = "Signal path was not found in the FSDB: " + names[i];
+                missing_count++;
+                missing_by_reason["signal_not_found"] =
+                    missing_by_reason.value("signal_not_found", 0) + 1;
+            }
+            batch.push_back(item);
         }
-        out["signals"] = batch;
+        out["values"] = batch;
+        out["summary"] = {{"time", time_str}, {"signal_count", batch.size()},
+                          {"x_or_z_count", unknown_count}, {"unknown_count", unknown_count},
+                          {"missing_count", missing_count},
+                          {"missing_by_reason", missing_by_reason}};
         return out;
     }
 
@@ -174,6 +275,8 @@ public:
         std::string path = args.value("path", std::string(""));
         bool recursive = args.value("recursive", true);
         int max_depth = args.value("max_depth", 3);
+        Json limits = request.value("limits", Json::object());
+        int max_rows = limits.value("max_rows", -1);
 
         FILE* fp = tmpfile();
         if (!fp) return err("INTERNAL_ERROR", "tmpfile failed");
@@ -197,13 +300,23 @@ public:
         }
         fclose(fp);
 
+        const size_t total_signals = signals.size();
+        bool truncated = max_rows >= 0 && signals.size() > static_cast<size_t>(max_rows);
+        if (truncated) {
+            Json limited = Json::array();
+            for (int i = 0; i < max_rows; ++i) limited.push_back(signals[i]);
+            signals = limited;
+        }
         Json out;
         out["path"] = path;
         out["recursive"] = recursive;
         out["scopes"] = scopes;
         out["signals"] = signals;
         out["signals_preview"] = signals;
-        out["total_signals"] = static_cast<int>(signals.size());
+        out["total_signals"] = static_cast<int>(total_signals);
+        out["truncated"] = truncated;
+        out["summary"] = {{"path", path}, {"recursive", recursive},
+                          {"signal_count", signals.size()}, {"truncated", truncated}};
         return out;
     }
 
@@ -253,7 +366,8 @@ public:
             double v; std::string u; char* e = nullptr;
             v = std::strtod(s.c_str(), &e);
             if (!e || e == s.c_str()) return;
-            while (*e && std::isspace(*e)) ++e; u = e;
+            while (*e && std::isspace(*e)) ++e;
+            u = e;
             npi_fsdb_convert_time_in(g_fsdb_file, v, u.c_str(), t);
         };
         parse_t(time_range.value("start", time_range.value("begin", "")), tbegin);
@@ -276,7 +390,8 @@ public:
         if (export_mode_) {
             int max_examples = args.value(
                 "max_examples",
-                args.value("max_events", limits.value("max_rows", 1000)));
+                args.value("max_events",
+                           args.value("limit", limits.value("max_rows", 1000))));
             query.limit = max_examples > 0 ? max_examples : 1000;
         } else if (mode == "first") {
             query.limit = 1;
@@ -308,13 +423,48 @@ public:
             Json je;
             je["time"] = format_time(rec.time);
             je["time_ps"] = rec.time;
-            je["signals"] = rec.signals;
-            je["fields"] = rec.fields;
+            Json signal_values = Json::object();
+            for (const auto& value : rec.signals)
+                signal_values[value.first] = value_object(value.second);
+            Json field_values = Json::object();
+            for (const auto& value : rec.fields)
+                field_values[value.first] = value_object(value.second);
+            je["signals"] = signal_values;
+            je["fields"] = field_values;
             arr.push_back(je);
         }
         Json out;
-        out["events"] = arr;
-        out["examples"] = arr;
+        bool include_events = true;
+        if (export_mode_ && args.contains("aggregate") && args["aggregate"].is_object()) {
+            Json aggregate_args = args["aggregate"];
+            Json aggregate;
+            aggregate["count"] = arr.size();
+            Json groups = Json::object();
+            Json group_by = aggregate_args.value("group_by", Json::array());
+            if (group_by.is_array() && !group_by.empty()) {
+                for (const auto& event : arr) {
+                    std::string key;
+                    for (const auto& field : group_by) {
+                        if (!field.is_string()) continue;
+                        std::string name = field.get<std::string>();
+                        Json value;
+                        if (event["fields"].contains(name)) value = event["fields"][name]["value"];
+                        else if (event["signals"].contains(name)) value = event["signals"][name]["value"];
+                        if (!key.empty()) key += "|";
+                        key += name + "=" + (value.is_string() ? value.get<std::string>() : "null");
+                    }
+                    groups[key] = groups.value(key, 0) + 1;
+                }
+            }
+            aggregate["groups"] = groups;
+            aggregate["group_count"] = groups.size();
+            out["aggregate"] = aggregate;
+            include_events = aggregate_args.value("events", true);
+        }
+        if (include_events) {
+            out["events"] = arr;
+            out["examples"] = arr;
+        }
         out["count"] = static_cast<int>(arr.size());
         out["event_count"] = out["count"];
         if (!arr.empty()) {
@@ -332,7 +482,8 @@ public:
             {"first", out.value("first", Json())},
             {"last", out.value("last", Json())},
             {"count", out["count"]},
-            {"mode", mode}
+            {"mode", mode},
+            {"inline", name.empty()}
         };
         if (scan_limit > 0) out["summary"]["scan_limit"] = scan_limit;
         return out;
@@ -354,13 +505,23 @@ public:
     bool needs_waveform() const override { return nw_; }
     Json run(const Json& request) const override {
         std::string error;
-        Json result = xdebug_waveform::ai_dispatch_query(request, error);
+        Json effective_request = request;
+        if (name_ == "inspect_signal") {
+            effective_request["args"]["include_rows"] = true;
+        }
+        Json result = xdebug_waveform::ai_dispatch_query(effective_request, error);
         if (!error.empty()) {
             Json e; e["error"] = "ACTION_FAILED"; e["message"] = error; return e;
         }
         // Fix statistics end time: ai functions may return FSDB max time
         // instead of the requested window end.
         Json args = request.value("args", Json::object());
+        if (name_ == "signal.changes") {
+            int limit = args.value("limit", args.value("max_events", 1000));
+            size_t matched = result.value("returned_change_rows", static_cast<size_t>(0));
+            if (limit >= 0 && matched > static_cast<size_t>(limit))
+                result["truncated"] = true;
+        }
         if (args.contains("time_range") && args["time_range"].is_object() &&
             args["time_range"].contains("end")) {
             std::string req_end = args["time_range"]["end"].get<std::string>();
@@ -397,38 +558,60 @@ public:
             return err("TIME_SPEC_INVALID", "failed to convert: " + time_str);
 
         Json results = Json::array();
-        bool all_pass = true;
+        int passed = 0;
+        int failed = 0;
+        int unknown = 0;
         for (auto& cond : conditions) {
             Json r;
-            r["expr"] = cond.value("expr", "");
-            r["op"] = cond.value("op", "");
+            r["signal"] = cond.value("signal", "");
+            r["time"] = time_str;
+            r["op"] = cond.value("op", "==");
             r["expected"] = cond.value("value", "");
-            bool pass = false;
             std::string signal = cond.value("signal", "");
             if (!signal.empty()) {
                 std::string raw;
-                if (npi_fsdb_sig_value_at(g_fsdb_file, signal.c_str(), fsdb_time, raw, npiFsdbBinStrVal)) {
+                if (npi_fsdb_sig_value_at(g_fsdb_file, signal.c_str(), fsdb_time, raw, npiFsdbHexStrVal)) {
+                    raw = with_value_prefix(raw, 'h');
                     bool known = raw.find_first_of("xXzZ") == std::string::npos;
-                    r["actual"] = raw;
+                    r["observed"] = value_object(raw);
                     r["known"] = known;
                     std::string exp_val = cond.value("value", "");
                     std::string op = cond.value("op", "==");
                     if (known) {
-                        if (op == "==") pass = (raw == exp_val);
-                        else if (op == "!=") pass = (raw != exp_val);
+                        bool equal = normalize_numeric(raw) == normalize_numeric(exp_val);
+                        bool pass = op == "!=" ? !equal : equal;
+                        r["status"] = pass ? "pass" : "fail";
+                        r["pass"] = pass;
+                        if (pass) passed++; else failed++;
+                    } else {
+                        r["status"] = "unknown";
+                        r["pass"] = nullptr;
+                        unknown++;
                     }
                 } else {
-                    r["actual"] = "NOT_FOUND"; r["known"] = false;
+                    r["known"] = false;
+                    r["status"] = "unknown";
+                    r["pass"] = nullptr;
+                    r["error"] = "signal not found";
+                    unknown++;
                 }
+            } else {
+                r["known"] = false;
+                r["status"] = "unknown";
+                r["pass"] = nullptr;
+                unknown++;
             }
-            r["pass"] = pass;
-            if (!pass) all_pass = false;
             results.push_back(r);
         }
         Json out;
         out["time"] = time_str;
-        out["all_pass"] = all_pass;
+        out["all_pass"] = failed == 0 && unknown == 0;
+        out["checks"] = results;
         out["results"] = results;
+        out["summary"] = {{"verdict", out["all_pass"].get<bool>() ? "pass" : "fail"},
+                          {"condition_count", results.size()},
+                          {"all_passed", out["all_pass"]},
+                          {"passed", passed}, {"failed", failed}, {"unknown", unknown}};
         return out;
     }
 private:
@@ -562,6 +745,7 @@ public:
         Json sigs = a.value("signals", Json::array());
         for (auto& s : sigs) if (s.is_string())
             lm.add_signal(xdebug_waveform::g_session_id, n, s.get<std::string>());
+        out["summary"] = {{"name", n}, {"status", "created"}};
         return out;
     }
 };
@@ -576,10 +760,14 @@ public:
         std::string n = a.value("name", ""), sig = a.value("signal", "");
         if (n.empty() || sig.empty())
             return Json({{"error","MISSING_FIELD"},{"message","args.name+signal"}});
+        if (!npi_fsdb_sig_by_name(xdebug_waveform::g_fsdb_file, sig.c_str(), NULL))
+            return Json({{"error","SIGNAL_NOT_FOUND"},{"message",sig}});
         xdebug_waveform::ListManager lm;
         if (!lm.add_signal(xdebug_waveform::g_session_id, n, sig))
             return Json({{"error","ADD_FAILED"},{"message",sig}});
-        Json out; out["name"] = n; out["signal"] = sig; out["added"] = true; return out;
+        Json out; out["name"] = n; out["signal"] = sig; out["added"] = true;
+        out["summary"] = {{"name", n}, {"signal", sig}, {"status", "added"}};
+        return out;
     }
 };
 
@@ -593,14 +781,14 @@ public:
         std::string n = a.value("name", "");
         if (n.empty()) return Json({{"error","MISSING_FIELD"},{"message","args.name"}});
         xdebug_waveform::ListManager lm;
-        if (a.contains("signal")) {
-            if (!lm.del_signal(xdebug_waveform::g_session_id, n, a["signal"].get<std::string>()))
-                return Json({{"error","DEL_FAILED"}});
-        } else {
-            if (!lm.delete_list(xdebug_waveform::g_session_id, n))
-                return Json({{"error","DEL_FAILED"}});
-        }
-        Json out; out["name"] = n; out["deleted"] = true; return out;
+        std::string signal = a.value("signal", a.value("index", ""));
+        if (signal.empty())
+            return Json({{"error","MISSING_FIELD"},{"message","args.signal or args.index"}});
+        if (!lm.del_signal(xdebug_waveform::g_session_id, n, signal))
+            return Json({{"error","DEL_FAILED"}});
+        Json out; out["name"] = n; out["deleted"] = true; out["removed"] = signal;
+        out["summary"] = {{"name", n}, {"removed", signal}};
+        return out;
     }
 };
 
@@ -617,8 +805,11 @@ public:
         if (!read_list_storage(n, lst))
             return Json({{"error","LIST_NOT_FOUND"},{"message",n}});
         Json out; out["name"] = n;
-        Json arr = Json::array(); for (auto& s : lst.signals) arr.push_back(s);
+        Json arr = Json::array();
+        for (size_t i = 0; i < lst.signals.size(); ++i)
+            arr.push_back({{"index", static_cast<int>(i) + 1}, {"signal", lst.signals[i]}});
         out["signals"] = arr; out["count"] = static_cast<int>(lst.signals.size());
+        out["summary"] = {{"name", n}, {"signal_count", arr.size()}};
         return out;
     }
 };
@@ -638,7 +829,8 @@ public:
             return Json({{"error","LIST_NOT_FOUND"},{"message",n}});
         double tv; std::string unit; char* e = nullptr;
         tv = std::strtod(ts.c_str(), &e);
-        while (e && *e && std::isspace(*e)) ++e; unit = e;
+        while (e && *e && std::isspace(*e)) ++e;
+        unit = e;
         npiFsdbTime ft = 0;
         if (!unit.empty() && !npi_fsdb_convert_time_in(xdebug_waveform::g_fsdb_file, tv, unit.c_str(), ft))
             return Json({{"error","TIME_SPEC_INVALID"}});
@@ -650,6 +842,7 @@ public:
         for (size_t i = 0; i < lst.signals.size(); i++)
             sv[lst.signals[i]] = found[i] ? vals[i] : "NOT_FOUND";
         out["values"] = sv;
+        out["summary"] = {{"name", n}, {"time", ts}};
         return out;
     }
 };
@@ -673,7 +866,13 @@ public:
                 ? "ok" : "not_found";
             arr.push_back(item);
         }
-        Json out; out["name"] = n; out["signals"] = arr; return out;
+        Json out; out["name"] = n; out["signals"] = arr;
+        bool all_found = true;
+        for (const auto& item : arr) {
+            if (item.value("status", "") != "ok") all_found = false;
+        }
+        out["summary"] = {{"name", n}, {"all_found", all_found}};
+        return out;
     }
 };
 
@@ -693,7 +892,8 @@ public:
         auto ptime = [](const std::string& s, npiFsdbTime& t) -> bool {
             double v; std::string u; char* e = nullptr;
             v = std::strtod(s.c_str(), &e);
-            while (e && *e && std::isspace(*e)) ++e; u = e;
+            while (e && *e && std::isspace(*e)) ++e;
+            u = e;
             return !u.empty() && npi_fsdb_convert_time_in(xdebug_waveform::g_fsdb_file, v, u.c_str(), t);
         };
         npiFsdbTime bt = 0, et = 0;
@@ -703,7 +903,14 @@ public:
         bool found = xdebug_waveform::find_list_diff(
             xdebug_waveform::g_fsdb_file, lst.signals, bt, et, dt);
         Json out; out["name"] = n; out["diff_found"] = found;
-        if (found) out["diff_time"] = dt;
+        if (found) {
+            std::string formatted = xdebug_waveform::format_time(dt);
+            out["diff_time"] = formatted;
+            out["time"] = formatted;
+            out["summary"] = {{"name", n}, {"diff_time", formatted}};
+        } else {
+            out["summary"] = {{"name", n}, {"diff_time", ""}};
+        }
         return out;
     }
 };
