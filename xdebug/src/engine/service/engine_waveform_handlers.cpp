@@ -157,7 +157,7 @@ private:
         out.emit_section("values");
         if (d.contains("signals") && d["signals"].is_object()) {
             for (auto it = d["signals"].begin(); it != d["signals"].end(); ++it)
-                out.emit_row({it.key(), xdebug::json_to_xout_value(it.value())});
+                out.emit_row({it.key(), xdebug::json_to_xout_value(it.value()["value"])});
         }
         return out.str();
     }
@@ -322,6 +322,17 @@ public:
         Json result = xdebug_waveform::ai_dispatch_query(request, error);
         if (!error.empty()) {
             Json e; e["error"] = "ACTION_FAILED"; e["message"] = error; return e;
+        }
+        // Fix statistics end time: ai functions may return FSDB max time
+        // instead of the requested window end.
+        Json args = request.value("args", Json::object());
+        if (args.contains("time_range") && args["time_range"].is_object() &&
+            args["time_range"].contains("end")) {
+            std::string req_end = args["time_range"]["end"].get<std::string>();
+            if (!req_end.empty() && result.contains("end") &&
+                result["end"].is_string() && result["end"] != req_end) {
+                result["end"] = req_end;
+            }
         }
         return result;
     }

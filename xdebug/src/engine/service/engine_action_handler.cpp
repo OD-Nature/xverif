@@ -26,15 +26,20 @@ static void render_data_value(xdebug::TextResponseBuilder& out,
         int count = (int)val.size();
         out.emit_section(key);
 
-        // Collect common scalar keys from first few items
+        // Collect top-level scalar keys + flatten one level of object keys
         std::vector<std::string> keys;
         std::set<std::string> seen;
         for (int i = 0; i < std::min(5, count); ++i) {
             for (auto ki = val[i].begin(); ki != val[i].end(); ++ki) {
-                if ((ki.value().is_string() || ki.value().is_number() ||
-                     ki.value().is_boolean()) &&
-                    seen.insert(ki.key()).second) {
-                    keys.push_back(ki.key());
+                if (ki.value().is_string() || ki.value().is_number() ||
+                    ki.value().is_boolean()) {
+                    if (seen.insert(ki.key()).second) keys.push_back(ki.key());
+                } else if (ki.value().is_object()) {
+                    for (auto oi = ki.value().begin(); oi != ki.value().end(); ++oi) {
+                        std::string fkey = ki.key() + "." + oi.key();
+                        if ((oi.value().is_string() || oi.value().is_number()) &&
+                            seen.insert(fkey).second) keys.push_back(fkey);
+                    }
                 }
             }
         }
@@ -43,9 +48,18 @@ static void render_data_value(xdebug::TextResponseBuilder& out,
         int n = std::min(20, count);
         for (int i = 0; i < n; ++i) {
             std::vector<std::string> row;
-            for (const auto& k : keys)
-                row.push_back(xdebug::json_to_xout_value(
-                    val[i].value(k, Json())));
+            for (const auto& k : keys) {
+                auto dot = k.find('.');
+                if (dot != std::string::npos) {
+                    std::string parent = k.substr(0, dot);
+                    std::string child = k.substr(dot + 1);
+                    row.push_back(xdebug::json_to_xout_value(
+                        val[i].value(parent, Json()).value(child, Json())));
+                } else {
+                    row.push_back(xdebug::json_to_xout_value(
+                        val[i].value(k, Json())));
+                }
+            }
             out.emit_row(row);
         }
         if (count > n)
@@ -77,8 +91,10 @@ std::string EngineActionHandler::render_xout(const Json& response) const {
     const Json& data = response.value("data", Json::object());
     if (data.is_object() && !data.empty()) {
         out.emit_section("data");
-        for (auto it = data.begin(); it != data.end(); ++it)
+        for (auto it = data.begin(); it != data.end(); ++it) {
+            if (it.key() == "summary") continue;  // already rendered above
             render_data_value(out, it.key(), it.value());
+        }
     }
 
     // ── findings ──
