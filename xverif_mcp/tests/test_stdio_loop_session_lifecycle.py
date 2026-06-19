@@ -192,6 +192,18 @@ class TestOpenFailure:
         assert not r.get("ok")
         assert "doomed" not in mgr.sessions
 
+    def test_mcp_log_path_redaction_basename(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("XDEBUG_LOG_PATH_MODE", "basename")
+        fake = _fake_loop_script(tmp_path)
+        mgr = McpSessionManager(mode="direct")
+        mgr.xdebug_bin = fake
+        r = mgr.open_session("redact_case", fsdb="/very/private/wave.fsdb")
+        assert r.get("ok"), r
+        events = _session_events(tmp_path, "redact_case")
+        begin = next(e for e in events if e["phase"] == "manager.open.begin")
+        assert begin["fsdb"] == "wave.fsdb"
+        assert "/very/private" not in json.dumps(events)
+
 
 class TestQueryFailure:
     def test_crash_mid_query(self, tmp_path):

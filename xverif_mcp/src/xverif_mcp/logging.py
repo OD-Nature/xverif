@@ -58,6 +58,46 @@ def argv_hash(argv: Iterable[str]) -> str:
     return f"{h:x}"
 
 
+def _path_key(key: str) -> bool:
+    return (
+        key in {"fsdb", "daidir", "dbdir", "file_dir", "socket_path", "path", "log_path"}
+        or "_path" in key
+        or "_dir" in key
+    )
+
+
+def _path_mode() -> str:
+    mode = os.environ.get("XDEBUG_LOG_PATH_MODE")
+    if mode:
+        return mode
+    redact = os.environ.get("XDEBUG_LOG_REDACT")
+    if redact and redact != "0":
+        return "hash"
+    return "full"
+
+
+def _redact_path(value: str) -> str:
+    mode = _path_mode()
+    if mode == "basename":
+        return Path(value).name
+    if mode == "hash":
+        return f"<path:{argv_hash([value])}>"
+    return value
+
+
+def _sanitize(value: Any, key: str = "") -> Any:
+    if isinstance(value, str):
+        return _redact_path(value) if _path_key(key) else value
+    if isinstance(value, list):
+        return [_sanitize(item, key) for item in value[:200]]
+    if isinstance(value, dict):
+        out: Json = {}
+        for k, v in list(value.items())[:200]:
+            out[str(k)] = _sanitize(v, str(k))
+        return out
+    return value
+
+
 def _append(path: Path, event: Json) -> None:
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -79,7 +119,7 @@ def _base(phase: str, ok: bool, **fields: Any) -> Json:
     }
     for key, value in fields.items():
         if value is not None:
-            event[key] = value
+            event[key] = _sanitize(value, key)
     return event
 
 
@@ -97,4 +137,3 @@ def log_stdio_event(alias: Optional[str], phase: str, ok: bool = True, **fields:
 
 def log_lsf_event(alias: Optional[str], phase: str, ok: bool = True, **fields: Any) -> None:
     _append(session_log_path(alias, "lsf"), _base(phase, ok, alias=_safe_name(alias), **fields))
-

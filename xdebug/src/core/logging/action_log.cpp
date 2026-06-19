@@ -246,6 +246,29 @@ bool heavy_key(const std::string& key) {
            key == "all_changes" || key == "all_events";
 }
 
+bool path_key(const std::string& key) {
+    return key == "fsdb" || key == "daidir" || key == "dbdir" ||
+           key == "file_dir" || key == "socket_path" ||
+           key == "path" || key == "log_path" ||
+           key.find("_path") != std::string::npos ||
+           key.find("_dir") != std::string::npos;
+}
+
+std::string path_log_mode() {
+    const char* mode = std::getenv("XDEBUG_LOG_PATH_MODE");
+    if (mode && mode[0] != '\0') return std::string(mode);
+    const char* redact = std::getenv("XDEBUG_LOG_REDACT");
+    if (redact && redact[0] != '\0' && std::string(redact) != "0") return "hash";
+    return "full";
+}
+
+std::string redact_path_for_log(const std::string& value) {
+    std::string mode = path_log_mode();
+    if (mode == "basename") return basename_of(value);
+    if (mode == "hash") return std::string("<path:") + fnv1a_hex(value) + ">";
+    return value;
+}
+
 Json sanitize_impl(const Json& value, int depth, bool& truncated) {
     if (depth > kMaxDepth) {
         truncated = true;
@@ -284,6 +307,8 @@ Json sanitize_impl(const Json& value, int depth, bool& truncated) {
             if (heavy_key(it.key())) {
                 truncated = true;
                 out[it.key()] = "<omitted:large-field>";
+            } else if (path_key(it.key()) && it.value().is_string()) {
+                out[it.key()] = redact_path_for_log(it.value().get<std::string>());
             } else {
                 out[it.key()] = sanitize_impl(it.value(), depth + 1, truncated);
             }

@@ -90,6 +90,14 @@ int main() {
     assert(!summary["args"].contains("include_trace"));
     assert(!summary["args"].contains("samples"));
 
+    setenv("XDEBUG_LOG_PATH_MODE", "basename", 1);
+    Json basename_summary = xdebug_core::request_summary_for_log(request);
+    assert(basename_summary["target"]["daidir"] == "foo.daidir");
+    setenv("XDEBUG_LOG_PATH_MODE", "hash", 1);
+    Json hash_summary = xdebug_core::request_summary_for_log(request);
+    assert(hash_summary["target"]["daidir"].get<std::string>().find("<path:") == 0);
+    unsetenv("XDEBUG_LOG_PATH_MODE");
+
     xdebug_core::log_action_event("public", "xdebug", "case_a", "value.at", "end", false, 12,
                                   {{"request", xdebug_core::request_summary_for_log(request)},
                                    {"response", xdebug_core::response_summary_for_log(response)},
