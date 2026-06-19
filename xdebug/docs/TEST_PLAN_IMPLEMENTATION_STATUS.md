@@ -73,6 +73,25 @@ PYTHON=/home/yian/miniconda3/bin/python make test-nightly
 real LSF 仍按计划作为可选项；未设置 `XDEBUG_ENABLE_REAL_LSF=1` 时，
 `test-nightly` 会明确输出跳过提示。
 
+### 2026-06-19 本轮复核
+
+本轮继续验证了当前 HEAD 的分层入口：
+
+```bash
+PYTHON=/home/yian/miniconda3/bin/python make test-fast
+PYTHON=/home/yian/miniconda3/bin/python make test-synthetic
+PYTHON=/home/yian/miniconda3/bin/python make test-session
+PYTHON=/home/yian/miniconda3/bin/python make test-mcp-direct
+PYTHON=/home/yian/miniconda3/bin/python make test-mcp-fake-lsf
+PYTHON=/home/yian/miniconda3/bin/python make test-realdata-smoke
+PYTHON=/home/yian/miniconda3/bin/python make test-vip
+```
+
+其中 `test-fast` 可在普通沙箱内运行；所有需要 NPI、Verdi/VCS、FSDB、daidir、
+`session.open` 子进程、Unix domain socket 或真实 VIP 编译/仿真的入口，必须在
+Codex 沙箱外运行。沙箱内运行这些入口时会出现 license 连接、UDS bind 或
+`SESSION_UNHEALTHY: child_exited` 之类的环境型失败，不应据此判断 xdebug 功能回归。
+
 ## 维护要求
 
 后续新增 xdebug action、schema、example、MCP wrapper 或 session transport 时，应同步：

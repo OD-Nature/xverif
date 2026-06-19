@@ -276,6 +276,11 @@ make -C xdebug test-regression
 make -C xdebug test-nightly
 ```
 
+在 Codex 受限沙箱中，只建议直接运行不启动 NPI/EDA/session 子进程的基础入口，例如
+`test-fast`。所有涉及 NPI、Verdi/VCS、FSDB、daidir、`session.open`、Unix domain
+socket、SVT VIP 编译/仿真的入口，应在沙箱外运行，否则可能得到 license 连接失败、
+UDS bind 失败或 `SESSION_UNHEALTHY: child_exited` 等环境型失败。
+
 `test-regression` 不包含真实 LSF。`test-nightly` 默认也不会强制真实 LSF；只有显式
 设置 `XDEBUG_ENABLE_REAL_LSF=1` 时才追加 real LSF smoke：
 
