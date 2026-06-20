@@ -1,16 +1,226 @@
-# xdebug rc.generate
+# xdebug rc.generate 参考
 
-`rc.generate` 用于生成 nWave `signal.rc` 证据视图。它适合把关键波形、marker 和 debug evidence 固化给用户复查。
+`rc.generate` 根据外部 JSON 配置生成 nWave `signal.rc`。xdebug 会使用 `target.fsdb` 或包含 fsdb 的 `session_id` 校验信号是否存在、marker 时间是否合法，然后写出 rc 文件。
 
-## 使用规则
+第一版约束：
 
-- 先用 value/event/trace action 找到关键 signal 和时间窗口。
-- 再用 `rc.generate` 生成 rc，不要让 AI 手写 nWave rc。
-- 输出中保留 `output_path`，并说明生成了哪些 signal/marker。
+- 配置文件只支持 JSON。
+- 配置里的信号路径使用点分层次，例如 `top.u.sig[3:0]`。
+- 生成 rc 时自动转成 nWave slash 路径，例如 `/top/u/sig[3:0]`。
+- 支持 `addSignal`、`addSignal -w analog`、`addExprSig`、`addGroup/addSubGroup`、`cursor/marker/userMarker/zoom`。
+- 不写 `openDirFile` 和 `activeDirFile`。
+- 校验失败默认不写 rc；`allow_invalid:true` 才允许带 warning 生成。
 
-## 常见流程
+## JSON request
 
-1. 打开 FSDB 或 combined session。
-2. 用 `event.find` / `value.batch_at` / `trace.active_driver` 收集证据。
-3. 调 `rc.generate`，传 signals、time window、markers。
-4. 若路径写入失败，读 `error.code/message`，检查输出目录权限。
+```json
+{
+  "api_version": "xdebug.v1",
+  "action": "rc.generate",
+  "target": {
+    "fsdb": "waves.fsdb",
+    "session_id": "case_a"
+  },
+  "args": {
+    "config_path": "wave_view.json",
+    "rc_path": "signal.rc",
+    "include_preview": true
+  }
+}
+```
+
+参数：
+
+| 字段 | 说明 |
+| --- | --- |
+| `args.config_path` | 必填；rc 配置 JSON 文件路径；兼容别名 `json_path` |
+| `args.rc_path` | 必填；生成 rc 文件路径；兼容别名 `output_path` |
+| `args.allow_invalid` | 默认 `false`；校验失败时是否仍生成 rc |
+| `args.include_preview` | 默认 `false`；是否在响应中返回 rc 预览 |
+| `args.max_preview_lines` | 默认 `40` |
+
+## 配置示例
+
+```json
+{
+  "file_time_scale": "1ns",
+  "window_time_unit": "1ns",
+  "signal_spacing": 5,
+  "cursor": "120ns",
+  "main_marker": "120ns",
+  "zoom": {
+    "begin": "0ns",
+    "end": "500ns"
+  },
+  "groups": [
+    {
+      "name": "ClockReset",
+      "expanded": true,
+      "signals": [
+        "top.clk",
+        {
+          "path": "top.rst_n",
+          "radix": "bin",
+          "height": 15
+        }
+      ]
+    },
+    {
+      "name": "Analog",
+      "signals": [
+        {
+          "path": "top.u_adc.sample[11:0]",
+          "waveform": "analog",
+          "height": 40,
+          "analog": {
+            "display_style": "pwl",
+            "grid_x": true,
+            "grid_y": true,
+            "unit": "m"
+          }
+        }
+      ]
+    },
+    {
+      "name": "AXI",
+      "expanded": true,
+      "subgroups": [
+        {
+          "name": "AW",
+          "signals": [
+            "top.u_axi.awvalid",
+            "top.u_axi.awready",
+            {
+              "path": "top.u_axi.awaddr[31:0]",
+              "radix": "hex",
+              "notation": "unsigned",
+              "height": 15
+            }
+          ],
+          "expr_signals": [
+            {
+              "name": "aw_fire",
+              "bit_size": 1,
+              "notation": "UUU",
+              "expr": "$valid & $ready",
+              "signals": {
+                "valid": "top.u_axi.awvalid",
+                "ready": "top.u_axi.awready"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "user_markers": [
+    {
+      "name": "reset_done",
+      "time": "120ns",
+      "color": "ID_YELLOW5",
+      "linestyle": "solid"
+    }
+  ]
+}
+```
+
+## 生成规则
+
+点分路径转换：
+
+```text
+top.clk -> /top/clk
+top.u_axi.awaddr[31:0] -> /top/u_axi/awaddr[31:0]
+```
+
+输入路径若以 `/` 开头，默认报 `RC_CONFIG_INVALID`，提示使用点分格式。
+
+普通 signal：
+
+```json
+{
+  "path": "top.u_axi.awaddr[31:0]",
+  "radix": "hex",
+  "notation": "unsigned",
+  "height": 15,
+  "color": "ID_GREEN5",
+  "line_style": "solid",
+  "line_width": 2
+}
+```
+
+生成：
+
+```rc
+addSignal -h 15 -c ID_GREEN5 -ls solid -lw 2 -UNSIGNED -HEX /top/u_axi/awaddr[31:0]
+```
+
+analog signal：
+
+```json
+{
+  "path": "top.u_adc.sample[11:0]",
+  "waveform": "analog",
+  "height": 40,
+  "analog": {
+    "display_style": "pwl",
+    "grid_x": true,
+    "grid_y": true,
+    "unit": "m",
+    "options": ["-gs2", "10"]
+  }
+}
+```
+
+生成：
+
+```rc
+addSignal -w analog -ds pwl -gx -gy -us m -gs2 10 -h 40 /top/u_adc/sample[11:0]
+```
+
+expression signal 推荐使用 `$alias` 引用 `signals` map：
+
+```json
+{
+  "name": "aw_fire",
+  "bit_size": 1,
+  "notation": "UUU",
+  "expr": "$valid & $ready",
+  "signals": {
+    "valid": "top.u_axi.awvalid",
+    "ready": "top.u_axi.awready"
+  }
+}
+```
+
+生成：
+
+```rc
+addExprSig -b 1 -n UUU aw_fire "/top/u_axi/awvalid" & "/top/u_axi/awready"
+```
+
+`raw_expr` 只是逃生口，仅当 `allow_raw_expr:true` 时允许；`raw_expr` 不做信号校验。
+
+## 响应读取
+
+成功时重点读：
+
+- `summary.config_path`
+- `summary.rc_path`
+- `summary.group_count`
+- `summary.signal_count`
+- `summary.expr_signal_count`
+- `summary.marker_count`
+- `summary.written`
+- `summary.valid`
+- `data.validation.signals`
+- `data.validation.times`
+- `data.rc_preview`
+
+失败错误码：
+
+- `RC_CONFIG_INVALID`
+- `RC_VALIDATION_FAILED`
+- `RC_WRITE_FAILED`
+
+默认不要把完整 rc 文本粘给用户。需要证明生成内容时使用 `include_preview:true` 和合理的 `max_preview_lines`。

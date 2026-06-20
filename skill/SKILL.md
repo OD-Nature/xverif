@@ -20,6 +20,7 @@ description: >
 | 查询 daidir、FSDB、波形值、driver、active driver、APB/AXI、verify、rc | [references/xdebug/overview.md](references/xdebug/overview.md) |
 | 构造 xdebug JSON request、raw CLI request、查 action/schema | [references/xdebug/json-api.md](references/xdebug/json-api.md) |
 | 按流程做 xdebug debug | [references/xdebug/recipes.md](references/xdebug/recipes.md) |
+| 参考 xdebug 实战示例和证据链写法 | [references/xdebug/examples.md](references/xdebug/examples.md) |
 | 读取 xdebug compact/xout/JSON 字段 | [references/xdebug/response-fields.md](references/xdebug/response-fields.md) |
 | 定位 xdebug 原生命令、session、socket、engine、日志问题 | [references/xdebug/troubleshooting.md](references/xdebug/troubleshooting.md) |
 | 判断 xdebug UDS/TCP/file transport | [references/xdebug/transport.md](references/xdebug/transport.md) |
@@ -43,6 +44,8 @@ description: >
 ## 入口选择
 
 - 有 MCP client 且 MCP SDK 可用时，交互式 AI 工具调用优先用 MCP。
+- MCP 场景下，xdebug 原生 action 能力从 `xverif_debug_query` 进入：先 `xverif_debug_session_open`，再把 `trace.driver`、`value.batch_at`、`event.find`、`trace.active_driver` 等 action 作为 query 参数传入。
+- `xverif_debug_raw_request` 只用于需要完整 xdebug envelope 控制或验证 raw CLI 行为；常规 xdebug debug workflow 不默认使用 raw request。
 - 必须使用 LSF，且不能使用 MCP、不能安装 MCP SDK，或需要脚本/批处理直接驱动长期 xdebug `--stdio-loop` session 时，优先用 SDK-free xdebug wrapper。
 - 只需要一次性完整 JSON request 时，可以用 xdebug/xcov raw CLI；raw CLI 不是 wrapper 托管的 stdio-loop session。
 - 项目里存在 xeda-runner 配置时，EDA 命令必须走 `xeda-runner`；不要直接跑 `make`、`vcs`、`simv`、`urg`、`verdi` 或项目 setup。
