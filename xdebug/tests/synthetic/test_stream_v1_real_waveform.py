@@ -121,7 +121,7 @@ def test_stream_v1_real_waveform_actions(
             artifact_root=artifact_root,
             extra={"config": json.loads(config_path.read_text(encoding="utf-8"))},
         )
-        assert loaded["data"]["summary"]["loaded"] == 6
+        assert loaded["data"]["summary"]["loaded"] == len(expected)
 
         listed = _query(
             cli_runner,
@@ -134,10 +134,39 @@ def test_stream_v1_real_waveform_actions(
             case_name="stream-v1-config-list",
             artifact_root=artifact_root,
         )
-        assert listed["data"]["summary"]["count"] == 6
+        assert listed["data"]["summary"]["count"] == len(expected)
         assert {
             row["name"] for row in listed["data"]["streams"]
         } == set(expected.keys())
+
+        invalid_interleaving = cli_runner.run(
+            {
+                "api_version": "xdebug.v1",
+                "action": "stream.config.load",
+                "target": target,
+                "args": {
+                    "mode": "append",
+                    "streams": [
+                        {
+                            "name": "bad_interleave_channel_valid",
+                            "clock": "stream_v1_top.clk",
+                            "vld": "stream_v1_top.ipkt_vld",
+                            "rdy": "stream_v1_top.ipkt_rdy",
+                            "sop": "stream_v1_top.ipkt_sop",
+                            "eop": "stream_v1_top.ipkt_eop",
+                            "channel_id": "stream_v1_top.ipkt_chid",
+                            "channel_id_valid": "sop",
+                            "allow_interleaving": True,
+                            "beat_fields": {"data": "stream_v1_top.ipkt_data"},
+                        }
+                    ],
+                },
+            },
+            timeout_sec=120,
+        )
+        assert invalid_interleaving.response is not None
+        assert invalid_interleaving.response["ok"] is False
+        assert "allow_interleaving requires channel_id_valid=every_beat" in invalid_interleaving.stdout_raw
 
         for stream_name, counts in expected.items():
             shown = _query(
@@ -258,6 +287,88 @@ def test_stream_v1_real_waveform_actions(
             assert len(window["data"]["rows"]) == 8
             assert window["data"]["truncated"] is True
 
+        first_packet = _query(
+            cli_runner,
+            {
+                "api_version": "xdebug.v1",
+                "action": "stream.query",
+                "target": target,
+                "args": {
+                    "stream": "ready_packet",
+                    "query": "first_packet",
+                    "start": "0ns",
+                    "end": "250us",
+                },
+            },
+            case_name="stream-v1-first-packet",
+            artifact_root=artifact_root,
+        )
+        assert first_packet["data"]["found"] is True
+        assert first_packet["data"]["packet"]["packet_index"] == 0
+        assert first_packet["data"]["packet"]["stable_fields"]["opcode"]["value"] == "0xa0"
+        assert first_packet["data"]["packet"]["beat_fields_preview"]["total_beats"] == 4
+        assert first_packet["data"]["packet"]["beat_fields_preview"]["head"][0]["fields"]["data"]["value"] == "0x40000000"
+
+        packet_at = _query(
+            cli_runner,
+            {
+                "api_version": "xdebug.v1",
+                "action": "stream.query",
+                "target": target,
+                "args": {
+                    "stream": "ready_packet",
+                    "query": "packet_at",
+                    "packet_index": 3,
+                    "start": "0ns",
+                    "end": "250us",
+                },
+            },
+            case_name="stream-v1-packet-at",
+            artifact_root=artifact_root,
+        )
+        assert packet_at["data"]["found"] is True
+        assert packet_at["data"]["packet"]["packet_index"] == 3
+        assert packet_at["data"]["packet"]["stable_fields"]["opcode"]["value"] == "0xa3"
+
+        packet_oob = _query(
+            cli_runner,
+            {
+                "api_version": "xdebug.v1",
+                "action": "stream.query",
+                "target": target,
+                "args": {
+                    "stream": "ready_packet",
+                    "query": "packet_at",
+                    "packet_index": 999999,
+                    "start": "0ns",
+                    "end": "250us",
+                },
+            },
+            case_name="stream-v1-packet-at-oob",
+            artifact_root=artifact_root,
+        )
+        assert packet_oob["data"]["found"] is False
+        assert packet_oob["data"]["packet"] is None
+
+        mismatch_packet = _query(
+            cli_runner,
+            {
+                "api_version": "xdebug.v1",
+                "action": "stream.query",
+                "target": target,
+                "args": {
+                    "stream": "bp_packet",
+                    "query": "first_packet",
+                    "start": "0ns",
+                    "end": "250us",
+                },
+            },
+            case_name="stream-v1-stable-mismatch",
+            artifact_root=artifact_root,
+        )
+        assert mismatch_packet["data"]["packet"]["stable_mismatches"]
+        assert mismatch_packet["data"]["summary"]["stable_mismatch_count"] > 0
+
         stalls = _query(
             cli_runner,
             {
@@ -297,6 +408,27 @@ def test_stream_v1_real_waveform_actions(
         )
         assert len(packets["data"]["packets"]) == 4
         assert packets["data"]["summary"]["clock_edge"] == "negedge"
+
+        interleaved = _query(
+            cli_runner,
+            {
+                "api_version": "xdebug.v1",
+                "action": "stream.query",
+                "target": target,
+                "args": {
+                    "stream": "interleaved_packet",
+                    "query": "packet_window",
+                    "start": "0ns",
+                    "end": "250us",
+                    "limit": 4,
+                },
+            },
+            case_name="stream-v1-interleaved-packet-window",
+            artifact_root=artifact_root,
+        )
+        assert len(interleaved["data"]["packets"]) == 4
+        assert {packet["channel_id"]["value"] for packet in interleaved["data"]["packets"]} == {"0x0", "0x1"}
+        assert all(packet["beat_count"] == 4 for packet in interleaved["data"]["packets"])
 
         match = _query(
             cli_runner,
@@ -385,6 +517,30 @@ def test_stream_v1_real_waveform_actions(
         assert Path(packet_exported["data"]["output_file"]).is_file()
         assert Path(packet_exported["data"]["meta_file"]).is_file()
         assert packet_exported["data"]["row_count"] == expected["ready_packet"]["packet_count"]
+
+        packet_beats_out = tmp_path / "ready_packet_beats.tsv"
+        packet_beats_exported = _query(
+            cli_runner,
+            {
+                "api_version": "xdebug.v1",
+                "action": "stream.export",
+                "target": target,
+                "args": {
+                    "stream": "ready_packet",
+                    "kind": "packet_beats",
+                    "format": "tsv",
+                    "start": "0ns",
+                    "end": "250us",
+                    "output_file": str(packet_beats_out),
+                },
+            },
+            case_name="stream-v1-export-packet-beats",
+            artifact_root=artifact_root,
+        )
+        assert Path(packet_beats_exported["data"]["output_file"]).is_file()
+        assert Path(packet_beats_exported["data"]["meta_file"]).is_file()
+        assert packet_beats_exported["data"]["row_count"] == expected["ready_packet"]["transfer_count"]
+        assert "packet_index\tchannel_id\tbeat_index" in packet_beats_out.read_text(encoding="utf-8").splitlines()[0]
     finally:
         cli_runner.run(
             {

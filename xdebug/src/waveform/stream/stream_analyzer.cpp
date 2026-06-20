@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
+#include <map>
 #include <set>
 
 namespace xdebug_waveform {
@@ -21,10 +22,6 @@ void issue(std::vector<StreamValidationIssue>& issues,
            const std::string& code,
            const std::string& message) {
     issues.push_back(StreamValidationIssue{severity, code, message});
-}
-
-std::string plain_clock_signal(const StreamConfig& config) {
-    return config.clock;
 }
 
 std::vector<std::string> sorted_signals(const std::set<std::string>& signals) {
@@ -61,10 +58,53 @@ bool value_u64(const StreamValue& value, unsigned long long& out) {
     return true;
 }
 
+bool stream_value_equal(const StreamValue& a, const StreamValue& b) {
+    return a.known == b.known && a.bits == b.bits;
+}
+
+std::string stream_value_key(const StreamValue& value) {
+    return value.bits.empty() ? "<none>" : value.bits;
+}
+
 Json fields_json(const std::map<std::string, StreamValue>& fields) {
     Json out = Json::object();
     for (const auto& kv : fields) out[kv.first] = stream_value_json(kv.second);
     return out;
+}
+
+Json stable_mismatches_json(const std::vector<StreamStableMismatch>& mismatches) {
+    Json arr = Json::array();
+    for (const auto& mismatch : mismatches) {
+        arr.push_back({{"field", mismatch.field},
+                       {"cycle", mismatch.cycle},
+                       {"time", format_time(mismatch.time)},
+                       {"expected", stream_value_json(mismatch.expected)},
+                       {"actual", stream_value_json(mismatch.actual)}});
+    }
+    return arr;
+}
+
+Json beat_json(const StreamBeat& beat) {
+    return Json{{"cycle", beat.cycle},
+                {"time", format_time(beat.time)},
+                {"beat_index", beat.beat_index},
+                {"fields", fields_json(beat.fields)}};
+}
+
+Json beat_preview_json(const std::vector<StreamBeat>& beats) {
+    Json head = Json::array();
+    Json tail = Json::array();
+    size_t n = beats.size();
+    size_t head_count = std::min<size_t>(5, n);
+    for (size_t i = 0; i < head_count; ++i) head.push_back(beat_json(beats[i]));
+    if (n > 5) {
+        size_t tail_start = n > 10 ? n - 5 : 5;
+        for (size_t i = tail_start; i < n; ++i) tail.push_back(beat_json(beats[i]));
+    }
+    return Json{{"total_beats", n},
+                {"truncated", n > 10},
+                {"head", head},
+                {"tail", tail}};
 }
 
 } // namespace
@@ -80,8 +120,9 @@ struct StreamAnalyzer::Compiled {
     StreamExpression data;
     StreamExpression channel;
     std::map<std::string, StreamExpression> data_fields;
+    std::map<std::string, StreamExpression> stable_fields;
+    std::map<std::string, StreamExpression> beat_fields;
     std::set<std::string> deps;
-    std::string clock_signal;
 };
 
 bool StreamAnalyzer::compile(npiFsdbFileHandle file, const StreamConfig& config, Compiled& c,
@@ -102,7 +143,6 @@ bool StreamAnalyzer::compile(npiFsdbFileHandle file, const StreamConfig& config,
         if (issues) issue(*issues, "WARNING", "CLOCK_COMPLEX",
             "clock expression is not a plain signal; edge detection uses expression dependency changes");
     }
-    c.clock_signal = plain_clock_signal(config);
     if (!parse_one("reset", config.reset, c.reset)) return false;
     if (!parse_one("vld", config.vld, c.vld)) return false;
     if (!parse_one("rdy", config.rdy, c.rdy)) return false;
@@ -115,6 +155,16 @@ bool StreamAnalyzer::compile(npiFsdbFileHandle file, const StreamConfig& config,
         StreamExpression expr;
         if (!parse_one("data_fields." + kv.first, kv.second, expr)) return false;
         c.data_fields[kv.first] = std::move(expr);
+    }
+    for (const auto& kv : config.stable_fields) {
+        StreamExpression expr;
+        if (!parse_one("stable_fields." + kv.first, kv.second, expr)) return false;
+        c.stable_fields[kv.first] = std::move(expr);
+    }
+    for (const auto& kv : config.beat_fields) {
+        StreamExpression expr;
+        if (!parse_one("beat_fields." + kv.first, kv.second, expr)) return false;
+        c.beat_fields[kv.first] = std::move(expr);
     }
 
     for (const auto& sig : c.deps) {
@@ -132,9 +182,22 @@ bool StreamAnalyzer::validate_static(npiFsdbFileHandle file, const StreamConfig&
     issues.clear();
     if (!stream_name_valid(config.name)) issue(issues, "ERROR", "INVALID_NAME", "invalid stream name");
     if (config.data.empty() && config.data_fields.empty())
-        issue(issues, "ERROR", "MISSING_DATA", "stream requires data or data_fields");
+        if (config.beat_fields.empty() && config.stable_fields.empty())
+            issue(issues, "ERROR", "MISSING_DATA", "stream requires data, data_fields, stable_fields, or beat_fields");
     if ((config.sop.empty()) != (config.eop.empty()))
         issue(issues, "ERROR", "PACKET_PAIR", "sop/eop must be configured together");
+    if ((config.channel_id_valid == "sop" || config.channel_id_valid == "eop") && !stream_packet_enabled(config))
+        issue(issues, "ERROR", "CHANNEL_VALID_REQUIRES_PACKET", "channel_id_valid=sop/eop requires sop/eop");
+    if ((config.channel_id_valid == "sop" || config.channel_id_valid == "eop") && config.channel_id.empty())
+        issue(issues, "ERROR", "CHANNEL_VALID_REQUIRES_CHANNEL", "channel_id_valid=sop/eop requires channel_id");
+    if (config.allow_interleaving) {
+        if (!stream_packet_enabled(config))
+            issue(issues, "ERROR", "INTERLEAVING_REQUIRES_PACKET", "allow_interleaving requires sop/eop");
+        if (config.channel_id.empty())
+            issue(issues, "ERROR", "INTERLEAVING_REQUIRES_CHANNEL", "allow_interleaving requires channel_id");
+        if (config.channel_id_valid != "every_beat")
+            issue(issues, "ERROR", "INTERLEAVING_REQUIRES_EVERY_BEAT_CHANNEL", "allow_interleaving requires channel_id_valid=every_beat");
+    }
 
     Compiled compiled;
     if (!compile(file, config, compiled, &issues, error)) {
@@ -200,11 +263,15 @@ bool StreamAnalyzer::analyze(npiFsdbFileHandle file, const StreamConfig& config,
         have_prev = true;
     }
 
-    bool in_packet = false;
-    StreamPacket current_packet;
     int packet_index = 0;
     StreamStallWindow current_stall;
     bool in_stall = false;
+    struct PacketState {
+        bool active = false;
+        StreamPacket packet;
+    };
+    PacketState single_packet;
+    std::map<std::string, PacketState> channel_packets;
 
     auto finish_stall = [&](npiFsdbTime end_time, int end_cycle) {
         if (!in_stall) return;
@@ -214,12 +281,66 @@ bool StreamAnalyzer::analyze(npiFsdbFileHandle file, const StreamConfig& config,
         in_stall = false;
     };
 
-    auto finish_packet = [&](bool partial_end) {
-        if (!in_packet) return;
-        current_packet.partial_end = partial_end;
-        analysis.packets.push_back(current_packet);
+    auto finish_packet = [&](PacketState& state, bool partial_end) {
+        if (!state.active) return;
+        state.packet.partial_end = partial_end;
+        analysis.stable_mismatch_count += static_cast<int>(state.packet.stable_mismatches.size());
+        analysis.packets.push_back(state.packet);
         analysis.packet_count++;
-        in_packet = false;
+        state.active = false;
+        state.packet = StreamPacket();
+    };
+
+    auto start_packet = [&](PacketState& state, const StreamRow& row, bool partial_begin) {
+        if (state.active) finish_packet(state, true);
+        state.active = true;
+        state.packet = StreamPacket();
+        state.packet.packet_index = packet_index++;
+        state.packet.start_cycle = row.cycle;
+        state.packet.end_cycle = row.cycle;
+        state.packet.start_time = row.time;
+        state.packet.end_time = row.time;
+        state.packet.partial_begin = partial_begin;
+        state.packet.stable_fields = row.stable_fields;
+        if (config.channel_id_valid == "sop" || config.channel_id_valid == "every_beat") {
+            state.packet.channel = row.channel;
+        }
+    };
+
+    auto append_packet_beat = [&](PacketState& state, StreamRow& row) {
+        row.packet_index = state.packet.packet_index;
+        row.beat_index = state.packet.beat_count;
+        state.packet.end_cycle = row.cycle;
+        state.packet.end_time = row.time;
+        state.packet.beat_count++;
+        if (state.packet.first_fields.empty()) state.packet.first_fields = row.fields;
+        state.packet.last_fields = row.fields;
+        if (config.channel_id_valid == "eop" && row.eop) state.packet.channel = row.channel;
+        if (config.channel_id_valid == "every_beat" && state.packet.channel.bits.empty()) {
+            state.packet.channel = row.channel;
+        }
+        for (const auto& kv : row.stable_fields) {
+            auto it = state.packet.stable_fields.find(kv.first);
+            if (it == state.packet.stable_fields.end()) {
+                state.packet.stable_fields[kv.first] = kv.second;
+                continue;
+            }
+            if (!stream_value_equal(it->second, kv.second)) {
+                StreamStableMismatch mismatch;
+                mismatch.field = kv.first;
+                mismatch.cycle = row.cycle;
+                mismatch.time = row.time;
+                mismatch.expected = it->second;
+                mismatch.actual = kv.second;
+                state.packet.stable_mismatches.push_back(mismatch);
+            }
+        }
+        StreamBeat beat;
+        beat.cycle = row.cycle;
+        beat.time = row.time;
+        beat.beat_index = row.beat_index;
+        beat.fields = row.fields;
+        state.packet.beats.push_back(beat);
     };
 
     int cycle = 0;
@@ -299,11 +420,22 @@ bool StreamAnalyzer::analyze(npiFsdbFileHandle file, const StreamConfig& config,
             row.fields[kv.first] = eval(kv.second, "data_fields." + kv.first);
             if (!error.empty()) return false;
         }
+        for (auto& kv : compiled.beat_fields) {
+            row.fields[kv.first] = eval(kv.second, "beat_fields." + kv.first);
+            if (!error.empty()) return false;
+        }
+        for (auto& kv : compiled.stable_fields) {
+            row.stable_fields[kv.first] = eval(kv.second, "stable_fields." + kv.first);
+            if (!error.empty()) return false;
+        }
         if (!config.channel_id.empty()) {
             row.channel = eval(compiled.channel, "channel_id");
             if (!error.empty()) return false;
         }
         for (const auto& kv : row.fields) {
+            if (stream_value_has_xz(kv.second)) row.data_xz_count++;
+        }
+        for (const auto& kv : row.stable_fields) {
             if (stream_value_has_xz(kv.second)) row.data_xz_count++;
         }
         analysis.data_xz_count += row.data_xz_count;
@@ -332,32 +464,26 @@ bool StreamAnalyzer::analyze(npiFsdbFileHandle file, const StreamConfig& config,
         if (row.transfer) {
             analysis.transfer_count++;
             if (stream_packet_enabled(config)) {
-                if (row.sop) {
-                    if (in_packet) finish_packet(true);
-                    in_packet = true;
-                    current_packet = StreamPacket();
-                    current_packet.packet_index = packet_index++;
-                    current_packet.start_cycle = cycle;
-                    current_packet.end_cycle = cycle;
-                    current_packet.start_time = t;
-                    current_packet.end_time = t;
-                    current_packet.first_fields = row.fields;
-                } else if (!in_packet && row.eop) {
-                    current_packet = StreamPacket();
-                    current_packet.packet_index = packet_index++;
-                    current_packet.start_cycle = cycle;
-                    current_packet.start_time = t;
-                    current_packet.partial_begin = true;
-                    in_packet = true;
+                PacketState* state = &single_packet;
+                if (config.allow_interleaving) {
+                    if (row.channel.bits.empty() || stream_value_has_xz(row.channel)) {
+                        error = "interleaved packet stream requires known channel_id on every transfer";
+                        return false;
+                    }
+                    state = &channel_packets[stream_value_key(row.channel)];
+                } else if (config.channel_id_valid == "every_beat" && single_packet.active &&
+                           !single_packet.packet.channel.bits.empty() &&
+                           !stream_value_equal(single_packet.packet.channel, row.channel)) {
+                    error = "non-interleaved packet channel_id changed within a packet";
+                    return false;
                 }
-                if (in_packet) {
-                    row.packet_index = current_packet.packet_index;
-                    row.beat_index = current_packet.beat_count;
-                    current_packet.end_cycle = cycle;
-                    current_packet.end_time = t;
-                    current_packet.beat_count++;
-                    current_packet.last_fields = row.fields;
-                    if (row.eop) finish_packet(false);
+
+                if (row.sop) start_packet(*state, row, false);
+                else if (!state->active && row.eop) start_packet(*state, row, true);
+
+                if (state->active) {
+                    append_packet_beat(*state, row);
+                    if (row.eop) finish_packet(*state, false);
                 }
             }
             if (channel_ok) {
@@ -371,18 +497,32 @@ bool StreamAnalyzer::analyze(npiFsdbFileHandle file, const StreamConfig& config,
         cycle++;
     }
     finish_stall(edge_times.empty() ? options.end : edge_times.back(), cycle);
-    finish_packet(true);
+    finish_packet(single_packet, true);
+    for (auto& kv : channel_packets) finish_packet(kv.second, true);
+    std::sort(analysis.packets.begin(), analysis.packets.end(),
+              [](const StreamPacket& a, const StreamPacket& b) {
+                  if (a.start_time != b.start_time) return a.start_time < b.start_time;
+                  return a.packet_index < b.packet_index;
+              });
     return true;
 }
 
 bool StreamAnalyzer::match_row(const StreamRow& row, const StreamMatch& match, std::string& error) const {
-    auto it = row.fields.find(match.field);
-    if (it == row.fields.end()) {
+    const StreamValue* value_ptr = nullptr;
+    if (match.field_scope == "beat" || match.field_scope == "any" || match.field_scope.empty()) {
+        auto it = row.fields.find(match.field);
+        if (it != row.fields.end()) value_ptr = &it->second;
+    }
+    if (!value_ptr && (match.field_scope == "stable" || match.field_scope == "any" || match.field_scope.empty())) {
+        auto it = row.stable_fields.find(match.field);
+        if (it != row.stable_fields.end()) value_ptr = &it->second;
+    }
+    if (!value_ptr) {
         error = "match field not found: " + match.field;
         return false;
     }
     unsigned long long lhs = 0;
-    if (!value_u64(it->second, lhs)) return false;
+    if (!value_u64(*value_ptr, lhs)) return false;
     bool ok = false;
     unsigned long long value = parse_u64(match.value, ok);
     if (!ok && match.op != "in_range") {
@@ -433,6 +573,7 @@ Json stream_row_json(const StreamRow& row) {
     if (row.packet_index >= 0) j["packet_index"] = row.packet_index;
     j["beat_index"] = row.beat_index;
     j["fields"] = fields_json(row.fields);
+    if (!row.stable_fields.empty()) j["stable_fields"] = fields_json(row.stable_fields);
     if (!row.channel.bits.empty()) j["channel_id"] = stream_value_json(row.channel);
     return j;
 }
@@ -444,13 +585,18 @@ Json stream_stall_json(const StreamStallWindow& stall) {
 }
 
 Json stream_packet_json(const StreamPacket& packet) {
-    return Json{{"packet_index", packet.packet_index},
-                {"start_cycle", packet.start_cycle}, {"end_cycle", packet.end_cycle},
-                {"start_time", format_time(packet.start_time)}, {"end_time", format_time(packet.end_time)},
-                {"beat_count", packet.beat_count},
-                {"partial_begin", packet.partial_begin}, {"partial_end", packet.partial_end},
-                {"first_fields", fields_json(packet.first_fields)},
-                {"last_fields", fields_json(packet.last_fields)}};
+    Json j{{"packet_index", packet.packet_index},
+           {"start_cycle", packet.start_cycle}, {"end_cycle", packet.end_cycle},
+           {"start_time", format_time(packet.start_time)}, {"end_time", format_time(packet.end_time)},
+           {"beat_count", packet.beat_count},
+           {"partial_begin", packet.partial_begin}, {"partial_end", packet.partial_end},
+           {"stable_fields", fields_json(packet.stable_fields)},
+           {"stable_mismatches", stable_mismatches_json(packet.stable_mismatches)},
+           {"beat_fields_preview", beat_preview_json(packet.beats)},
+           {"first_fields", fields_json(packet.first_fields)},
+           {"last_fields", fields_json(packet.last_fields)}};
+    if (!packet.channel.bits.empty()) j["channel_id"] = stream_value_json(packet.channel);
+    return j;
 }
 
 Json stream_summary_json(const StreamConfig& config, const StreamAnalysis& analysis) {
@@ -469,6 +615,7 @@ Json stream_summary_json(const StreamConfig& config, const StreamAnalysis& analy
     j["control_xz_count"] = analysis.control_xz_count;
     j["data_xz_count"] = analysis.data_xz_count;
     j["ready_bp_conflict_count"] = analysis.ready_bp_conflict_count;
+    j["stable_mismatch_count"] = analysis.stable_mismatch_count;
     j["truncated"] = analysis.truncated;
     if (!analysis.transfers.empty()) {
         j["first_transfer"] = stream_row_json(analysis.transfers.front());

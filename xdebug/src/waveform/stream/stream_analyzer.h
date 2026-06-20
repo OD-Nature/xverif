@@ -26,9 +26,25 @@ struct StreamRow {
     int packet_index = -1;
     int beat_index = 0;
     std::map<std::string, StreamValue> fields;
+    std::map<std::string, StreamValue> stable_fields;
     StreamValue channel;
     int control_xz_count = 0;
     int data_xz_count = 0;
+};
+
+struct StreamBeat {
+    int cycle = 0;
+    npiFsdbTime time = 0;
+    int beat_index = 0;
+    std::map<std::string, StreamValue> fields;
+};
+
+struct StreamStableMismatch {
+    std::string field;
+    int cycle = 0;
+    npiFsdbTime time = 0;
+    StreamValue expected;
+    StreamValue actual;
 };
 
 struct StreamPacket {
@@ -40,6 +56,10 @@ struct StreamPacket {
     int beat_count = 0;
     bool partial_begin = false;
     bool partial_end = false;
+    StreamValue channel;
+    std::map<std::string, StreamValue> stable_fields;
+    std::vector<StreamStableMismatch> stable_mismatches;
+    std::vector<StreamBeat> beats;
     std::map<std::string, StreamValue> first_fields;
     std::map<std::string, StreamValue> last_fields;
 };
@@ -65,6 +85,7 @@ struct StreamAnalysis {
     int control_xz_count = 0;
     int data_xz_count = 0;
     int ready_bp_conflict_count = 0;
+    int stable_mismatch_count = 0;
     bool truncated = false;
 };
 
@@ -89,6 +110,7 @@ struct StreamMatch {
     std::string lo;
     std::string hi;
     std::string mask;
+    std::string field_scope = "any";
 };
 
 class StreamAnalyzer {

@@ -183,7 +183,10 @@ public:
                                 {"clock_edge", stream.posedge ? "posedge" : "negedge"},
                                 {"handshake", xdebug_waveform::stream_handshake_text(stream)},
                                 {"packet", xdebug_waveform::stream_packet_enabled(stream) ? "sop/eop" : "none"},
-                                {"field_count", stream.data_fields.size() + (stream.data.empty() ? 0 : 1)}});
+                                {"field_count", stream.data_fields.size() + stream.beat_fields.size() +
+                                    stream.stable_fields.size() + (stream.data.empty() ? 0 : 1)},
+                                {"channel_id_valid", stream.channel_id_valid},
+                                {"allow_interleaving", stream.allow_interleaving}});
         }
         return Json{{"summary", {{"count", streams.size()}}}, {"streams", arr}};
     }
@@ -241,6 +244,7 @@ public:
             if (analysis.vld_cycles == 0) add_issue(issues, "WARNING", "VLD_NEVER_TRUE", "vld was never true in validation window");
             if (analysis.transfer_count == 0) add_issue(issues, "WARNING", "NO_TRANSFER", "no transfer observed in validation window");
             if (analysis.ready_bp_conflict_count > 0) add_issue(issues, "WARNING", "READY_BP_CONFLICT", "observed vld=1,rdy=1,bp=1");
+            if (analysis.stable_mismatch_count > 0) add_issue(issues, "WARNING", "STABLE_FIELD_MISMATCH", "observed stable_fields changing within packet");
             dyn = xdebug_waveform::stream_summary_json(config, analysis);
         }
         bool has_error = false;
@@ -299,14 +303,35 @@ public:
             return out;
         }
         if (query == "first_packet" || query == "last_packet") {
+            out["found"] = !analysis.packets.empty();
             if (!analysis.packets.empty()) {
                 out["packet"] = xdebug_waveform::stream_packet_json(
                     query == "first_packet" ? analysis.packets.front() : analysis.packets.back());
+            } else {
+                out["packet"] = nullptr;
+            }
+            return out;
+        }
+        if (query == "packet_at") {
+            int packet_index = args.value("packet_index", -1);
+            out["found"] = false;
+            out["packet"] = nullptr;
+            if (packet_index < 0) return err("INVALID_REQUEST", "packet_index must be >= 0");
+            for (const auto& packet : analysis.packets) {
+                if (packet.packet_index == packet_index) {
+                    out["found"] = true;
+                    out["packet"] = xdebug_waveform::stream_packet_json(packet);
+                    break;
+                }
             }
             return out;
         }
         if (query == "packet_window") {
             out["packets"] = packets_limited(analysis.packets, options.limit);
+            if (static_cast<int>(analysis.packets.size()) > options.limit) {
+                out["truncated"] = true;
+                out["summary"]["truncated"] = true;
+            }
             return out;
         }
         if (query == "match_field") {
@@ -318,7 +343,26 @@ public:
             match.lo = m.value("lo", std::string());
             match.hi = m.value("hi", std::string());
             match.mask = m.value("mask", std::string());
+            match.field_scope = m.value("field_scope", args.value("field_scope", std::string("any")));
+            if (match.field_scope.empty()) match.field_scope = "any";
+            if (match.field_scope != "beat" && match.field_scope != "stable" && match.field_scope != "any")
+                return err("INVALID_REQUEST", "field_scope must be beat, stable, or any");
             if (match.field.empty()) return err("MISSING_FIELD", "match.field is required");
+            if (match.field_scope == "stable") {
+                Json packets = Json::array();
+                for (const auto& packet : analysis.packets) {
+                    xdebug_waveform::StreamRow pseudo;
+                    pseudo.stable_fields = packet.stable_fields;
+                    std::string match_error;
+                    if (analyzer.match_row(pseudo, match, match_error)) packets.push_back(xdebug_waveform::stream_packet_json(packet));
+                    else if (!match_error.empty()) return err("INVALID_REQUEST", match_error);
+                    if (static_cast<int>(packets.size()) >= options.limit) break;
+                }
+                out["packets"] = packets;
+                out["summary"]["match_count"] = packets.size();
+                out["summary"]["field_scope"] = match.field_scope;
+                return out;
+            }
             Json rows = Json::array();
             for (const auto& row : analysis.transfers) {
                 std::string match_error;
@@ -328,6 +372,7 @@ public:
             }
             out["rows"] = rows;
             out["summary"]["match_count"] = rows.size();
+            out["summary"]["field_scope"] = match.field_scope;
             return out;
         }
         return err("INVALID_REQUEST", "unsupported stream.query type: " + query);
@@ -357,6 +402,7 @@ public:
         std::string format = args.value("format", std::string("tsv"));
         if (format != "tsv" && format != "csv" && format != "xout") return err("INVALID_REQUEST", "format must be tsv, csv, or xout");
         std::string output = args.value("output_file", std::string());
+        if (kind == "packet_beats" && output.empty()) return err("MISSING_FIELD", "packet_beats export requires output_file");
         if (output.empty()) {
             std::ostringstream oss;
             oss << xdebug_waveform::xdebug_waveform_stream_exports_dir(xdebug_waveform::g_session_id)
@@ -366,13 +412,16 @@ public:
         }
         std::string meta;
         StreamExporter exporter;
-        bool ok = kind == "packet"
-            ? exporter.export_packet_file(output, format, config, analysis, meta, error)
-            : exporter.export_transfer_file(output, format, config, analysis, meta, error);
+        bool ok = false;
+        if (kind == "packet") ok = exporter.export_packet_file(output, format, config, analysis, meta, error);
+        else if (kind == "packet_beats") ok = exporter.export_packet_beats_file(output, format, config, analysis, meta, error);
+        else if (kind == "transfer") ok = exporter.export_transfer_file(output, format, config, analysis, meta, error);
+        else return err("INVALID_REQUEST", "kind must be transfer, packet, or packet_beats");
         if (!ok) return err("EXPORT_FAILED", error);
         return Json{{"summary", xdebug_waveform::stream_summary_json(config, analysis)},
                     {"output_file", output}, {"meta_file", meta}, {"kind", kind},
-                    {"format", format}, {"row_count", kind == "packet" ? analysis.packets.size() : analysis.transfers.size()}};
+                    {"format", format}, {"row_count", kind == "transfer" ? analysis.transfers.size() :
+                        kind == "packet" ? analysis.packets.size() : analysis.transfer_count}};
     }
 };
 

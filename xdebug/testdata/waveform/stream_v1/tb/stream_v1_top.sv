@@ -26,6 +26,7 @@ module stream_v1_top;
   reg        rpkt_rdy;
   reg        rpkt_sop;
   reg        rpkt_eop;
+  reg [7:0]  rpkt_opcode;
   reg [15:0] rpkt_seq;
   reg [31:0] rpkt_data;
 
@@ -33,6 +34,7 @@ module stream_v1_top;
   reg        bpkt_bp;
   reg        bpkt_sop;
   reg        bpkt_eop;
+  reg [7:0]  bpkt_badstable;
   reg [15:0] bpkt_seq;
   reg [31:0] bpkt_data;
 
@@ -44,6 +46,15 @@ module stream_v1_top;
   reg [1:0]  npkt_chid;
   reg [15:0] npkt_seq;
   reg [31:0] npkt_data;
+
+  reg        ipkt_vld;
+  reg        ipkt_rdy;
+  reg        ipkt_sop;
+  reg        ipkt_eop;
+  reg [1:0]  ipkt_chid;
+  reg [15:0] ipkt_tag;
+  reg [15:0] ipkt_seq;
+  reg [31:0] ipkt_data;
 
   integer valid_only_count;
   integer ready_count;
@@ -57,6 +68,8 @@ module stream_v1_top;
   integer negedge_count;
   integer negedge_packets;
   integer negedge_conflicts;
+  integer interleaved_count;
+  integer interleaved_packets;
   integer pos_done;
   integer neg_done;
 
@@ -89,12 +102,14 @@ module stream_v1_top;
       rpkt_rdy = 1'b0;
       rpkt_sop = 1'b0;
       rpkt_eop = 1'b0;
+      rpkt_opcode = 8'h0;
       rpkt_seq = 16'h0;
       rpkt_data = 32'h0;
       bpkt_vld = 1'b0;
       bpkt_bp = 1'b0;
       bpkt_sop = 1'b0;
       bpkt_eop = 1'b0;
+      bpkt_badstable = 8'h0;
       bpkt_seq = 16'h0;
       bpkt_data = 32'h0;
       npkt_vld = 1'b0;
@@ -105,6 +120,14 @@ module stream_v1_top;
       npkt_chid = 2'b00;
       npkt_seq = 16'h0;
       npkt_data = 32'h0;
+      ipkt_vld = 1'b0;
+      ipkt_rdy = 1'b0;
+      ipkt_sop = 1'b0;
+      ipkt_eop = 1'b0;
+      ipkt_chid = 2'b00;
+      ipkt_tag = 16'h0;
+      ipkt_seq = 16'h0;
+      ipkt_data = 32'h0;
     end
   endtask
 
@@ -119,7 +142,8 @@ module stream_v1_top;
       $fdisplay(fd, "    \"bp_stream\": {\"transfer_count\": %0d, \"stall_cycles\": %0d},", bp_count, bp_stall_count);
       $fdisplay(fd, "    \"ready_packet\": {\"transfer_count\": %0d, \"packet_count\": %0d},", ready_packet_count, ready_packet_packets);
       $fdisplay(fd, "    \"bp_packet\": {\"transfer_count\": %0d, \"packet_count\": %0d},", bp_packet_count, bp_packet_packets);
-      $fdisplay(fd, "    \"ready_bp_packet_negedge\": {\"transfer_count\": %0d, \"packet_count\": %0d, \"ready_bp_conflict_count\": %0d}", negedge_count, negedge_packets, negedge_conflicts);
+      $fdisplay(fd, "    \"ready_bp_packet_negedge\": {\"transfer_count\": %0d, \"packet_count\": %0d, \"ready_bp_conflict_count\": %0d},", negedge_count, negedge_packets, negedge_conflicts);
+      $fdisplay(fd, "    \"interleaved_packet\": {\"transfer_count\": %0d, \"packet_count\": %0d}", interleaved_count, interleaved_packets);
       $fdisplay(fd, "  }");
       $fdisplay(fd, "}");
       $fclose(fd);
@@ -141,6 +165,8 @@ module stream_v1_top;
     negedge_count = 0;
     negedge_packets = 0;
     negedge_conflicts = 0;
+    interleaved_count = 0;
+    interleaved_packets = 0;
     pos_done = 0;
     neg_done = 0;
 
@@ -179,6 +205,7 @@ module stream_v1_top;
       rpkt_rdy = 1'b1;
       rpkt_sop = ((i % 4) == 0);
       rpkt_eop = ((i % 4) == 3);
+      rpkt_opcode = 8'ha0 + ((i / 4) % 16);
       rpkt_seq = i[15:0];
       rpkt_data = 32'h40000000 + i;
       ready_packet_count = ready_packet_count + 1;
@@ -188,10 +215,22 @@ module stream_v1_top;
       bpkt_bp = 1'b0;
       bpkt_sop = ((i % 4) == 0);
       bpkt_eop = ((i % 4) == 3);
+      bpkt_badstable = i[7:0];
       bpkt_seq = i[15:0];
       bpkt_data = 32'h50000000 + i;
       bp_packet_count = bp_packet_count + 1;
       if ((i % 4) == 3) bp_packet_packets = bp_packet_packets + 1;
+
+      ipkt_vld = 1'b1;
+      ipkt_rdy = 1'b1;
+      ipkt_chid = i[0];
+      ipkt_sop = (((i / 2) % 4) == 0);
+      ipkt_eop = (((i / 2) % 4) == 3);
+      ipkt_tag = 16'h9000 + (i / 8);
+      ipkt_seq = i[15:0];
+      ipkt_data = 32'h70000000 + i;
+      interleaved_count = interleaved_count + 1;
+      if (((i / 2) % 4) == 3) interleaved_packets = interleaved_packets + 1;
     end
 
     @(negedge clk);
@@ -200,6 +239,7 @@ module stream_v1_top;
     bp_vld = 1'b0;
     rpkt_vld = 1'b0;
     bpkt_vld = 1'b0;
+    ipkt_vld = 1'b0;
     pos_done = 1;
   end
 
@@ -213,7 +253,7 @@ module stream_v1_top;
       npkt_bp = 1'b0;
       npkt_sop = ((i % 4) == 0);
       npkt_eop = ((i % 4) == 3);
-      npkt_chid = i[1:0];
+      npkt_chid = (i / 4) % 4;
       npkt_seq = i[15:0];
       npkt_data = 32'h60000000 + i;
       negedge_count = negedge_count + 1;

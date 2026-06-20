@@ -44,7 +44,10 @@
       "rdy": "stream_v1_top.rpkt_rdy",
       "sop": "stream_v1_top.rpkt_sop",
       "eop": "stream_v1_top.rpkt_eop",
-      "data_fields": {
+      "stable_fields": {
+        "opcode": "stream_v1_top.rpkt_opcode"
+      },
+      "beat_fields": {
         "seq": "stream_v1_top.rpkt_seq",
         "data": "stream_v1_top.rpkt_data"
       },
@@ -59,7 +62,10 @@
       "bp": "stream_v1_top.bpkt_bp",
       "sop": "stream_v1_top.bpkt_sop",
       "eop": "stream_v1_top.bpkt_eop",
-      "data_fields": {
+      "stable_fields": {
+        "badstable": "stream_v1_top.bpkt_badstable"
+      },
+      "beat_fields": {
         "seq": "stream_v1_top.bpkt_seq",
         "data": "stream_v1_top.bpkt_data"
       },
@@ -76,11 +82,33 @@
       "sop": "stream_v1_top.npkt_sop",
       "eop": "stream_v1_top.npkt_eop",
       "channel_id": "stream_v1_top.npkt_chid",
+      "channel_id_valid": "every_beat",
       "data_fields": {
         "seq": "stream_v1_top.npkt_seq",
         "data": "stream_v1_top.npkt_data"
       },
       "description": "negedge vld/rdy/bp/sop/eop packet stream"
+    },
+    {
+      "name": "interleaved_packet",
+      "clock": "stream_v1_top.clk",
+      "clock_edge": "posedge",
+      "reset": "!stream_v1_top.rst_n",
+      "vld": "stream_v1_top.ipkt_vld",
+      "rdy": "stream_v1_top.ipkt_rdy",
+      "sop": "stream_v1_top.ipkt_sop",
+      "eop": "stream_v1_top.ipkt_eop",
+      "channel_id": "stream_v1_top.ipkt_chid",
+      "channel_id_valid": "every_beat",
+      "allow_interleaving": true,
+      "stable_fields": {
+        "tag": "stream_v1_top.ipkt_tag"
+      },
+      "beat_fields": {
+        "seq": "stream_v1_top.ipkt_seq",
+        "data": "stream_v1_top.ipkt_data"
+      },
+      "description": "interleaved two-channel packet stream"
     }
   ]
 }

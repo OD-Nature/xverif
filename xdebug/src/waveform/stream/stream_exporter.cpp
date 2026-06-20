@@ -61,6 +61,12 @@ bool write_meta(const std::string& output_file,
     for (const auto& kv : config.data_fields) {
         meta["fields"].push_back(Json{{"name", kv.first}, {"expr", kv.second}});
     }
+    for (const auto& kv : config.beat_fields) {
+        meta["fields"].push_back(Json{{"name", kv.first}, {"expr", kv.second}, {"scope", "beat"}});
+    }
+    for (const auto& kv : config.stable_fields) {
+        meta["fields"].push_back(Json{{"name", kv.first}, {"expr", kv.second}, {"scope", "stable"}});
+    }
     std::ofstream out(meta_file.c_str());
     if (!out) {
         error = "failed to write meta file: " + meta_file;
@@ -90,6 +96,8 @@ bool StreamExporter::export_transfer_file(const std::string& output_file,
     if (!config.channel_id.empty()) out << sep << "channel_id";
     if (!config.data.empty()) out << sep << "data";
     for (const auto& kv : config.data_fields) out << sep << kv.first;
+    for (const auto& kv : config.beat_fields) out << sep << kv.first;
+    for (const auto& kv : config.stable_fields) out << sep << "stable_" << kv.first;
     out << "\n";
     for (const auto& row : analysis.transfers) {
         out << row.cycle << sep << format_time(row.time) << sep
@@ -101,6 +109,14 @@ bool StreamExporter::export_transfer_file(const std::string& output_file,
         for (const auto& kv : config.data_fields) {
             auto it = row.fields.find(kv.first);
             out << sep << (it == row.fields.end() ? "" : cell(it->second));
+        }
+        for (const auto& kv : config.beat_fields) {
+            auto it = row.fields.find(kv.first);
+            out << sep << (it == row.fields.end() ? "" : cell(it->second));
+        }
+        for (const auto& kv : config.stable_fields) {
+            auto it = row.stable_fields.find(kv.first);
+            out << sep << (it == row.stable_fields.end() ? "" : cell(it->second));
         }
         out << "\n";
     }
@@ -120,16 +136,31 @@ bool StreamExporter::export_packet_file(const std::string& output_file,
         return false;
     }
     char sep = sep_for(format);
-    out << "packet_index" << sep << "start_time" << sep << "end_time" << sep
-        << "start_cycle" << sep << "end_cycle" << sep << "beat_count" << sep << "partial";
+    out << "packet_index" << sep << "channel_id" << sep << "start_time" << sep << "end_time" << sep
+        << "start_cycle" << sep << "end_cycle" << sep << "beat_count" << sep << "partial" << sep
+        << "stable_mismatch_count";
+    for (const auto& kv : config.stable_fields) out << sep << "stable_" << kv.first;
     for (const auto& kv : config.data_fields) out << sep << "first_" << kv.first << sep << "last_" << kv.first;
+    for (const auto& kv : config.beat_fields) out << sep << "first_" << kv.first << sep << "last_" << kv.first;
     if (!config.data.empty()) out << sep << "first_data" << sep << "last_data";
     out << "\n";
     for (const auto& packet : analysis.packets) {
-        out << packet.packet_index << sep << format_time(packet.start_time) << sep << format_time(packet.end_time)
+        out << packet.packet_index << sep << (packet.channel.bits.empty() ? "" : cell(packet.channel))
+            << sep << format_time(packet.start_time) << sep << format_time(packet.end_time)
             << sep << packet.start_cycle << sep << packet.end_cycle << sep << packet.beat_count << sep
-            << ((packet.partial_begin || packet.partial_end) ? "true" : "false");
+            << ((packet.partial_begin || packet.partial_end) ? "true" : "false") << sep
+            << packet.stable_mismatches.size();
+        for (const auto& kv : config.stable_fields) {
+            auto it = packet.stable_fields.find(kv.first);
+            out << sep << (it == packet.stable_fields.end() ? "" : cell(it->second));
+        }
         for (const auto& kv : config.data_fields) {
+            auto f = packet.first_fields.find(kv.first);
+            auto l = packet.last_fields.find(kv.first);
+            out << sep << (f == packet.first_fields.end() ? "" : cell(f->second))
+                << sep << (l == packet.last_fields.end() ? "" : cell(l->second));
+        }
+        for (const auto& kv : config.beat_fields) {
             auto f = packet.first_fields.find(kv.first);
             auto l = packet.last_fields.find(kv.first);
             out << sep << (f == packet.first_fields.end() ? "" : cell(f->second))
@@ -144,6 +175,52 @@ bool StreamExporter::export_packet_file(const std::string& output_file,
         out << "\n";
     }
     return write_meta(output_file, config, analysis, "packet", meta_file, error);
+}
+
+bool StreamExporter::export_packet_beats_file(const std::string& output_file,
+                                              const std::string& format,
+                                              const StreamConfig& config,
+                                              const StreamAnalysis& analysis,
+                                              std::string& meta_file,
+                                              std::string& error) {
+    ensure_parent_dir(output_file);
+    std::ofstream out(output_file.c_str());
+    if (!out) {
+        error = "failed to write output file: " + output_file;
+        return false;
+    }
+    char sep = sep_for(format);
+    out << "packet_index" << sep << "channel_id" << sep << "beat_index" << sep
+        << "cycle" << sep << "time";
+    if (!config.data.empty()) out << sep << "data";
+    for (const auto& kv : config.data_fields) out << sep << kv.first;
+    for (const auto& kv : config.beat_fields) out << sep << kv.first;
+    for (const auto& kv : config.stable_fields) out << sep << "stable_" << kv.first;
+    out << "\n";
+    for (const auto& packet : analysis.packets) {
+        for (const auto& beat : packet.beats) {
+            out << packet.packet_index << sep << (packet.channel.bits.empty() ? "" : cell(packet.channel))
+                << sep << beat.beat_index << sep << beat.cycle << sep << format_time(beat.time);
+            if (!config.data.empty()) {
+                auto it = beat.fields.find("data");
+                out << sep << (it == beat.fields.end() ? "" : cell(it->second));
+            }
+            for (const auto& kv : config.data_fields) {
+                auto it = beat.fields.find(kv.first);
+                out << sep << (it == beat.fields.end() ? "" : cell(it->second));
+            }
+            for (const auto& kv : config.beat_fields) {
+                auto it = beat.fields.find(kv.first);
+                out << sep << (it == beat.fields.end() ? "" : cell(it->second));
+            }
+            for (const auto& kv : config.stable_fields) {
+                auto it = packet.stable_fields.find(kv.first);
+                out << sep << (it == packet.stable_fields.end() ? "" : cell(it->second));
+            }
+            out << "\n";
+        }
+    }
+    return write_meta(output_file, config, analysis, "packet_beats", meta_file, error);
 }
 
 } // namespace xdebug_waveform
