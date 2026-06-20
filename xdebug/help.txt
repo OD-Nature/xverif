@@ -281,6 +281,12 @@ Logs and troubleshooting
       ~/.xverif/mcp/sessions/<alias>/stdio.ndjson
       ~/.xverif/mcp/sessions/<alias>/lsf.ndjson
 
+  SDK-free loop wrapper logs:
+      ~/.xverif/loop-wrapper/logs/uds.ndjson
+      ~/.xverif/loop-wrapper/sessions/<alias>/session.ndjson
+      ~/.xverif/loop-wrapper/sessions/<alias>/stdio.ndjson
+      ~/.xverif/loop-wrapper/sessions/<alias>/lsf.ndjson
+
   Helpers:
       xdebug log doctor --session <id> --json
       xdebug log tail --session <id> --lines 40
@@ -295,6 +301,8 @@ Logs and troubleshooting
       4. Check transport.ndjson for connect, ping, write, read and timeout.
       5. Check MCP session/stdio/lsf logs for ready timeout, stdout pollution,
          job id, stderr_tail and cleanup.
+      6. Check loop-wrapper uds/session/stdio/lsf logs for SDK-free wrapper
+         JSONL request parsing, socket handling, LSF job id and cleanup.
 
 Docs
 ----

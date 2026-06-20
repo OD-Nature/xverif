@@ -17,6 +17,29 @@ It is not a replacement for all MCP tools.  Stateless tools such as `xbit`,
 `xentry`, `xloc`, `xsva`, and `xberif` stay MCP-only or CLI-only for this
 rollout.
 
+## Implementation Status
+
+Completed in staged commits:
+
+- Phase 0: `f7b7b16` added this plan before implementation.
+- Phase 1: `288f446` added the SDK-free `xverif_loop` shared layer and kept
+  existing `xverif_mcp` imports as compatibility wrappers.
+- Phase 2: `5db8889` added `tools/xverif-loop-server`,
+  `tools/xverif-loop-client`, UDS JSONL dispatch, and lifecycle tests.
+- Phase 3: `f0dc2a1` added targeted wrapper logging regressions for direct
+  logs, invalid JSON, redaction, fake LSF job detection, and cleanup.
+- Phase 4: documentation and final validation were completed after Phase 3.
+
+Validation evidence:
+
+- `xverif_loop` import guard verifies the shared package has no MCP SDK import.
+- UDS wrapper tests require running outside the restricted sandbox because the
+  sandbox blocks Unix domain socket bind.
+- Targeted wrapper and session tests passed with:
+  `PYTHONPATH=/home/yian/xverif/xverif_mcp/src pytest
+  xverif_mcp/tests/test_loop_wrapper_uds.py
+  xverif_mcp/tests/test_stdio_loop_session_lifecycle.py`.
+
 ## Phased Rollout
 
 Each phase is committed and pushed separately.  The implementation must not
