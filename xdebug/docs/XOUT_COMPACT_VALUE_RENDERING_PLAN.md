@@ -126,9 +126,9 @@ summary:
 
 checks:
   signal op expected observed status
-  top.sig_a == 0x22 'h22 pass
-  top.sig_b == 0x23 'h22 fail
-  top.xz_bus == 0x0 'hxx known=false unknown
+  top.sig_a == 'h22 'h22 pass
+  top.sig_b == 'h23 'h22 fail
+  top.xz_bus == 'h0 'hxx known=false unknown
 ```
 
 ### event.find

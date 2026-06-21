@@ -2,6 +2,7 @@
 #include "../command_builder.h"
 
 #include "../../protocol/protocol.h"
+#include "../../value/logic_value.h"
 
 #include <cstdlib>
 #include <string>
@@ -149,6 +150,7 @@ Json make_xbit_hints(const Json& args, const std::string& signal, const std::str
 Json make_value_payload(const Json& args, const std::string& signal, const std::string& raw, bool compact) {
     Json payload = Json::object();
     std::string requested_format = string_or(args, "format", "");
+    LogicValue value = logic_value_from_fsdb_raw(raw, fmt_char(args));
     if (requested_format == "array_indexed") {
         bool ok = false;
         std::string error;
@@ -156,20 +158,20 @@ Json make_value_payload(const Json& args, const std::string& signal, const std::
         if (ok) {
             payload["status"] = "ok";
             payload["value"] = indexed;
-            payload["known"] = !contains_xz(raw);
+            payload["known"] = !logic_value_has_xz(value);
         } else {
             payload["status"] = "unsupported_format";
             payload["reason"] = value_reason_for_status("unsupported_format", signal, error);
-            payload["raw_value"] = trim(raw);
-            payload["known"] = !contains_xz(raw);
+            payload["raw_value"] = logic_value_compact_string(value);
+            payload["known"] = !logic_value_has_xz(value);
         }
     } else if (compact) {
         payload["status"] = "ok";
-        payload["value"] = trim(raw);
-        payload["known"] = !contains_xz(raw);
+        payload["value"] = logic_value_compact_string(value);
+        payload["known"] = !logic_value_has_xz(value);
     } else {
         payload["status"] = "ok";
-        payload["value"] = make_value_object(raw);
+        payload["value"] = logic_value_json(value);
     }
     Json hints = make_xbit_hints(args, signal, raw);
     if (!hints.is_null()) payload["xbit_hints"] = hints;
@@ -204,7 +206,8 @@ public:
             return print_error_and_return(ctx.req, ctx.action, code, err, ctx.elapsed_ms);
         }
         Json out = ok_out(ctx);
-        out["summary"] = {{"signal", signal}, {"time", time}, {"known", !contains_xz(raw)}};
+        LogicValue value = logic_value_from_fsdb_raw(raw, fmt_char(ctx.args));
+        out["summary"] = {{"signal", signal}, {"time", time}, {"known", !logic_value_has_xz(value)}};
         out["data"]["signal"] = signal;
         out["data"]["time"] = time;
         bool compact = compact_mode(ctx.req) && !bool_or(ctx.args, "include_raw", false);
@@ -220,7 +223,7 @@ public:
             out["data"]["value"] = payload["value"];
         } else {
             out["data"]["value"] = payload["value"];
-            out["data"]["known"] = payload.value("known", !contains_xz(raw));
+            out["data"]["known"] = payload.value("known", !logic_value_has_xz(value));
         }
         out["data"]["status"] = payload.value("status", "ok");
         if (payload.contains("reason")) out["data"]["reason"] = payload["reason"];
@@ -260,14 +263,17 @@ public:
                 if (payload.contains("raw_value")) item["raw_value"] = payload["raw_value"];
                 if (payload.contains("xbit_hints")) item["xbit_hints"] = payload["xbit_hints"];
                 if (item["status"] == "ok") {
-                    values[signal] = string_or(ctx.args, "format", "") == "array_indexed" ? payload["value"] : Json(trim(raw));
+                    LogicValue value = logic_value_from_fsdb_raw(raw, fmt_char(ctx.args));
+                    values[signal] = string_or(ctx.args, "format", "") == "array_indexed"
+                        ? payload["value"]
+                        : Json(logic_value_compact_string(value));
                 } else {
                     values[signal] = nullptr;
                     missing++;
                     std::string reason_key = item["status"].get<std::string>();
                     missing_by_reason[reason_key] = missing_by_reason.value(reason_key, 0) + 1;
                 }
-                if (contains_xz(raw)) unknown++;
+                if (logic_value_has_xz(logic_value_from_fsdb_raw(raw, fmt_char(ctx.args)))) unknown++;
             } else {
                 std::string status = value_status_from_error(err);
                 item["status"] = status;

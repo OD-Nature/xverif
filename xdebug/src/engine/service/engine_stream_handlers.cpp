@@ -33,6 +33,13 @@ Json err(const std::string& code, const std::string& message) {
     return Json{{"error", code}, {"message", message}};
 }
 
+std::string code_for_stream_error(const std::string& message, const std::string& fallback) {
+    return message.find("0x prefix is not accepted") != std::string::npos ||
+           message.find("invalid value literal") != std::string::npos
+        ? "VALUE_FORMAT_INVALID"
+        : fallback;
+}
+
 bool parse_time_arg(const std::string& text, bool allow_max, npiFsdbTime& out, std::string& error) {
     if (text.empty()) {
         out = 0;
@@ -240,7 +247,7 @@ public:
             options.limit = args.value("max_edges", 256);
             StreamAnalysis analysis;
             if (!analyzer.analyze(g_fsdb_file, config, options, analysis, error))
-                return err("STREAM_ANALYZE_FAILED", error);
+                return err(code_for_stream_error(error, "STREAM_ANALYZE_FAILED"), error);
             if (analysis.vld_cycles == 0) add_issue(issues, "WARNING", "VLD_NEVER_TRUE", "vld was never true in validation window");
             if (analysis.transfer_count == 0) add_issue(issues, "WARNING", "NO_TRANSFER", "no transfer observed in validation window");
             if (analysis.ready_bp_conflict_count > 0) add_issue(issues, "WARNING", "READY_BP_CONFLICT", "observed vld=1,rdy=1,bp=1");
@@ -271,7 +278,7 @@ public:
         StreamAnalyzer analyzer;
         StreamAnalysis analysis;
         if (!analyzer.analyze(g_fsdb_file, config, options, analysis, error))
-            return err("STREAM_ANALYZE_FAILED", error);
+            return err(code_for_stream_error(error, "STREAM_ANALYZE_FAILED"), error);
 
         std::string query = args.value("query", std::string("summary"));
         Json out;
@@ -355,7 +362,8 @@ public:
                     pseudo.stable_fields = packet.stable_fields;
                     std::string match_error;
                     if (analyzer.match_row(pseudo, match, match_error)) packets.push_back(xdebug_waveform::stream_packet_json(packet));
-                    else if (!match_error.empty()) return err("INVALID_REQUEST", match_error);
+                    else if (!match_error.empty())
+                        return err(code_for_stream_error(match_error, "INVALID_REQUEST"), match_error);
                     if (static_cast<int>(packets.size()) >= options.limit) break;
                 }
                 out["packets"] = packets;
@@ -367,7 +375,8 @@ public:
             for (const auto& row : analysis.transfers) {
                 std::string match_error;
                 if (analyzer.match_row(row, match, match_error)) rows.push_back(xdebug_waveform::stream_row_json(row));
-                else if (!match_error.empty()) return err("INVALID_REQUEST", match_error);
+                else if (!match_error.empty())
+                    return err(code_for_stream_error(match_error, "INVALID_REQUEST"), match_error);
                 if (static_cast<int>(rows.size()) >= options.limit) break;
             }
             out["rows"] = rows;
@@ -397,7 +406,7 @@ public:
         StreamAnalyzer analyzer;
         StreamAnalysis analysis;
         if (!analyzer.analyze(g_fsdb_file, config, options, analysis, error))
-            return err("STREAM_ANALYZE_FAILED", error);
+            return err(code_for_stream_error(error, "STREAM_ANALYZE_FAILED"), error);
         std::string kind = args.value("kind", std::string("transfer"));
         std::string format = args.value("format", std::string("tsv"));
         if (format != "tsv" && format != "csv" && format != "xout") return err("INVALID_REQUEST", "format must be tsv, csv, or xout");

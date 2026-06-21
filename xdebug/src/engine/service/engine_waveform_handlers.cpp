@@ -10,6 +10,7 @@
 #include "../../waveform/list/list_manager.h"
 #include "../../waveform/list/signal_list.h"
 #include "../../waveform/service/rc_generator.h"
+#include "../../waveform/value/logic_value.h"
 
 #include "npi.h"
 #include "npi_fsdb.h"
@@ -23,7 +24,8 @@ namespace xdebug_design {
 namespace {
 
 static bool contains_xz(const std::string& v) {
-    return v.find_first_of("xXzZ") != std::string::npos;
+    return xdebug_waveform::logic_value_has_xz(
+        xdebug_waveform::logic_value_from_fsdb_raw(v, 'h'));
 }
 
 static std::string trim_copy(const std::string& text) {
@@ -35,36 +37,14 @@ static std::string trim_copy(const std::string& text) {
 }
 
 static Json value_object(const std::string& raw) {
-    return Json{{"value", trim_copy(raw)}, {"known", !contains_xz(raw)}};
+    return xdebug_waveform::logic_value_json(
+        xdebug_waveform::logic_value_from_fsdb_raw(raw, 'h'));
 }
 
 static std::string with_value_prefix(const std::string& raw, char fmt) {
     std::string text = trim_copy(raw);
     if (text.size() >= 2 && text[0] == '\'') return text;
     return std::string("'") + static_cast<char>(std::tolower(static_cast<unsigned char>(fmt))) + text;
-}
-
-static std::string normalize_numeric(const std::string& text) {
-    std::string s = trim_copy(text);
-    size_t tick = s.find('\'');
-    int base = 10;
-    std::string body = s;
-    if (tick != std::string::npos && tick + 1 < s.size()) {
-        char radix = static_cast<char>(std::tolower(static_cast<unsigned char>(s[tick + 1])));
-        base = radix == 'h' ? 16 : radix == 'b' ? 2 : 10;
-        body = s.substr(tick + 2);
-    } else if (s.size() > 2 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X')) {
-        base = 16;
-        body = s.substr(2);
-    } else if (s.size() > 2 && s[0] == '0' && (s[1] == 'b' || s[1] == 'B')) {
-        base = 2;
-        body = s.substr(2);
-    }
-    body.erase(std::remove(body.begin(), body.end(), '_'), body.end());
-    char* end = nullptr;
-    unsigned long long value = std::strtoull(body.c_str(), &end, base);
-    if (!end || *end != '\0') return s;
-    return std::to_string(value);
 }
 
 static Json make_xbit_hints(const Json& args,
@@ -574,18 +554,25 @@ public:
             r["time"] = time_str;
             r["op"] = cond.value("op", "==");
             r["expected"] = cond.value("value", "");
+            xdebug_waveform::LogicValue expected_value =
+                xdebug_waveform::parse_user_logic_literal(r["expected"].get<std::string>());
+            if (!expected_value.valid)
+                return err("VALUE_FORMAT_INVALID", expected_value.error);
             std::string signal = cond.value("signal", "");
             if (!signal.empty()) {
                 std::string raw;
                 if (npi_fsdb_sig_value_at(g_fsdb_file, signal.c_str(), fsdb_time, raw, npiFsdbHexStrVal)) {
                     raw = with_value_prefix(raw, 'h');
-                    bool known = raw.find_first_of("xXzZ") == std::string::npos;
+                    xdebug_waveform::LogicValue observed =
+                        xdebug_waveform::logic_value_from_fsdb_raw(raw, 'h');
+                    bool known = !xdebug_waveform::logic_value_has_xz(observed) &&
+                                 !xdebug_waveform::logic_value_has_xz(expected_value);
                     r["observed"] = value_object(raw);
                     r["known"] = known;
-                    std::string exp_val = cond.value("value", "");
                     std::string op = cond.value("op", "==");
                     if (known) {
-                        bool equal = normalize_numeric(raw) == normalize_numeric(exp_val);
+                        bool equal = xdebug_waveform::logic_value_compare_key(observed) ==
+                                     xdebug_waveform::logic_value_compare_key(expected_value);
                         bool pass = op == "!=" ? !equal : equal;
                         r["status"] = pass ? "pass" : "fail";
                         r["pass"] = pass;

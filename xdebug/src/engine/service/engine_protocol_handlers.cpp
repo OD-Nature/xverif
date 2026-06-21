@@ -6,6 +6,7 @@
 #include "../../waveform/apb/apb_analyzer.h"
 #include "../../waveform/axi/axi_manager.h"
 #include "../../waveform/axi/axi_analyzer.h"
+#include "../../waveform/value/logic_value.h"
 
 #include <fstream>
 #include <memory>
@@ -43,6 +44,26 @@ static bool ensure_axi_analyzed(const std::string& name,
             xdebug_waveform::g_fsdb_file, cfg)) {
         err = "Failed to analyze AXI: " + name;
         return false;
+    }
+    return true;
+}
+
+static bool parse_user_uint64_literal(const std::string& text,
+                                      uint64_t& out,
+                                      std::string& err) {
+    xdebug_waveform::LogicValue value = xdebug_waveform::parse_user_logic_literal(text);
+    if (!value.valid) {
+        err = value.error;
+        return false;
+    }
+    if (xdebug_waveform::logic_value_has_xz(value) || value.bits.size() > 64) {
+        err = "value literal must be known and at most 64 bits: " + text;
+        return false;
+    }
+    out = 0;
+    for (char c : value.bits) {
+        out <<= 1ULL;
+        if (c == '1') out |= 1ULL;
     }
     return true;
 }
@@ -145,7 +166,10 @@ public:
         const ApbTransaction* txn = nullptr;
         bool found = false;
         if (!addr_str.empty()) {
-            uint64_t addr = std::stoull(addr_str, nullptr, 0);
+            uint64_t addr = 0;
+            std::string parse_err;
+            if (!parse_user_uint64_literal(addr_str, addr, parse_err))
+                return Json({{"error","VALUE_FORMAT_INVALID"},{"message",parse_err}});
             if (num >= 0) {
                 found = is_write ? g_apb_analyzer.get_write_by_addr_num(name, addr, (size_t)num, txn)
                                  : g_apb_analyzer.get_read_by_addr_num(name, addr, (size_t)num, txn);
@@ -335,7 +359,16 @@ public:
         const AxiTransaction* txn = nullptr;
         bool found = false;
         if (!addr_str.empty()) {
-            uint64_t addr = std::stoull(addr_str, nullptr, 0);
+            uint64_t addr = 0;
+            std::string parse_err;
+            if (!parse_user_uint64_literal(addr_str, addr, parse_err))
+                return Json({{"error","VALUE_FORMAT_INVALID"},{"message",parse_err}});
+            if (!id_str.empty()) {
+                uint64_t id_value = 0;
+                if (!parse_user_uint64_literal(id_str, id_value, parse_err))
+                    return Json({{"error","VALUE_FORMAT_INVALID"},{"message",parse_err}});
+                id_str = std::to_string(id_value);
+            }
             if (!id_str.empty()) {
                 if (num >= 0)
                     found = is_write ? g_axi_analyzer.get_write_by_addr_num(name, addr, id_str.c_str(), (size_t)num, txn)

@@ -9,7 +9,7 @@
   "data": {
     "signal": "top.clk",
     "time": "10ns",
-    "value": "1",
+    "value": "'h1",
     "known": true
   },
   "meta": {

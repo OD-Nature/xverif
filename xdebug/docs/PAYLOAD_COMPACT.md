@@ -185,7 +185,7 @@ compact 默认形态：
   "data": {
     "signal": "top.u.valid",
     "time": "100ns",
-    "value": "1",
+    "value": "'h1",
     "known": true
   }
 }
@@ -208,7 +208,7 @@ compact 默认返回 map，避免每个信号重复 time/session/format：
     "values": {
       "top.u.valid": "1",
       "top.u.ready": "0",
-      "top.u.data": "0x12"
+      "top.u.data": "8'h12"
     }
   }
 }

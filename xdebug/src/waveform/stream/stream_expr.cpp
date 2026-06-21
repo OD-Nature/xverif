@@ -1,6 +1,7 @@
 #include "stream_expr.h"
 
 #include "../server/fsdb_value_reader.h"
+#include "../value/logic_value.h"
 
 #include "npi_fsdb.h"
 
@@ -447,22 +448,7 @@ bool stream_value_truthy(const StreamValue& value, bool unknown_default) {
 }
 
 std::string stream_value_hex(const StreamValue& value) {
-    std::string bits = value.bits.empty() ? "0" : value.bits;
-    size_t pad = (4 - bits.size() % 4) % 4;
-    bits.insert(bits.begin(), pad, '0');
-    static const char* hex = "0123456789abcdef";
-    std::string out = "0x";
-    for (size_t i = 0; i < bits.size(); i += 4) {
-        bool unknown = false;
-        int v = 0;
-        for (size_t j = 0; j < 4; ++j) {
-            char c = bits[i + j];
-            if (c != '0' && c != '1') unknown = true;
-            v = (v << 1) | (c == '1' ? 1 : 0);
-        }
-        out.push_back(unknown ? 'x' : hex[v]);
-    }
-    return out;
+    return logic_value_compact_string(logic_value_from_bits(value.bits, value.width()));
 }
 
 bool stream_value_has_xz(const StreamValue& value) {

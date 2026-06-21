@@ -186,10 +186,10 @@ def run_nonaxi(xdebug, fsdb):
         require(scope["meta"]["truncated"] is True, "scope.list did not truncate")
 
         v = r.query("value.at", args={"signal": "ai_complex_top.sig_a", "time": "75ns", "format": "hex"})
-        require(v["data"]["value"] == {"value": "'h22", "known": True}, "unexpected sig_a value")
+        require(v["data"]["value"]["value"] == "'h22" and v["data"]["value"]["known"] is True, "unexpected sig_a value")
         xz = r.query("value.at", args={"signal": "ai_complex_top.xz_bus", "time": "95ns", "format": "binary"})
-        require(set(xz["data"]["value"].keys()) == set(["value", "known"]), "value object is not compact")
         require(xz["data"]["value"]["known"] is False, "xz_bus should be unknown")
+        require("bits" in xz["data"]["value"] and "has_x" in xz["data"]["value"], "xz_bus lacks logic diagnostics")
         batch = r.query(
             "value.batch_at",
             args={"time": "95ns", "signals": ["ai_complex_top.sig_a", "ai_complex_top.xz_bus", "ai_complex_top.no_such"], "format": "hex"},
@@ -246,7 +246,8 @@ def run_nonaxi(xdebug, fsdb):
         require(inline["summary"]["inline"] is True and len(inline["data"]["events"]) == 1, "inline event.find failed")
         exported = r.query("event.export", args={"name": "evt0", "expr": "vld && !rdy", "time_range": {"begin": "0ns", "end": "200ns"}, "limit": 1})
         require(len(exported["data"]["events"]) == 1, "event.export limit failed")
-        require(set(exported["data"]["events"][0]["signals"]["vld"].keys()) == set(["value", "known"]), "event signal value is not compact")
+        event_vld = exported["data"]["events"][0]["signals"]["vld"]
+        require("'h" in event_vld["value"] and event_vld["known"] is True, "event signal value is not normalized")
         agg = r.query("event.export", args={"name": "evt0", "expr": "vld && !rdy", "time_range": {"begin": "0ns", "end": "200ns"}, "aggregate": {"count": True, "group_by": ["payload_lo"], "events": False}})
         require("events" not in agg["data"] and agg["data"]["aggregate"]["count"] >= 1, "event aggregate count failed")
         require(agg["data"]["aggregate"]["group_count"] >= 1, "event aggregate group failed")
@@ -257,8 +258,8 @@ def run_nonaxi(xdebug, fsdb):
         checks = r.query("verify.conditions", args={
             "time": "95ns",
             "conditions": [
-                {"signal": "ai_complex_top.sig_a", "op": "==", "value": "0x22"},
-                {"signal": "ai_complex_top.sig_b", "op": "==", "value": "0x22"},
+                {"signal": "ai_complex_top.sig_a", "op": "==", "value": "'h22"},
+                {"signal": "ai_complex_top.sig_b", "op": "==", "value": "'h22"},
                 {"signal": "ai_complex_top.xz_bus", "op": "==", "value": "0"},
             ],
         })

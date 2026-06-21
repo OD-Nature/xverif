@@ -203,7 +203,7 @@ def test_apb_vip_real_wait_state_and_error_actions(
                 "args": {
                     "name": "apb0",
                     "direction": "rd",
-                    "address": "0xf0",
+                    "address": "'hf0",
                 },
             },
             case_name="apb-vip-error-response",

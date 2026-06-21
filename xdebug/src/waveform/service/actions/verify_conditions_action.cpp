@@ -1,5 +1,6 @@
 #include "../action_handler.h"
 #include "../action_support.h"
+#include "../../value/logic_value.h"
 
 namespace xdebug_waveform {
 
@@ -26,6 +27,13 @@ public:
             get_string(cond, "signal", signal);
             get_string(cond, "op", op);
             get_string(cond, "value", expected);
+            if (op.empty()) op = "==";
+
+            LogicValue expected_value = parse_user_logic_literal(expected);
+            if (!expected_value.valid) {
+                return print_error_and_return(ctx.req, ctx.action, "VALUE_FORMAT_INVALID",
+                    expected_value.error, ctx.elapsed_ms);
+            }
 
             Json item = {{"signal", signal}, {"time", time}, {"op", op}, {"expected", expected}};
             std::string raw;
@@ -36,20 +44,23 @@ public:
                 item["pass"] = nullptr;
                 item["error"] = err;
                 unknown++;
-            } else if (contains_xz(raw) || contains_xz(expected)) {
-                item["observed"] = make_value_object(raw);
-                item["status"] = "unknown";
-                item["known"] = false;
-                item["pass"] = nullptr;
-                unknown++;
             } else {
-                bool eq = normalize_numeric(raw) == normalize_numeric(expected);
-                bool pass = (op == "!=") ? !eq : eq;
-                item["observed"] = make_value_object(raw);
-                item["status"] = pass ? "pass" : "fail";
-                item["known"] = true;
-                item["pass"] = pass;
-                if (pass) passed++; else failed++;
+                LogicValue observed = logic_value_from_fsdb_raw(raw, 'h');
+                item["observed"] = logic_value_json(observed);
+                if (logic_value_has_xz(observed) || logic_value_has_xz(expected_value)) {
+                    item["status"] = "unknown";
+                    item["known"] = false;
+                    item["pass"] = nullptr;
+                    unknown++;
+                } else {
+                    bool eq = logic_value_compare_key(observed) == logic_value_compare_key(expected_value);
+                    bool pass = (op == "!=") ? !eq : eq;
+                    item["observed"] = logic_value_json(observed);
+                    item["status"] = pass ? "pass" : "fail";
+                    item["known"] = true;
+                    item["pass"] = pass;
+                    if (pass) passed++; else failed++;
+                }
             }
             checks.push_back(item);
         }

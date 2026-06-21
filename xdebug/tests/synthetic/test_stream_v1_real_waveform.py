@@ -330,9 +330,9 @@ def test_stream_v1_real_waveform_actions(
         )
         assert first_packet["data"]["found"] is True
         assert first_packet["data"]["packet"]["packet_index"] == 0
-        assert first_packet["data"]["packet"]["stable_fields"]["opcode"]["value"] == "0xa0"
+        assert first_packet["data"]["packet"]["stable_fields"]["opcode"]["value"] == "8'ha0"
         assert first_packet["data"]["packet"]["beat_fields_preview"]["total_beats"] == 4
-        assert first_packet["data"]["packet"]["beat_fields_preview"]["head"][0]["fields"]["data"]["value"] == "0x40000000"
+        assert first_packet["data"]["packet"]["beat_fields_preview"]["head"][0]["fields"]["data"]["value"] == "32'h40000000"
 
         packet_at = _query(
             cli_runner,
@@ -353,7 +353,7 @@ def test_stream_v1_real_waveform_actions(
         )
         assert packet_at["data"]["found"] is True
         assert packet_at["data"]["packet"]["packet_index"] == 3
-        assert packet_at["data"]["packet"]["stable_fields"]["opcode"]["value"] == "0xa3"
+        assert packet_at["data"]["packet"]["stable_fields"]["opcode"]["value"] == "8'ha3"
         packet_at_xout = _query_xout(
             cli_runner,
             {
@@ -497,7 +497,7 @@ def test_stream_v1_real_waveform_actions(
             artifact_root=artifact_root,
         )
         assert len(interleaved["data"]["packets"]) == 4
-        assert {packet["channel_id"]["value"] for packet in interleaved["data"]["packets"]} == {"0x0", "0x1"}
+        assert {packet["channel_id"]["value"] for packet in interleaved["data"]["packets"]} == {"2'h0", "2'h1"}
         assert all(packet["beat_count"] == 4 for packet in interleaved["data"]["packets"])
 
         match = _query(
@@ -512,14 +512,14 @@ def test_stream_v1_real_waveform_actions(
                     "start": "0ns",
                     "end": "250us",
                     "limit": 8,
-                    "match": {"field": "low8", "op": "==", "value": "0x5a"},
+                    "match": {"field": "low8", "op": "==", "value": "8'h5a"},
                 },
             },
             case_name="stream-v1-match-field",
             artifact_root=artifact_root,
         )
         assert match["data"]["summary"]["match_count"] > 0
-        assert match["data"]["rows"][0]["fields"]["low8"]["value"] == "0x5a"
+        assert match["data"]["rows"][0]["fields"]["low8"]["value"] == "8'h5a"
         match_xout = _query_xout(
             cli_runner,
             {
@@ -532,7 +532,7 @@ def test_stream_v1_real_waveform_actions(
                     "start": "0ns",
                     "end": "250us",
                     "limit": 2,
-                    "match": {"field": "low8", "op": "==", "value": "0x5a"},
+                    "match": {"field": "low8", "op": "==", "value": "8'h5a"},
                 },
             },
             case_name="stream-v1-match-field-xout",
@@ -562,7 +562,7 @@ def test_stream_v1_real_waveform_actions(
             artifact_root=artifact_root,
         )
         assert channel["data"]["rows"]
-        assert all(row["channel_id"]["value"] == "0x3" for row in channel["data"]["rows"])
+        assert all(row["channel_id"]["value"] == "2'h3" for row in channel["data"]["rows"])
 
         transfer_out = tmp_path / "ready_stream.tsv"
         exported = _query(

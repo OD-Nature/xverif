@@ -9,7 +9,7 @@
       {
         "signal": "top.u.valid",
         "op": "==",
-        "value": "1"
+        "value": "'h1"
       }
     ],
     "time": "100ns"

@@ -1,4 +1,5 @@
 #include "action_support.h"
+#include "../value/logic_value.h"
 
 #include <algorithm>
 #include <cctype>
@@ -19,66 +20,16 @@ std::string compact_expr_ws(const std::string& expr) {
 }
 
 bool contains_xz(const std::string& value) {
-    std::string v = trim(value);
-    size_t start = 0;
-    if (v.size() >= 2 && v[0] == '0' && (v[1] == 'x' || v[1] == 'X')) {
-        start = 2;
-    } else if (v.size() >= 2 && v[0] == '\'' &&
-               (v[1] == 'h' || v[1] == 'H' || v[1] == 'b' || v[1] == 'B' ||
-                v[1] == 'd' || v[1] == 'D')) {
-        start = 2;
-    }
-    for (size_t i = start; i < v.size(); ++i) {
-        char c = v[i];
-        if (c == 'x' || c == 'X' || c == 'z' || c == 'Z') return true;
-    }
-    return false;
+    return logic_value_has_xz(logic_value_from_fsdb_raw(value, 'h'));
 }
 
 std::string normalize_numeric(std::string value) {
-    value = trim(value);
-    if (value.size() >= 2 && value[0] == '\'' && (value[1] == 'h' || value[1] == 'H')) {
-        value = "0x" + value.substr(2);
-    } else if (value.size() >= 2 && value[0] == '\'' && (value[1] == 'b' || value[1] == 'B')) {
-        value = "0b" + value.substr(2);
-    } else if (value.size() >= 2 && value[0] == '\'' && (value[1] == 'd' || value[1] == 'D')) {
-        value = value.substr(2);
-    }
-    if (value.size() > 2 && value[0] == '0' && (value[1] == 'x' || value[1] == 'X')) {
-        value = value.substr(2);
-    } else if (value.size() > 2 && value[0] == '0' && (value[1] == 'b' || value[1] == 'B')) {
-        unsigned long long n = strtoull(value.substr(2).c_str(), nullptr, 2);
-        char buf[64];
-        snprintf(buf, sizeof(buf), "%llx", n);
-        value = buf;
-    } else {
-        bool decimal = !value.empty();
-        for (char c : value) {
-            if (!std::isdigit(static_cast<unsigned char>(c))) {
-                decimal = false;
-                break;
-            }
-        }
-        if (decimal) {
-            unsigned long long n = strtoull(value.c_str(), nullptr, 10);
-            char buf[64];
-            snprintf(buf, sizeof(buf), "%llx", n);
-            value = buf;
-        }
-    }
-    std::transform(value.begin(), value.end(), value.begin(),
-                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    size_t first = value.find_first_not_of('0');
-    if (first == std::string::npos) return "0";
-    return value.substr(first);
+    LogicValue parsed = logic_value_from_fsdb_raw(value, 'h');
+    return logic_value_compare_key(parsed);
 }
 
 Json make_value_object(const std::string& raw) {
-    Json v;
-    std::string text = trim(raw);
-    v["value"] = text;
-    v["known"] = !contains_xz(text);
-    return v;
+    return logic_value_json(logic_value_from_fsdb_raw(raw, 'h'));
 }
 
 Json make_value_map(const Json& raw_map) {

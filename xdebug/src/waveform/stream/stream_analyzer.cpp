@@ -2,6 +2,7 @@
 
 #include "../server/fsdb_scan_utils.h"
 #include "../server/fsdb_value_reader.h"
+#include "../value/logic_value.h"
 
 #include "npi_fsdb.h"
 
@@ -32,18 +33,24 @@ StreamValue x_value() {
     return StreamValue{"x", false};
 }
 
-unsigned long long parse_u64(const std::string& text, bool& ok) {
-    std::string s;
-    for (char c : text) if (c != '_') s.push_back(c);
-    int base = 10;
-    const char* start = s.c_str();
-    if (s.size() > 2 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X')) {
-        base = 16;
-        start += 2;
+unsigned long long parse_user_u64(const std::string& text, bool& ok, std::string& error) {
+    LogicValue literal = parse_user_logic_literal(text);
+    if (!literal.valid) {
+        ok = false;
+        error = literal.error;
+        return 0;
     }
-    char* end = nullptr;
-    unsigned long long out = std::strtoull(start, &end, base);
-    ok = end && *end == '\0';
+    if (logic_value_has_xz(literal) || literal.bits.size() > 63) {
+        ok = false;
+        error = "match value must be a known literal up to 63 bits: " + text;
+        return 0;
+    }
+    unsigned long long out = 0;
+    for (char c : literal.bits) {
+        out <<= 1ULL;
+        if (c == '1') out |= 1ULL;
+    }
+    ok = true;
     return out;
 }
 
@@ -443,9 +450,14 @@ bool StreamAnalyzer::analyze(npiFsdbFileHandle file, const StreamConfig& config,
         bool channel_ok = options.channel_filter.empty();
         if (!options.channel_filter.empty()) {
             bool ok = false;
-            unsigned long long want = parse_u64(options.channel_filter, ok);
+            std::string parse_error;
+            unsigned long long want = parse_user_u64(options.channel_filter, ok, parse_error);
+            if (!ok) {
+                error = parse_error.empty() ? "invalid channel filter: " + options.channel_filter : parse_error;
+                return false;
+            }
             unsigned long long got = 0;
-            channel_ok = ok && value_u64(row.channel, got) && got == want;
+            channel_ok = value_u64(row.channel, got) && got == want;
         }
 
         if (row.stall) {
@@ -524,9 +536,10 @@ bool StreamAnalyzer::match_row(const StreamRow& row, const StreamMatch& match, s
     unsigned long long lhs = 0;
     if (!value_u64(*value_ptr, lhs)) return false;
     bool ok = false;
-    unsigned long long value = parse_u64(match.value, ok);
+    std::string parse_error;
+    unsigned long long value = parse_user_u64(match.value, ok, parse_error);
     if (!ok && match.op != "in_range") {
-        error = "invalid match value: " + match.value;
+        error = parse_error.empty() ? "invalid match value: " + match.value : parse_error;
         return false;
     }
     if (match.op == "==") return lhs == value;
@@ -537,19 +550,21 @@ bool StreamAnalyzer::match_row(const StreamRow& row, const StreamMatch& match, s
     if (match.op == "<=") return lhs <= value;
     if (match.op == "mask_eq") {
         bool mok = false;
-        unsigned long long mask = parse_u64(match.mask, mok);
+        std::string mask_error;
+        unsigned long long mask = parse_user_u64(match.mask, mok, mask_error);
         if (!mok) {
-            error = "invalid match mask: " + match.mask;
+            error = mask_error.empty() ? "invalid match mask: " + match.mask : mask_error;
             return false;
         }
         return (lhs & mask) == (value & mask);
     }
     if (match.op == "in_range") {
         bool lok = false, hik = false;
-        unsigned long long lo = parse_u64(match.lo, lok);
-        unsigned long long hi = parse_u64(match.hi, hik);
+        std::string lo_error, hi_error;
+        unsigned long long lo = parse_user_u64(match.lo, lok, lo_error);
+        unsigned long long hi = parse_user_u64(match.hi, hik, hi_error);
         if (!lok || !hik) {
-            error = "invalid in_range bounds";
+            error = !lo_error.empty() ? lo_error : !hi_error.empty() ? hi_error : "invalid in_range bounds";
             return false;
         }
         return lhs >= lo && lhs <= hi;

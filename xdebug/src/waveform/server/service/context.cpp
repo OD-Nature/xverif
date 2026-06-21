@@ -1,5 +1,6 @@
 #include "../server_internal.h"
 #include "session/session_types.h"
+#include "waveform/value/logic_value.h"
 
 namespace xdebug_waveform {
 
@@ -128,10 +129,7 @@ std::string json_response(const Json& j) {
 }
 
 bool contains_xz_value(const std::string& value) {
-    for (char c : value) {
-        if (c == 'x' || c == 'X' || c == 'z' || c == 'Z') return true;
-    }
-    return false;
+    return logic_value_has_xz(logic_value_from_fsdb_raw(value, 'h'));
 }
 
 std::string with_value_prefix(const std::string& value, char prefix) {
@@ -141,11 +139,7 @@ std::string with_value_prefix(const std::string& value, char prefix) {
 }
 
 Json wave_value_json(const std::string& raw, char prefix) {
-    Json v;
-    std::string text = with_value_prefix(raw, prefix);
-    v["value"] = text;
-    v["known"] = !contains_xz_value(text);
-    return v;
+    return logic_value_json(logic_value_from_fsdb_raw(raw, prefix));
 }
 
 bool stat_fsdb(long& mtime,

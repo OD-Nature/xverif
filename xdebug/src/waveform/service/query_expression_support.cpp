@@ -1,5 +1,6 @@
 #include "action_support.h"
 #include "../protocol/protocol.h"
+#include "../value/logic_value.h"
 
 #include <cctype>
 
@@ -96,8 +97,9 @@ Tri tri_or(Tri a, Tri b) {
 }
 
 Tri value_to_bool(const std::string& raw) {
-    if (contains_xz(raw)) return Tri::Unknown;
-    return normalize_numeric(raw) == "0" ? Tri::False : Tri::True;
+    LogicValue value = logic_value_from_fsdb_raw(raw, 'h');
+    if (logic_value_has_xz(value)) return Tri::Unknown;
+    return logic_value_compare_key(value) == "0" ? Tri::False : Tri::True;
 }
 
 class ExprParser {
@@ -190,8 +192,14 @@ private:
                 return Tri::Unknown;
             }
             std::string lhs_val = value_for(name);
-            if (contains_xz(lhs_val) || contains_xz(rhs)) return Tri::Unknown;
-            bool eq = normalize_numeric(lhs_val) == normalize_numeric(rhs);
+            LogicValue lhs = logic_value_from_fsdb_raw(lhs_val, 'h');
+            LogicValue rhs_value = parse_user_logic_literal(rhs);
+            if (!rhs_value.valid) {
+                ok_ = false;
+                return Tri::Unknown;
+            }
+            if (logic_value_has_xz(lhs) || logic_value_has_xz(rhs_value)) return Tri::Unknown;
+            bool eq = logic_value_compare_key(lhs) == logic_value_compare_key(rhs_value);
             return (neq ? !eq : eq) ? Tri::True : Tri::False;
         }
         return value_to_bool(value_for(name));
