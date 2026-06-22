@@ -1,6 +1,6 @@
 ---
 name: x-npi
-description: 当 Codex 需要使用 Synopsys pynpi 编写 Python 脚本，进行批量 FSDB 波形统计、值扫描、APB/AXI/valid-ready stream 协议分析，或静态设计 driver/load 查询时使用。离线大规模分析脚本和报告优先使用本 skill；xdebug 风格的实时 active-driver 根因定位或 PVC active-driver 检查不要使用本 skill。
+description: 当 AI agent 需要使用 Synopsys pynpi 编写 Python 脚本，进行批量 FSDB 波形统计、值扫描、APB/AXI/valid-ready stream 协议分析，或静态设计 driver/load 查询时使用。离线大规模分析脚本和报告优先使用本 skill；xdebug 风格的实时 active-driver 根因定位或 PVC active-driver 检查不要使用本 skill。
 ---
 
 # x-npi

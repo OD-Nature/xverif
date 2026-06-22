@@ -1,8 +1,6 @@
-.PHONY: all xdebug xbit xentry xloc xberif xcov test full-test clean xcov-test install-skill
+.PHONY: all xdebug xbit xentry xloc xberif xcov test full-test clean xcov-test install-xverif-skill install-x-npi-skill _install-agent-skill
 
 PYTHON ?= python3
-SKILL_NAME ?= xverif
-SKILL_SRC ?= skill
 
 all: xdebug xbit xentry xloc xberif xcov
 
@@ -27,7 +25,13 @@ xcov:
 xcov-test:
 	$(MAKE) -C xcov PYTHON=$(PYTHON) test
 
-install-skill:
+install-xverif-skill:
+	$(MAKE) _install-agent-skill SKILL_SRC=skills/xverif SKILL_NAME=xverif
+
+install-x-npi-skill:
+	$(MAKE) _install-agent-skill SKILL_SRC=skills/x-npi SKILL_NAME=x-npi
+
+_install-agent-skill:
 	@set -eu; \
 	src="$(SKILL_SRC)"; \
 	name="$(SKILL_NAME)"; \

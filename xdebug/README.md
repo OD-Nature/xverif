@@ -2,7 +2,7 @@
 
 xdebug 是 xtrace 与 xwave 合并后的统一调试工具。公开入口使用 JSON request 描述动作，默认输出 `xout` 结构化文本；需要机器解析、schema 校验或回归兼容时显式加 `--json` 获取原 JSON response。旧的 xtrace/xwave 人类 CLI 不再作为主路径维护。
 
-仓库内 skill source-of-truth 位于 [skill/SKILL.md](skill/SKILL.md)。更细的字段字典和 API 速查位于 [skill/references](skill/references)。
+仓库内 xverif skill source-of-truth 位于 [../skills/xverif/SKILL.md](../skills/xverif/SKILL.md)。更细的字段字典和 API 速查位于 [../skills/xverif/references](../skills/xverif/references)。
 
 Action 协议由 `ActionSpec` / `ActionRegistry` 约束。`actions` 输出来自 runtime registry，并带有 `category`、`status`、`requires`、action-specific schema 和 example 信息；`xdebug/specs/actions/actions.yaml`、`xdebug/schemas/v1/actions` 与 `xdebug/examples` 由 contract test 校验一致。所有 non-removed action 都必须有自己的 request/response schema，不能退回通用 envelope schema。
 
@@ -893,10 +893,10 @@ make -C xdebug log-test
 - [docs/JSON_API.md](docs/JSON_API.md)：JSON envelope、target、输出策略。
 - [docs/PAYLOAD_COMPACT.md](docs/PAYLOAD_COMPACT.md)：业务 payload 压缩契约。
 - [docs/AGENT_GUIDE.md](docs/AGENT_GUIDE.md)：面向 agent 的最短调试指南。
-- [skill/SKILL.md](skill/SKILL.md)：Codex skill source-of-truth。
-- [skill/references/json-api-reference.md](skill/references/json-api-reference.md)：skill 内 API 速查。
-- [skill/references/ai-response-dictionary.md](skill/references/ai-response-dictionary.md)：skill 内响应字段字典。
-- [skill/references/recipes.md](skill/references/recipes.md)：常见 debug workflow。
-- [skill/references/lsf-mcp.md](skill/references/lsf-mcp.md)：MCP LSF backend 说明。
-- [skill/references/file-transport.md](skill/references/file-transport.md)：LSF/file transport v2 说明。
-- [skill/references/rc-generate.md](skill/references/rc-generate.md)：nWave `signal.rc` 生成说明。
+- [../skills/xverif/SKILL.md](../skills/xverif/SKILL.md)：xverif agent skill source-of-truth。
+- [../skills/xverif/references/xdebug/json-api.md](../skills/xverif/references/xdebug/json-api.md)：skill 内 API 速查。
+- [../skills/xverif/references/xdebug/response-fields.md](../skills/xverif/references/xdebug/response-fields.md)：skill 内响应字段字典。
+- [../skills/xverif/references/xdebug/recipes.md](../skills/xverif/references/xdebug/recipes.md)：常见 debug workflow。
+- [../skills/xverif/references/mcp/lsf.md](../skills/xverif/references/mcp/lsf.md)：MCP LSF backend 说明。
+- [../skills/xverif/references/sdk-free-xdebug/uds-jsonl.md](../skills/xverif/references/sdk-free-xdebug/uds-jsonl.md)：SDK-free UDS/file transport 说明。
+- [../skills/xverif/references/xdebug/rc-generate.md](../skills/xverif/references/xdebug/rc-generate.md)：nWave `signal.rc` 生成说明。

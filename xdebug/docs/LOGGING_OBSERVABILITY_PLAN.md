@@ -417,9 +417,9 @@ make -C xdebug log-test
 实现完成后同步更新：
 
 - `xdebug/README.md`：日志路径、排障顺序、`log-test`。
-- `skill/SKILL.md`：agent 使用 xverif 工具和日志排障的最短路径。
-- `skill/references/xdebug/troubleshooting.md`：xdebug 原生日志路径和 bundle/doctor/tail 说明。
-- `skill/references/mcp/troubleshooting.md`、`skill/references/sdk-free-xdebug/troubleshooting.md`：
+- `skills/xverif/SKILL.md`：agent 使用 xverif 工具和日志排障的最短路径。
+- `skills/xverif/references/xdebug/troubleshooting.md`：xdebug 原生日志路径和 bundle/doctor/tail 说明。
+- `skills/xverif/references/mcp/troubleshooting.md`、`skills/xverif/references/sdk-free-xdebug/troubleshooting.md`：
   MCP / SDK-free wrapper 日志路径和 ready timeout、stdout pollution、job id 排障方式。
 - `xverif_mcp/README.md`：MCP / LSF 日志路径、ready timeout、stdout pollution、job id
   排障方式。

@@ -56,7 +56,7 @@
   - 跑 `apb_summary.py`、`axi_summary.py`、`stream_summary.py`，对比现有 xdebug APB/AXI/stream 回归输出。
   - 跑 `trace_driver_summary.py`，对比 xdebug `trace.driver/load` JSON 的 signal/source/file/line 核心字段。
 - 安装验证：
-  - `make install-skill SKILL_SRC=skills/x-npi SKILL_NAME=x-npi`。
+  - `make install-x-npi-skill`。
   - `diff -rq skills/x-npi ~/.codex/skills/x-npi` 和 `diff -rq skills/x-npi ~/.claude/skills/x-npi`。
 
 ## Assumptions
