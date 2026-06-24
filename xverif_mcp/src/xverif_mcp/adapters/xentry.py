@@ -1,17 +1,14 @@
-"""Stateless xentry adapter — deterministic entry field decoder.
-
-xentry natively supports JSON-on-stdin: just pass a JSON request string.
-No subcommand parsing needed — xentry reads {"api_version": "xentry.v1", ...}
-and dispatches internally.
-"""
+"""Stateless xentry adapter — deterministic entry field decoder."""
 from __future__ import annotations
 
-import json
 from typing import Any, Optional
 
-from xverif_mcp.runner import StatelessCliRunner
+from xverif_mcp.import_paths import ensure_tool_import_paths
 
-runner = StatelessCliRunner()
+ensure_tool_import_paths()
+
+from xentry.api import dispatch_request
+from xentry.format import error_response, to_xout
 
 
 def _xentry_request(action: str, config_path: Optional[str] = None,
@@ -30,7 +27,13 @@ def _xentry_request(action: str, config_path: Optional[str] = None,
         req["fragments"] = fragments
     if output_format == "json":
         req["output"] = {"format": "json"}
-    return runner.run_json("xentry", ["-"], json.dumps(req))
+    try:
+        payload = dispatch_request(req)
+    except Exception as exc:
+        payload = error_response(exc, action=action)
+    if output_format == "json":
+        return payload
+    return to_xout(payload)
 
 
 def entry_decode(config_path: str = "", input_path: str = "",

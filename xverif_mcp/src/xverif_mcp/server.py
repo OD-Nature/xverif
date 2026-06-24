@@ -7,6 +7,10 @@ from typing import Any, Optional
 
 from mcp.server.fastmcp import FastMCP
 
+from xverif_mcp.import_paths import ensure_tool_import_paths
+
+ensure_tool_import_paths()
+
 from xverif_mcp.adapters.xdebug import XverifDebugAdapter
 from xverif_mcp.adapters.xcov import XverifCoverageAdapter
 from xverif_mcp.adapters.xbit import bit_conv, bit_eval, bit_slice, bit_check
@@ -28,7 +32,7 @@ xverif-mcp — https://github.com/BLANK2077/xverif
 
 Exposes deterministic local tools for chip verification debug agents.
 The xdebug and xcov backends are stateful and may run locally or through LSF.
-Other tools (xbit, xentry, xloc, xberif, xsva) are stateless CLI adapters.
+Other tools (xbit, xentry, xloc, xberif, xsva) are stateless in-process adapters.
 
 Typical workflow:
 1. Call xverif_tools to discover available tools.
@@ -477,7 +481,7 @@ def xverif_cov_query(
 
 
 # ---------------------------------------------------------------------------
-# Bit tools (xbit — stateless CLI adapter)
+# Bit tools (xbit - stateless in-process adapter)
 # ---------------------------------------------------------------------------
 
 
@@ -551,7 +555,7 @@ def xverif_bit_check(expr: str, vars: Optional[dict] = None,
 
 
 # ---------------------------------------------------------------------------
-# Entry tools (xentry — stateless CLI adapter)
+# Entry tools (xentry - stateless in-process adapter)
 # ---------------------------------------------------------------------------
 
 
@@ -619,7 +623,7 @@ def xverif_entry_validate(config_path: Optional[str] = None,
 
 
 # ---------------------------------------------------------------------------
-# Location tools (xloc — stateless CLI adapter)
+# Location tools (xloc - stateless in-process adapter)
 # ---------------------------------------------------------------------------
 
 
@@ -682,7 +686,7 @@ def xverif_loc_annotate(log_path: str, map_path: Optional[str] = None,
 
 
 # ---------------------------------------------------------------------------
-# Context tools (xberif — stateless CLI adapter)
+# Context tools (xberif - stateless in-process adapter)
 # ---------------------------------------------------------------------------
 
 
@@ -767,7 +771,7 @@ def xverif_context_repair_index(project_root: Optional[str] = None) -> Any:
 
 
 # ---------------------------------------------------------------------------
-# SVA tools (xsva — stateless CLI adapter)
+# SVA tools (xsva - stateless in-process adapter)
 # ---------------------------------------------------------------------------
 
 

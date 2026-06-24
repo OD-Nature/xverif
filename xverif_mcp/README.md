@@ -4,7 +4,7 @@
 
 - **xdebug**：stateful backend，通过 `tools/xdebug --stdio-loop` 提供设计/波形查询能力，支持 direct/LSF 模式。
 - **xcov**：stateful backend，通过 `tools/xcov --stdio-loop` 提供 VCS/Verdi coverage database 查询能力，支持 direct/LSF 模式。
-- **xbit / xentry / xloc / xberif / xsva**：stateless CLI adapter，每次调用短生命周期 subprocess。
+- **xbit / xentry / xloc / xberif / xsva**：stateless in-process adapter，由 MCP server 直接 import 对应 Python API。
 
 xdebug/xcov direct 和 LSF 共用 stdio-loop session manager，只在 `Launcher` 层分离。每 session 独立进程，同 session 串行（request_lock），多 session 可并行。
 
@@ -223,8 +223,8 @@ AI MCP client
        -> McpSessionManager
        -> DirectLauncher:  tools/xcov --stdio-loop  (direct)
        -> LsfLauncher:     bsub -I tools/xcov --stdio-loop  (LSF)
-  -> StatelessCliRunner (xbit/xentry/xloc/xberif/xsva)
-       -> tools/<tool> --json ...
+  -> In-process adapters (xbit/xentry/xloc/xberif/xsva)
+       -> import corresponding Python APIs in the MCP server process
 ```
 
 非 MCP wrapper 链路：
