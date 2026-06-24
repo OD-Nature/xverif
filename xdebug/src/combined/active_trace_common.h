@@ -173,4 +173,114 @@ inline std::string driver_text(npiHandle h, const std::string& kind) {
     return raw.empty() ? "(" + kind + ")" : raw;
 }
 
+struct PortConnectionInfo {
+    bool found_port = false;
+    bool is_input_like = false;
+    std::string instance_path;
+    std::string port_name;
+    std::string target_signal;
+};
+
+inline bool is_input_like_direction(int dir) {
+    return dir == npiInput || dir == npiInout;
+}
+
+inline std::vector<std::string> split_hier_name(const std::string& path) {
+    std::vector<std::string> parts;
+    std::string current;
+    for (char ch : path) {
+        if (ch == '.') {
+            if (!current.empty()) {
+                parts.push_back(current);
+                current.clear();
+            }
+        } else {
+            current += ch;
+        }
+    }
+    if (!current.empty()) parts.push_back(current);
+    return parts;
+}
+
+inline std::string join_hier_name(const std::vector<std::string>& parts,
+                                  size_t begin,
+                                  size_t end) {
+    std::string out;
+    for (size_t i = begin; i < end && i < parts.size(); ++i) {
+        if (!out.empty()) out += ".";
+        out += parts[i];
+    }
+    return out;
+}
+
+inline PortConnectionInfo resolve_input_port_connection(const std::string& signal_name) {
+    PortConnectionInfo info;
+    auto parts = split_hier_name(signal_name);
+    if (parts.size() < 2) return info;
+
+    for (size_t inst_end = parts.size() - 1; inst_end >= 1; --inst_end) {
+        std::string inst_path = join_hier_name(parts, 0, inst_end);
+        std::string port_name = parts[inst_end];
+
+        npiHandle inst = npi_handle_by_name(inst_path.c_str(), nullptr);
+        if (!inst) {
+            if (inst_end == 1) break;
+            continue;
+        }
+
+        int inst_type = npi_get(npiType, inst);
+        if (inst_type != npiModule && inst_type != npiInterface &&
+            inst_type != npiInterfaceArray) {
+            npi_release_handle(inst);
+            if (inst_end == 1) break;
+            continue;
+        }
+
+        npiHandle port_iter = npi_iterate(npiPort, inst);
+        if (!port_iter) {
+            npi_release_handle(inst);
+            if (inst_end == 1) break;
+            continue;
+        }
+
+        npiHandle port;
+        while ((port = npi_scan(port_iter)) != nullptr) {
+            std::string pname = npi_string(npiName, port);
+            if (pname != port_name) {
+                npi_release_handle(port);
+                continue;
+            }
+
+            info.found_port = true;
+            info.instance_path = inst_path;
+            info.port_name = port_name;
+            info.is_input_like = is_input_like_direction(npi_get(npiDirection, port));
+
+            if (info.is_input_like) {
+                npiHandle high = npi_handle(npiHighConn, port);
+                if (high) {
+                    std::string high_name = npi_string(npiFullName, high);
+                    if (!high_name.empty()) {
+                        std::string resolved = high_name;
+                        for (size_t i = inst_end + 1; i < parts.size(); ++i) {
+                            resolved += "." + parts[i];
+                        }
+                        if (resolved != signal_name) info.target_signal = resolved;
+                    }
+                    npi_release_handle(high);
+                }
+            }
+
+            npi_release_handle(port);
+            break;
+        }
+
+        npi_release_handle(port_iter);
+        npi_release_handle(inst);
+        if (info.found_port) break;
+        if (inst_end == 1) break;
+    }
+    return info;
+}
+
 } // namespace xdebug

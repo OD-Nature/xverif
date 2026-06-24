@@ -34,7 +34,7 @@ bool is_alias_kind(const std::string& kind) {
 bool is_primary_input(npiHandle signal_hdl) {
     if (!signal_hdl) return false;
     int dir = npi_get(npiDirection, signal_hdl);
-    return dir == npiInput || dir == npiInout;
+    return is_input_like_direction(dir);
 }
 
 bool is_ref_obj_type(int type) {
@@ -812,6 +812,7 @@ TraceBuildResult build_active_trace(
         }
 
         int signal_type = npi_get(npiType, signal_hdl.get());
+        PortConnectionInfo input_port = resolve_input_port_connection(current.signal);
 
         // Run active trace driver at this time
         actTrcRes_t active = {};
@@ -827,6 +828,7 @@ TraceBuildResult build_active_trace(
         }
 
         if (active_count == 0) {
+            std::string active_time = active.activeTime.empty() ? current.time : active.activeTime;
             // No active driver found.  Check if this is an alias-type signal
             // that can be resolved through the design hierarchy.
             std::string alias_kind_str = statement_kind(signal_type);
@@ -871,18 +873,64 @@ TraceBuildResult build_active_trace(
                 }
             }
 
-            // Terminal: primary input, constant, or truly unresolved
-                        if (result.node_count == 0) {
-                result.termination = "unresolved";
+            if (input_port.is_input_like && !input_port.target_signal.empty()) {
+                std::string target = input_port.target_signal;
+                if (visited.find(vkey(target, active_time)) == visited.end() &&
+                    current.depth < limits.max_depth) {
+                    visited.insert(vkey(target, active_time));
+                    std::string nid = "n" + std::to_string(result.node_count);
+                    TraceNode port_node;
+                    port_node.id = nid;
+                    port_node.role = "alias";
+                    port_node.kind = "port_boundary";
+                    port_node.signal = current.signal;
+                    port_node.active_time = active_time;
+                    port_node.next_signal = target;
+                    port_node.alias_kind = "module_port";
+                    result.nodes.push_back(port_node);
+                    result.selected_path.push_back(nid);
+                    result.node_count++;
+                    if (!current.parent_id.empty()) {
+                        result.edges.push_back({
+                            current.parent_id,
+                            nid,
+                            current.parent_relation.empty() ? "rhs_dependency" : current.parent_relation,
+                            current.parent_confidence.empty() ? "high" : current.parent_confidence
+                        });
+                    }
+                    queue.push_back({
+                        target,
+                        active_time,
+                        current.depth + 1,
+                        nid,
+                        "port_connection",
+                        "high"
+                    });
+                    continue;
+                }
+                if (visited.find(vkey(target, active_time)) != visited.end()) {
+                    result.limitations.push_back("cycle detected: " + current.signal + " → " + target);
+                } else {
+                    result.truncated = true;
+                    result.termination = "limit";
+                    result.limitations.push_back("trace truncated by limits.max_depth at signal " + current.signal);
+                    break;
+                }
+            }
+
+            const bool is_external_input_boundary =
+                input_port.is_input_like && input_port.target_signal.empty();
+            if (!is_external_input_boundary) {
                 result.limitations.push_back("active trace returned no driver evidence for " + current.signal);
             }
+
             std::string nid = "n" + std::to_string(result.node_count);
             TraceNode terminal_node;
             terminal_node.id = nid;
             terminal_node.role = "root";
-            terminal_node.kind = "primary_input";
+            terminal_node.kind = is_external_input_boundary ? "primary_input" : "unknown";
             terminal_node.signal = current.signal;
-            terminal_node.active_time = current.time;
+            terminal_node.active_time = active_time;
             terminal_node.alias_kind = "none";
             result.nodes.push_back(terminal_node);
             result.selected_path.push_back(nid);
@@ -895,11 +943,13 @@ TraceBuildResult build_active_trace(
                     current.parent_confidence.empty() ? "high" : current.parent_confidence
                 });
             }
-            if (result.root_driver.is_null()) {
+            if (is_external_input_boundary && result.root_driver.is_null()) {
                 result.root_driver = {{"kind", "primary_input"}, {"file", ""}, {"line", 0}};
             }
-            if (result.termination == "unresolved") {
+            if (is_external_input_boundary && result.termination == "unresolved") {
                 result.termination = "primary_input";
+            } else if (!is_external_input_boundary) {
+                result.termination = "unresolved";
             }
             continue;
         }
@@ -944,6 +994,15 @@ TraceBuildResult build_active_trace(
 
             TraceNode node = trace_node_from_statement(
                 stmt, node_id, role, active.activeTime, current.signal, node_value);
+            if ((kind == "assignment" || kind == "port_boundary") &&
+                input_port.is_input_like &&
+                !input_port.target_signal.empty()) {
+                node.next_signal = input_port.target_signal;
+                if (std::find(node.signals.begin(), node.signals.end(),
+                              input_port.target_signal) == node.signals.end()) {
+                    node.signals.push_back(input_port.target_signal);
+                }
+            }
             result.nodes.push_back(node);
             result.selected_path.push_back(node_id);
             result.node_count++;
@@ -976,9 +1035,11 @@ TraceBuildResult build_active_trace(
                     // Pass-through: check if we should recurse.
                     // Stop at primary inputs (module boundary).
                     bool next_is_input = false;
+                    PortConnectionInfo next_port = resolve_input_port_connection(next);
+                    next_is_input = next_port.is_input_like;
                     npiHandle next_hdl = npi_handle_by_name(next.c_str(), nullptr);
                     if (next_hdl) {
-                        next_is_input = is_primary_input(next_hdl);
+                        next_is_input = next_is_input || is_primary_input(next_hdl);
                         npi_release_handle(next_hdl);
                     }
                     if (next_is_input) {
@@ -1041,8 +1102,33 @@ TraceBuildResult build_active_trace(
                 // assignment that led us here, not the port itself.
                 if (kind == "port_boundary" && stmt.useHdl) {
                     int pdir = npi_get(npiDirection, stmt.useHdl);
+                    if (is_input_like_direction(pdir) &&
+                        input_port.is_input_like &&
+                        !input_port.target_signal.empty()) {
+                        std::string target = input_port.target_signal;
+                        std::string next_time = active.activeTime.empty() ? current.time : active.activeTime;
+                        if (visited.find(vkey(target, next_time)) == visited.end() &&
+                            current.depth < limits.max_depth) {
+                            visited.insert(vkey(target, next_time));
+                            queue.push_back({
+                                target,
+                                next_time,
+                                current.depth + 1,
+                                node_id,
+                                "port_connection",
+                                "high"
+                            });
+                            continue;
+                        }
+                    }
                     if (pdir == npiInput) {
-                        if (result.termination == "unresolved") {
+                        if (input_port.is_input_like &&
+                            input_port.target_signal.empty() &&
+                            current.parent_id.empty() &&
+                            result.root_driver.is_null()) {
+                            result.termination = "primary_input";
+                            result.root_driver = {{"kind", "primary_input"}, {"file", ""}, {"line", 0}};
+                        } else if (result.termination == "unresolved") {
                             result.termination = "assignment";
                         }
                         // Don't override root_driver if already set by a

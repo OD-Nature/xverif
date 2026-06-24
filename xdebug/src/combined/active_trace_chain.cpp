@@ -69,11 +69,22 @@ Decision decide_next(npiFsdbFileHandle fsdb,
                       const std::string& clk_period,
                       const std::vector<std::string>& data_signals,
                       const std::string& driver_kind,
+                      bool current_is_primary_input,
                       ChainStats& stats) {
     Decision d;
 
     if (driver_kind == "force") { d.stop = true; d.reason = "force"; return d; }
-    if (data_signals.empty())   { d.stop = true; d.reason = "primary_input"; return d; }
+    if (data_signals.empty()) {
+        d.stop = true;
+        if (driver_kind.empty() || driver_kind == "unresolved" ||
+            driver_kind == "other" || driver_kind == "port_boundary" ||
+            driver_kind == "modport_port" || driver_kind == "ref_obj") {
+            d.reason = current_is_primary_input ? "primary_input" : "unresolved";
+        } else {
+            d.reason = "primary_input";
+        }
+        return d;
+    }
 
     if (data_signals.size() == 1) {
         d.next_signal = data_signals[0];
@@ -143,6 +154,7 @@ ChainResult build_chain(npiFsdbFileHandle fsdb,
             result.limitations.push_back("signal not found: " + cur_sig);
             break;
         }
+        PortConnectionInfo input_port = resolve_input_port_connection(cur_sig);
 
         actTrcRes_t active = {};
         result.stats.calls++;
@@ -159,6 +171,43 @@ ChainResult build_chain(npiFsdbFileHandle fsdb,
         if (temporal) result.stats.temporal_boundaries++;
 
         std::string active_time = active.activeTime.empty() ? cur_time : active.activeTime;
+
+        if (rc == 0) {
+            std::string raw_val = fsdb_value_at(fsdb, cur_sig, active_time);
+            ChainNode node;
+            node.index = static_cast<int>(result.chain.size());
+            node.signal = cur_sig;
+            node.time = cur_time;
+            node.active_time = active_time;
+            node.value_str = format_value(raw_val);
+            node.value_known = raw_val.find_first_of("xXzZ") == std::string::npos;
+            node.driver_kind = "unresolved";
+            node.driver = "(no driver)";
+
+            if (input_port.is_input_like && !input_port.target_signal.empty()) {
+                node.hop = temporal ? "⏱" : "→";
+                node.next = input_port.target_signal;
+                result.chain.push_back(node);
+                if (visited.count(vkey(input_port.target_signal, active_time))) {
+                    result.termination = "loop_detected";
+                    result.limitations.push_back("loop: " + cur_sig + " -> " + input_port.target_signal);
+                    break;
+                }
+                visited.insert(vkey(input_port.target_signal, active_time));
+                cur_sig = input_port.target_signal;
+                cur_time = active_time;
+                depth++;
+                continue;
+            }
+
+            node.hop = "■";
+            result.termination = input_port.is_input_like ? "primary_input" : "unresolved";
+            if (!input_port.is_input_like) {
+                result.limitations.push_back("active trace returned no driver evidence for " + cur_sig);
+            }
+            result.chain.push_back(node);
+            break;
+        }
 
         // ── classify ──
         std::string best_kind, best_driver, best_file;
@@ -185,6 +234,10 @@ ChainResult build_chain(npiFsdbFileHandle fsdb,
         std::vector<std::string> data_signals;
         for (auto& s : all_signals)
             if (s != cur_sig) data_signals.push_back(s);
+        if (input_port.is_input_like && !input_port.target_signal.empty()) {
+            data_signals.clear();
+            data_signals.push_back(input_port.target_signal);
+        }
 
         std::string raw_val = fsdb_value_at(fsdb, cur_sig, active_time);
         std::string val_disp = format_value(raw_val);
@@ -192,7 +245,9 @@ ChainResult build_chain(npiFsdbFileHandle fsdb,
 
         // ── decide ──
         Decision d = decide_next(fsdb, cur_sig, cur_time, clk_period,
-                                  data_signals, best_kind, result.stats);
+                                  data_signals, best_kind,
+                                  input_port.is_input_like && input_port.target_signal.empty(),
+                                  result.stats);
 
         // ── record node ──
         ChainNode node;
