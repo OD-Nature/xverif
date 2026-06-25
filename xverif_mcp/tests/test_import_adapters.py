@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import importlib
+import sys
 from pathlib import Path
 
 
@@ -48,3 +50,13 @@ def test_stateless_adapters_do_not_use_cli_runner(monkeypatch):
                    output_format="json")
     assert sva["ok"] is True
     assert sva["items"][0]["name"] == "p_simple"
+
+
+def test_xberif_status_fallback_when_pathspec_missing(monkeypatch, tmp_path):
+    monkeypatch.setitem(sys.modules, "pathspec", None)
+    module = importlib.reload(importlib.import_module("xverif_mcp.adapters.xberif"))
+
+    status = module.context_status(project_root=str(tmp_path), output_format="json")
+
+    assert status["schema_version"] == "xberif.status.v1"
+    assert status["state"] == "not_configured"
