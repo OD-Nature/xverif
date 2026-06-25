@@ -41,9 +41,9 @@ bool env_debug_enabled() {
 
 int session_start_timeout_sec() {
     const char* env = getenv("XDEBUG_WAVEFORM_SESSION_START_TIMEOUT_SEC");
-    if (!env || env[0] == '\0') return 60;
+    if (!env || env[0] == '\0') return 180;
     int value = atoi(env);
-    return value > 0 ? value : 60;
+    return value > 0 ? value : 180;
 }
 
 std::string default_transport_from_env() {

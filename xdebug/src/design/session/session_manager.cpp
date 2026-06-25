@@ -283,14 +283,14 @@ bool SessionManager::parse_open_args(const std::vector<std::string>& args,
 WaitForServerResult SessionManager::wait_for_server(const std::string& session_id, pid_t pid) {
     WaitForServerResult result;
 
-    int timeout_sec = 60;
+    int timeout_sec = 180;
     const char* env = getenv("XDEBUG_DESIGN_SESSION_START_TIMEOUT_SEC");
     if (env && *env) {
         int v = atoi(env);
         if (v > 0) timeout_sec = v;
     }
     int loops = timeout_sec * 10;
-    if (loops <= 0) loops = 600;
+    if (loops <= 0) loops = 1800;
     debug_log("wait_for_server: session=%s pid=%d timeout_sec=%d",
               session_id.c_str(), pid, timeout_sec);
     xdebug_core::log_lifecycle_event("design", session_id, "wait_for_server.begin", true,
