@@ -48,6 +48,9 @@ struct ChainResult {
     std::vector<BranchEvidence> branch_evidence;
     std::vector<std::string> limitations;
     std::string termination = "unresolved";
+    std::string evidence_source;
+    int static_candidate_count = 0;
+    int active_check_count = 0;
     ChainStats stats;
     bool truncated = false;
 };
@@ -156,14 +159,21 @@ ChainResult build_chain(npiFsdbFileHandle fsdb,
         }
         PortConnectionInfo input_port = resolve_input_port_connection(cur_sig);
 
-        actTrcRes_t active = {};
         result.stats.calls++;
-        int rc = npi_active_trace_driver_by_hdl(hdl.get(), active, cur_time.c_str(), opt);
-        if (rc < 0) {
-            result.termination = "active_trace_failed";
-            result.limitations.push_back(
-                "npi_active_trace_driver_by_hdl error " + std::to_string(rc)
-                + " for " + cur_sig);
+        ActiveTraceResolveResult resolved = resolve_active_driver_precise(
+            fsdb, hdl.get(), cur_sig, cur_time, opt);
+        actTrcRes_t active = resolved.active;
+        int rc = resolved.count;
+        for (const auto& limitation : resolved.limitations) {
+            result.limitations.push_back(limitation);
+        }
+        if (depth == 0) {
+            result.evidence_source = resolved.evidence_source;
+            result.static_candidate_count = resolved.static_candidate_count;
+            result.active_check_count = resolved.active_check_count;
+        }
+        if (resolved.ambiguous) {
+            result.termination = "ambiguous";
             break;
         }
 
@@ -213,6 +223,7 @@ ChainResult build_chain(npiFsdbFileHandle fsdb,
         std::string best_kind, best_driver, best_file;
         int best_line = 0;
         std::vector<std::string> all_signals;
+        std::vector<std::string> best_data_signals;
 
         for (auto& stmt : active.drvLoadStmtVec) {
             int type = stmt.useHdl ? npi_get(npiType, stmt.useHdl) : 0;
@@ -222,6 +233,11 @@ ChainResult build_chain(npiFsdbFileHandle fsdb,
                 best_driver = driver_text(stmt.useHdl, kind);
                 best_file = npi_string(npiFile, stmt.useHdl);
                 best_line = stmt.useHdl ? npi_get(npiLineNo, stmt.useHdl) : 0;
+                best_data_signals.clear();
+                for (auto& sh : stmt.sigHdlVec) {
+                    std::string n = npi_string(npiFullName, sh);
+                    if (!n.empty()) best_data_signals.push_back(n);
+                }
             }
             for (auto& sh : stmt.sigHdlVec) {
                 std::string n = npi_string(npiFullName, sh);
@@ -230,9 +246,17 @@ ChainResult build_chain(npiFsdbFileHandle fsdb,
         }
         std::sort(all_signals.begin(), all_signals.end());
         all_signals.erase(std::unique(all_signals.begin(), all_signals.end()), all_signals.end());
+        std::sort(best_data_signals.begin(), best_data_signals.end());
+        best_data_signals.erase(std::unique(best_data_signals.begin(), best_data_signals.end()),
+                                best_data_signals.end());
 
         std::vector<std::string> data_signals;
-        for (auto& s : all_signals)
+        const bool best_is_assignment =
+            best_kind == "assignment" || best_kind == "force";
+        const std::vector<std::string>& source_signals =
+            best_is_assignment && !best_data_signals.empty()
+                ? best_data_signals : all_signals;
+        for (auto& s : source_signals)
             if (s != cur_sig) data_signals.push_back(s);
         if (input_port.is_input_like && !input_port.target_signal.empty()) {
             data_signals.clear();
@@ -326,6 +350,9 @@ Json chain_to_json(const ChainResult& r) {
 
     Json data; data["chain"] = arr; data["branch_evidence"] = be;
     data["stats"] = st; data["limitations"] = r.limitations;
+    data["evidence_source"] = r.evidence_source.empty() ? Json(nullptr) : Json(r.evidence_source);
+    data["static_candidate_count"] = r.static_candidate_count;
+    data["active_check_count"] = r.active_check_count;
     data["truncated"] = r.truncated;
     return data;
 }
@@ -423,6 +450,9 @@ Json ActiveTraceChainService::run(const Json& request, const Json& target) const
         {"signal", signal}, {"start_time", req_time},
         {"chain_length", static_cast<int>(result.chain.size())},
         {"termination", result.termination},
+        {"evidence_source", result.evidence_source.empty() ? Json(nullptr) : Json(result.evidence_source)},
+        {"static_candidate_count", result.static_candidate_count},
+        {"active_check_count", result.active_check_count},
         {"temporal_boundaries", result.stats.temporal_boundaries}
     };
     resp["data"] = chain_to_json(result);
@@ -465,6 +495,10 @@ nlohmann::ordered_json ActiveTraceChainService::run_engine(const Json& request,
     resp["start_time"] = req_time;
     resp["chain_length"] = static_cast<int>(result.chain.size());
     resp["termination"] = result.termination;
+    resp["evidence_source"] = result.evidence_source.empty()
+        ? nlohmann::ordered_json(nullptr) : nlohmann::ordered_json(result.evidence_source);
+    resp["static_candidate_count"] = result.static_candidate_count;
+    resp["active_check_count"] = result.active_check_count;
     resp["temporal_boundaries"] = result.stats.temporal_boundaries;
     resp["chain"] = chain_to_json(result);
     resp["text"] = chain_to_xout(signal, req_time, result);

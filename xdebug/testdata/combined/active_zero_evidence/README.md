@@ -8,8 +8,8 @@ The fixture is intentionally not an undriven-net test.  It covers:
 - a module output driven by a single `bufif1` primitive, where
   `trace.active_driver_chain` must not turn no data dependency into
   `primary_input`;
-- an `output reg` driven by `deq_vld <= deq_vld_cb`, where
-  `deq_vld_cb` is `|port_arb_rr_grant_r`, matching the reduction-OR shape
+- an `output reg` driven by `sample_flag <= sample_flag_expr`, where
+  `sample_flag_expr` is `|sample_vec_q`, matching the reduction-OR shape
   that can produce native zero-result evidence for the output flop.
 - a direct query on a child module input port connected to a parent signal,
   which must follow the parent connection instead of stopping as

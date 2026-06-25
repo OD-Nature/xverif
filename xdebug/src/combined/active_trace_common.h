@@ -9,9 +9,11 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <fcntl.h>
+#include <iomanip>
 #include <sstream>
 #include <string>
 #include <unistd.h>
@@ -163,6 +165,33 @@ inline std::string format_value(const std::string& raw) {
     return ss.str();
 }
 
+inline bool nearly_integer(double value) {
+    return std::fabs(value - std::round(value)) < 1e-9;
+}
+
+inline std::string format_number_for_time(double value) {
+    std::ostringstream ss;
+    if (nearly_integer(value)) {
+        ss << static_cast<long long>(std::llround(value));
+    } else {
+        ss << std::setprecision(15) << value;
+    }
+    return ss.str();
+}
+
+inline std::string fsdb_time_to_precise_text(npiFsdbFileHandle fsdb,
+                                             npiFsdbTime time) {
+    double ns = 0.0;
+    if (npi_fsdb_convert_time_out(fsdb, time, "ns", ns) && nearly_integer(ns)) {
+        return format_number_for_time(ns) + "ns";
+    }
+    double ps = 0.0;
+    if (npi_fsdb_convert_time_out(fsdb, time, "ps", ps)) {
+        return format_number_for_time(ps) + "ps";
+    }
+    return "";
+}
+
 inline std::string driver_text(npiHandle h, const std::string& kind) {
     if (!h) return "(primary input)";
     std::string raw = handle_info(h);
@@ -171,6 +200,111 @@ inline std::string driver_text(npiHandle h, const std::string& kind) {
     size_t brace = raw.rfind(" {");
     if (brace != std::string::npos) raw = raw.substr(0, brace);
     return raw.empty() ? "(" + kind + ")" : raw;
+}
+
+struct ActiveTraceResolveResult {
+    actTrcRes_t active;
+    int count = 0;
+    bool precise_time_found = false;
+    bool ambiguous = false;
+    std::string active_time;
+    std::string evidence_source = "fsdb_precise_time_static_trace";
+    int static_candidate_count = 0;
+    int active_check_count = 0;
+    std::vector<std::string> limitations;
+};
+
+inline bool previous_fsdb_change_time(npiFsdbFileHandle fsdb,
+                                      const std::string& signal_name,
+                                      const std::string& requested_time,
+                                      std::string& precise_time,
+                                      npiFsdbTime& precise_fsdb_time) {
+    if (!fsdb) return false;
+    double value = 0.0;
+    std::string unit;
+    if (!parse_time(requested_time, value, unit)) return false;
+
+    npiFsdbTime requested_fsdb_time = 0;
+    if (!npi_fsdb_convert_time_in(fsdb, value, unit.c_str(), requested_fsdb_time)) {
+        return false;
+    }
+
+    npiFsdbSigHandle signal = npi_fsdb_sig_by_name(fsdb, signal_name.c_str(), nullptr);
+    if (!signal) return false;
+
+    npiFsdbVctHandle vct = npi_fsdb_create_vct(signal);
+    if (!vct) return false;
+
+    bool ok = false;
+    if (npi_fsdb_goto_time(vct, requested_fsdb_time) &&
+        npi_fsdb_vct_time(vct, &precise_fsdb_time)) {
+        precise_time = fsdb_time_to_precise_text(fsdb, precise_fsdb_time);
+        ok = !precise_time.empty();
+    }
+    npi_fsdb_release_vct(vct);
+    return ok;
+}
+
+inline bool is_assignment_like_statement(const drvLoadStmt_s& stmt) {
+    int type = stmt.useHdl ? npi_get(npiType, stmt.useHdl) : 0;
+    std::string kind = statement_kind(type);
+    return kind == "assignment" || kind == "force";
+}
+
+inline ActiveTraceResolveResult resolve_active_driver_precise(
+    npiFsdbFileHandle fsdb,
+    npiHandle signal_hdl,
+    const std::string& signal_name,
+    const std::string& requested_time,
+    const trcOption_t& options) {
+    ActiveTraceResolveResult result;
+
+    npiFsdbTime precise_fsdb_time = 0;
+    if (!previous_fsdb_change_time(
+            fsdb, signal_name, requested_time, result.active_time, precise_fsdb_time)) {
+        result.limitations.push_back(
+            "could not locate precise FSDB value-change time for " + signal_name);
+        return result;
+    }
+    result.precise_time_found = true;
+    result.active.activeTime = result.active_time;
+    result.active.isForce = false;
+
+    drvLoadStmtVec_t candidates;
+    int static_rc = signal_hdl
+        ? npi_trace_driver_by_hdl2(signal_hdl, candidates, true, nullptr, options)
+        : 0;
+    result.static_candidate_count = static_rc > 0
+        ? static_cast<int>(candidates.size()) : 0;
+    if (static_rc <= 0 || candidates.empty()) {
+        result.limitations.push_back(
+            "static driver trace returned no candidates for " + signal_name);
+        return result;
+    }
+
+    int active_assignment_count = 0;
+    for (const auto& candidate : candidates) {
+        if (!candidate.useHdl) continue;
+        int active_rc = npi_check_active_handle(candidate.useHdl, result.active_time.c_str());
+        if (active_rc != 1) continue;
+        result.active.drvLoadStmtVec.push_back(candidate);
+        result.active_check_count++;
+        if (is_assignment_like_statement(candidate)) active_assignment_count++;
+    }
+
+    result.count = static_cast<int>(result.active.drvLoadStmtVec.size());
+    if (result.count == 0) {
+        result.limitations.push_back(
+            "no static driver candidate is active at precise FSDB time " + result.active_time +
+            " for " + signal_name);
+    }
+    if (active_assignment_count > 1) {
+        result.ambiguous = true;
+        result.limitations.push_back(
+            "multiple active assignment candidates at precise FSDB time " + result.active_time +
+            " for " + signal_name);
+    }
+    return result;
 }
 
 struct PortConnectionInfo {

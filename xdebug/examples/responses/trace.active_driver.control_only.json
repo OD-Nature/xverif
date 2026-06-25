@@ -17,6 +17,9 @@
     "requested_time": "100ns",
     "active_time": "100ns",
     "driver_status": "control_only",
+    "evidence_source": "fsdb_precise_time_static_trace",
+    "static_candidate_count": 1,
+    "active_check_count": 1,
     "statement_count": 1,
     "trace_node_count": 1,
     "root_driver": {
@@ -49,6 +52,9 @@
       "active": {}
     },
     "alias_candidates": [],
+    "evidence_source": "fsdb_precise_time_static_trace",
+    "static_candidate_count": 1,
+    "active_check_count": 1,
     "limitations": [
       "control context confirmed but NPI active evidence did not confirm specific assignment"
     ]

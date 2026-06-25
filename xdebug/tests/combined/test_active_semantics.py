@@ -180,7 +180,8 @@ def test_active_trace_semantic_branches_and_gates(
 
         en_hold = active_driver("active_semantics_tb.u_dut.q_en", "26ns")
         assert en_hold["data"]["root_driver"]["line"] == marker_lines["ENABLE_Q_EN_DATA"]
-        assert en_hold["summary"]["active_time"] == "15.0n"
+        assert en_hold["summary"]["active_time"] == "15ns"
+        assert en_hold["summary"]["evidence_source"] == "fsdb_precise_time_static_trace"
         assert en_hold["data"]["root_driver"]["line"] != marker_lines["HOLD_Q_EN"]
 
         handshake_hold = active_driver(
@@ -190,7 +191,7 @@ def test_active_trace_semantic_branches_and_gates(
             handshake_hold["data"]["root_driver"]["line"]
             == marker_lines["HANDSHAKE_PAYLOAD"]
         )
-        assert handshake_hold["summary"]["active_time"] == "15.0n"
+        assert handshake_hold["summary"]["active_time"] == "15ns"
 
         handshake_payload = active_driver(
             "active_semantics_tb.u_dut.handshake_q", "36ns"
@@ -199,7 +200,7 @@ def test_active_trace_semantic_branches_and_gates(
             handshake_payload["data"]["root_driver"]["line"]
             == marker_lines["HANDSHAKE_PAYLOAD"]
         )
-        assert handshake_payload["summary"]["active_time"] == "35.0n"
+        assert handshake_payload["summary"]["active_time"] == "35ns"
 
         arbiter_winner_1 = active_driver("active_semantics_tb.u_dut.arb_q", "26ns")
         assert (

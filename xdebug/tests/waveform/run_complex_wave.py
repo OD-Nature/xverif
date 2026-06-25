@@ -34,6 +34,7 @@ AXI_SIM_LOG = os.path.join(
     "axi_multi_id_test",
     "sim.log",
 )
+DEFAULT_QUERY_TIMEOUT_MS = int(os.environ.get("XDEBUG_QUERY_TIMEOUT_MS", "120000"))
 
 
 def run_cmd(cmd, cwd=None, env=None, timeout=120, input_text=None):
@@ -237,12 +238,14 @@ class AiRunner(object):
             req["target"] = {"session_id": self.sid}
         elif not allow_no_sid:
             raise AssertionError("session must be opened before stateful query")
-        if limits is not None:
-            req["limits"] = limits
+        request_limits = dict(limits or {})
+        request_limits.setdefault("timeout_ms", DEFAULT_QUERY_TIMEOUT_MS)
+        req["limits"] = request_limits
 
         start = time.time()
+        process_timeout = max(timeout, int(request_limits["timeout_ms"] / 1000) + 30)
         rc, out, err, _ = run_cmd([self.xdebug, "--json", "-"], cwd=REPO_ROOT, env=self.env,
-                                  timeout=timeout, input_text=json.dumps(req) + "\n")
+                                  timeout=process_timeout, input_text=json.dumps(req) + "\n")
         elapsed_ms = int((time.time() - start) * 1000)
         try:
             data = json.loads(out)

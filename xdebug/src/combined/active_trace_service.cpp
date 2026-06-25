@@ -162,21 +162,27 @@ Json statement_json(const drvLoadStmt_s& statement, std::vector<std::string>& si
 
 // ─── parity ─────────────────────────────────────────────────────────────────
 
-Json parity_json(npiHandle signal,
+Json parity_json(npiFsdbFileHandle fsdb,
+                 npiHandle signal,
+                 const std::string& signal_name,
                  const std::string& requested_time,
                  const trcOption_t& options,
                  const Json& baseline_statements) {
-    Json result = {{"pvc_time", ""}, {"candidates", Json::array()}};
-    const char* pvc = npi_get_pvc_time(signal, requested_time.c_str());
-    if (!pvc) return result;
-    result["pvc_time"] = pvc;
+    Json result = {{"pvc_time", ""}, {"precise_time", ""}, {"candidates", Json::array()}};
+    npiFsdbTime precise_fsdb_time = 0;
+    std::string precise_time;
+    if (!previous_fsdb_change_time(fsdb, signal_name, requested_time,
+                                   precise_time, precise_fsdb_time)) {
+        return result;
+    }
+    result["precise_time"] = precise_time;
     drvLoadStmtVec_t candidates;
     npi_trace_driver_by_hdl2(signal, candidates, true, nullptr, options);
     for (const auto& candidate : candidates) {
         if (!candidate.useHdl) continue;
         std::vector<std::string> ignored;
         Json item = statement_json(candidate, ignored);
-        int rc = npi_check_active_handle(candidate.useHdl, pvc);
+        int rc = npi_check_active_handle(candidate.useHdl, precise_time.c_str());
         item["active_check_rc"] = rc;
         item["classification"] = rc == 1 ? "active" : rc == 0 ? "inactive" : "unknown";
         result["candidates"].push_back(item);
@@ -243,6 +249,9 @@ struct TraceBuildResult {
     std::vector<AliasCandidate> alias_candidates;
     Json root_driver = nullptr;
     Json current_driver = nullptr;
+    std::string evidence_source;
+    int static_candidate_count = 0;
+    int active_check_count = 0;
     bool truncated = false;
     std::string termination = "unresolved";
     int node_count = 0;
@@ -814,16 +823,20 @@ TraceBuildResult build_active_trace(
         int signal_type = npi_get(npiType, signal_hdl.get());
         PortConnectionInfo input_port = resolve_input_port_connection(current.signal);
 
-        // Run active trace driver at this time
-        actTrcRes_t active = {};
-        int active_count = npi_active_trace_driver_by_hdl(
-            signal_hdl.get(), active, current.time.c_str(), options);
-
-        if (active_count < 0) {
-            result.termination = "active_trace_failed";
-            result.limitations.push_back(
-                "npi_active_trace_driver_by_hdl error " + std::to_string(active_count)
-                + " for " + current.signal);
+        ActiveTraceResolveResult resolved = resolve_active_driver_precise(
+            fsdb, signal_hdl.get(), current.signal, current.time, options);
+        actTrcRes_t active = resolved.active;
+        int active_count = resolved.count;
+        for (const auto& limitation : resolved.limitations) {
+            result.limitations.push_back(limitation);
+        }
+        if (current.depth == 0) {
+            result.evidence_source = resolved.evidence_source;
+            result.static_candidate_count = resolved.static_candidate_count;
+            result.active_check_count = resolved.active_check_count;
+        }
+        if (resolved.ambiguous) {
+            result.termination = "ambiguous";
             break;
         }
 
@@ -1331,6 +1344,10 @@ Json ActiveTraceService::run(const Json& request, const Json& target) const {
         {"active", active_values}
     };
     data["limitations"] = strings_to_json(limitations);
+    data["evidence_source"] = trace_result.evidence_source.empty()
+        ? Json(nullptr) : Json(trace_result.evidence_source);
+    data["static_candidate_count"] = trace_result.static_candidate_count;
+    data["active_check_count"] = trace_result.active_check_count;
 
     if (request_options.include_alias_candidates || !trace_result.alias_candidates.empty()) {
         data["alias_candidates"] = alias_candidates_to_json(trace_result.alias_candidates);
@@ -1373,16 +1390,17 @@ Json ActiveTraceService::run(const Json& request, const Json& target) const {
     response["data"] = data;
     response["meta"]["truncated"] = trace_result.truncated;
 
-    // parity (unchanged behavior)
+    // parity
     if (request_options.include_parity && !trace_result.nodes.empty()) {
-        // Re-run the original single-level active trace for parity comparison
         npiHandle sig_hdl = npi_handle_by_name(signal_name.c_str(), nullptr);
         if (sig_hdl) {
             Json baseline_statements = Json::array();
             for (const auto& node : trace_result.nodes) {
                 baseline_statements.push_back(to_json(node));
             }
-            response["data"]["parity"] = parity_json(sig_hdl, requested_time, options, baseline_statements);
+            response["data"]["parity"] = parity_json(fsdb.get(), sig_hdl, signal_name,
+                                                     requested_time, options,
+                                                     baseline_statements);
             npi_release_handle(sig_hdl);
         }
     }
@@ -1454,6 +1472,10 @@ nlohmann::ordered_json ActiveTraceService::run_engine(const Json& request,
     resp["events"] = nodes_to_json(trace_result.events);
     resp["values"] = {{"requested", requested_values}, {"active", active_values}};
     resp["limitations"] = strings_to_json(limitations);
+    resp["evidence_source"] = trace_result.evidence_source.empty()
+        ? nlohmann::ordered_json(nullptr) : nlohmann::ordered_json(trace_result.evidence_source);
+    resp["static_candidate_count"] = trace_result.static_candidate_count;
+    resp["active_check_count"] = trace_result.active_check_count;
     resp["statement_count"] = trace_result.node_count;
     resp["trace_node_count"] = trace_result.node_count;
 

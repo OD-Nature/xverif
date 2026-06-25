@@ -266,6 +266,127 @@ def test_scope_roots_supports_source_filters_and_xout(
 @pytest.mark.synthetic
 @pytest.mark.regression
 @pytest.mark.slow
+def test_active_driver_reports_precise_active_time_for_delayed_query(
+    cli_runner: CliRunner,
+    active_zero_evidence_session: str,
+    artifact_root: Path,
+) -> None:
+    response = _query(
+        cli_runner,
+        active_zero_evidence_session,
+        "trace.active_driver",
+        "active_zero_evidence_tb.u_reduction_10ns.sample_flag",
+        "15ns",
+        artifact_root=artifact_root,
+    )
+
+    assert response["summary"]["driver_status"] == "resolved"
+    assert response["summary"]["active_time"] == "10ns"
+    assert response["summary"]["evidence_source"] == "fsdb_precise_time_static_trace"
+    driver = response["data"]["driver"]
+    assert driver["line"] == 77
+    assert driver["signals"] == [
+        "active_zero_evidence_tb.u_reduction_10ns.sample_flag_expr"
+    ]
+    assert "sample_flag <= sample_flag_expr" in driver["text"]
+    assert any(
+        node["kind"] == "if_else" and node["line"] == 74
+        for node in response["data"]["trace"]["nodes"]
+    )
+    assert any(
+        node["kind"] == "assignment"
+        and node["line"] == 50
+        and node["signals"]
+        == ["active_zero_evidence_tb.u_reduction_10ns.sample_vec_q"]
+        and "|sample_vec_q" in node["text"]
+        for node in response["data"]["trace"]["nodes"]
+    )
+
+
+@pytest.mark.combined
+@pytest.mark.active_trace
+@pytest.mark.synthetic
+@pytest.mark.regression
+@pytest.mark.slow
+def test_active_driver_uses_precise_fsdb_time_for_us_scale_reduction_output(
+    cli_runner: CliRunner,
+    active_zero_evidence_session: str,
+    artifact_root: Path,
+) -> None:
+    response = _query(
+        cli_runner,
+        active_zero_evidence_session,
+        "trace.active_driver",
+        "active_zero_evidence_tb.u_reduction_us_pulse.sample_flag",
+        "10000ns",
+        artifact_root=artifact_root,
+    )
+
+    assert response["summary"]["driver_status"] == "resolved"
+    assert response["summary"]["active_time"] == "9995ns"
+    assert response["summary"]["evidence_source"] == "fsdb_precise_time_static_trace"
+    assert response["summary"]["static_candidate_count"] > 0
+    assert response["summary"]["active_check_count"] > 0
+
+    driver = response["data"]["driver"]
+    assert driver["line"] == 167
+    assert driver["signals"] == [
+        "active_zero_evidence_tb.u_reduction_us_pulse.sample_flag_expr"
+    ]
+    assert "sample_flag <= sample_flag_expr" in driver["text"]
+
+    assert response["data"]["root_driver"]["line"] == 142
+    assert any(
+        node["kind"] == "assignment"
+        and node["line"] == 142
+        and node["signals"]
+        == ["active_zero_evidence_tb.u_reduction_us_pulse.sample_vec_q"]
+        and "|sample_vec_q" in node["text"]
+        for node in response["data"]["trace"]["nodes"]
+    )
+
+
+@pytest.mark.combined
+@pytest.mark.active_trace
+@pytest.mark.synthetic
+@pytest.mark.regression
+@pytest.mark.slow
+def test_active_driver_chain_uses_precise_fsdb_time_for_us_scale_reduction_output(
+    cli_runner: CliRunner,
+    active_zero_evidence_session: str,
+    artifact_root: Path,
+) -> None:
+    response = _query(
+        cli_runner,
+        active_zero_evidence_session,
+        "trace.active_driver_chain",
+        "active_zero_evidence_tb.u_reduction_us_pulse.sample_flag",
+        "10000ns",
+        artifact_root=artifact_root,
+    )
+
+    assert response["summary"]["termination"] != "unresolved"
+    assert response["summary"]["termination"] != "ambiguous"
+    assert response["data"]["chain"]["evidence_source"] == "fsdb_precise_time_static_trace"
+
+    nodes = response["data"]["chain"]["chain"]
+    assert len(nodes) >= 3
+    assert nodes[0]["signal"] == "active_zero_evidence_tb.u_reduction_us_pulse.sample_flag"
+    assert nodes[0]["active_time"] == "9995ns"
+    assert nodes[0]["line"] == 167
+    assert nodes[0]["next"] == "active_zero_evidence_tb.u_reduction_us_pulse.sample_flag_expr"
+    assert nodes[1]["signal"] == "active_zero_evidence_tb.u_reduction_us_pulse.sample_flag_expr"
+    assert nodes[1]["line"] == 142
+    assert nodes[1]["next"] == (
+        "active_zero_evidence_tb.u_reduction_us_pulse.sample_vec_q"
+    )
+
+
+@pytest.mark.combined
+@pytest.mark.active_trace
+@pytest.mark.synthetic
+@pytest.mark.regression
+@pytest.mark.slow
 def test_active_driver_reduction_output_zero_evidence_is_unresolved(
     cli_runner: CliRunner,
     active_zero_evidence_session: str,
@@ -275,7 +396,7 @@ def test_active_driver_reduction_output_zero_evidence_is_unresolved(
         cli_runner,
         active_zero_evidence_session,
         "trace.active_driver",
-        "active_zero_evidence_tb.u_reduction.deq_vld",
+        "active_zero_evidence_tb.u_reduction.sample_flag",
         "16ns",
         artifact_root=artifact_root,
     )
@@ -304,7 +425,7 @@ def test_active_driver_chain_reduction_output_zero_evidence_is_unresolved(
         cli_runner,
         active_zero_evidence_session,
         "trace.active_driver_chain",
-        "active_zero_evidence_tb.u_reduction.deq_vld",
+        "active_zero_evidence_tb.u_reduction.sample_flag",
         "16ns",
         artifact_root=artifact_root,
     )

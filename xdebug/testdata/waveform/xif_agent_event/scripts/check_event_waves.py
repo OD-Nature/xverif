@@ -21,7 +21,7 @@ def query(binary, home, action, args=None, target=None, expect_ok=True):
     env = os.environ.copy()
     env["HOME"] = str(home)
     proc = subprocess.run(
-        [binary, "-"],
+        [binary, "--json", "-"],
         input=json.dumps(request) + "\n",
         universal_newlines=True,
         cwd=str(REPO_ROOT),
@@ -29,7 +29,14 @@ def query(binary, home, action, args=None, target=None, expect_ok=True):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
-    result = json.loads(proc.stdout)
+    try:
+        result = json.loads(proc.stdout)
+    except json.JSONDecodeError as exc:
+        raise AssertionError(
+            "{} returned non-JSON stdout: {!r}; stderr: {!r}".format(
+                action, proc.stdout[:500], proc.stderr[:500]
+            )
+        ) from exc
     if expect_ok and (proc.returncode != 0 or not result.get("ok")):
         raise AssertionError("{} failed: {} {}".format(action, result, proc.stderr))
     if not expect_ok and result.get("ok"):

@@ -86,10 +86,10 @@ main() {
         skip_case waveform_complex "vcs not found"
     fi
 
-    if [[ -d /home/yian/xif_agent ]] && command -v vcs >/dev/null 2>&1; then
+    if [[ -f /home/yian/xif_agent/src/xif_pkg.sv ]] && command -v vcs >/dev/null 2>&1; then
         run_case waveform_event make -C xdebug/testdata/waveform/xif_agent_event check XDEBUG="$XDEBUG"
     else
-        skip_case waveform_event "xif_agent fixture dependency or vcs missing"
+        skip_case waveform_event "xif_agent xif_pkg.sv dependency or vcs missing"
     fi
 
     if [[ -f /home/yian/axi_test/test/sim_run/tb.fsdb ]]; then
@@ -97,10 +97,10 @@ main() {
     else
         skip_case realdata_axi "AXI FSDB not found"
     fi
-    if [[ -f /home/yian/wave_tmp/waves.fsdb ]]; then
+    if [[ -f /home/yian/wave_tmp/waves.fsdb && -f "$ROOT/xdebug/tests/realdata/run_system_wave.py" ]]; then
         run_case realdata_system_wave python3 xdebug/tests/realdata/run_system_wave.py
     else
-        skip_case realdata_system_wave "system FSDB not found"
+        skip_case realdata_system_wave "system FSDB or runner not found"
     fi
 
     log_line ""

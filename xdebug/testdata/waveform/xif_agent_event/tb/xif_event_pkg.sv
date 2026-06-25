@@ -3,7 +3,7 @@
 
 package xif_event_pkg;
   import uvm_pkg::*;
-  import xif_types_pkg::*;
+  import xif_pkg::*;
   import xif_agent_pkg::*;
   `include "uvm_macros.svh"
 

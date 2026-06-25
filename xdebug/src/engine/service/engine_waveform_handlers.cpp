@@ -11,6 +11,7 @@
 #include "../../waveform/list/signal_list.h"
 #include "../../waveform/export/waveform_exporter.h"
 #include "../../waveform/common/xdebug_waveform_paths.h"
+#include "../../waveform/service/action_support.h"
 #include "../../waveform/service/rc_generator.h"
 #include "../../waveform/value/logic_value.h"
 
@@ -911,29 +912,10 @@ public:
         if (!load_config_from_args(args, cfg_j, err))
             return Json({{"error","INVALID_REQUEST"},{"message",err}});
 
-        // Validate required event fields
-        if (!cfg_j.contains("clk") || !cfg_j["clk"].is_string() || cfg_j["clk"].get<std::string>().empty())
-            return Json({{"error","INVALID_REQUEST"},{"message","missing or empty field: clk"}});
-        if (!cfg_j.contains("signals") || !cfg_j["signals"].is_object())
-            return Json({{"error","INVALID_REQUEST"},{"message","signals must be an object"}});
-
         EventConfig cfg;
+        if (!parse_event_config(cfg_j, cfg, err))
+            return Json({{"error","INVALID_REQUEST"},{"message",err}});
         cfg.name = name;
-        cfg.clk = cfg_j["clk"].get<std::string>();
-        cfg.rst_n = cfg_j.value("rst_n", "");
-        cfg.posedge = cfg_j.value("posedge", true);
-        for (auto it = cfg_j["signals"].begin(); it != cfg_j["signals"].end(); ++it) {
-            if (it->is_string()) cfg.signals[it.key()] = it->get<std::string>();
-        }
-        if (cfg_j.contains("fields") && cfg_j["fields"].is_object()) {
-            for (auto it = cfg_j["fields"].begin(); it != cfg_j["fields"].end(); ++it) {
-                EventField f;
-                f.signal_alias = it->value("signal", "");
-                f.left = it->value("left", 0);
-                f.right = it->value("right", 0);
-                cfg.fields[it.key()] = f;
-            }
-        }
 
         EventManager em;
         if (!em.create_event(g_session_id, g_fsdb_file_path, cfg))
@@ -942,8 +924,7 @@ public:
         Json out;
         out["summary"] = {{"name", name}, {"status", "loaded"}};
         out["name"] = name; out["status"] = "loaded";
-        Json cinfo; cinfo["name"] = name; cinfo["clk"] = cfg.clk;
-        out["config"] = cinfo;
+        out["config"] = event_config_json(cfg);
         return out;
     }
 };

@@ -70,52 +70,54 @@ assert removed["ok"] is False and removed["error"]["code"] == "UNKNOWN_ACTION"
 assert text_cli["ok"] is False and text_cli["error"]["code"] == "JSON_ONLY"
 PY
 
-if LD_LIBRARY_PATH="$NPI_LIB:${LD_LIBRARY_PATH:-}" "$ROOT/xdebug/libexec/xdebug-design-engine" open -dbdir nowhere \
-    >"$TMP_HOME/private_design.out" 2>&1; then
-    printf 'FAIL: internal design engine accepted a text CLI request\n' >&2
+if LD_LIBRARY_PATH="$NPI_LIB:${LD_LIBRARY_PATH:-}" "$ROOT/xdebug/libexec/xdebug-engine" open -dbdir nowhere \
+    >"$TMP_HOME/private_engine.out" 2>&1; then
+    printf 'FAIL: internal engine accepted a text CLI request\n' >&2
     exit 1
 fi
-if LD_LIBRARY_PATH="$NPI_LIB:${LD_LIBRARY_PATH:-}" "$ROOT/xdebug/libexec/xdebug-waveform-engine" value top.clk 10ns \
-    >"$TMP_HOME/private_waveform.out" 2>&1; then
-    printf 'FAIL: internal waveform engine accepted a text CLI request\n' >&2
-    exit 1
-fi
-grep -q 'accepts JSON requests only' "$TMP_HOME/private_design.out"
-grep -q 'accepts JSON requests only' "$TMP_HOME/private_waveform.out"
+grep -q 'accepts JSON requests only' "$TMP_HOME/private_engine.out"
 
 if [[ ! -d "$DBDIR" || ! -f "$FSDB" ]]; then
     printf 'SKIP: fixture resources absent: %s %s\n' "$DBDIR" "$FSDB"
     exit 0
 fi
 
-query wave_only "{\"api_version\":\"xdebug.v1\",\"action\":\"value.at\",\"target\":{\"fsdb\":\"$FSDB\",\"auto_open\":true},\"args\":{\"name\":\"wave_case\",\"signal\":\"active_driver_tb.u_dut.q\",\"time\":\"26ns\",\"format\":\"bin\"}}"
+query wave_open "{\"api_version\":\"xdebug.v1\",\"action\":\"session.open\",\"target\":{\"fsdb\":\"$FSDB\"},\"args\":{\"name\":\"wave_case\"}}"
+expect_ok wave_open
+query wave_only "{\"api_version\":\"xdebug.v1\",\"action\":\"value.at\",\"target\":{\"session_id\":\"wave_case\"},\"args\":{\"signal\":\"active_driver_tb.u_dut.q\",\"time\":\"26ns\",\"format\":\"bin\"}}"
 expect_ok wave_only
 
-query design_only "{\"api_version\":\"xdebug.v1\",\"action\":\"trace.driver\",\"target\":{\"daidir\":\"$DBDIR\",\"auto_ensure\":true},\"args\":{\"name\":\"design_case\",\"signal\":\"active_driver_tb.u_dut.q\"},\"limits\":{\"max_results\":4}}"
+query design_open "{\"api_version\":\"xdebug.v1\",\"action\":\"session.open\",\"target\":{\"daidir\":\"$DBDIR\"},\"args\":{\"name\":\"design_case\"}}"
+expect_ok design_open
+query design_only "{\"api_version\":\"xdebug.v1\",\"action\":\"trace.driver\",\"target\":{\"session_id\":\"design_case\"},\"args\":{\"signal\":\"active_driver_tb.u_dut.q\"},\"limits\":{\"max_results\":4}}"
 expect_ok design_only
 
 query compact_expand '{"api_version":"xdebug.v1","action":"trace.expand","target":{"session_id":"design_case"},"args":{"signal":"active_driver_tb.u_dut.q","direction":"driver"},"limits":{"max_depth":1,"max_edges":8}}'
-query compact_verify '{"api_version":"xdebug.v1","action":"verify.conditions","target":{"session_id":"wave_case"},"args":{"signal":"active_driver_tb.u_dut.q","time":"26ns","conditions":[{"signal":"active_driver_tb.u_dut.q","op":"==","value":"0xb2"},{"signal":"active_driver_tb.u_dut.q","op":"==","value":"0x00"}]}}'
+query compact_verify '{"api_version":"xdebug.v1","action":"verify.conditions","target":{"session_id":"wave_case"},"args":{"signal":"active_driver_tb.u_dut.q","time":"26ns","conditions":[{"signal":"active_driver_tb.u_dut.q","op":"==","value":"'\''hb2"},{"signal":"active_driver_tb.u_dut.q","op":"==","value":"'\''h00"}]}}'
 python3 - "$TMP_HOME/wave_only.json" "$TMP_HOME/design_only.json" "$TMP_HOME/compact_expand.json" "$TMP_HOME/compact_verify.json" <<'PY'
 import json
 import sys
 
 wave, design, expand, verify = (json.load(open(path)) for path in sys.argv[1:])
-assert isinstance(wave["data"]["value"], str), wave
+assert isinstance(wave["data"]["value"], dict), wave
+assert wave["data"]["value"]["value"] == "8'hb2", wave
 assert "resolved_time" not in wave["data"], wave
-assert "drivers" in design["data"], design
-assert "dependency_edges" not in design["data"], design
+assert "assignments" in design["data"], design
+assert design["data"]["assignments"], design
 assert "graph" in expand["data"], expand
-assert "trace" not in expand["data"], expand
-assert "expanded_queries" not in expand["data"], expand
 assert verify["summary"]["verdict"] == "fail", verify
-assert all(item["status"] != "pass" for item in verify["data"]["checks"]), verify
+assert any(item["status"] == "pass" for item in verify["data"]["checks"]), verify
+assert any(item["status"] == "fail" for item in verify["data"]["checks"]), verify
 PY
 
-query active_assignment "{\"api_version\":\"xdebug.v1\",\"action\":\"trace.active_driver\",\"target\":{\"daidir\":\"$DBDIR\",\"fsdb\":\"$FSDB\"},\"args\":{\"signal\":\"active_driver_tb.u_dut.q\",\"requested_time\":\"26ns\",\"include_control\":true,\"include_parity\":true}}"
-query active_force "{\"api_version\":\"xdebug.v1\",\"action\":\"trace.active_driver\",\"target\":{\"daidir\":\"$DBDIR\",\"fsdb\":\"$FSDB\"},\"args\":{\"signal\":\"active_driver_tb.u_dut.q\",\"requested_time\":\"40ns\",\"include_control\":true}}"
-query active_default "{\"api_version\":\"xdebug.v1\",\"action\":\"trace.active_driver\",\"target\":{\"daidir\":\"$DBDIR\",\"fsdb\":\"$FSDB\"},\"args\":{\"signal\":\"active_driver_tb.u_dut.comb_q\",\"requested_time\":\"51ns\",\"include_control\":true}}"
-query_from_root active_relative '{"api_version":"xdebug.v1","action":"trace.active_driver","target":{"daidir":"xdebug/testdata/combined/active_driver/out/simv.daidir","fsdb":"xdebug/testdata/combined/active_driver/out/waves.fsdb"},"args":{"signal":"active_driver_tb.u_dut.q","requested_time":"26ns","include_control":true}}'
+query combined_open "{\"api_version\":\"xdebug.v1\",\"action\":\"session.open\",\"target\":{\"daidir\":\"$DBDIR\",\"fsdb\":\"$FSDB\"},\"args\":{\"name\":\"combined_case\"}}"
+expect_ok combined_open
+query_from_root combined_relative_open '{"api_version":"xdebug.v1","action":"session.open","target":{"daidir":"xdebug/testdata/combined/active_driver/out/simv.daidir","fsdb":"xdebug/testdata/combined/active_driver/out/waves.fsdb"},"args":{"name":"combined_relative"}}'
+expect_ok combined_relative_open
+query active_assignment '{"api_version":"xdebug.v1","action":"trace.active_driver","target":{"session_id":"combined_case"},"args":{"signal":"active_driver_tb.u_dut.q","requested_time":"26ns","include_control":true,"include_parity":true}}'
+query active_force '{"api_version":"xdebug.v1","action":"trace.active_driver","target":{"session_id":"combined_case"},"args":{"signal":"active_driver_tb.u_dut.q","requested_time":"40ns","include_control":true}}'
+query active_default '{"api_version":"xdebug.v1","action":"trace.active_driver","target":{"session_id":"combined_case"},"args":{"signal":"active_driver_tb.u_dut.comb_q","requested_time":"51ns","include_control":true}}'
+query active_relative '{"api_version":"xdebug.v1","action":"trace.active_driver","target":{"session_id":"combined_relative"},"args":{"signal":"active_driver_tb.u_dut.q","requested_time":"26ns","include_control":true}}'
 python3 - "$TMP_HOME/active_assignment.json" "$TMP_HOME/active_force.json" "$TMP_HOME/active_default.json" "$TMP_HOME/active_relative.json" <<'PY'
 import json
 import sys
@@ -123,21 +125,19 @@ import sys
 assignment, force, default, relative = (json.load(open(path)) for path in sys.argv[1:])
 for result in (assignment, force, default, relative):
     assert result["ok"] is True, result
-assert assignment["data"]["active_time"] == "25.0n"
+assert assignment["data"]["active_time"] == "25ns"
 assert assignment["data"]["driver_status"] == "resolved"
 assert assignment["data"]["driver"]["kind"] == "assignment"
 assert assignment["data"]["driver"]["line"] == 20
-assert force["data"]["active_time"] == "37.0n"
+assert force["data"]["active_time"] == "37ns"
 assert force["data"]["driver"]["kind"] == "force"
 assert force["data"]["driver"]["line"] == 82
-assert default["data"]["active_time"] == "50.0n"
+assert default["data"]["active_time"] == "50ns"
 assert default["data"]["driver_status"] == "control_only"
 assert default["data"]["driver"] is None
 assert relative["data"]["driver"]["line"] == 20
 PY
 
-query combined_open "{\"api_version\":\"xdebug.v1\",\"action\":\"session.open\",\"target\":{\"daidir\":\"$DBDIR\",\"fsdb\":\"$FSDB\"},\"args\":{\"name\":\"combined_case\"}}"
-expect_ok combined_open
 query session_active '{"api_version":"xdebug.v1","action":"trace.active_driver","target":{"session_id":"combined_case"},"args":{"signal":"active_driver_tb.u_dut.q","requested_time":"26ns","include_control":true}}'
 expect_ok session_active
 python3 - "$TMP_HOME/session_active.json" <<'PY'

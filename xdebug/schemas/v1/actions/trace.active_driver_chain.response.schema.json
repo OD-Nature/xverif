@@ -61,6 +61,17 @@
             "ambiguous"
           ]
         },
+        "evidence_source": {
+          "type": ["string", "null"]
+        },
+        "static_candidate_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "active_check_count": {
+          "type": "integer",
+          "minimum": 0
+        },
         "statement_count": {
           "type": "integer"
         },
@@ -91,6 +102,17 @@
         "driver_status": {
           "type": "string",
           "enum": ["resolved", "control_only", "unresolved", "ambiguous"]
+        },
+        "evidence_source": {
+          "type": ["string", "null"]
+        },
+        "static_candidate_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "active_check_count": {
+          "type": "integer",
+          "minimum": 0
         },
         "driver": {
           "type": ["object", "null"],

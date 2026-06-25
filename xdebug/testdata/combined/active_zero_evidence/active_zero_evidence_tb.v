@@ -9,32 +9,185 @@ module primitive_output_dut (
 endmodule
 
 module reduction_output_dut #(
-  parameter C_PORT_NUM = 4
+  parameter C_VEC_NUM = 4
 ) (
   input clk,
   input rst_n,
-  input [C_PORT_NUM-1:0] grant_next,
-  output reg deq_vld
+  input [C_VEC_NUM-1:0] sample_vec_next,
+  output reg sample_flag
 );
-  wire deq_vld_cb;
-  reg [C_PORT_NUM-1:0] port_arb_rr_grant_r;
+  wire sample_flag_expr;
+  reg [C_VEC_NUM-1:0] sample_vec_q;
 
-  assign deq_vld_cb = |port_arb_rr_grant_r;
+  assign sample_flag_expr = |sample_vec_q;
 
   always @(posedge clk or negedge rst_n) begin
     if (~rst_n) begin
-      port_arb_rr_grant_r <= {C_PORT_NUM{1'b0}};
+      sample_vec_q <= {C_VEC_NUM{1'b0}};
     end else begin
-      port_arb_rr_grant_r <= grant_next;
+      sample_vec_q <= sample_vec_next;
     end
   end
 
   always @(posedge clk or negedge rst_n) begin
     if (~rst_n) begin
-      deq_vld <= 1'b0;
+      sample_flag <= 1'b0;
     end else begin
-      deq_vld <= deq_vld_cb;
+      sample_flag <= sample_flag_expr;
     end
+  end
+endmodule
+
+module reduction_active_time_probe (
+  output reg sample_flag
+);
+  reg clk;
+  reg rst_n;
+  reg [3:0] sample_vec_next;
+  reg [3:0] sample_vec_q;
+  wire sample_flag_expr;
+
+  assign sample_flag_expr = |sample_vec_q;
+
+  initial begin
+    clk = 1'b0;
+    rst_n = 1'b0;
+    sample_vec_next = 4'b0000;
+    sample_vec_q = 4'b0000;
+    #2 rst_n = 1'b1;
+    #1 sample_vec_next = 4'b0001;
+    #2 clk = 1'b1;
+    #1 clk = 1'b0;
+    #4 clk = 1'b1;
+    #5 clk = 1'b0;
+  end
+
+  always @(posedge clk or negedge rst_n) begin
+    if (~rst_n) begin
+      sample_vec_q <= 4'b0000;
+    end else begin
+      sample_vec_q <= sample_vec_next;
+    end
+  end
+
+  always @(posedge clk or negedge rst_n) begin
+    if (~rst_n) begin
+      sample_flag <= 1'b0;
+    end else begin
+      sample_flag <= sample_flag_expr;
+    end
+  end
+endmodule
+
+module reduction_cycle_pulse_probe (
+  output reg sample_flag
+);
+  reg clk;
+  reg rst_n;
+  integer cycle_count;
+  reg [3:0] sample_vec_next;
+  reg [3:0] sample_vec_q;
+  wire sample_flag_expr;
+
+  assign sample_flag_expr = |sample_vec_q;
+
+  initial begin
+    clk = 1'b0;
+    rst_n = 1'b0;
+    #2 rst_n = 1'b1;
+  end
+
+  always #5 clk = ~clk;
+
+  always @(posedge clk or negedge rst_n) begin
+    if (~rst_n) begin
+      cycle_count <= 0;
+      sample_vec_next <= 4'b0000;
+    end else begin
+      cycle_count <= cycle_count + 1;
+      if (cycle_count == 7) begin
+        sample_vec_next <= 4'b0001;
+      end else if (cycle_count == 8) begin
+        sample_vec_next <= 4'b0000;
+      end
+    end
+  end
+
+  always @(posedge clk or negedge rst_n) begin
+    if (~rst_n) begin
+      sample_vec_q <= 4'b0000;
+    end else begin
+      sample_vec_q <= sample_vec_next;
+    end
+  end
+
+  always @(posedge clk or negedge rst_n) begin
+    if (~rst_n) begin
+      sample_flag <= 1'b0;
+    end else begin
+      sample_flag <= sample_flag_expr;
+    end
+  end
+endmodule
+
+module reduction_us_pulse_probe (
+  output reg sample_flag
+);
+  reg clk;
+  reg rst_n;
+  reg [3:0] sample_vec_next;
+  reg [3:0] sample_vec_q;
+  wire sample_flag_expr;
+
+  assign sample_flag_expr = |sample_vec_q;
+
+  initial begin
+    clk = 1'b0;
+    rst_n = 1'b0;
+    sample_vec_next = 4'b0000;
+    #2 rst_n = 1'b1;
+    #9968 sample_vec_next = 4'b0001;
+    #10 sample_vec_next = 4'b0000;
+  end
+
+  always #5 clk = ~clk;
+
+  always @(posedge clk or negedge rst_n) begin
+    if (~rst_n) begin
+      sample_vec_q <= 4'b0000;
+    end else begin
+      sample_vec_q <= sample_vec_next;
+    end
+  end
+
+  always @(posedge clk or negedge rst_n) begin
+    if (~rst_n) begin
+      sample_flag <= 1'b0;
+    end else begin
+      sample_flag <= sample_flag_expr;
+    end
+  end
+endmodule
+
+module reduction_active_time_no_reset_probe (
+  output reg sample_flag
+);
+  reg clk;
+  reg [3:0] sample_vec_q;
+  wire sample_flag_expr;
+
+  assign sample_flag_expr = |sample_vec_q;
+
+  initial begin
+    clk = 1'b0;
+    sample_vec_q = 4'b0001;
+    sample_flag = 1'b0;
+    #10 clk = 1'b1;
+    #5 clk = 1'b0;
+  end
+
+  always @(posedge clk) begin
+    sample_flag <= sample_flag_expr;
   end
 endmodule
 
@@ -186,8 +339,11 @@ module active_zero_evidence_tb (
   reg data_i;
   reg enable_i;
   wire out_bufif;
-  reg [3:0] grant_next;
-  wire deq_vld;
+  reg [3:0] sample_vec_next;
+  wire sample_flag;
+  wire sample_flag_10ns;
+  wire sample_flag_cycle_pulse;
+  wire sample_flag_us_pulse;
   reg parent_src_next;
   reg parent_src;
   wire child_data_q;
@@ -225,11 +381,23 @@ module active_zero_evidence_tb (
     .out_bufif(out_bufif)
   );
 
-  reduction_output_dut #(.C_PORT_NUM(4)) u_reduction (
+  reduction_output_dut #(.C_VEC_NUM(4)) u_reduction (
     .clk(clk),
     .rst_n(rst_n),
-    .grant_next(grant_next),
-    .deq_vld(deq_vld)
+    .sample_vec_next(sample_vec_next),
+    .sample_flag(sample_flag)
+  );
+
+  reduction_active_time_probe u_reduction_10ns (
+    .sample_flag(sample_flag_10ns)
+  );
+
+  reduction_cycle_pulse_probe u_reduction_cycle_pulse (
+    .sample_flag(sample_flag_cycle_pulse)
+  );
+
+  reduction_us_pulse_probe u_reduction_us_pulse (
+    .sample_flag(sample_flag_us_pulse)
   );
 
   input_trace_child u_input_child (
@@ -281,7 +449,7 @@ module active_zero_evidence_tb (
     rst_n = 1'b0;
     data_i = 1'b0;
     enable_i = 1'b0;
-    grant_next = 4'b0000;
+    sample_vec_next = 4'b0000;
     parent_src_next = 1'b0;
     parent_src = 1'b0;
     vec_a_next = 4'b0000;
@@ -294,7 +462,7 @@ module active_zero_evidence_tb (
     idx_next = 2'b00;
 
     #7 rst_n = 1'b1;
-    #3 grant_next = 4'b0001;
+    #3 sample_vec_next = 4'b0001;
        vec_a_next = 4'b0001;
        vec_b_next = 4'b0010;
        mask_next = 4'b0101;
@@ -304,7 +472,7 @@ module active_zero_evidence_tb (
        parent_src_next = 1'b1;
        idx_next = 2'b00;
     #5 enable_i = 1'b1;
-    #5 grant_next = 4'b0000;
+    #5 sample_vec_next = 4'b0000;
        parent_src_next = 1'b0;
        vec_a_next = 4'b0000;
        vec_b_next = 4'b1000;
@@ -313,7 +481,7 @@ module active_zero_evidence_tb (
        ready_next = 1'b1;
        expr_enable_next = 1'b0;
        idx_next = 2'b01;
-    #10 grant_next = 4'b1000;
+    #10 sample_vec_next = 4'b1000;
         parent_src_next = 1'b1;
         vec_a_next = 4'b1000;
         vec_b_next = 4'b0011;
@@ -323,7 +491,7 @@ module active_zero_evidence_tb (
         expr_enable_next = 1'b1;
         flush_next = 1'b0;
         idx_next = 2'b10;
-    #10 grant_next = 4'b0000;
+    #10 sample_vec_next = 4'b0000;
         vec_a_next = 4'b0110;
         vec_b_next = 4'b0101;
         mask_next = 4'b0011;
@@ -332,7 +500,7 @@ module active_zero_evidence_tb (
         expr_enable_next = 1'b1;
         flush_next = 1'b1;
         idx_next = 2'b01;
-    #20 $finish;
+    #10060 $finish;
   end
 
   always @(posedge clk or negedge rst_n) begin

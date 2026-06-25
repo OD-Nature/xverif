@@ -9,6 +9,9 @@
     "chain_length": 3,
     "driver_status": "resolved",
     "termination": "primary_input",
+    "evidence_source": "fsdb_precise_time_static_trace",
+    "static_candidate_count": 2,
+    "active_check_count": 1,
     "temporal_boundaries": 0
   },
   "data": {
@@ -27,6 +30,9 @@
        "hop": "■", "next": ""}
     ],
     "stats": {"calls": 3, "edgecheck_direct": 2, "fallback": 0, "temporal_boundaries": 0},
+    "evidence_source": "fsdb_precise_time_static_trace",
+    "static_candidate_count": 2,
+    "active_check_count": 1,
     "limitations": []
   },
   "meta": {"truncated": false}

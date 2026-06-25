@@ -17,6 +17,9 @@
     "requested_time": "120ns",
     "active_time": "115ns",
     "driver_status": "resolved",
+    "evidence_source": "fsdb_precise_time_static_trace",
+    "static_candidate_count": 2,
+    "active_check_count": 1,
     "statement_count": 2,
     "trace_node_count": 2,
     "root_driver": {
@@ -53,6 +56,9 @@
       }
     },
     "alias_candidates": [],
+    "evidence_source": "fsdb_precise_time_static_trace",
+    "static_candidate_count": 2,
+    "active_check_count": 1,
     "limitations": []
   },
   "findings": [],
