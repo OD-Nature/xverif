@@ -390,7 +390,7 @@ def run_nonaxi(xdebug, fsdb):
         r.query("apb.query", args={"name": "apb0", "direction": "rd", "num": 1})
         r.query("apb.cursor", args={"name": "apb0", "op": "begin", "direction": "all"})
         apb_window = r.query("apb.transfer_window", args={"name": "apb0", "time_range": {"begin": "200ns", "end": "400ns"}, "limit": 2})
-        require(apb_window["data"]["transaction_count"] >= 1, "APB window empty")
+        require(apb_window["summary"]["transaction_count"] >= 1, "APB window empty")
 
         event_cfg = os.path.join(NONAXI_DIR, "config", "event0.json")
         r.query("event.config.load", args={"name": "evt0", "config_path": event_cfg})
@@ -497,7 +497,7 @@ def run_axi(xdebug, fsdb):
         r.query("axi.config.list", args={"name": "axi0"})
         wr = r.query("axi.query", args={"name": "axi0", "direction": "wr"})
         rd = r.query("axi.query", args={"name": "axi0", "direction": "rd"})
-        require(wr["data"].get("count", 0) > 0 and rd["data"].get("count", 0) > 0, "AXI query count is empty")
+        require(wr["summary"].get("count", 0) > 0 and rd["summary"].get("count", 0) > 0, "AXI query count is empty")
         r.query("axi.query", args={"name": "axi0", "direction": "wr", "num": 1})
         r.query("axi.cursor", args={"name": "axi0", "op": "begin", "direction": "all"})
         r.query("axi.cursor", args={"name": "axi0", "op": "next", "direction": "all"})
@@ -541,8 +541,8 @@ def run_axi(xdebug, fsdb):
             },
             timeout=240,
         )
-        require(windowed["data"]["write_count"] <= exported["data"]["write_count"], "windowed write count exceeds full export")
-        require(windowed["data"]["read_count"] <= exported["data"]["read_count"], "windowed read count exceeds full export")
+        require(windowed["summary"]["write_count"] <= exported["summary"]["write_count"], "windowed write count exceeds full export")
+        require(windowed["summary"]["read_count"] <= exported["summary"]["read_count"], "windowed read count exceeds full export")
         return r.rows
     finally:
         r.cleanup()

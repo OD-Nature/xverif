@@ -60,6 +60,35 @@ def _query(
     )
 
 
+def _xout(
+    cli_runner: CliRunner,
+    request: dict[str, Any],
+    *,
+    case_name: str,
+    artifact_root: Path,
+    extra: dict[str, Any] | None = None,
+) -> str:
+    result = cli_runner.run(request, output_format="xout", timeout_sec=120)
+    if result.returncode == 0 and not result.timed_out and isinstance(result.response, str):
+        return result.response
+    artifact_dir = ArtifactWriter(artifact_root).write(
+        case_name,
+        result,
+        extra=extra,
+    )
+    pytest.fail(
+        "%s failed rc=%s timeout=%s; artifacts=%s\nstdout:\n%s\nstderr:\n%s"
+        % (
+            case_name,
+            result.returncode,
+            result.timed_out,
+            artifact_dir,
+            result.stdout_raw[-8000:],
+            result.stderr_raw[-8000:],
+        )
+    )
+
+
 def _marker_lines(source: Path) -> dict[str, int]:
     markers: dict[str, int] = {}
     pattern = re.compile(r"//\s*([A-Z][A-Z0-9_]+)")
@@ -173,6 +202,46 @@ def test_active_trace_semantic_branches_and_gates(
             extra={"marker_lines": marker_lines, "request": request},
         )
 
+    def active_driver_xout(signal: str, requested_time: str) -> str:
+        request: dict[str, Any] = {
+            "api_version": "xdebug.v1",
+            "action": "trace.active_driver",
+            "target": {"session_id": session_id},
+            "args": {
+                "signal": signal,
+                "requested_time": requested_time,
+                "include_trace": True,
+            },
+            "output": {"verbosity": "compact"},
+        }
+        return _xout(
+            cli_runner,
+            request,
+            case_name="active-driver-xout-" + signal.rsplit(".", 1)[-1],
+            artifact_root=artifact_root,
+            extra={"marker_lines": marker_lines, "request": request},
+        )
+
+    def active_driver_chain_xout(signal: str, requested_time: str) -> str:
+        request: dict[str, Any] = {
+            "api_version": "xdebug.v1",
+            "action": "trace.active_driver_chain",
+            "target": {"session_id": session_id},
+            "args": {
+                "signal": signal,
+                "requested_time": requested_time,
+                "clk_period": "10ns",
+            },
+            "output": {"verbosity": "compact"},
+        }
+        return _xout(
+            cli_runner,
+            request,
+            case_name="active-driver-chain-xout-" + signal.rsplit(".", 1)[-1],
+            artifact_root=artifact_root,
+            extra={"marker_lines": marker_lines, "request": request},
+        )
+
     try:
         mux_b = active_driver("active_semantics_tb.u_dut.mux_y", "26ns")
         assert mux_b["data"]["root_driver"]["line"] == marker_lines["MUX_ACTIVE_B"]
@@ -245,6 +314,33 @@ def test_active_trace_semantic_branches_and_gates(
         assert nodes[1]["hop"] == "→"
         assert nodes[2]["hop"] == "→"
         assert nodes[3]["hop"] == "■"
+
+        active_xout = active_driver_xout("active_semantics_tb.u_dut.q_en", "16ns")
+        assert active_xout.startswith("@xdebug.trace.active_driver.v1")
+        assert "\nsummary:\n" in active_xout
+        assert "\ndriver:\n" in active_xout
+        assert "\ncontrols:\n" in active_xout
+        assert "\nevents:\n" in active_xout
+        assert "\nroot_cause:\n" in active_xout
+
+        chain_xout = active_driver_chain_xout(
+            "active_semantics_tb.u_dut.chain_out",
+            "26ns",
+        )
+        assert chain_xout.startswith("@xdebug.trace.active_driver_chain.v1")
+        assert "\nsummary:\n" in chain_xout
+        assert "\nchain:\n" in chain_xout
+        assert "\nstats:\n" in chain_xout
+        assert "\nchain_path:\n" in chain_xout
+        assert "\ntarget:\n" not in chain_xout
+        assert "text:" not in chain_xout
+        for expected_signal in [
+            "active_semantics_tb.u_dut.chain_out",
+            "active_semantics_tb.u_dut.chain_mid",
+            "active_semantics_tb.u_dut.chain_src",
+            "active_semantics_tb.chain_src",
+        ]:
+            assert expected_signal in chain_xout
 
         chain_limited = active_driver_chain(
             "active_semantics_tb.u_dut.chain_out",

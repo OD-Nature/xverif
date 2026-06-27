@@ -37,8 +37,8 @@ int main() {
     };
     text = render_xout_response(response);
     assert(text.find("@xdebug.value.at.v1") == 0);
-    assert(text.find("target:\n  signal: top.clk\n  time: 10ns") != std::string::npos);
-    assert(text.find("summary:\n  value: 'h1") != std::string::npos);
+    assert(text.find("data:\n  signal: top.clk\n  time: 10ns") != std::string::npos);
+    assert(text.find("value: 'h1") != std::string::npos);
 
     Json sized_value = {
         {"value", "0x4000000c"},
@@ -82,6 +82,14 @@ int main() {
     assert(text.find("cycle time fields\n  18 185ns data=32'h4000000c seq=16'h000c") != std::string::npos);
     assert(text.find("bits:") == std::string::npos);
     assert(text.find("known: true") == std::string::npos);
+
+    Json handler_text = {
+        {"ok", true},
+        {"action", "any.action"},
+        {"text", "@xdebug.any.action.v1\nsummary:\n  ok: true\n"}
+    };
+    text = render_xout_response(handler_text);
+    assert(text == "@xdebug.any.action.v1\nsummary:\n  ok: true\n");
 
     Json error = {
         {"ok", false},

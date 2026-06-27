@@ -66,8 +66,15 @@ Json ai_apb_transfer_window(const Json& args, std::string& error) {
         txn["time_ps"] = item.txn->time;
         arr.push_back(txn);
     }
-    return Json{{"name", name}, {"begin", format_time(begin)}, {"end", format_time(end)},
-                {"transaction_count", arr.size()}, {"truncated", truncated}, {"transactions", arr}};
+    Json out;
+    out["summary"] = {{"name", name},
+                      {"begin", format_time(begin)},
+                      {"end", format_time(end)},
+                      {"transaction_count", arr.size()}};
+    if (truncated) out["summary"]["truncated"] = true;
+    out["transactions"] = arr;
+    if (truncated) out["truncated"] = true;
+    return out;
 }
 
 Json ai_axi_transactions_window(const Json& args, std::string& error) {

@@ -739,6 +739,9 @@ bool Dispatcher::send_to_socket(const std::string& session_id,
         result_summary["truncated"].get<bool>()) {
         response["meta"] = {{"truncated", true}};
     }
+    if (engine_resp.contains("text") && engine_resp["text"].is_string()) {
+        response["text"] = engine_resp["text"];
+    }
     response["data"] = data_payload;
     Json ctx = transport_context(request, "socket.request.end", session_id, socket_path, timeout_ms);
     ctx["elapsed_ms"] = elapsed_ms_since(begin);

@@ -192,7 +192,7 @@ def test_apb_vip_real_wait_state_and_error_actions(
                 manifest=manifest,
                 extra={"apb_config": config, "simulation_log": log_text},
             )
-            assert queried["data"]["count"] == expected_count
+            assert queried["summary"]["count"] == expected_count
 
         error_txn = _query(
             cli_runner,
@@ -230,7 +230,7 @@ def test_apb_vip_real_wait_state_and_error_actions(
             manifest=manifest,
             extra={"apb_config": config},
         )
-        assert window["data"]["transaction_count"] == 10
+        assert window["summary"]["transaction_count"] == 10
         assert sum(
             1
             for transaction in window["data"]["transactions"]
@@ -254,7 +254,7 @@ def test_apb_vip_real_wait_state_and_error_actions(
                 artifact_root=artifact_root,
                 manifest=manifest,
             )
-            assert cursor["data"]["found"] is True
+            assert cursor["summary"]["found"] is True
     finally:
         cli_runner.run(
             {

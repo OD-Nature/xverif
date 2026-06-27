@@ -57,3 +57,12 @@ def test_json_after_cleanup_contains_all_runtime_action_samples() -> None:
     actions = {_action(path) for path in files}
     assert len(actions) == 85
     assert "signal.search" not in actions
+
+
+def test_public_xout_renderer_has_no_action_specific_branches() -> None:
+    renderer = XDEBUG / "src" / "api" / "xout_renderer.cpp"
+    text = renderer.read_text(encoding="utf-8")
+    assert "action ==" not in text
+    for sample in XDEBUG.joinpath("doc", "json_after_cleanup").glob("*.json"):
+        action = _action(sample)
+        assert f'"{action}"' not in text
