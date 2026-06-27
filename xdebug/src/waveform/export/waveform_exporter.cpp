@@ -147,9 +147,9 @@ bool write_tsv_file(const std::string& path,
         error = "failed to open export file: " + path;
         return false;
     }
-    out << "time_ps\tvalue_hex\tknown_hex\n";
+    out << "time\tvalue_hex\tknown_hex\n";
     for (const auto& row : rows) {
-        out << row.time << '\t' << hex_from_words(row.bits, false)
+        out << format_time(row.time) << '\t' << hex_from_words(row.bits, false)
             << '\t' << hex_from_words(row.bits, true) << '\n';
     }
     if (!out) {
@@ -222,12 +222,12 @@ bool export_signal_list(npiFsdbFileHandle file,
     manifest["version"] = 1;
     manifest["format"] = format == "u64bin" ? "u64bin.v1" : "hex_tsv.v1";
     manifest["list"] = list.name;
-    manifest["begin_ps"] = options.begin;
-    manifest["end_ps"] = options.end;
-    manifest["time_unit"] = "ps";
+    auto range = format_time_range(options.begin, options.end);
+    manifest["begin"] = range.first;
+    manifest["end"] = range.second;
     manifest["row_layout"] = format == "u64bin"
-        ? "uint64_le: time_ps, value_words, known_mask_words"
-        : "tsv: time_ps, value_hex, known_hex";
+        ? "uint64_le: time_tick, value_words, known_mask_words"
+        : "tsv: time, value_hex, known_hex";
     manifest["signals"] = Json::array();
 
     size_t total_rows = 0;

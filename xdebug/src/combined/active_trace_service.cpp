@@ -1,6 +1,7 @@
 #include "combined/active_trace_service.h"
 #include "combined/active_trace_common.h"
 #include "api/response.h"
+#include "core/npi/time_contract.h"
 #include "runtime/work_dir.h"
 
 #include "npi.h"
@@ -112,15 +113,15 @@ std::string passthrough_sigvec_candidate(const drvLoadStmt_s& statement,
 
 Json value_map(npiFsdbFileHandle fsdb,
                const std::vector<std::string>& signals,
-               const std::string& time_text,
+               const std::string& time_spec,
                std::vector<std::string>& limitations) {
     Json values = Json::object();
-    double numeric_time = 0.0;
-    std::string unit;
     npiFsdbTime time = 0;
-    if (!parse_time(time_text, numeric_time, unit) ||
-        !npi_fsdb_convert_time_in(fsdb, numeric_time, unit.c_str(), time)) {
-        limitations.push_back("can not convert time " + time_text + " to FSDB time");
+    std::string error;
+    xdebug_core::TimeParseOptions options;
+    options.default_unit = "ns";
+    if (!xdebug_core::parse_time(fsdb, time_spec, options, time, error)) {
+        limitations.push_back("can not convert time " + time_spec + " to FSDB time");
         return values;
     }
     for (const auto& signal : signals) {

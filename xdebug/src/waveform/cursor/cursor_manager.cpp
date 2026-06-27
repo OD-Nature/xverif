@@ -18,7 +18,6 @@ Json cursor_to_json(const Cursor& c) {
     Json j;
     j["name"] = c.name;
     j["time"] = c.time;
-    j["time_text"] = c.time_text;
     j["note"] = c.note;
     j["origin"] = c.origin.empty() ? "manual" : c.origin;
     j["clock"] = c.clock;
@@ -31,7 +30,6 @@ bool json_to_cursor(const Json& j, Cursor& c) {
     if (!j.is_object()) return false;
     c.name = j.value("name", "");
     c.time = j.value("time", static_cast<uint64_t>(0));
-    c.time_text = j.value("time_text", "");
     c.note = j.value("note", "");
     c.origin = j.value("origin", "manual");
     c.clock = j.value("clock", "");

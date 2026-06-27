@@ -5,6 +5,7 @@
 
 #include "npi_fsdb.h"
 #include <string>
+#include <utility>
 
 namespace xdebug_design {
 extern bool g_has_design;
@@ -30,6 +31,8 @@ extern ApbAnalyzer g_apb_analyzer;
 extern AxiAnalyzer g_axi_analyzer;
 
 std::string format_time(npiFsdbTime t);
+std::string format_duration(npiFsdbTime t);
+std::pair<std::string, std::string> format_time_range(npiFsdbTime begin, npiFsdbTime end);
 bool read_list_from_storage(const std::string& session_id,
                             const char* list_name, SignalList& out_list);
 bool find_list_diff(npiFsdbFileHandle file,

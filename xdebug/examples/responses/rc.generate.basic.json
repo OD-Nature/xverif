@@ -31,8 +31,7 @@
           "valid": true,
           "resolved_time": {
             "source": "120ns",
-            "time": "120000ps",
-            "time_value": 120000
+            "time": "120ns"
           }
         }
       ]

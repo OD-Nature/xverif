@@ -2,6 +2,7 @@
 
 #include "api/json_types.h"
 #include "core/npi/resource_guard.h"
+#include "core/npi/time_contract.h"
 
 #include "npi.h"
 #include "npi_fsdb.h"
@@ -9,12 +10,9 @@
 #include "npi_L1.h"
 
 #include <algorithm>
-#include <cctype>
 #include <cmath>
 #include <cstdio>
-#include <cstdlib>
 #include <fcntl.h>
-#include <iomanip>
 #include <sstream>
 #include <string>
 #include <unistd.h>
@@ -61,29 +59,13 @@ inline std::string statement_kind(int type) {
     }
 }
 
-inline bool parse_time(const std::string& s, double& val, std::string& unit) {
-    char* end = nullptr;
-    val = std::strtod(s.c_str(), &end);
-    if (!end || end == s.c_str()) return false;
-    while (*end && std::isspace(static_cast<unsigned char>(*end))) ++end;
-    unit = end;
-    if (unit == "f") unit = "fs"; else if (unit == "p") unit = "ps";
-    else if (unit == "n") unit = "ns"; else if (unit == "u") unit = "us";
-    else if (unit == "m") unit = "ms";
-    return !unit.empty();
-}
-
 inline std::string fsdb_value_at(npiFsdbFileHandle fsdb,
-                                  const std::string& sig, const std::string& t) {
+                                  const std::string& sig, npiFsdbTime time) {
     if (!fsdb) return "";
     npiFsdbSigHandle sh = npi_fsdb_sig_by_name(fsdb, sig.c_str(), nullptr);
     if (!sh) return "";
-    double tv; std::string unit;
-    if (!parse_time(t, tv, unit)) return "";
-    npiFsdbTime ft = 0;
-    if (!npi_fsdb_convert_time_in(fsdb, tv, unit.c_str(), ft)) return "";
     std::string raw;
-    int rc = npi_fsdb_sig_hdl_value_at(sh, ft, raw, npiFsdbBinStrVal);
+    int rc = npi_fsdb_sig_hdl_value_at(sh, time, raw, npiFsdbBinStrVal);
     return rc ? raw : "";
 }
 
@@ -96,33 +78,6 @@ inline std::string format_value(const std::string& raw) {
     std::ostringstream ss;
     ss << raw.size() << "'h" << std::hex << v;
     return ss.str();
-}
-
-inline bool nearly_integer(double value) {
-    return std::fabs(value - std::round(value)) < 1e-9;
-}
-
-inline std::string format_number_for_time(double value) {
-    std::ostringstream ss;
-    if (nearly_integer(value)) {
-        ss << static_cast<long long>(std::llround(value));
-    } else {
-        ss << std::setprecision(15) << value;
-    }
-    return ss.str();
-}
-
-inline std::string fsdb_time_to_precise_text(npiFsdbFileHandle fsdb,
-                                             npiFsdbTime time) {
-    double ns = 0.0;
-    if (npi_fsdb_convert_time_out(fsdb, time, "ns", ns) && nearly_integer(ns)) {
-        return format_number_for_time(ns) + "ns";
-    }
-    double ps = 0.0;
-    if (npi_fsdb_convert_time_out(fsdb, time, "ps", ps)) {
-        return format_number_for_time(ps) + "ps";
-    }
-    return "";
 }
 
 inline std::string driver_text(npiHandle h, const std::string& kind) {
@@ -153,12 +108,11 @@ inline bool previous_fsdb_change_time(npiFsdbFileHandle fsdb,
                                       std::string& precise_time,
                                       npiFsdbTime& precise_fsdb_time) {
     if (!fsdb) return false;
-    double value = 0.0;
-    std::string unit;
-    if (!parse_time(requested_time, value, unit)) return false;
-
     npiFsdbTime requested_fsdb_time = 0;
-    if (!npi_fsdb_convert_time_in(fsdb, value, unit.c_str(), requested_fsdb_time)) {
+    std::string error;
+    xdebug_core::TimeParseOptions options;
+    options.default_unit = "ns";
+    if (!xdebug_core::parse_time(fsdb, requested_time, options, requested_fsdb_time, error)) {
         return false;
     }
 
@@ -171,7 +125,7 @@ inline bool previous_fsdb_change_time(npiFsdbFileHandle fsdb,
     bool ok = false;
     if (npi_fsdb_goto_time(vct, requested_fsdb_time) &&
         npi_fsdb_vct_time(vct, &precise_fsdb_time)) {
-        precise_time = fsdb_time_to_precise_text(fsdb, precise_fsdb_time);
+        precise_time = xdebug_core::format_time(fsdb, precise_fsdb_time);
         ok = !precise_time.empty();
     }
     npi_fsdb_release_vct(vct);

@@ -9,7 +9,6 @@ namespace xdebug_waveform {
 struct Cursor {
     std::string name;
     uint64_t time = 0;
-    std::string time_text;
     std::string note;
     std::string origin;
     std::string clock;

@@ -51,7 +51,6 @@ Json changes_to_json(const fsdbTimeValPairVec_t& changes,
         }
         Json item;
         item["time"] = format_time(changes[i].first);
-        item["time_ps"] = changes[i].first;
         item["value"] = wave_value_json(changes[i].second, prefix);
         arr.push_back(item);
     }
@@ -378,7 +377,6 @@ Json ai_signal_stability(const Json& args, std::string& error) {
         std::string text = value_with_prefix(val.value.str, json_value_prefix(fmt));
         Json item;
         item["time"] = format_time(change_time);
-        item["time_ps"] = change_time;
         item["value"] = wave_value_json(val.value.str, json_value_prefix(fmt));
         arr.push_back(item);
         if (first.empty()) {
@@ -538,7 +536,6 @@ Json ai_expr_eval_at(const Json& args, std::string& error) {
     };
     data["expr"] = expr;
     data["time"] = format_time(t);
-    data["time_ps"] = t;
     data["status"] = xdebug_waveform::expr_tri_text(result);
     data["known"] = result != ExprTri::Unknown;
     data["expr_value"] = result == ExprTri::True ? Json(true) : result == ExprTri::False ? Json(false) : Json(nullptr);
@@ -974,8 +971,6 @@ Json ai_counter_statistics(const Json& args, std::string& error) {
         data["max_count"] = max_count;
         data["min_first_time"] = format_time(min_first_time);
         data["max_first_time"] = format_time(max_first_time);
-        data["min_first_time_ps"] = min_first_time;
-        data["max_first_time_ps"] = max_first_time;
     }
     return data;
 }

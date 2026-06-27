@@ -124,6 +124,24 @@ def _format_time_ns(ps: int) -> str:
     return f"{text}ns"
 
 
+def _parse_time_spec(text: Any, default: int) -> int:
+    if text is None:
+        return default
+    raw = str(text).strip().lower()
+    if not raw:
+        return default
+    units = {
+        "ms": 1_000_000_000,
+        "us": 1_000_000,
+        "ns": 1000,
+        "ps": 1,
+    }
+    for unit, scale in units.items():
+        if raw.endswith(unit):
+            return int(round(float(raw[:-len(unit)].strip()) * scale))
+    return int(round(float(raw) * 1000))
+
+
 def _text_width(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont) -> int:
     if hasattr(draw, "textlength"):
         return int(draw.textlength(text, font=font))
@@ -147,10 +165,10 @@ def _plot_left(draw: ImageDraw.ImageDraw, signals: list[dict[str, Any]],
     return label_x + max_label_width + label_gap
 
 
-def _time_to_x(time_ps: np.ndarray, begin: int, end: int, left: int, plot_width: int) -> np.ndarray:
+def _time_to_x(time_tick: np.ndarray, begin: int, end: int, left: int, plot_width: int) -> np.ndarray:
     if end <= begin:
-        return np.full(time_ps.shape, left, dtype=np.int64)
-    scaled = (time_ps.astype(np.float64) - float(begin)) / float(end - begin)
+        return np.full(time_tick.shape, left, dtype=np.int64)
+    scaled = (time_tick.astype(np.float64) - float(begin)) / float(end - begin)
     x = left + np.clip(np.rint(scaled * (plot_width - 1)), 0, plot_width - 1).astype(np.int64)
     return x
 
@@ -163,7 +181,7 @@ def _draw_signal(draw: ImageDraw.ImageDraw, data: SignalData, begin: int, end: i
     draw.line((left, mid, left + plot_width - 1, mid), fill=(220, 224, 230), width=1)
     if data.row_count == 0:
         return
-    xs = _time_to_x(np.asarray(data.time_ps), begin, end, left, plot_width)
+    xs = _time_to_x(np.asarray(data.time_tick), begin, end, left, plot_width)
     ys, known = _value_y_positions(data, high, low, mid)
     for i in range(data.row_count):
         x0 = int(xs[i])
@@ -184,8 +202,8 @@ def render_waveform(manifest_path: str | Path, output: str | Path,
     signals = manifest.get("signals") or []
     output_path = Path(output)
     stats_path = Path(stats_file) if stats_file else output_path.with_suffix(output_path.suffix + ".stats.json")
-    begin = int(manifest.get("begin_ps", 0))
-    end = int(manifest.get("end_ps", begin + 1))
+    begin = _parse_time_spec(manifest.get("begin"), 0)
+    end = _parse_time_spec(manifest.get("end"), begin + 1000)
     right = 24
     top = 48
     bottom = 32

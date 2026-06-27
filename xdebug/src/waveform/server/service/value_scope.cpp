@@ -217,10 +217,9 @@ void handle_list_export(int client_fd, const char* list_name, npiFsdbTime begin_
     out["signal_count"] = result.signal_count;
     out["row_count"] = result.row_count;
     out["signals"] = result.signals;
-    out["begin"] = format_time(begin_time);
-    out["end"] = format_time(end_time);
-    out["begin_ps"] = begin_time;
-    out["end_ps"] = end_time;
+    auto range = format_time_range(begin_time, end_time);
+    out["begin"] = range.first;
+    out["end"] = range.second;
     std::string response = json_response(out);
     send_all(client_fd, response.c_str(), response.length());
 }

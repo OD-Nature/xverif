@@ -6,13 +6,12 @@
 #include "../../waveform/stream/stream_analyzer.h"
 #include "../../waveform/stream/stream_exporter.h"
 #include "../../waveform/stream/stream_manager.h"
+#include "core/npi/time_contract.h"
 
 #include "npi_fsdb.h"
 #include "npi_L1.h"
 
 #include <ctime>
-#include <cctype>
-#include <cstdlib>
 #include <memory>
 #include <sstream>
 #include <sys/stat.h>
@@ -45,23 +44,11 @@ bool parse_time_arg(const std::string& text, bool allow_max, npiFsdbTime& out, s
         out = 0;
         return true;
     }
-    if (allow_max && text == "max") {
-        return npi_fsdb_max_time(g_fsdb_file, &out) != 0;
-    }
-    double value = 0;
-    char* end = nullptr;
-    value = std::strtod(text.c_str(), &end);
-    if (!end || end == text.c_str()) {
-        error = "invalid time: " + text;
-        return false;
-    }
-    while (*end && std::isspace(static_cast<unsigned char>(*end))) ++end;
-    std::string unit = *end ? std::string(end) : "ns";
-    if (!npi_fsdb_convert_time_in(g_fsdb_file, value, unit.c_str(), out)) {
-        error = "failed to convert time: " + text;
-        return false;
-    }
-    return true;
+    xdebug_core::TimeParseOptions options;
+    options.allow_max = allow_max;
+    options.use_fsdb_max = true;
+    options.default_unit = "ns";
+    return xdebug_core::parse_time(g_fsdb_file, text, options, out, error);
 }
 
 bool range_from_args(const Json& args, const Json& limits, StreamQueryOptions& options, std::string& error) {

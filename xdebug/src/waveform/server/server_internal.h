@@ -33,6 +33,7 @@
 #include <map>
 #include <sstream>
 #include <functional>
+#include <utility>
 #include <cstdarg>
 #include <unistd.h>
 #include <fcntl.h>
@@ -84,6 +85,8 @@ void send_error(int client_fd, const std::string& message);
 bool parse_user_time(const char* text, bool allow_max, npiFsdbTime& out_time, std::string& error);
 bool read_list_from_storage(const std::string& session_id, const char* list_name, SignalList& out_list);
 std::string format_time(npiFsdbTime t);
+std::string format_duration(npiFsdbTime t);
+std::pair<std::string, std::string> format_time_range(npiFsdbTime begin, npiFsdbTime end);
 bool json_time_range(const Json& args, npiFsdbTime& begin, npiFsdbTime& end, std::string& error);
 npiFsdbValType json_value_format(const Json& args);
 std::string server_compact_expr_ws(const std::string& expr);

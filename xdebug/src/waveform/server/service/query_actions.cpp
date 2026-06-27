@@ -1,4 +1,5 @@
 #include "../server_internal.h"
+#include "core/npi/time_contract.h"
 
 namespace xdebug_waveform {
 
@@ -63,13 +64,13 @@ Json ai_apb_transfer_window(const Json& args, std::string& error) {
             break;
         }
         Json txn = apb_txn_to_json(item.txn, true);
-        txn["time_ps"] = item.txn->time;
         arr.push_back(txn);
     }
+    auto range = format_time_range(begin, end);
     Json out;
     out["summary"] = {{"name", name},
-                      {"begin", format_time(begin)},
-                      {"end", format_time(end)},
+                      {"begin", range.first},
+                      {"end", range.second},
                       {"transaction_count", arr.size()}};
     if (truncated) out["summary"]["truncated"] = true;
     out["transactions"] = arr;
@@ -106,11 +107,12 @@ Json ai_axi_transactions_window(const Json& args, std::string& error) {
         }
         Json txn = axi_txn_to_json(item.txn);
         txn["match_time"] = format_time(item.match_time);
-        txn["match_time_ps"] = item.match_time;
-        txn["latency_ps"] = item.txn->resp_time >= item.txn->addr_time ? item.txn->resp_time - item.txn->addr_time : 0;
+        txn["latency"] = format_duration(
+            item.txn->resp_time >= item.txn->addr_time ? item.txn->resp_time - item.txn->addr_time : 0);
         arr.push_back(txn);
     }
-    return Json{{"name", name}, {"begin", format_time(begin)}, {"end", format_time(end)},
+    auto range = format_time_range(begin, end);
+    return Json{{"name", name}, {"begin", range.first}, {"end", range.second},
                 {"transaction_count", arr.size()}, {"truncated", truncated}, {"transactions", arr}};
 }
 
@@ -120,8 +122,15 @@ Json ai_axi_latency_outlier(const Json& args, std::string& error) {
     Json txns = data["transactions"];
     std::vector<Json> vec;
     for (const auto& t : txns) vec.push_back(t);
-    std::sort(vec.begin(), vec.end(), [](const Json& a, const Json& b) {
-        return a.value("latency_ps", 0ULL) > b.value("latency_ps", 0ULL);
+    auto latency_key = [](const Json& item) -> npiFsdbTime {
+        const std::string value = item.value("latency", std::string("0ns"));
+        npiFsdbTime time = 0;
+        std::string error;
+        if (!parse_user_time(value.c_str(), false, time, error)) return 0;
+        return time;
+    };
+    std::sort(vec.begin(), vec.end(), [&](const Json& a, const Json& b) {
+        return latency_key(a) > latency_key(b);
     });
     int top_n = args.value("top_n", 10);
     Json out = Json::array();
@@ -158,7 +167,6 @@ Json ai_axi_outstanding_timeline(const Json& args, std::string& error) {
         }
         Json item;
         item["time"] = format_time(s.time);
-        item["time_ps"] = s.time;
         if (filter == 0 || filter == 2) item["read"] = s.read;
         if (filter == 0 || filter == 1) item["write"] = s.write;
         arr.push_back(item);
@@ -309,8 +317,7 @@ Json ai_axi_channel_stall(const Json& args, std::string& error) {
 Json cursor_to_json(const Cursor& c) {
     Json j;
     j["name"] = c.name;
-    j["time"] = c.time;
-    j["time_text"] = c.time_text.empty() ? format_time(c.time) : c.time_text;
+    j["time"] = format_time(c.time);
     j["note"] = c.note;
     j["origin"] = c.origin;
     j["clock"] = c.clock;
@@ -323,7 +330,6 @@ Json resolved_time_json(const std::string& spec, npiFsdbTime time) {
     Json j;
     j["source"] = spec;
     j["time"] = format_time(time);
-    j["time_value"] = time;
     return j;
 }
 
@@ -341,7 +347,6 @@ Json ai_cursor_action(const std::string& action, const Json& args, std::string& 
         Cursor c;
         c.name = name;
         c.time = t;
-        c.time_text = format_time(t);
         c.note = args.value("note", std::string());
         c.origin = args.value("origin", std::string("manual"));
         c.clock = args.value("clock", std::string());
@@ -423,6 +428,19 @@ Json ai_cursor_action(const std::string& action, const Json& args, std::string& 
 Json ai_dispatch_query(const Json& req, std::string& error) {
     std::string action = req.value("action", std::string());
     Json args = req.value("args", Json::object());
+    xdebug_core::TimeRenderOptions time_render_options;
+    if (args.contains("time_unit")) {
+        if (!args["time_unit"].is_string()) {
+            error = "TIME_UNIT_INVALID: args.time_unit must be ns, ps, us, or auto";
+            return Json();
+        }
+        if (!xdebug_core::parse_time_render_unit(args["time_unit"].get<std::string>(),
+                                                 time_render_options.unit,
+                                                 error)) {
+            return Json();
+        }
+    }
+    xdebug_core::ScopedTimeRenderOptions time_render_scope(time_render_options);
     Json limits = req.value("limits", Json::object());
     for (auto it = limits.begin(); it != limits.end(); ++it) {
         if (!args.contains(it.key())) args[it.key()] = it.value();

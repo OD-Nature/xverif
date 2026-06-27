@@ -14,6 +14,7 @@
 #include "../../waveform/service/action_support.h"
 #include "../../waveform/service/rc_generator.h"
 #include "../../waveform/value/logic_value.h"
+#include "core/npi/time_contract.h"
 
 #include "npi.h"
 #include "npi_fsdb.h"
@@ -121,23 +122,6 @@ static Json make_xbit_hints(const Json& args,
                 {"commands", commands}};
 }
 
-// Parse TimeSpec string (e.g. "100ns") via waveform's parse_user_time with
-// fallback to simple <value><unit> conversion.
-static bool engine_parse_time(const std::string& text, npiFsdbTime& out) {
-    std::string error;
-    if (xdebug_waveform::parse_user_time(text.c_str(), false, out, error))
-        return true;
-    double val = 0;
-    std::string unit;
-    char* end = nullptr;
-    val = std::strtod(text.c_str(), &end);
-    if (!end || end == text.c_str()) return false;
-    while (*end && std::isspace(static_cast<unsigned char>(*end))) ++end;
-    unit = end;
-    if (unit.empty()) return false;
-    return npi_fsdb_convert_time_in(g_fsdb_file, val, unit.c_str(), out) != 0;
-}
-
 class ValueAtHandler : public EngineActionHandler {
 public:
     const char* action_name() const override { return "value.at"; }
@@ -157,8 +141,9 @@ public:
         if (fmt != 'h' && fmt != 'b' && fmt != 'd') fmt = 'h';
 
         npiFsdbTime fsdb_time = 0;
-        if (!engine_parse_time(time_str, fsdb_time))
-            return err("TIME_SPEC_INVALID", "failed to parse time: " + time_str);
+        std::string time_error;
+        if (!xdebug_waveform::parse_user_time(time_str.c_str(), false, fsdb_time, time_error))
+            return err("TIME_SPEC_INVALID", time_error.empty() ? "failed to parse time: " + time_str : time_error);
 
         npiFsdbValType vtype = xdebug_waveform::parse_format(fmt);
         std::string raw;
@@ -168,7 +153,8 @@ public:
 
         Json out;
         out["signal"] = signal;
-        out["time"] = time_str;
+        std::string formatted_time = xdebug_core::format_time(g_fsdb_file, fsdb_time);
+        out["time"] = formatted_time;
         std::string requested_format = args.value("format", "");
         if (requested_format == "array_indexed" && raw.find('{') == std::string::npos) {
             out["status"] = "unsupported_format";
@@ -182,7 +168,7 @@ public:
         out["known"] = !contains_xz(raw);
         Json hints = make_xbit_hints(args, signal, raw);
         if (!hints.is_null()) out["xbit_hints"] = hints;
-        out["summary"] = {{"signal", signal}, {"time", time_str},
+        out["summary"] = {{"signal", signal}, {"time", formatted_time},
                           {"known", !contains_xz(raw)}, {"status", out["status"]}};
         return out;
     }
@@ -224,8 +210,9 @@ public:
         if (fmt != 'h' && fmt != 'b' && fmt != 'd') fmt = 'h';
 
         npiFsdbTime fsdb_time = 0;
-        if (!engine_parse_time(time_str, fsdb_time))
-            return err("TIME_SPEC_INVALID", "failed to parse time: " + time_str);
+        std::string time_error;
+        if (!xdebug_waveform::parse_user_time(time_str.c_str(), false, fsdb_time, time_error))
+            return err("TIME_SPEC_INVALID", time_error.empty() ? "failed to parse time: " + time_str : time_error);
 
         std::vector<std::string> names;
         for (const auto& s : signals_j)
@@ -237,7 +224,8 @@ public:
             g_fsdb_file, names, fsdb_time, fmt, values, found);
 
         Json out;
-        out["time"] = time_str;
+        std::string formatted_time = xdebug_core::format_time(g_fsdb_file, fsdb_time);
+        out["time"] = formatted_time;
         Json batch = Json::array();
         Json missing_by_reason = Json::object();
         int missing_count = 0;
@@ -245,7 +233,7 @@ public:
         for (size_t i = 0; i < names.size(); ++i) {
             Json item;
             item["signal"] = names[i];
-            item["time"] = time_str;
+            item["time"] = formatted_time;
             if (found[i]) {
                 values[i] = with_value_prefix(values[i], fmt);
                 item["status"] = "ok";
@@ -262,7 +250,7 @@ public:
             batch.push_back(item);
         }
         out["values"] = batch;
-        out["summary"] = {{"time", time_str}, {"signal_count", batch.size()},
+        out["summary"] = {{"time", formatted_time}, {"signal_count", batch.size()},
                           {"x_or_z_count", unknown_count}, {"unknown_count", unknown_count},
                           {"missing_count", missing_count},
                           {"missing_by_reason", missing_by_reason}};
@@ -630,17 +618,18 @@ public:
 
         npiFsdbTime tbegin = 0, tend = ~0ULL;
         Json time_range = args.value("time_range", Json::object());
-        auto parse_t = [](const std::string& s, npiFsdbTime& t) {
-            if (s.empty()) return;
-            double v; std::string u; char* e = nullptr;
-            v = std::strtod(s.c_str(), &e);
-            if (!e || e == s.c_str()) return;
-            while (*e && std::isspace(*e)) ++e;
-            u = e;
-            npi_fsdb_convert_time_in(g_fsdb_file, v, u.c_str(), t);
+        auto parse_t = [](const std::string& s, bool allow_max, npiFsdbTime& t, std::string& error) -> bool {
+            if (s.empty()) return true;
+            xdebug_core::TimeParseOptions options;
+            options.allow_max = allow_max;
+            options.default_unit = "ns";
+            return xdebug_core::parse_time(g_fsdb_file, s, options, t, error);
         };
-        parse_t(time_range.value("start", time_range.value("begin", "")), tbegin);
-        parse_t(time_range.value("end", ""), tend);
+        std::string time_error;
+        if (!parse_t(time_range.value("start", time_range.value("begin", "")), false, tbegin, time_error) ||
+            !parse_t(time_range.value("end", ""), true, tend, time_error)) {
+            return Json({{"error","TIME_SPEC_INVALID"},{"message",time_error}});
+        }
 
         EventQuery query;
         query.expr = args.value("expr", "");
@@ -690,8 +679,7 @@ public:
         Json arr = Json::array();
         for (auto& rec : records) {
             Json je;
-            je["time"] = format_time(rec.time);
-            je["time_ps"] = rec.time;
+            je["time"] = xdebug_core::format_time(g_fsdb_file, rec.time);
             Json signal_values = Json::object();
             for (const auto& value : rec.signals)
                 signal_values[value.first] = value_object(value.second);
@@ -744,8 +732,9 @@ public:
             out["summary"]["first"] = out["first"];
             out["summary"]["last"] = out["last"];
         }
-        out["begin"] = time_range.value("start", time_range.value("begin", ""));
-        out["end"] = time_range.value("end", "");
+        auto formatted_range = xdebug_core::format_time_range(g_fsdb_file, tbegin, tend);
+        out["begin"] = formatted_range.first;
+        out["end"] = formatted_range.second;
         if (scan_limit > 0) out["scan_limit"] = scan_limit;
         out["sampling_mode"] = "clock_edge";
         return out;
@@ -789,7 +778,11 @@ public:
             std::string req_end = args["time_range"]["end"].get<std::string>();
             if (!req_end.empty() && result.contains("end") &&
                 result["end"].is_string() && result["end"] != req_end) {
-                result["end"] = req_end;
+                npiFsdbTime parsed_end = 0;
+                std::string parse_error;
+                if (xdebug_waveform::parse_user_time(req_end.c_str(), true, parsed_end, parse_error)) {
+                    result["end"] = xdebug_core::format_time(g_fsdb_file, parsed_end);
+                }
             }
         }
         return result;
@@ -810,14 +803,10 @@ public:
             return err("MISSING_FIELD", "args.conditions[] and args.time are required");
 
         npiFsdbTime fsdb_time = 0;
-        double tv; std::string unit;
-        char* end = nullptr;
-        tv = std::strtod(time_str.c_str(), &end);
-        if (!end || end == time_str.c_str()) return err("TIME_SPEC_INVALID", time_str);
-        while (*end && std::isspace(*end)) ++end;
-        unit = end;
-        if (!npi_fsdb_convert_time_in(g_fsdb_file, tv, unit.c_str(), fsdb_time))
-            return err("TIME_SPEC_INVALID", "failed to convert: " + time_str);
+        std::string time_error;
+        if (!xdebug_waveform::parse_user_time(time_str.c_str(), false, fsdb_time, time_error))
+            return err("TIME_SPEC_INVALID", time_error.empty() ? time_str : time_error);
+        std::string formatted_time = xdebug_core::format_time(g_fsdb_file, fsdb_time);
 
         Json results = Json::array();
         int passed = 0;
@@ -826,7 +815,7 @@ public:
         for (auto& cond : conditions) {
             Json r;
             r["signal"] = cond.value("signal", "");
-            r["time"] = time_str;
+            r["time"] = formatted_time;
             r["op"] = cond.value("op", "==");
             r["expected"] = cond.value("value", "");
             xdebug_waveform::LogicValue expected_value =
@@ -875,7 +864,7 @@ public:
         Json out;
         bool all_passed = failed == 0 && unknown == 0;
         out["summary"] = {
-            {"time", time_str},
+            {"time", formatted_time},
             {"verdict", all_passed ? "pass" : "fail"},
             {"condition_count", results.size()},
             {"all_passed", all_passed},
@@ -1079,18 +1068,16 @@ public:
         xdebug_waveform::SignalList lst;
         if (!read_list_storage(n, lst))
             return Json({{"error","LIST_NOT_FOUND"},{"message",n}});
-        double tv; std::string unit; char* e = nullptr;
-        tv = std::strtod(ts.c_str(), &e);
-        while (e && *e && std::isspace(*e)) ++e;
-        unit = e;
         npiFsdbTime ft = 0;
-        if (!unit.empty() && !npi_fsdb_convert_time_in(xdebug_waveform::g_fsdb_file, tv, unit.c_str(), ft))
-            return Json({{"error","TIME_SPEC_INVALID"}});
+        std::string time_error;
+        if (!xdebug_waveform::parse_user_time(ts.c_str(), false, ft, time_error))
+            return Json({{"error","TIME_SPEC_INVALID"},{"message",time_error}});
+        std::string formatted_time = xdebug_core::format_time(xdebug_waveform::g_fsdb_file, ft);
         std::vector<std::string> vals; std::vector<bool> found;
         xdebug_waveform::read_sig_vec_value_at_with_status(
             xdebug_waveform::g_fsdb_file, lst.signals, ft, 'h', vals, found);
         Json out;
-        out["summary"] = {{"name", n}, {"time", ts}, {"signal_count", static_cast<int>(lst.signals.size())}};
+        out["summary"] = {{"name", n}, {"time", formatted_time}, {"signal_count", static_cast<int>(lst.signals.size())}};
         Json sv = Json::object();
         for (size_t i = 0; i < lst.signals.size(); i++)
             sv[lst.signals[i]] = found[i] ? vals[i] : "NOT_FOUND";
@@ -1141,22 +1128,17 @@ public:
         xdebug_waveform::SignalList lst;
         if (!read_list_storage(n, lst))
             return Json({{"error","LIST_NOT_FOUND"},{"message",n}});
-        auto ptime = [](const std::string& s, npiFsdbTime& t) -> bool {
-            double v; std::string u; char* e = nullptr;
-            v = std::strtod(s.c_str(), &e);
-            while (e && *e && std::isspace(*e)) ++e;
-            u = e;
-            return !u.empty() && npi_fsdb_convert_time_in(xdebug_waveform::g_fsdb_file, v, u.c_str(), t);
-        };
         npiFsdbTime bt = 0, et = 0;
-        if (!ptime(bs, bt) || !ptime(es, et))
-            return Json({{"error","TIME_SPEC_INVALID"}});
+        std::string time_error;
+        if (!xdebug_waveform::parse_user_time(bs.c_str(), false, bt, time_error) ||
+            !xdebug_waveform::parse_user_time(es.c_str(), false, et, time_error))
+            return Json({{"error","TIME_SPEC_INVALID"},{"message",time_error}});
         npiFsdbTime dt = 0;
         bool found = xdebug_waveform::find_list_diff(
             xdebug_waveform::g_fsdb_file, lst.signals, bt, et, dt);
         Json out;
         if (found) {
-            std::string formatted = xdebug_waveform::format_time(dt);
+            std::string formatted = xdebug_core::format_time(xdebug_waveform::g_fsdb_file, dt);
             out["summary"] = {{"name", n}, {"diff_found", true}, {"diff_time", formatted}};
         } else {
             out["summary"] = {{"name", n}, {"diff_found", false}, {"diff_time", ""}};
@@ -1186,20 +1168,11 @@ public:
         if (bs.empty() || es.empty())
             return Json({{"error","MISSING_FIELD"},{"message","list.export requires begin/end"}});
 
-        auto ptime = [](const std::string& s, bool allow_max, npiFsdbTime& t) -> bool {
-            if (allow_max && (s == "max" || s == "inf")) {
-                t = 0xffffffffffffffffULL;
-                return true;
-            }
-            double v; std::string u; char* e = nullptr;
-            v = std::strtod(s.c_str(), &e);
-            while (e && *e && std::isspace(*e)) ++e;
-            u = e;
-            return !u.empty() && npi_fsdb_convert_time_in(xdebug_waveform::g_fsdb_file, v, u.c_str(), t);
-        };
         npiFsdbTime begin = 0, end = 0;
-        if (!ptime(bs, false, begin) || !ptime(es, true, end))
-            return Json({{"error","TIME_SPEC_INVALID"},{"message","failed to parse list.export time range"}});
+        std::string time_error;
+        if (!xdebug_waveform::parse_user_time(bs.c_str(), false, begin, time_error) ||
+            !xdebug_waveform::parse_user_time(es.c_str(), true, end, time_error))
+            return Json({{"error","TIME_SPEC_INVALID"},{"message",time_error.empty() ? "failed to parse list.export time range" : time_error}});
         if (end < begin)
             return Json({{"error","TIME_SPEC_INVALID"},{"message","end time is before begin time"}});
         if (end - begin < 256000ULL)
@@ -1234,10 +1207,9 @@ public:
         out["output_dir"] = result.output_dir;
         out["manifest_file"] = result.manifest_file;
         out["signals"] = result.signals;
-        out["begin"] = xdebug_waveform::format_time(begin);
-        out["end"] = xdebug_waveform::format_time(end);
-        out["begin_ps"] = begin;
-        out["end_ps"] = end;
+        auto range = xdebug_core::format_time_range(xdebug_waveform::g_fsdb_file, begin, end);
+        out["begin"] = range.first;
+        out["end"] = range.second;
         return out;
     }
 };

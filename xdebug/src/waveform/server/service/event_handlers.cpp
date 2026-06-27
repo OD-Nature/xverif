@@ -102,11 +102,6 @@ std::string format_axi_stat(const char* label, const xdebug_waveform::AxiStatRes
         + " samples=" + std::to_string(stat.samples) + "\n" + END_MARKER;
 }
 
-long long signed_delta(npiFsdbTime t, npiFsdbTime base) {
-    if (t >= base) return static_cast<long long>(t - base);
-    return -static_cast<long long>(base - t);
-}
-
 const char* relation_to_event(npiFsdbTime t, npiFsdbTime event_time) {
     if (t < event_time) return "before_event";
     if (t > event_time) return "after_event";
@@ -132,7 +127,6 @@ void handle_axi_stat(int client_fd, const char* name, bool latency, int filter,
 Json event_record_to_json(const xdebug_waveform::EventRecord& rec) {
     Json j;
     j["time"] = format_time(rec.time);
-    j["time_ps"] = rec.time;
     j["signals"] = rec.signals;
     j["fields"] = rec.fields;
     return j;
@@ -164,14 +158,16 @@ Json axi_context_to_json(const char* axi_name,
                                 const std::vector<xdebug_waveform::AxiContextTransaction>& txns) {
     Json ctx;
     ctx["name"] = axi_name ? axi_name : "";
-    ctx["window_ps"] = window_ps;
+    ctx["window"] = format_duration(window_ps);
     ctx["transactions"] = Json::array();
     for (const auto& item : txns) {
         Json txn = axi_txn_to_json(item.txn);
         txn["match_time"] = format_time(item.match_time);
-        txn["match_time_ps"] = item.match_time;
         txn["relation"] = relation_to_event(item.match_time, event_time);
-        txn["delta_ps"] = signed_delta(item.match_time, event_time);
+        npiFsdbTime delta = item.match_time >= event_time
+            ? item.match_time - event_time
+            : event_time - item.match_time;
+        txn["delta"] = (item.match_time < event_time ? "-" : "") + format_duration(delta);
         ctx["transactions"].push_back(txn);
     }
     return ctx;
@@ -183,14 +179,14 @@ Json apb_context_to_json(const char* apb_name,
                                 const std::vector<xdebug_waveform::ApbContextTransaction>& txns) {
     Json ctx;
     ctx["name"] = apb_name ? apb_name : "";
-    ctx["window_ps"] = window_ps;
+    ctx["window"] = format_duration(window_ps);
     ctx["transactions"] = Json::array();
     for (const auto& item : txns) {
         Json txn = apb_txn_to_json(item.txn, true);
         npiFsdbTime t = item.txn ? item.txn->time : 0;
-        txn["time_ps"] = t;
         txn["relation"] = relation_to_event(t, event_time);
-        txn["delta_ps"] = signed_delta(t, event_time);
+        npiFsdbTime delta = t >= event_time ? t - event_time : event_time - t;
+        txn["delta"] = (t < event_time ? "-" : "") + format_duration(delta);
         ctx["transactions"].push_back(txn);
     }
     return ctx;
@@ -241,7 +237,10 @@ std::string format_event_records_with_context_text(
                     out += "    " + format_axi_txn(item.txn)
                         + " match_time=" + format_time(item.match_time)
                         + " relation=" + relation_to_event(item.match_time, rec.time)
-                        + " delta_ps=" + std::to_string(signed_delta(item.match_time, rec.time))
+                        + " delta=" + std::string(item.match_time < rec.time ? "-" : "")
+                        + format_duration(item.match_time >= rec.time
+                                          ? item.match_time - rec.time
+                                          : rec.time - item.match_time)
                         + "\n";
                 }
             }
@@ -257,7 +256,8 @@ std::string format_event_records_with_context_text(
                     npiFsdbTime t = item.txn ? item.txn->time : 0;
                     out += "    " + format_apb_txn_with_type(item.txn)
                         + " relation=" + relation_to_event(t, rec.time)
-                        + " delta_ps=" + std::to_string(signed_delta(t, rec.time))
+                        + " delta=" + std::string(t < rec.time ? "-" : "")
+                        + format_duration(t >= rec.time ? t - rec.time : rec.time - t)
                         + "\n";
                 }
             }

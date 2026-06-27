@@ -14,6 +14,7 @@
 namespace xdebug_waveform {
 
 std::string format_time(npiFsdbTime t);
+std::string format_duration(npiFsdbTime t);
 
 namespace {
 
@@ -124,11 +125,11 @@ static std::string sv_hex(const std::string& value) {
 
 static void write_header(std::ofstream& out, char sep) {
     out << "seq" << sep
-        << "completion_time" << sep << "completion_time_ps" << sep
-        << "addr_time" << sep << "addr_time_ps" << sep
-        << "first_data_time" << sep << "first_data_time_ps" << sep
-        << "last_data_time" << sep << "last_data_time_ps" << sep
-        << "latency_ps" << sep
+        << "completion_time" << sep
+        << "addr_time" << sep
+        << "first_data_time" << sep
+        << "last_data_time" << sep
+        << "latency" << sep
         << "id" << sep << "addr" << sep << "len" << sep << "size" << sep
         << "burst" << sep << "resp" << sep
         << "beat_count" << sep << "expected_beat_count" << "\n";
@@ -137,11 +138,11 @@ static void write_header(std::ofstream& out, char sep) {
 static void write_txn(std::ofstream& out, char sep, const AxiExportTransaction& txn) {
     npiFsdbTime latency = txn.completion_time >= txn.addr_time ? txn.completion_time - txn.addr_time : 0;
     out << txn.seq << sep
-        << format_time(txn.completion_time) << sep << txn.completion_time << sep
-        << format_time(txn.addr_time) << sep << txn.addr_time << sep
-        << format_time(txn.first_data_time) << sep << txn.first_data_time << sep
-        << format_time(txn.last_data_time) << sep << txn.last_data_time << sep
-        << latency << sep
+        << format_time(txn.completion_time) << sep
+        << format_time(txn.addr_time) << sep
+        << format_time(txn.first_data_time) << sep
+        << format_time(txn.last_data_time) << sep
+        << format_duration(latency) << sep
         << sv_hex(txn.id) << sep << sv_hex(txn.addr) << sep << sv_hex(txn.len) << sep
         << sv_hex(txn.size) << sep << sv_hex(txn.burst) << sep << sv_hex(txn.resp) << sep
         << txn.beat_count << sep << txn.expected_beat_count << "\n";

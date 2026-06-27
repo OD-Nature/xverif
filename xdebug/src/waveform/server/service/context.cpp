@@ -1,4 +1,5 @@
 #include "../server_internal.h"
+#include "core/npi/time_contract.h"
 #include "session/session_types.h"
 #include "waveform/value/logic_value.h"
 
@@ -123,15 +124,11 @@ bool convert_duration_to_time(const DurationSpec& duration,
         error = "TIME_SPEC_INVALID: negative duration is not allowed here";
         return false;
     }
-    if (!g_fsdb_file ||
-        !npi_fsdb_convert_time_in(g_fsdb_file,
-                                  duration.value,
-                                  duration.unit.c_str(),
-                                  out_time)) {
-        error = "Failed to convert TimeSpec duration for FSDB scale " + fsdb_time_scale();
-        return false;
-    }
-    return true;
+    return xdebug_core::convert_time(g_fsdb_file,
+                                     duration.value,
+                                     duration.unit,
+                                     out_time,
+                                     error);
 }
 
 bool resolve_cycle_offset(npiFsdbTime base,
@@ -237,48 +234,11 @@ bool parse_user_time(const char* text,
     ParsedTimeSpec spec;
     if (!parse_time_spec_text(text, spec, error)) return false;
 
-    auto convert_abs = [&](const std::string& source, npiFsdbTime& out) -> bool {
-        if (source.empty() || source[0] == '-') {
-            error = std::string("Invalid time '") + source + "': negative time is not allowed";
-            return false;
-        }
-        char* end = nullptr;
-        errno = 0;
-        double value = strtod(source.c_str(), &end);
-        if (errno != 0 || end == source.c_str() || !std::isfinite(value) || value < 0) {
-            error = std::string("Invalid time '") + source + "'";
-            return false;
-        }
-        while (*end && std::isspace(static_cast<unsigned char>(*end))) ++end;
-        const char* unit = "ns";
-        if (*end != '\0') {
-            if (strcasecmp(end, "ms") == 0) {
-                value *= 1000.0;
-                unit = "us";
-            }
-            else if (strcasecmp(end, "us") == 0) unit = "us";
-            else if (strcasecmp(end, "ns") == 0) unit = "ns";
-            else if (strcasecmp(end, "ps") == 0) unit = "ps";
-            else if (strcasecmp(end, "fs") == 0) unit = "fs";
-            else {
-                error = std::string("Invalid time '") + source
-                      + "': unsupported unit, expected ms/us/ns/ps/fs (FSDB scale "
-                      + fsdb_time_scale() + ")";
-                return false;
-            }
-        }
-        npiFsdbTime converted = 0;
-        if (!g_fsdb_file || !npi_fsdb_convert_time_in(g_fsdb_file, value, unit, converted)) {
-            error = std::string("Failed to convert time '") + source
-                  + "' for FSDB scale " + fsdb_time_scale();
-            return false;
-        }
-        out = converted;
-        return true;
-    };
-
     if (spec.kind == TimeSpecKind::Absolute) {
-        return convert_abs(spec.absolute_text, out_time);
+        xdebug_core::TimeParseOptions options;
+        options.allow_max = allow_max;
+        options.default_unit = "ns";
+        return xdebug_core::parse_time(g_fsdb_file, spec.absolute_text, options, out_time, error);
     }
 
     std::string cursor_name = spec.cursor_name;
@@ -308,41 +268,15 @@ bool read_list_from_storage(const std::string& session_id, const char* list_name
 }
 
 std::string format_time(npiFsdbTime t) {
-    auto format_number = [](double value) {
-        char buf[64];
-        double rounded = std::round(value);
-        if (std::fabs(value - rounded) < 1e-9) {
-            snprintf(buf, sizeof(buf), "%.0f", rounded);
-        } else {
-            snprintf(buf, sizeof(buf), "%.6g", value);
-        }
-        return std::string(buf);
-    };
+    return xdebug_core::format_time(g_fsdb_file, t);
+}
 
-    if (g_fsdb_file) {
-        double us = 0.0;
-        if (npi_fsdb_convert_time_out(g_fsdb_file, t, "us", us) && us >= 1.0 &&
-            std::fabs(us - std::round(us)) < 1e-9) {
-            return format_number(us) + "us";
-        }
-        double ns = 0.0;
-        if (npi_fsdb_convert_time_out(g_fsdb_file, t, "ns", ns) && ns >= 1.0 &&
-            std::fabs(ns - std::round(ns)) < 1e-9) {
-            return format_number(ns) + "ns";
-        }
-        double ps = 0.0;
-        if (npi_fsdb_convert_time_out(g_fsdb_file, t, "ps", ps)) {
-            return format_number(ps) + "ps";
-        }
-    }
+std::string format_duration(npiFsdbTime t) {
+    return xdebug_core::format_duration(g_fsdb_file, t);
+}
 
-    if (t % 1000000 == 0 && t >= 1000000) {
-        return std::to_string(t / 1000000) + "us";
-    }
-    if (t % 1000 == 0 && t >= 1000) {
-        return std::to_string(t / 1000) + "ns";
-    }
-    return std::to_string(t) + "ps";
+std::pair<std::string, std::string> format_time_range(npiFsdbTime begin, npiFsdbTime end) {
+    return xdebug_core::format_time_range(g_fsdb_file, begin, end);
 }
 
 bool json_time_range(const Json& args,

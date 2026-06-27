@@ -4,6 +4,7 @@
 #include "../design/session/session_registry.h"
 #include "../design/session/session_transport.h"
 #include "core/logging/action_log.h"
+#include "core/npi/time_contract.h"
 #include "core/transport/file_exchange.h"
 #include "json.hpp"
 
@@ -449,6 +450,21 @@ static bool handle_client(int client_fd, bool& should_quit) {
     if (h->needs_waveform() && !g_has_waveform)
         return send_response(client_fd, error_response("WAVEFORM_NOT_LOADED",
             "waveform not loaded; open session with -fsdb"));
+
+    xdebug_core::TimeRenderOptions time_render_options;
+    Json args = request.value("args", Json::object());
+    if (args.contains("time_unit")) {
+        if (!args["time_unit"].is_string())
+            return send_response(client_fd, error_response("TIME_UNIT_INVALID",
+                "args.time_unit must be ns, ps, us, or auto"));
+        std::string time_unit_error;
+        if (!xdebug_core::parse_time_render_unit(args["time_unit"].get<std::string>(),
+                                                 time_render_options.unit,
+                                                 time_unit_error)) {
+            return send_response(client_fd, error_response("TIME_UNIT_INVALID", time_unit_error));
+        }
+    }
+    xdebug_core::ScopedTimeRenderOptions time_render_scope(time_render_options);
 
     ActionResourceScope resources;
     EngineActionContext ctx(g_session_id, action, resources);

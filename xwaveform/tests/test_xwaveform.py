@@ -16,8 +16,8 @@ class XwaveformTest(unittest.TestCase):
     def _write_u64bin(self, path, rows, word_count=1):
         with path.open("wb") as f:
             for row in rows:
-                time_ps, value_words, known_words = row
-                f.write(struct.pack("<Q", time_ps))
+                time_tick, value_words, known_words = row
+                f.write(struct.pack("<Q", time_tick))
                 for word in value_words:
                     f.write(struct.pack("<Q", word))
                 for word in known_words:
@@ -28,8 +28,8 @@ class XwaveformTest(unittest.TestCase):
             "version": 1,
             "format": "u64bin.v1",
             "list": "basic",
-            "begin_ps": 0,
-            "end_ps": 256000,
+            "begin": "0ns",
+            "end": "256ns",
             "signals": signals,
         }
         manifest_path = root / "manifest.json"
@@ -113,7 +113,7 @@ class XwaveformTest(unittest.TestCase):
     def test_value_plot_uses_full_width_words(self):
         data = SignalData(
             signal="top.wide",
-            time_ps=np.array([0, 128000, 256000], dtype=np.uint64),
+            time_tick=np.array([0, 128000, 256000], dtype=np.uint64),
             value_words=np.array([[0, 0], [0, 1], [0, 2]], dtype=np.uint64),
             known_words=np.array([[0xffffffffffffffff, 0xffffffffffffffff],
                                   [0xffffffffffffffff, 0xffffffffffffffff],

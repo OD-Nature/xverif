@@ -11,7 +11,7 @@ import numpy as np
 @dataclass(frozen=True)
 class SignalData:
     signal: str
-    time_ps: np.ndarray
+    time_tick: np.ndarray
     value_words: np.ndarray
     known_words: np.ndarray
     width: int
@@ -49,12 +49,12 @@ def load_signal(manifest: dict[str, Any], signal_or_index: str | int) -> SignalD
     word_count = int(entry.get("word_count", 1))
     columns = 1 + word_count * 2
     raw = np.memmap(path, dtype="<u8", mode="r", shape=(row_count, columns))
-    time_ps = raw[:, 0]
+    time_tick = raw[:, 0]
     value_words = raw[:, 1:1 + word_count]
     known_words = raw[:, 1 + word_count:1 + word_count * 2]
     return SignalData(
         signal=str(entry.get("signal", "")),
-        time_ps=time_ps,
+        time_tick=time_tick,
         value_words=value_words,
         known_words=known_words,
         width=int(entry.get("width", word_count * 64)),

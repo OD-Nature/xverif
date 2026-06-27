@@ -28,8 +28,6 @@
     "min_count": 2,
     "max_count": 1,
     "min_first_time": "120ns",
-    "max_first_time": "180ns",
-    "min_first_time_ps": 120000,
-    "max_first_time_ps": 180000
+    "max_first_time": "180ns"
   }
 }

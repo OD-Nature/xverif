@@ -6,7 +6,6 @@
   "properties": {
     "signal": {"type": "string"},
     "time": {"type": "string"},
-    "time_ps": {"type": "integer"},
     "value": {},
     "known": {"type": "boolean"}
   },
