@@ -314,46 +314,6 @@ Json ai_handshake_inspect(const Json& args, std::string& error) {
     return data;
 }
 
-Json ai_inspect_signal(const Json& args, std::string& error) {
-    Json data = ai_signal_changes(args, error);
-    if (!error.empty()) return Json();
-    npiFsdbTime glitch_threshold = 0;
-    std::string threshold = args.value("glitch_threshold", std::string("1ns"));
-    parse_user_time(threshold.c_str(), false, glitch_threshold, error);
-    if (!error.empty()) return Json();
-    fsdbTimeValPairVec_t raw_changes;
-    std::string signal = args.value("signal", std::string());
-    npiFsdbTime begin = 0, end = 0;
-    if (!json_time_range(args, begin, end, error)) return Json();
-    bool raw_truncated = false;
-    read_signal_changes(signal, begin, end, npiFsdbBinStrVal, raw_changes, error, -1, &raw_truncated);
-    if (!error.empty()) return Json();
-    Json arr = data["changes"];
-    Json period;
-    double total_period = 0.0;
-    int period_count = 0;
-    int glitch_count = 0;
-    const size_t change_count = raw_changes.empty() ? 0 : raw_changes.size();
-    for (size_t i = 1; i < change_count; ++i) {
-        npiFsdbTime t0 = raw_changes[i - 1].first;
-        npiFsdbTime t1 = raw_changes[i].first;
-        npiFsdbTime width = t1 >= t0 ? t1 - t0 : 0;
-        if (width > 0) {
-            total_period += static_cast<double>(width);
-            period_count++;
-            if (width < glitch_threshold) glitch_count++;
-        }
-    }
-    data["edge_count"] = arr.size();
-    data["glitch"] = {{"count", glitch_count}, {"threshold", format_time(glitch_threshold)}};
-    if (period_count > 0) {
-        period["avg"] = format_duration(static_cast<npiFsdbTime>(std::llround(total_period / period_count)));
-        period["samples"] = period_count;
-        data["period"] = period;
-    }
-    return data;
-}
-
 Json ai_detect_anomaly(const Json& args, std::string& error) {
     if (!args.contains("signals") || !args["signals"].is_array()) {
         error = "detect_anomaly requires args.signals[]";

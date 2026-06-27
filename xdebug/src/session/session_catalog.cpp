@@ -44,6 +44,14 @@ bool SessionCatalog::parse_record(const Json& item, SessionRecord& record) {
     record.bind_host = item.value("bind_host", std::string());
     record.port = item.value("port", 0);
     record.server_host = item.value("server_host", std::string());
+    record.dbdir_mtime = item.value("dbdir_mtime", 0L);
+    record.dbdir_size = item.value("dbdir_size", 0LL);
+    record.dbdir_dev = item.value("dbdir_dev", 0ULL);
+    record.dbdir_inode = item.value("dbdir_inode", 0ULL);
+    record.fsdb_mtime = item.value("fsdb_mtime", 0L);
+    record.fsdb_size = item.value("fsdb_size", 0LL);
+    record.fsdb_dev = item.value("fsdb_dev", 0ULL);
+    record.fsdb_inode = item.value("fsdb_inode", 0ULL);
     if (record.id.empty() || (record.daidir.empty() && record.fsdb.empty())) return false;
     record.mode = !record.daidir.empty() && !record.fsdb.empty()
         ? "combined"
@@ -85,6 +93,14 @@ Json session_record_json(const SessionRecord& record) {
     if (!record.bind_host.empty()) item["bind_host"] = record.bind_host;
     if (record.port > 0) item["port"] = record.port;
     if (!record.server_host.empty()) item["server_host"] = record.server_host;
+    if (record.dbdir_mtime) item["dbdir_mtime"] = record.dbdir_mtime;
+    if (record.dbdir_size) item["dbdir_size"] = record.dbdir_size;
+    if (record.dbdir_dev) item["dbdir_dev"] = record.dbdir_dev;
+    if (record.dbdir_inode) item["dbdir_inode"] = record.dbdir_inode;
+    if (record.fsdb_mtime) item["fsdb_mtime"] = record.fsdb_mtime;
+    if (record.fsdb_size) item["fsdb_size"] = record.fsdb_size;
+    if (record.fsdb_dev) item["fsdb_dev"] = record.fsdb_dev;
+    if (record.fsdb_inode) item["fsdb_inode"] = record.fsdb_inode;
     return item;
 }
 

@@ -25,6 +25,7 @@ private:
     std::string mode_for_target(const Json& target) const;
     bool send_to_socket(const std::string& session_id,
                         const std::string& socket_path,
+                        const std::string& category,
                         const Json& request,
                         Json& response) const;
 

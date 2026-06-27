@@ -37,7 +37,10 @@
         "response": [
           "examples/responses/apb.config.list.basic.json"
         ]
-      }
+      },
+      "required_args": [
+        "name"
+      ]
     },
     {
       "name": "apb.config.load",
@@ -211,7 +214,10 @@
         "response": [
           "examples/responses/axi.config.list.basic.json"
         ]
-      }
+      },
+      "required_args": [
+        "name"
+      ]
     },
     {
       "name": "axi.config.load",
@@ -736,28 +742,6 @@
       "required_args": [
         "valid",
         "ready"
-      ]
-    },
-    {
-      "name": "inspect_signal",
-      "category": "waveform",
-      "status": "deprecated",
-      "requires": "waveform",
-      "handler_kind": "engine_forward",
-      "schemas": {
-        "request": "schemas/v1/actions/inspect_signal.request.schema.json",
-        "response": "schemas/v1/actions/inspect_signal.response.schema.json"
-      },
-      "examples": {
-        "request": [
-          "examples/requests/inspect_signal.basic.json"
-        ],
-        "response": [
-          "examples/responses/inspect_signal.basic.json"
-        ]
-      },
-      "required_args": [
-        "signal"
       ]
     },
     {
@@ -1409,7 +1393,7 @@
       "name": "trace.active_driver",
       "category": "combined",
       "status": "stable",
-      "requires": "any",
+      "requires": "combined",
       "handler_kind": "engine_forward",
       "schemas": {
         "request": "schemas/v1/actions/trace.active_driver.request.schema.json",
@@ -1432,7 +1416,7 @@
       "name": "trace.active_driver_chain",
       "category": "combined",
       "status": "stable",
-      "requires": "any",
+      "requires": "combined",
       "handler_kind": "engine_forward",
       "schemas": {
         "request": "schemas/v1/actions/trace.active_driver_chain.request.schema.json",

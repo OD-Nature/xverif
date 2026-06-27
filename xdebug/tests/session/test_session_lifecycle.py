@@ -279,6 +279,35 @@ def test_session_gc_removes_crashed_engine(
 
 @pytest.mark.session
 @pytest.mark.waveform
+def test_session_doctor_reports_resource_changed_for_stale_fsdb(
+    resource_targets: dict,
+    cli_runner: CliRunner,
+    isolated_home: Path,
+) -> None:
+    name = "stale_fsdb"
+    try:
+        opened = cli_runner.run(
+            _request(
+                "session.open",
+                target=resource_targets["waveform"],
+                args={"name": name},
+            )
+        )
+        assert opened.ok
+        native = _registry_session(isolated_home, name)
+        native["fsdb_size"] = int(native.get("fsdb_size", 0)) + 1
+        _write_registry_session(isolated_home, native)
+
+        doctor = cli_runner.run(_request("session.doctor", target={"session_id": name}))
+        assert not doctor.ok
+        assert doctor.response["error"]["code"] == "RESOURCE_CHANGED"
+        assert doctor.response["summary"]["status"] == "resource_changed"
+    finally:
+        _kill_all(cli_runner)
+
+
+@pytest.mark.session
+@pytest.mark.waveform
 def test_session_file_transport_open_query_doctor_and_close(
     resource_targets: dict,
     cli_runner: CliRunner,

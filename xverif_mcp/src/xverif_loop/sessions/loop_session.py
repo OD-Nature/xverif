@@ -213,6 +213,12 @@ class XdebugLoopSession:
                           backend=self.backend, launcher=self.launcher.mode,
                           session_id=self.session_id, force=force,
                           state=self.state)
+        cleanup: Json = {
+            "backend_close": "skipped",
+            "stdio_quit": "skipped",
+            "terminate": "skipped",
+        }
+        errors: Json = {}
         if self.handle and self.state == "alive" and self.session_id and not force:
             try:
                 req = {
@@ -224,8 +230,10 @@ class XdebugLoopSession:
                     else {"format": "json"},
                 }
                 self._call_raw(req, timeout=close_timeout())
-            except Exception:
-                pass
+                cleanup["backend_close"] = "ok"
+            except Exception as exc:
+                cleanup["backend_close"] = "failed"
+                errors["backend_close"] = str(exc)
             try:
                 req = {
                     "request_id": f"quit-{_safe_name(self.alias)}",
@@ -233,18 +241,39 @@ class XdebugLoopSession:
                     "api_version": "xdebug.v1", "action": "stdio.quit",
                 }
                 self._call_raw(req, timeout=close_timeout() / 2)
-            except Exception:
-                pass
+                cleanup["stdio_quit"] = "ok"
+            except Exception as exc:
+                cleanup["stdio_quit"] = "failed"
+                errors["stdio_quit"] = str(exc)
+        elif force:
+            cleanup["backend_close"] = "force_skipped"
+            cleanup["stdio_quit"] = "force_skipped"
         if self.handle:
             try:
                 self.launcher.terminate(self.handle)
-            except Exception:
-                pass
+                cleanup["terminate"] = "ok"
+            except Exception as exc:
+                cleanup["terminate"] = "failed"
+                errors["terminate"] = str(exc)
+        self.last_cleanup = cleanup
+        if errors:
+            cleanup["errors"] = errors
+            log_session_event(self.alias, "session.close.end", False,
+                              backend=self.backend, launcher=self.launcher.mode,
+                              session_id=self.session_id, state=self.state,
+                              cleanup=cleanup)
+            return _error(
+                "SESSION_CLEANUP_PARTIAL_FAILURE",
+                "session cleanup failed; retry close or inspect cleanup details",
+                cleanup=cleanup,
+                session=self.public_json(),
+            )
         self.state = "closed"
         log_session_event(self.alias, "session.close.end", True,
                           backend=self.backend, launcher=self.launcher.mode,
-                          session_id=self.session_id, state=self.state)
-        return {"ok": True, "closed": self.public_json()}
+                          session_id=self.session_id, state=self.state,
+                          cleanup=cleanup)
+        return {"ok": True, "closed": self.public_json(), "cleanup": cleanup}
 
     def query(self, action: str, args: Optional[Json] = None,
               target: Optional[Json] = None, limits: Optional[Json] = None,

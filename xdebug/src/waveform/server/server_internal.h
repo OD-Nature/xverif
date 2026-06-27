@@ -139,7 +139,6 @@ Json ai_signal_statistics(const Json& args, std::string& error);
 Json ai_counter_statistics(const Json& args, std::string& error);
 Json ai_sampled_pulse_inspect(const Json& args, std::string& error);
 Json ai_handshake_inspect(const Json& args, std::string& error);
-Json ai_inspect_signal(const Json& args, std::string& error);
 Json ai_detect_anomaly(const Json& args, std::string& error);
 Json resolved_time_json(const std::string& spec, npiFsdbTime time);
 Json ai_dispatch_query(const Json& req, std::string& error);

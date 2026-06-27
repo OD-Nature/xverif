@@ -6,6 +6,7 @@
 #include "api/resource_resolver.h"
 #include "api/response.h"
 #include "common/path_utils.h"
+#include "core/session/session_types.h"
 #include "logging/action_log.h"
 
 #include <cerrno>
@@ -15,6 +16,7 @@
 #include <cstring>
 #include <unistd.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/un.h>
 
@@ -25,6 +27,45 @@ namespace {
 bool has_string(const Json& object, const char* key) {
     return object.contains(key) && object[key].is_string() &&
            !object[key].get<std::string>().empty();
+}
+
+bool fingerprint_recorded(long mtime, long long size,
+                          unsigned long long dev, unsigned long long inode) {
+    return mtime != 0 || size != 0 || dev != 0 || inode != 0;
+}
+
+bool resource_changed(const std::string& path,
+                      long expected_mtime,
+                      long long expected_size,
+                      unsigned long long expected_dev,
+                      unsigned long long expected_inode,
+                      std::string& message) {
+    if (path.empty() ||
+        !fingerprint_recorded(expected_mtime, expected_size, expected_dev, expected_inode)) {
+        return false;
+    }
+    struct stat st;
+    if (stat(path.c_str(), &st) != 0) {
+        message = "resource is missing or cannot be stat'ed: " + path;
+        return true;
+    }
+    bool content_changed = !xdebug_core::resource_content_matches(
+        expected_mtime, expected_size,
+        static_cast<long>(st.st_mtime), static_cast<long long>(st.st_size));
+    bool identity_changed = xdebug_core::resource_identity_differs(
+        expected_dev, expected_inode,
+        static_cast<unsigned long long>(st.st_dev),
+        static_cast<unsigned long long>(st.st_ino));
+    if (!content_changed && !identity_changed) return false;
+    message = "resource changed since session was opened: " + path;
+    return true;
+}
+
+bool session_resource_changed(const SessionRecord& record, std::string& message) {
+    return resource_changed(record.daidir, record.dbdir_mtime, record.dbdir_size,
+                            record.dbdir_dev, record.dbdir_inode, message) ||
+           resource_changed(record.fsdb, record.fsdb_mtime, record.fsdb_size,
+                            record.fsdb_dev, record.fsdb_inode, message);
 }
 
 std::string requested_name(const Json& request) {
@@ -304,7 +345,7 @@ Json Dispatcher::handle_engine_forward(const Json& request, const ActionSpec& sp
         }
         if (record.socket_path.empty()) return direct_socket_failed_error(request, spec.name, record);
         Json response;
-        if (send_to_socket(sid, record.socket_path, routed, response)) return response;
+        if (send_to_socket(sid, record.socket_path, spec.category, routed, response)) return response;
         return direct_socket_failed_error(request, spec.name, record);
     }
 
@@ -492,6 +533,19 @@ Json Dispatcher::handle_session(const Json& request, const std::string& action) 
         return response;
     }
     if (action == "session.doctor") {
+        std::string resource_message;
+        if (session_resource_changed(record, resource_message)) {
+            Json response = make_response(request, action, false);
+            response["session"] = session_record_json(record);
+            response["summary"] = {{"session_id", id}, {"mode", record.mode},
+                                   {"healthy", false}, {"status", "resource_changed"},
+                                   {"message", resource_message}};
+            response["data"] = {{"health", response["summary"]}};
+            response["error"] = {{"code", "RESOURCE_CHANGED"},
+                                 {"message", resource_message},
+                                 {"recoverable", true}};
+            return response;
+        }
         Json inner = request;
         inner["target"] = {{"session_id", id}};
         Json health = forward_action(inner);
@@ -566,6 +620,7 @@ Json Dispatcher::dispatch(const Json& request) {
 
 bool Dispatcher::send_to_socket(const std::string& session_id,
                                 const std::string& socket_path,
+                                const std::string& category,
                                 const Json& request,
                                 Json& response) const {
     const std::string action = request.value("action", std::string());
@@ -720,7 +775,7 @@ bool Dispatcher::send_to_socket(const std::string& session_id,
     if (data_payload.is_object() && data_payload.contains("summary")) {
         data_payload.erase("summary");
     }
-    if (result_summary.is_object() && data_payload.is_object()) {
+    if (category != "design" && result_summary.is_object() && data_payload.is_object()) {
         for (auto it = result_summary.begin(); it != result_summary.end(); ++it) {
             auto data_it = data_payload.find(it.key());
             if (data_it != data_payload.end() && *data_it == it.value()) {
@@ -731,13 +786,12 @@ bool Dispatcher::send_to_socket(const std::string& session_id,
     if (result_summary.is_object() && !result_summary.empty()) response["summary"] = result_summary;
     if (data_payload.is_object() && data_payload.contains("truncated") &&
         data_payload["truncated"].is_boolean()) {
-        if (data_payload["truncated"].get<bool>()) response["meta"] = {{"truncated", true}};
+        response["meta"] = {{"truncated", data_payload["truncated"].get<bool>()}};
         data_payload.erase("truncated");
     }
     if (!response.contains("meta") && result_summary.is_object() &&
-        result_summary.contains("truncated") && result_summary["truncated"].is_boolean() &&
-        result_summary["truncated"].get<bool>()) {
-        response["meta"] = {{"truncated", true}};
+        result_summary.contains("truncated") && result_summary["truncated"].is_boolean()) {
+        response["meta"] = {{"truncated", result_summary["truncated"].get<bool>()}};
     }
     if (engine_resp.contains("text") && engine_resp["text"].is_string()) {
         response["text"] = engine_resp["text"];

@@ -34,7 +34,6 @@
 | `expr.normalize` | none | OK | top=summary,data,meta summary_keys=confidence,expr,source data_keys=confidence,confidence_reason,expr,summary | no target expression |
 | `fsm.explain` | design | OK | top=summary,data,meta summary_keys=confidence,signal,transition_count data_keys=fsm,summary | real fixture sample |
 | `handshake.inspect` | wave | FAIL:ACTION_FAILED | top=summary,meta summary_keys=error,message | real fixture sample |
-| `inspect_signal` | wave | OK | top=summary,data,meta summary_keys=actual_transition_count,begin,edge_count,end,first_change,includes_initial_value data_keys=actual_transition_count,begin,changes,edge_count,end,final_value | real fixture sample |
 | `instance.map` | design | FAIL:MISSING_FIELD | top=summary,meta summary_keys=error,message | real fixture sample |
 | `interface.resolve` | design | FAIL:MISSING_FIELD | top=summary,meta summary_keys=error,message | real fixture sample |
 | `list.add` | waveform | FAIL:MISSING_FIELD | top=summary,meta summary_keys=error,message | extend list |

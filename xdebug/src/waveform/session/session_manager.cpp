@@ -661,13 +661,13 @@ bool SessionManager::ensure_session_current(const std::string& session_id) {
                   session.fsdb_size, current.fsdb_size,
                   session.fsdb_dev, current.fsdb_dev,
                   session.fsdb_inode, current.fsdb_inode);
-        xdebug_core::log_lifecycle_event("waveform", session_id, "ensure_session_current.fsdb_changed_restart", true,
+        xdebug_core::log_lifecycle_event("waveform", session_id, "ensure_session_current.resource_changed", false,
                                          {{"old_mtime", session.fsdb_mtime}, {"new_mtime", current.fsdb_mtime},
                                           {"old_size", session.fsdb_size}, {"new_size", current.fsdb_size},
                                           {"old_dev", session.fsdb_dev}, {"new_dev", current.fsdb_dev},
                                           {"old_inode", session.fsdb_inode}, {"new_inode", current.fsdb_inode},
                                           {"identity_changed", identity_changed}});
-        return restart_session(session_id);
+        return false;
     }
     if (xdebug_core::resource_identity_differs(session.fsdb_dev,
                                                session.fsdb_inode,

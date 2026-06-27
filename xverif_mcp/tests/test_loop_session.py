@@ -14,6 +14,7 @@ import pytest
 from xverif_mcp.config import default_xdebug_bin
 from xverif_mcp.sessions.launchers import DirectLauncher, LaunchConfig
 from xverif_mcp.sessions.loop_session import XdebugLoopSession, _safe_name
+from xverif_mcp.sessions.session_manager import McpSessionManager
 from xverif_mcp.lsf.protocol import JsonlProcess
 
 
@@ -214,7 +215,11 @@ class TestLoopSessionQuery:
 class TestLoopSessionClose:
     def test_close_changes_state(self, session):
         session.open()
-        session.close()
+        r = session.close()
+        assert r["ok"] is True
+        assert r["cleanup"]["backend_close"] == "ok"
+        assert r["cleanup"]["stdio_quit"] == "ok"
+        assert r["cleanup"]["terminate"] == "ok"
         assert session.state == "closed"
 
     def test_dead_session_query_fails(self, session):
@@ -223,3 +228,75 @@ class TestLoopSessionClose:
         r = session.query("value.at", {"signal": "clk"}, output_format="json")
         assert not r.get("ok")
         assert r["error"]["code"] == "SESSION_DEAD"
+
+    def test_close_backend_failure_reports_partial_failure(self, session, monkeypatch):
+        session.open()
+        original_call_raw = session._call_raw
+
+        def fail_backend_close(req, *args, **kwargs):
+            if req.get("action") == "session.close":
+                raise RuntimeError("backend close failed")
+            return original_call_raw(req, *args, **kwargs)
+
+        monkeypatch.setattr(session, "_call_raw", fail_backend_close)
+        r = session.close()
+
+        assert r["ok"] is False
+        assert r["error"]["code"] == "SESSION_CLEANUP_PARTIAL_FAILURE"
+        assert r["error"]["cleanup"]["backend_close"] == "failed"
+        assert "backend close failed" in r["error"]["cleanup"]["errors"]["backend_close"]
+        assert r["error"]["cleanup"]["stdio_quit"] == "ok"
+        assert r["error"]["cleanup"]["terminate"] == "ok"
+        assert session.state == "alive"
+
+    def test_close_terminate_failure_reports_partial_failure(self, fake_xdebug_bin):
+        class FailingTerminateLauncher(DirectLauncher):
+            def terminate(self, handle):
+                raise RuntimeError("terminate failed")
+
+        s = XdebugLoopSession(
+            alias="termfail",
+            fsdb="test.fsdb",
+            daidir=None,
+            launcher=FailingTerminateLauncher(),
+            xdebug_bin=fake_xdebug_bin,
+            startup_timeout_sec=5.0,
+            request_timeout_sec=5.0,
+        )
+        try:
+            assert s.open()["ok"] is True
+            r = s.close()
+            assert r["ok"] is False
+            assert r["error"]["code"] == "SESSION_CLEANUP_PARTIAL_FAILURE"
+            assert r["error"]["cleanup"]["terminate"] == "failed"
+            assert "terminate failed" in r["error"]["cleanup"]["errors"]["terminate"]
+            assert s.state == "alive"
+        finally:
+            try:
+                DirectLauncher().terminate(s.handle)
+            except Exception:
+                pass
+
+    def test_manager_keeps_session_after_close_partial_failure(self, fake_xdebug_bin, monkeypatch):
+        manager = McpSessionManager(
+            mode="direct",
+            xdebug_bin=fake_xdebug_bin,
+            startup_timeout_sec=5.0,
+            request_timeout_sec=5.0,
+        )
+        assert manager.open_session("keep", fsdb="test.fsdb")["ok"] is True
+        s = manager.sessions["keep"]
+        original_call_raw = s._call_raw
+
+        def fail_backend_close(req, *args, **kwargs):
+            if req.get("action") == "session.close":
+                raise RuntimeError("backend close failed")
+            return original_call_raw(req, *args, **kwargs)
+
+        monkeypatch.setattr(s, "_call_raw", fail_backend_close)
+        r = manager.close_session("keep")
+
+        assert r["ok"] is False
+        assert r["error"]["code"] == "SESSION_CLEANUP_PARTIAL_FAILURE"
+        assert manager.sessions["keep"] is s
+        assert s.state == "alive"

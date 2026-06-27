@@ -19,6 +19,14 @@ struct SessionRecord {
     std::string bind_host;
     int port = 0;
     std::string server_host;
+    long dbdir_mtime = 0;
+    long long dbdir_size = 0;
+    unsigned long long dbdir_dev = 0;
+    unsigned long long dbdir_inode = 0;
+    long fsdb_mtime = 0;
+    long long fsdb_size = 0;
+    unsigned long long fsdb_dev = 0;
+    unsigned long long fsdb_inode = 0;
 };
 
 // Read-only view of the canonical engine registry.

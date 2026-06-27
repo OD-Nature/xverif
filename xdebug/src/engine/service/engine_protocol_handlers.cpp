@@ -133,10 +133,10 @@ public:
     Json run(const Json& r, EngineActionContext& ctx) const override {
         Json a = r.value("args", Json::object());
         std::string name = a.value("name", "");
+        if (name.empty()) return Json({{"error","MISSING_FIELD"},{"message","args.name"}});
         xdebug_waveform::ApbManager am;
-        if (name.empty()) { am.get_latest_apb(xdebug_waveform::g_session_id, name); }
         xdebug_waveform::ApbConfig cfg;
-        if (name.empty() || !am.get_apb(xdebug_waveform::g_session_id, name, cfg))
+        if (!am.get_apb(xdebug_waveform::g_session_id, name, cfg))
             return Json({{"error","CONFIG_NOT_FOUND"}});
         Json out; out["name"] = name;
         out["clk"] = cfg.clk; out["rst_n"] = cfg.rst_n;
@@ -327,10 +327,10 @@ public:
     Json run(const Json& r, EngineActionContext& ctx) const override {
         Json a = r.value("args", Json::object());
         std::string name = a.value("name", "");
+        if (name.empty()) return Json({{"error","MISSING_FIELD"},{"message","args.name"}});
         xdebug_waveform::AxiManager am;
-        if (name.empty()) { am.get_latest_axi(xdebug_waveform::g_session_id, name); }
         xdebug_waveform::AxiConfig cfg;
-        if (name.empty() || !am.get_axi(xdebug_waveform::g_session_id, name, cfg))
+        if (!am.get_axi(xdebug_waveform::g_session_id, name, cfg))
             return Json({{"error","CONFIG_NOT_FOUND"}});
         Json out; out["name"] = name;
         out["clk"] = cfg.clk; out["rst_n"] = cfg.rst_n;

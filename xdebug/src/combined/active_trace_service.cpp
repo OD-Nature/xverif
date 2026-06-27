@@ -183,6 +183,8 @@ struct TraceNode {
     std::string active_time;
     Json value = nullptr;
     std::string next_signal;
+    std::string next_relation;
+    std::string next_confidence;
     std::string alias_kind;
 };
 
@@ -320,6 +322,8 @@ TraceNode trace_node_from_statement(const drvLoadStmt_s& statement,
 
     std::vector<std::string> signals;
     std::string next_signal;
+    std::string next_relation = "rhs_dependency";
+    std::string next_confidence = "high";
     for (const auto& handle : statement.sigHdlVec) {
         std::string name = normalized_signal_name(handle);
         if (name.empty()) continue;
@@ -338,7 +342,11 @@ TraceNode trace_node_from_statement(const drvLoadStmt_s& statement,
             std::string fallback = passthrough_sigvec_candidate(statement, current_signal);
             if (!fallback.empty()) {
                 NpiHandleGuard verify(npi_handle_by_name(fallback.c_str(), nullptr));
-                if (verify) next_signal = fallback;
+                if (verify) {
+                    next_signal = fallback;
+                    next_relation = "heuristic_rhs_dependency";
+                    next_confidence = "medium";
+                }
             }
         }
     }
@@ -355,6 +363,8 @@ TraceNode trace_node_from_statement(const drvLoadStmt_s& statement,
     node.active_time = active_time;
     node.value = value;
     node.next_signal = next_signal;
+    node.next_relation = next_relation;
+    node.next_confidence = next_confidence;
     node.alias_kind = kind == "modport_port" ? "interface_modport" :
                       kind == "port_boundary" ? "module_port" :
                       kind == "ref_obj" ? "direct_ref" : "none";
@@ -1026,8 +1036,8 @@ TraceBuildResult build_active_trace(
                             active.activeTime,
                             current.depth + 1,
                             node_id,
-                            "rhs_dependency",
-                            "high"
+                            node.next_relation.empty() ? "rhs_dependency" : node.next_relation,
+                            node.next_confidence.empty() ? "high" : node.next_confidence
                         });
                     } else if (visited.find(vkey(next, active.activeTime)) != visited.end()) {
                         result.limitations.push_back("cycle detected: " + current.signal + " → " + next);

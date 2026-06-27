@@ -121,7 +121,21 @@ def expected_compare_key(row):
 
 
 def require_completion_sorted(rows, label):
-    times = [int(row["completion_time_ps"]) for row in rows]
+    def completion_time_ps(row):
+        if "completion_time_ps" in row:
+            return int(row["completion_time_ps"])
+        text = row["completion_time"]
+        if text.endswith("ps"):
+            return int(text[:-2])
+        if text.endswith("ns"):
+            return int(text[:-2]) * 1000
+        if text.endswith("us"):
+            return int(text[:-2]) * 1000 * 1000
+        if text.endswith("ms"):
+            return int(text[:-2]) * 1000 * 1000 * 1000
+        return int(text)
+
+    times = [completion_time_ps(row) for row in rows]
     require(times == sorted(times), "{} export is not sorted by completion time".format(label))
 
 
@@ -465,8 +479,6 @@ def run_nonaxi(xdebug, fsdb):
         stats = r.query("signal.statistics", args={"signal": "ai_complex_top.hs_valid", "clock": "ai_complex_top.clk", "time_range": {"begin": "120ns", "end": "210ns"}, "max_samples": 1000})
         require(stats["data"]["sample_count"] > 0 and stats["data"]["known_count"] > 0, "signal.statistics did not sample")
         require("high_cycles" in stats["data"] and "low_cycles" in stats["data"], "signal.statistics missing cycle counts")
-        inspect = r.query("inspect_signal", args={"signal": "ai_complex_top.glitch_sig", "time_range": {"begin": "80ns", "end": "120ns"}, "glitch_threshold": "1ns"})
-        require(inspect["data"]["glitch"]["count"] >= 1, "glitch not detected")
         anomaly = r.query("detect_anomaly", args={
             "signals": ["ai_complex_top.glitch_sig", "ai_complex_top.stuck_sig", "ai_complex_top.xz_bus"],
             "time_range": {"begin": "0ns", "end": "200ns"},
@@ -474,6 +486,7 @@ def run_nonaxi(xdebug, fsdb):
             "max_findings": 10,
         })
         require(anomaly["summary"]["finding_count"] >= 3, "detect_anomaly missing findings")
+        require(any(f.get("type") == "glitch" for f in anomaly["data"].get("findings", [])), "glitch not detected")
         hs = r.query("handshake.inspect", args={
             "clock": "ai_complex_top.clk",
             "valid": "ai_complex_top.hs_valid",

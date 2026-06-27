@@ -11,6 +11,8 @@ SRC_ROOT = XDEBUG_ROOT / "src"
 
 
 REMOVED_STANDALONE_PATHS = [
+    "src/backend/engine_request_mapper.cpp",
+    "src/backend/engine_request_mapper.h",
     "src/design/commands/cmd_ai.cpp",
     "src/design/commands/cmd_ai.h",
     "src/design/service/router.cpp",

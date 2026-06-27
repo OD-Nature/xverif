@@ -14,7 +14,6 @@
       "name": "xdebug",
       "version": "0.1.0"
     },
-    "session": null,
     "summary": {
       "action_count": 85,
       "removed_count": 1
@@ -55,7 +54,6 @@
         "expr.normalize",
         "fsm.explain",
         "handshake.inspect",
-        "inspect_signal",
         "instance.map",
         "interface.resolve",
         "list.add",
@@ -630,21 +628,6 @@
           ],
           "response_examples": [
             "examples/responses/handshake.inspect.basic.json"
-          ]
-        },
-        {
-          "name": "inspect_signal",
-          "category": "waveform",
-          "status": "deprecated",
-          "requires": "waveform",
-          "request_schema": "schemas/v1/actions/inspect_signal.request.schema.json",
-          "response_schema": "schemas/v1/actions/inspect_signal.response.schema.json",
-          "handler_kind": "engine_forward",
-          "request_examples": [
-            "examples/requests/inspect_signal.basic.json"
-          ],
-          "response_examples": [
-            "examples/responses/inspect_signal.basic.json"
           ]
         },
         {
@@ -1485,7 +1468,6 @@
           "event.find",
           "expr.eval_at",
           "handshake.inspect",
-          "inspect_signal",
           "list.add",
           "list.create",
           "list.delete",
@@ -1531,8 +1513,7 @@
           "session.open"
         ]
       }
-    },
-    "error": null
+    }
   },
   "stderr": ""
 }

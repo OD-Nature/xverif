@@ -185,16 +185,23 @@ class McpSessionManager:
             return _error("SESSION_NOT_FOUND", f"session not found: {session}")
         old_state = s.state
         if s.state == "alive":
-            s.close()
+            rsp = s.close()
         else:
-            s.abort(f"close requested for non-alive session: {old_state}",
-                    source="close_dead")
+            cleanup = s.abort(f"close requested for non-alive session: {old_state}",
+                              source="close_dead")
+            rsp = {"ok": True, "closed": s.public_json(), "cleanup": cleanup}
+        if not rsp.get("ok", True):
+            log_session_event(s.alias, "manager.close.end", False,
+                              backend=self.backend, launcher=self.mode,
+                              session_id=s.session_id, previous_state=old_state,
+                              response=rsp)
+            return rsp
         self._evict_session(s)
         log_session_event(s.alias, "manager.close.end", True,
                           backend=self.backend, launcher=self.mode,
                           session_id=s.session_id, previous_state=old_state)
-        return {"ok": True, "closed": s.public_json(),
-                "previous_state": old_state}
+        rsp["previous_state"] = old_state
+        return rsp
 
     def list_sessions(self) -> Json:
         seen = set()

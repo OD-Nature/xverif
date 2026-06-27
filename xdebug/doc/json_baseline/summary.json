@@ -5,7 +5,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 55,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "action_count",
@@ -35,7 +34,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 43,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "action",
@@ -69,7 +67,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 43,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "all_ok",
@@ -108,7 +105,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 75,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "confidence",
@@ -122,7 +118,6 @@
       "summary"
     ],
     "meta": {
-      "elapsed_ms": null,
       "truncated": false
     },
     "note": "no target expression",
@@ -148,7 +143,6 @@
     "summary_keys": [],
     "data_keys": [],
     "meta": {
-      "elapsed_ms": null,
       "truncated": false
     },
     "note": "repo source file",
@@ -170,7 +164,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 46,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "before_count",
@@ -201,7 +194,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 51,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "session_count"
@@ -302,7 +294,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 318,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "mode",
@@ -335,7 +326,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 394,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "mode",
@@ -368,7 +358,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 377,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "mode",
@@ -402,7 +391,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 363,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "mode",
@@ -435,7 +423,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 62,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "status"
@@ -498,7 +485,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 53,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "active_cursor",
@@ -530,7 +516,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 81,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "active_cursor",
@@ -565,7 +550,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 57,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "created",
@@ -673,7 +657,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 76,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "count"
@@ -765,7 +748,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 62,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "loaded",
@@ -801,7 +783,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 53,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "count"
@@ -834,7 +815,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 293,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "mode",
@@ -1230,7 +1210,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 52,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "confidence",
@@ -1340,7 +1319,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 49,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "count",
@@ -1387,7 +1365,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 48,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "ambiguous",
@@ -1523,7 +1500,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 46,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "found",
@@ -1613,7 +1589,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 45,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "control_dependency_count",
@@ -1650,7 +1625,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 47,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "assignment_count",
@@ -1694,7 +1668,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 45,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "clock",
@@ -1734,7 +1707,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 46,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "confidence",
@@ -1772,7 +1744,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 46,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "confidence",
@@ -1913,7 +1884,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 46,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "path",
@@ -1958,7 +1928,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 50,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "design_count",
@@ -2042,7 +2011,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 53,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "known",
@@ -2087,7 +2055,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 52,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "missing_by_reason",
@@ -2166,7 +2133,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 48,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "name",
@@ -2206,7 +2172,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 58,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "all_found",
@@ -2320,7 +2285,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 54,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "expr",
@@ -2450,7 +2414,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 47,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "all_pass",
@@ -2551,7 +2514,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 60,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "actual_transition_count",
@@ -2612,7 +2574,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 69,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "begin",
@@ -2708,7 +2669,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 50,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "begin",
@@ -2775,7 +2735,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 55,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "average_value",
@@ -2876,70 +2835,11 @@
     }
   },
   {
-    "action": "inspect_signal",
-    "bucket": "wave",
-    "ok": true,
-    "rc": 0,
-    "elapsed_ms": 51,
-    "error_code": null,
-    "error_message": "",
-    "summary_keys": [
-      "actual_transition_count",
-      "begin",
-      "edge_count",
-      "end",
-      "first_change",
-      "includes_initial_value",
-      "last_change",
-      "mode",
-      "returned_change_rows",
-      "semantic_note",
-      "signal",
-      "transition_count",
-      "truncated"
-    ],
-    "data_keys": [
-      "actual_transition_count",
-      "begin",
-      "changes",
-      "edge_count",
-      "end",
-      "final_value",
-      "first_change",
-      "glitch",
-      "includes_initial_value",
-      "initial_value",
-      "last_change",
-      "mode"
-    ],
-    "meta": {
-      "truncated": false
-    },
-    "note": "real fixture sample",
-    "request": {
-      "api_version": "xdebug.v1",
-      "action": "inspect_signal",
-      "target": {
-        "session_id": "sample_wave"
-      },
-      "args": {
-        "signal": "ai_complex_top.counter_inc"
-      },
-      "limits": {
-        "timeout_ms": 120000
-      },
-      "output": {
-        "verbosity": "compact"
-      }
-    }
-  },
-  {
     "action": "detect_anomaly",
     "bucket": "wave",
     "ok": true,
     "rc": 0,
     "elapsed_ms": 45,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "finding_count",
@@ -3337,7 +3237,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 46,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "name",
@@ -3400,15 +3299,12 @@
     "action": "session.open",
     "bucket": "any",
     "ok": false,
-    "rc": null,
     "elapsed_ms": 0,
     "error_code": "NOT_RUN",
     "error_message": "no safe configured real fixture/request in this readonly pass",
     "summary_keys": [],
     "data_keys": [],
-    "meta": null,
-    "note": "not covered by sampling map",
-    "request": null
+    "note": "not covered by sampling map"
   },
   {
     "action": "session.kill.cleanup.sample_design",
@@ -3416,7 +3312,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 141,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "mode",
@@ -3451,7 +3346,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 136,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "mode",
@@ -3486,7 +3380,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 152,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "mode",
@@ -3521,7 +3414,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 128,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "mode",
@@ -3556,7 +3448,6 @@
     "ok": true,
     "rc": 0,
     "elapsed_ms": 155,
-    "error_code": null,
     "error_message": "",
     "summary_keys": [
       "mode",

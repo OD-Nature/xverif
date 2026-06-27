@@ -35,7 +35,6 @@ changes:
 - `signal.statistics`
 - `expr.eval_at`
 - `sampled_pulse.inspect`
-- `inspect_signal`
 - `detect_anomaly`
 - `stream.query`
 - `trace.active_driver`
@@ -254,28 +253,6 @@ first_risk:
   raw_time: 125ns
   payload: alias=data0 signal=top.data value=32'h4000000c
   sampled_valid: 1'h0
-```
-
-### inspect_signal
-
-```text
-@xdebug.inspect_signal.v1
-summary:
-  transition_count: 3
-  returned_change_rows: 4
-
-data:
-  signal: top.sig_a
-  edge_count: 4
-  initial_value: 'h0
-  final_value: 'h3
-
-changes:
-  time value
-  10ns 'h0
-  20ns 'h1
-  30ns 'h2
-  40ns 'h3
 ```
 
 ### detect_anomaly

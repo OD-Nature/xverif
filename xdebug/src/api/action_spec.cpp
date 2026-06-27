@@ -52,6 +52,15 @@ Json action_spec_descriptor(const ActionSpec& spec) {
     if (!spec.handler_kind.empty()) descriptor["handler_kind"] = spec.handler_kind;
     if (!spec.request_examples.empty()) descriptor["request_examples"] = spec.request_examples;
     if (!spec.response_examples.empty()) descriptor["response_examples"] = spec.response_examples;
+    if (!spec.args.required.empty()) descriptor["required_args"] = spec.args.required;
+    if (!spec.args.allowed_values.empty()) {
+        Json allowed = Json::object();
+        for (std::map<std::string, std::vector<std::string> >::const_iterator it = spec.args.allowed_values.begin();
+             it != spec.args.allowed_values.end(); ++it) {
+            allowed[it->first] = it->second;
+        }
+        descriptor["allowed_values"] = allowed;
+    }
     if (spec.name == "signal.changes") {
         descriptor["use_for"] = Json::array({"List exact value-change times", "Inspect waveform timeline edges", "Find first/last raw value changes"});
         descriptor["do_not_use_for"] = Json::array({"Counting clock-sampled high cycles", "Measuring valid active cycles", "Comparing pulse width"});

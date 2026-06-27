@@ -1361,18 +1361,6 @@ finding type：
 | `unsampled_valid_pulse` | `severity`、`raw_begin`、`raw_end`、`previous_sample_edge`、`next_sample_edge`、`nearest_sample_edge`、`raw_valid`、`sampled_valid`、`sampled_payloads`、`reason` |
 | `payload_changed_without_sampled_valid` | `severity`、`raw_time`、`previous_sample_edge`、`next_sample_edge`、`nearest_sample_edge`、`payload`、`sampled_valid`、`sampled_payloads`、`reason` |
 
-### `inspect_signal`
-
-继承 `signal.changes` 字段，并额外：
-
-| 路径 | 类型 | 含义 |
-| --- | --- | --- |
-| `data.edge_count` | number | edge 数 |
-| `data.glitch.count` | number | 小于阈值脉冲数 |
-| `data.glitch.threshold` | string | glitch 阈值 |
-| `data.period.avg_ps` | number | 平均周期 ps |
-| `data.period.samples` | number | period 样本数 |
-
 ### `detect_anomaly`
 
 | 路径 | 类型 | 含义 |
@@ -1503,7 +1491,6 @@ signal.stability
 signal.trend
 signal.statistics
 sampled_pulse.inspect
-inspect_signal
 detect_anomaly
 handshake.inspect
 axi.channel_stall

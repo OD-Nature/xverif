@@ -32,11 +32,118 @@ void add_schema_refs(ActionSpec& spec) {
     spec.response_examples.push_back("examples/responses/" + spec.name + ".basic.json");
 }
 
+void apply_arg_contract(ActionSpec& spec);
+
 void register_spec(ActionRegistry& r, ActionSpec spec) {
+    apply_arg_contract(spec);
     if (spec.status != ActionStatus::Removed) {
         add_schema_refs(spec);
     }
     r.register_spec(spec);
+}
+
+void require_args(ActionSpec& spec, const char* const* names, size_t count) {
+    for (size_t i = 0; i < count; ++i) spec.args.required.push_back(names[i]);
+}
+
+template <size_t N>
+void require_args(ActionSpec& spec, const char* const (&names)[N]) {
+    require_args(spec, names, N);
+}
+
+void allow_values(ActionSpec& spec, const char* key, const char* const* values, size_t count) {
+    std::vector<std::string>& out = spec.args.allowed_values[key];
+    for (size_t i = 0; i < count; ++i) out.push_back(values[i]);
+}
+
+template <size_t N>
+void allow_values(ActionSpec& spec, const char* key, const char* const (&values)[N]) {
+    allow_values(spec, key, values, N);
+}
+
+void apply_arg_contract(ActionSpec& spec) {
+    struct RequiredEntry {
+        const char* name;
+        const char* args[5];
+        size_t count;
+    };
+    const RequiredEntry required[] = {
+        {"apb.config.load", {"name"}, 1},
+        {"apb.config.list", {"name"}, 1},
+        {"apb.cursor", {"name", "op"}, 2},
+        {"apb.query", {"name"}, 1},
+        {"axi.analysis", {"name"}, 1},
+        {"axi.export", {"name"}, 1},
+        {"axi.config.load", {"name"}, 1},
+        {"axi.config.list", {"name"}, 1},
+        {"axi.cursor", {"name", "op"}, 2},
+        {"axi.query", {"name"}, 1},
+        {"control.explain", {"signal"}, 1},
+        {"counter.explain", {"signal"}, 1},
+        {"counter.statistics", {"clock", "time_range", "vld", "cnt"}, 4},
+        {"cursor.delete", {"name"}, 1},
+        {"cursor.set", {"time"}, 1},
+        {"cursor.use", {"name"}, 1},
+        {"detect_anomaly", {"signals"}, 1},
+        {"event.config.load", {"name"}, 1},
+        {"event.export", {"expr"}, 1},
+        {"event.find", {"expr"}, 1},
+        {"expr.eval_at", {"expr", "time"}, 2},
+        {"fsm.explain", {"signal"}, 1},
+        {"handshake.inspect", {"valid", "ready"}, 2},
+        {"list.add", {"name"}, 1},
+        {"list.create", {"name"}, 1},
+        {"list.delete", {"name"}, 1},
+        {"list.diff", {"name"}, 1},
+        {"list.export", {"name"}, 1},
+        {"list.validate", {"name"}, 1},
+        {"list.value_at", {"name", "time"}, 2},
+        {"procedural.assignment", {"signal"}, 1},
+        {"rc.generate", {"config_path", "rc_path"}, 2},
+        {"sequential.update", {"signal"}, 1},
+        {"signal.canonicalize", {"signal"}, 1},
+        {"signal.changes", {"signal"}, 1},
+        {"signal.resolve", {"signal"}, 1},
+        {"signal.stability", {"signal"}, 1},
+        {"signal.statistics", {"signal"}, 1},
+        {"signal.trend", {"signal"}, 1},
+        {"source.context", {"file", "line"}, 2},
+        {"stream.config.load", {"streams"}, 1},
+        {"stream.show", {"stream"}, 1},
+        {"stream.validate", {"stream"}, 1},
+        {"stream.query", {"stream", "query"}, 2},
+        {"stream.export", {"stream"}, 1},
+        {"trace.active_driver", {"signal", "requested_time"}, 2},
+        {"trace.active_driver_chain", {"signal", "requested_time"}, 2},
+        {"trace.driver", {"signal"}, 1},
+        {"trace.explain", {"signal"}, 1},
+        {"trace.load", {"signal"}, 1},
+        {"trace.path", {"from_signal", "to_signal"}, 2},
+        {"trace.query", {"signal"}, 1},
+        {"value.at", {"signal", "time"}, 2},
+        {"value.batch_at", {"signals", "time"}, 2},
+        {"verify.conditions", {"conditions", "time"}, 2},
+        {"window.verify", {"conditions", "time_range"}, 2}
+    };
+    for (size_t i = 0; i < sizeof(required) / sizeof(required[0]); ++i) {
+        if (spec.name == required[i].name) {
+            require_args(spec, required[i].args, required[i].count);
+            break;
+        }
+    }
+
+    const char* direction[] = {"wr", "rd"};
+    const char* cursor_direction[] = {"wr", "rd", "all"};
+    const char* cursor_op[] = {"begin", "next", "prev", "pre", "last"};
+    const char* value_format[] = {"h", "hex", "b", "bin", "binary", "d", "dec", "decimal", "array_indexed"};
+    if (spec.name == "apb.query" || spec.name == "axi.query") {
+        allow_values(spec, "direction", direction);
+    } else if (spec.name == "apb.cursor" || spec.name == "axi.cursor") {
+        allow_values(spec, "op", cursor_op);
+        allow_values(spec, "direction", cursor_direction);
+    } else if (spec.name == "value.at") {
+        allow_values(spec, "format", value_format);
+    }
 }
 
 void register_builtin(ActionRegistry& r) {
@@ -73,9 +180,6 @@ void register_design(ActionRegistry& r) {
             resource = ResourceRequirement::None;
         }
         ActionSpec spec = stable_spec(names[i], "design", resource, "engine_forward");
-        if (spec.name == "trace.driver") {
-            spec.args.required.push_back("signal");
-        }
         register_spec(r, spec);
     }
 }
@@ -127,7 +231,6 @@ void register_waveform(ActionRegistry& r) {
         {"signal.statistics", ActionStatus::Stable},
         {"counter.statistics", ActionStatus::Stable},
         {"sampled_pulse.inspect", ActionStatus::Experimental},
-        {"inspect_signal", ActionStatus::Deprecated},
         {"detect_anomaly", ActionStatus::Stable},
         {"handshake.inspect", ActionStatus::Stable},
         {"axi.channel_stall", ActionStatus::Experimental},
@@ -142,13 +245,6 @@ void register_waveform(ActionRegistry& r) {
             : ResourceRequirement::Waveform;
         ActionSpec spec = make_spec(entries[i].name, "waveform", entries[i].status,
                                     resource, "engine_forward");
-        if (spec.name == "value.at") {
-            spec.args.required.push_back("signal");
-            spec.args.required.push_back("time");
-        } else if (spec.name == "rc.generate") {
-            spec.args.required.push_back("config_path");
-            spec.args.required.push_back("rc_path");
-        }
         register_spec(r, spec);
     }
     const char* stream_names[] = {
@@ -167,17 +263,13 @@ void register_waveform(ActionRegistry& r) {
 }
 
 void register_combined(ActionRegistry& r) {
-    ActionSpec active = stable_spec("trace.active_driver", "combined", ResourceRequirement::Any, "engine_forward");
-    active.args.required.push_back("signal");
-    active.args.required.push_back("requested_time");
+    ActionSpec active = stable_spec("trace.active_driver", "combined", ResourceRequirement::Combined, "engine_forward");
     active.response_examples.push_back("examples/responses/trace.active_driver.exact_assignment.json");
     active.response_examples.push_back("examples/responses/trace.active_driver.control_only.json");
     register_spec(r, active);
 
     ActionSpec chain = stable_spec("trace.active_driver_chain", "combined",
-                                    ResourceRequirement::Any, "engine_forward");
-    chain.args.required.push_back("signal");
-    chain.args.required.push_back("requested_time");
+                                    ResourceRequirement::Combined, "engine_forward");
     register_spec(r, chain);
 }
 

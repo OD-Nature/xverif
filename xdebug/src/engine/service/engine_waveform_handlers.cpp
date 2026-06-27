@@ -757,9 +757,6 @@ public:
     Json run(const Json& request, EngineActionContext& ctx) const override {
         std::string error;
         Json effective_request = request;
-        if (name_ == "inspect_signal") {
-            effective_request["args"]["include_rows"] = true;
-        }
         Json result = xdebug_waveform::ai_dispatch_query(effective_request, error);
         if (!error.empty()) {
             Json e; e["error"] = "ACTION_FAILED"; e["message"] = error; return e;
@@ -1303,7 +1300,6 @@ void register_waveform_handlers(EngineActionRegistry& r) {
     r.add(std::unique_ptr<EngineActionHandler>(new AiActionHandler("expr.eval_at",          false, true)));
     r.add(std::unique_ptr<EngineActionHandler>(new AiActionHandler("window.verify",         false, true)));
     r.add(std::unique_ptr<EngineActionHandler>(new AiActionHandler("sampled_pulse.inspect", false, true)));
-    r.add(std::unique_ptr<EngineActionHandler>(new AiActionHandler("inspect_signal",        false, true)));
     r.add(std::unique_ptr<EngineActionHandler>(new AiActionHandler("detect_anomaly",        false, true)));
     r.add(std::unique_ptr<EngineActionHandler>(new AiActionHandler("handshake.inspect",     false, true)));
     r.add(std::unique_ptr<EngineActionHandler>(new AiActionHandler("apb.transfer_window",   false, true)));

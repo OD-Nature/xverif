@@ -53,6 +53,18 @@ static bool include_arg(const Json& request, const char* name) {
     return request.value("args", Json::object()).value(name, false);
 }
 
+static Json with_scalar_summary(Json out) {
+    if (out.contains("summary") && out["summary"].is_object() && !out["summary"].empty())
+        return out;
+    Json summary = Json::object();
+    for (auto it = out.begin(); it != out.end(); ++it) {
+        if (it->is_string() || it->is_number() || it->is_boolean() || it->is_null())
+            summary[it.key()] = it.value();
+    }
+    if (!summary.empty()) out["summary"] = summary;
+    return out;
+}
+
 static Json trace_expand_summary(const std::string& root,
                                  const std::string& direction,
                                  const detail::BfsResult& bfs,
@@ -100,7 +112,14 @@ public:
         if (signal.empty()) return err("MISSING_FIELD", "args.signal is required");
         TraceEngine engine;
         TraceResult result = engine.trace(signal, TraceMode::Driver, parse_trace_opts(args));
-        return Json::parse(engine.render_ai_json(result));
+        Json out = Json::parse(engine.render_ai_json(result));
+        out["summary"] = {
+            {"query", out.value("query", signal)},
+            {"result_count", out.value("result_count", 0)},
+            {"confidence", out.value("confidence", "unknown")},
+            {"resolution", out.value("resolution", Json::object())}
+        };
+        return out;
     }
 
 private:
@@ -142,7 +161,7 @@ public:
         if (signal.empty()) return err("MISSING_FIELD", "args.signal is required");
         SignalFinder finder;
         SignalResolveResult result = finder.resolve(signal);
-        return Json::parse(finder.render_json(result));
+        return with_scalar_summary(Json::parse(finder.render_json(result)));
     }
 
 private:
@@ -165,7 +184,7 @@ public:
         int limit = args.value("limit",
             limits.value("max_results", limits.value("max_rows", 0)));
         PortAnalyzer analyzer;
-        return Json::parse(analyzer.render_port_trace(path, limit));
+        return with_scalar_summary(Json::parse(analyzer.render_port_trace(path, limit)));
     }
 
 private:
@@ -185,7 +204,7 @@ public:
         std::string path = args.value("path", std::string());
         if (path.empty()) return err("MISSING_FIELD", "args.path is required");
         PortAnalyzer analyzer;
-        return Json::parse(analyzer.render_instance_map(path));
+        return with_scalar_summary(Json::parse(analyzer.render_instance_map(path)));
     }
 
 private:
@@ -205,7 +224,7 @@ public:
         std::string path = args.value("path", std::string());
         if (path.empty()) return err("MISSING_FIELD", "args.path is required");
         PortAnalyzer analyzer;
-        return Json::parse(analyzer.render_interface_resolve(path));
+        return with_scalar_summary(Json::parse(analyzer.render_interface_resolve(path)));
     }
 
 private:
@@ -272,10 +291,12 @@ public:
         Json out;
         bool compact = compact_mode(request) && !include_arg(request, "include_debug");
         Json summary = trace_expand_summary(root, direction, bfs, graph, rel_edges, agg_count, compact);
+        out["summary"] = summary;
         for (auto it = summary.begin(); it != summary.end(); ++it) {
             if (it.value().is_string() || it.value().is_number() || it.value().is_boolean())
                 out[it.key()] = it.value();
         }
+        out["meta"] = {{"truncated", bfs.truncated}};
         out["truncated"] = bfs.truncated;
         out["graph"] = Json::parse(graph.dump());
         if (!compact || include_arg(request, "include_trace"))
@@ -284,7 +305,7 @@ public:
             out["expanded_queries"] = Json::parse(bfs.expanded_queries.dump());
         append_bfs_warnings(out, bfs);
         if (!bfs.root_error.empty()) out["error"] = Json::parse(bfs.root_error.dump());
-        return out;
+        return with_scalar_summary(out);
     }
 };
 
@@ -359,7 +380,7 @@ public:
             out["expanded_queries"] = Json::parse(bfs.expanded_queries.dump());
         append_bfs_warnings(out, bfs);
         if (!bfs.root_error.empty()) out["error"] = Json::parse(bfs.root_error.dump());
-        return out;
+        return with_scalar_summary(out);
     }
 };
 
@@ -434,6 +455,13 @@ public:
         out["found"] = found;
         out["path_count"] = paths.size();
         out["truncated"] = bfs.truncated;
+        out["summary"] = {
+            {"from_signal", from_sig},
+            {"to_signal", to_sig},
+            {"found", found},
+            {"path_count", paths.size()},
+            {"truncated", bfs.truncated}
+        };
         out["paths"] = Json::parse(paths.dump());
         return out;
     }
@@ -556,7 +584,7 @@ public:
         };
         if (defaults != assignments) procedural_assignment["default_assignments"] = defaults;
         out["procedural_assignment"] = Json::parse(procedural_assignment.dump());
-        return out;
+        return with_scalar_summary(out);
     }
 };
 

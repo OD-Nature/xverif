@@ -2,6 +2,7 @@
 
 #include "api/json_types.h"
 
+#include <map>
 #include <string>
 #include <vector>
 
@@ -25,6 +26,7 @@ enum class ResourceRequirement {
 
 struct ArgSpec {
     std::vector<std::string> required;
+    std::map<std::string, std::vector<std::string> > allowed_values;
 };
 
 struct ActionSpec {
@@ -47,4 +49,3 @@ ResourceRequirement resource_requirement_from_string(const std::string& value);
 Json action_spec_descriptor(const ActionSpec& spec);
 
 } // namespace xdebug
-

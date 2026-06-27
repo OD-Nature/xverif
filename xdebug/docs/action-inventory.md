@@ -34,8 +34,8 @@ example 和 contract test 迁移使用。状态定义：
 | `session.kill` | session | stable | session | dispatcher + backend session managers | partial |
 | `session.close` | session | stable | session | alias-compatible close path | partial |
 | `session.gc` | session | stable | none | dispatcher + waveform gc | partial |
-| `trace.active_driver` | combined | stable | any | unified engine handler + combined helper | regression |
-| `trace.active_driver_chain` | combined | stable | any | unified engine handler + combined helper | partial |
+| `trace.active_driver` | combined | stable | combined | unified engine handler + combined helper | regression |
+| `trace.active_driver_chain` | combined | stable | combined | unified engine handler + combined helper | partial |
 
 ## Design Actions
 
@@ -106,7 +106,6 @@ example 和 contract test 迁移使用。状态定义：
 | `signal.statistics` | waveform | stable | waveform | waveform engine forward | regression |
 | `counter.statistics` | waveform | stable | waveform | waveform engine forward | targeted |
 | `sampled_pulse.inspect` | waveform | experimental | waveform | waveform engine forward | partial |
-| `inspect_signal` | waveform | deprecated | waveform | waveform engine forward | partial |
 | `detect_anomaly` | waveform | stable | waveform | waveform engine forward | partial |
 | `handshake.inspect` | waveform | stable | waveform | waveform engine forward | regression |
 | `axi.channel_stall` | waveform | experimental | waveform | waveform engine forward | partial |

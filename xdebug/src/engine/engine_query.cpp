@@ -148,6 +148,14 @@ std::string ensure_error_code(const SessionEnsureResult& result) {
     return "SESSION_UNHEALTHY";
 }
 
+std::string health_error_code(SessionHealthStatus status) {
+    if (status == SessionHealthStatus::FsdbChanged ||
+        status == SessionHealthStatus::DbdirChanged) return "RESOURCE_CHANGED";
+    if (status == SessionHealthStatus::FsdbMissing ||
+        status == SessionHealthStatus::DbdirMissing) return "RESOURCE_MISSING";
+    return "SESSION_UNHEALTHY";
+}
+
 OrderedJson scalar_summary(const OrderedJson& data) {
     OrderedJson summary = OrderedJson::object();
     if (!data.is_object()) return summary;
@@ -262,7 +270,7 @@ OrderedJson handle_session_action(const OrderedJson& request, const std::string&
                                {"status", session_health_status_name(health.status)}, {"message", health.message}};
         response["data"] = {{"health", response["summary"]}};
         if (!health.healthy) {
-            response["error"] = {{"code", "SESSION_UNHEALTHY"}, {"message", health.message},
+            response["error"] = {{"code", health_error_code(health.status)}, {"message", health.message},
                                  {"recoverable", true}, {"candidates", OrderedJson::array()}, {"suggested_actions", OrderedJson::array()}};
         }
         return response;
@@ -327,7 +335,7 @@ OrderedJson handle_engine_forward(const OrderedJson& request, const std::string&
     }
     if (ordered_data.is_object() && ordered_data.contains("truncated") &&
         ordered_data["truncated"].is_boolean()) {
-        if (ordered_data["truncated"].get<bool>()) response["meta"] = {{"truncated", true}};
+        response["meta"] = {{"truncated", ordered_data["truncated"].get<bool>()}};
         ordered_data.erase("truncated");
     }
     if (!response.contains("meta") && response["summary"].is_object() &&
