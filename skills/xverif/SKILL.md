@@ -5,8 +5,8 @@ description: >
   事实和 RTL 因果，SDK-free xdebug wrapper 在没有 MCP SDK 或需要脚本化 LSF
   stdio-loop session 时使用，MCP xverif tools 用于交互式 AI 工具访问，xcov 查询
   VCS/Verdi coverage database，xbit 做确定性 bit/SV literal/表达式计算，xloc
-  还原压缩日志位置 ID，xentry 解 entry/descriptor fragments，xberif 管理项目
-  context cards/details，xsva 解析 SVA IR，xeda-runner 安全执行 EDA 命令。
+  还原压缩日志位置 ID，xentry 解 entry/descriptor fragments，xsva 解析
+  SVA IR，xeda-runner 安全执行 EDA 命令。
 ---
 
 # xverif 工具 Skill
@@ -38,7 +38,6 @@ description: >
 | 计算 bit slice、SV literal、mask、表达式、expected value | [references/xbit.md](references/xbit.md) |
 | 还原 `L_XXXXXXXX` 日志位置 ID | [references/xloc.md](references/xloc.md) |
 | 解 entry/descriptor/header fragments | [references/xentry.md](references/xentry.md) |
-| 管理项目 context cards/details | [references/xberif.md](references/xberif.md) |
 | 解析和解释 SVA IR | [references/xsva.md](references/xsva.md) |
 | 安全执行 make/vcs/simv/verdi 类 EDA 命令 | [references/xeda-runner.md](references/xeda-runner.md) |
 

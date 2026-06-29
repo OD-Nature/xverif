@@ -6,7 +6,7 @@
 
 - xdebug：stateful backend，`xverif_debug_*`。
 - xcov：stateful backend，`xverif_cov_*`。
-- xbit/xentry/xloc/xberif/xsva：stateless CLI adapter。
+- xbit/xentry/xloc/xsva：stateless CLI adapter。
 - common：`xverif_tools`、`xverif_tool_help`、`xverif_batch`。
 
 如果不确定哪些工具暴露，先调用 `xverif_tools`。`XVERIF_MCP_ENABLE_*` 可能关闭部分工具组。

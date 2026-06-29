@@ -17,9 +17,6 @@ from xverif_mcp.adapters.xcov import XverifCoverageAdapter
 from xverif_mcp.adapters.xbit import bit_conv, bit_eval, bit_slice, bit_check
 from xverif_mcp.adapters.xentry import entry_decode, entry_explain, entry_validate
 from xverif_mcp.adapters.xloc import loc_resolve, loc_context, loc_stats, loc_annotate
-from xverif_mcp.adapters.xberif import (context_status, context_list_topics, context_brief,
-                                         context_get, context_detail, context_validate,
-                                         context_config_init, context_init, context_repair)
 from xverif_mcp.adapters.xsva import sva_list, sva_scan, sva_parse, sva_explain
 from xverif_mcp.errors import error_payload
 from xverif_mcp.tool_policy import filtered_catalog, policy_summary, tool_enabled
@@ -33,7 +30,7 @@ xverif-mcp — https://github.com/BLANK2077/xverif
 
 Exposes deterministic local tools for chip verification debug agents.
 The xdebug and xcov backends are stateful and may run locally or through LSF.
-Other tools (xbit, xentry, xloc, xberif, xsva) are stateless in-process adapters.
+Other tools (xbit, xentry, xloc, xsva) are stateless in-process adapters.
 
 Typical workflow:
 1. Call xverif_tools to discover available tools.
@@ -705,91 +702,6 @@ def xverif_loc_annotate(log_path: str, map_path: Optional[str] = None,
 
 
 # ---------------------------------------------------------------------------
-# Context tools (xberif - stateless in-process adapter)
-# ---------------------------------------------------------------------------
-
-
-@xverif_tool("context")
-def xverif_context_status(project_root: Optional[str] = None,
-                           output_format: str = "xout") -> Any:
-    """Check xberif project status (which kinds, cards, details exist)."""
-    return context_status(project_root=project_root, output_format=output_format)
-
-
-@xverif_tool("context")
-def xverif_context_topics(project_root: Optional[str] = None,
-                                output_format: str = "xout") -> Any:
-    """List all known context topics."""
-    return context_list_topics(project_root=project_root, output_format=output_format)
-
-
-@xverif_tool("context")
-def xverif_context_brief(mode: str = "debug", project_root: Optional[str] = None,
-                          output_format: str = "xout") -> Any:
-    """Generate a context summary brief for the given mode.
-
-    Args:
-        mode: Context mode (e.g. "debug").
-        output_format: "json" or "xout".
-    """
-    return context_brief(mode=mode, project_root=project_root,
-                         output_format=output_format)
-
-
-@xverif_tool("context")
-def xverif_context_topic(topic: str, detail: bool = False,
-                        project_root: Optional[str] = None,
-                        output_format: str = "xout") -> Any:
-    """Get a topic summary card, optionally with full detail.
-
-    Args:
-        topic: Topic name (e.g. "clk_rst", "memory_map").
-        detail: If True, also include full detail content.
-        output_format: "json" or "xout".
-    """
-    return context_get(topic, detail=detail, project_root=project_root,
-                       output_format=output_format)
-
-
-@xverif_tool("context")
-def xverif_context_topic_detail(topic: str, project_root: Optional[str] = None,
-                           output_format: str = "markdown") -> Any:
-    """Get the full detail markdown for a topic.
-
-    Args:
-        topic: Topic name.
-        output_format: "markdown" (raw detail text).
-    """
-    return context_detail(topic, project_root=project_root,
-                          output_format=output_format)
-
-
-@xverif_tool("context")
-def xverif_context_validate(project_root: Optional[str] = None,
-                             output_format: str = "xout") -> Any:
-    """Validate project cards and detail files for consistency."""
-    return context_validate(project_root=project_root, output_format=output_format)
-
-
-@xverif_tool("context_write", write=True)
-def xverif_context_init_config(kind: str, project_root: Optional[str] = None) -> Any:
-    """Initialize xberif kind.toml config. Requires XVERIF_MCP_ENABLE_WRITE=1."""
-    return context_config_init(kind, project_root=project_root)
-
-
-@xverif_tool("context_write", write=True)
-def xverif_context_init_project(model: str, project_root: Optional[str] = None) -> Any:
-    """Initialize xberif project structure. Requires XVERIF_MCP_ENABLE_WRITE=1."""
-    return context_init(model, project_root=project_root)
-
-
-@xverif_tool("context_write", write=True)
-def xverif_context_repair_index(project_root: Optional[str] = None) -> Any:
-    """Repair xberif catalog index. Requires XVERIF_MCP_ENABLE_WRITE=1."""
-    return context_repair(project_root=project_root)
-
-
-# ---------------------------------------------------------------------------
 # SVA tools (xsva - stateless in-process adapter)
 # ---------------------------------------------------------------------------
 
@@ -959,34 +871,6 @@ TOOL_CATALOG = [
     {"name": "xverif_loc_annotate", "category": "loc", "backend": "xloc",
      "stateful": False, "requires_session": False,
      "description": "Insert source location hints into a simulation log."},
-    # context
-    {"name": "xverif_context_status", "category": "context", "backend": "xberif",
-     "stateful": False, "requires_session": False,
-     "description": "Check xberif project status."},
-    {"name": "xverif_context_topics", "category": "context", "backend": "xberif",
-     "stateful": False, "requires_session": False,
-     "description": "List all known context topics."},
-    {"name": "xverif_context_brief", "category": "context", "backend": "xberif",
-     "stateful": False, "requires_session": False,
-     "description": "Generate a context summary brief."},
-    {"name": "xverif_context_topic", "category": "context", "backend": "xberif",
-     "stateful": False, "requires_session": False,
-     "description": "Get a topic summary card, optionally with detail."},
-    {"name": "xverif_context_topic_detail", "category": "context", "backend": "xberif",
-     "stateful": False, "requires_session": False,
-     "description": "Get the full detail markdown for a topic."},
-    {"name": "xverif_context_validate", "category": "context", "backend": "xberif",
-     "stateful": False, "requires_session": False,
-     "description": "Validate project cards and detail files."},
-    {"name": "xverif_context_init_config", "category": "context", "backend": "xberif",
-     "stateful": False, "requires_session": False,
-     "description": "Initialize xberif kind.toml config (write)."},
-    {"name": "xverif_context_init_project", "category": "context", "backend": "xberif",
-     "stateful": False, "requires_session": False,
-     "description": "Initialize xberif project structure (write)."},
-    {"name": "xverif_context_repair_index", "category": "context", "backend": "xberif",
-     "stateful": False, "requires_session": False,
-     "description": "Repair xberif catalog index (write)."},
     # sva
     {"name": "xverif_sva_list_properties", "category": "sva", "backend": "xsva",
      "stateful": False, "requires_session": False,
@@ -1002,19 +886,9 @@ TOOL_CATALOG = [
      "description": "Generate a human-readable SVA property explanation."},
 ]
 
-_WRITE_TOOL_NAMES = {
-    "xverif_context_init_config",
-    "xverif_context_init_project",
-    "xverif_context_repair_index",
-}
-
 for _tool in TOOL_CATALOG:
-    if _tool["name"] in _WRITE_TOOL_NAMES:
-        _tool.setdefault("group", "context_write")
-        _tool.setdefault("write", True)
-    else:
-        _tool.setdefault("group", _tool["category"])
-        _tool.setdefault("write", False)
+    _tool.setdefault("group", _tool["category"])
+    _tool.setdefault("write", False)
 
 
 @xverif_tool("common")

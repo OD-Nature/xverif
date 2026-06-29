@@ -1,8 +1,8 @@
-.PHONY: all xdebug xbit xentry xloc xberif xcov xwaveform test full-test clean xcov-test install-xverif-skill install-x-npi-skill _install-agent-skill
+.PHONY: all xdebug xbit xentry xloc xcov xwaveform test full-test clean xcov-test install-all-skill install-xverif-skill install-xberif-skill install-x-npi-skill _install-agent-skill
 
 PYTHON ?= python3
 
-all: xdebug xbit xentry xloc xberif xcov xwaveform
+all: xdebug xbit xentry xloc xcov xwaveform
 
 xdebug:
 	$(MAKE) -C xdebug
@@ -16,9 +16,6 @@ xentry:
 xloc:
 	$(MAKE) -C xloc
 
-xberif:
-	$(MAKE) -C xberif
-
 xcov:
 	@true
 
@@ -31,8 +28,28 @@ xcov-test:
 install-xverif-skill:
 	$(MAKE) _install-agent-skill SKILL_SRC=skills/xverif SKILL_NAME=xverif
 
+install-xberif-skill:
+	$(MAKE) _install-agent-skill SKILL_SRC=skills/xberif SKILL_NAME=xberif
+
 install-x-npi-skill:
 	$(MAKE) _install-agent-skill SKILL_SRC=skills/x-npi SKILL_NAME=x-npi
+
+install-all-skill:
+	@set -eu; \
+	found=0; \
+	for skill_md in skills/*/SKILL.md; do \
+		if [ ! -e "$$skill_md" ]; then \
+			continue; \
+		fi; \
+		found=1; \
+		src=$$(dirname "$$skill_md"); \
+		name=$$(basename "$$src"); \
+		$(MAKE) _install-agent-skill SKILL_SRC="$$src" SKILL_NAME="$$name"; \
+	done; \
+	if [ "$$found" -eq 0 ]; then \
+		echo "ERROR: no skills/*/SKILL.md found"; \
+		exit 1; \
+	fi
 
 _install-agent-skill:
 	@set -eu; \
@@ -62,7 +79,7 @@ _install-agent-skill:
 	done; \
 	echo "Done. Backups, if any, were moved to ~/.codex/ or ~/.claude/ so agents do not load old and new skills twice."
 
-test: xdebug xbit xentry xloc xberif xcov xwaveform
+test: xdebug xbit xentry xloc xcov xwaveform
 	$(MAKE) -C xdebug PYTHON=$(PYTHON) schema-test
 	$(MAKE) -C xdebug PYTHON=$(PYTHON) contract-test
 	$(MAKE) -C xdebug unit-test
@@ -70,17 +87,15 @@ test: xdebug xbit xentry xloc xberif xcov xwaveform
 	$(MAKE) -C xbit PYTHON=$(PYTHON) test
 	$(MAKE) -C xentry PYTHON=$(PYTHON) test
 	$(MAKE) -C xloc test
-	$(MAKE) -C xberif PYTHON=$(PYTHON) test
 	$(MAKE) -C xcov PYTHON=$(PYTHON) test
 	$(MAKE) -C xwaveform PYTHON=$(PYTHON) test
 	$(MAKE) -C xdebug/testdata/combined/active_driver fixture
 	regression/run_xdebug_regression.sh
 
-full-test: xdebug xbit xentry xloc xberif
+full-test: xdebug xbit xentry xloc
 	$(MAKE) -C xbit PYTHON=$(PYTHON) test
 	$(MAKE) -C xentry PYTHON=$(PYTHON) test
 	$(MAKE) -C xloc test
-	$(MAKE) -C xberif PYTHON=$(PYTHON) test
 	regression/run_full_regression.sh
 
 clean:
@@ -88,5 +103,4 @@ clean:
 	$(MAKE) -C xbit clean
 	$(MAKE) -C xentry clean
 	$(MAKE) -C xloc clean
-	$(MAKE) -C xberif clean
 	$(MAKE) -C xwaveform clean

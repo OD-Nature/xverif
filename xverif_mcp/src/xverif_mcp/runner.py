@@ -1,4 +1,4 @@
-"""Stateless CLI runner for non-session tools (xbit, xentry, xloc, xberif, xsva)."""
+"""Stateless CLI runner for non-session tools (xbit, xentry, xloc, xsva)."""
 from __future__ import annotations
 
 import json

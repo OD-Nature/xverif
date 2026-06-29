@@ -1,4 +1,4 @@
 interface:
   display_name: "x-npi"
-  short_description: "Python pynpi waveform and protocol scripts"
-  default_prompt: "Use $x-npi to write a Python pynpi script for waveform statistics or protocol analysis."
+  short_description: "Python pynpi waveform, protocol, coverage, and design scripts"
+  default_prompt: "Use $x-npi to write a Python pynpi script for waveform statistics, protocol analysis, coverage database queries, or design driver/load facts."

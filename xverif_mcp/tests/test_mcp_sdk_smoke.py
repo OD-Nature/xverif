@@ -28,10 +28,7 @@ POLICY_ENV = [
     "XVERIF_MCP_ENABLE_BIT",
     "XVERIF_MCP_ENABLE_ENTRY",
     "XVERIF_MCP_ENABLE_LOC",
-    "XVERIF_MCP_ENABLE_CONTEXT",
-    "XVERIF_MCP_ENABLE_CONTEXT_WRITE",
     "XVERIF_MCP_ENABLE_SVA",
-    "XVERIF_MCP_ENABLE_WRITE",
 ]
 
 
@@ -138,9 +135,8 @@ def test_mcp_tools_list(monkeypatch: pytest.MonkeyPatch):
     assert "xverif_bit_eval" in names
     assert "xverif_entry_decode" in names
     assert "xverif_loc_resolve" in names
-    assert "xverif_context_status" in names
     assert "xverif_sva_explain_property" in names
-    assert "xverif_context_init_config" not in names
+    assert all(not name.startswith("xverif_" + "context") for name in names)
 
 
 def test_mcp_ping_call(monkeypatch: pytest.MonkeyPatch):
@@ -218,7 +214,6 @@ def test_cov_session_fake_lifecycle(monkeypatch: pytest.MonkeyPatch):
         ("XVERIF_MCP_ENABLE_BIT", "xverif_bit_eval", "xverif_entry_decode"),
         ("XVERIF_MCP_ENABLE_ENTRY", "xverif_entry_decode", "xverif_bit_eval"),
         ("XVERIF_MCP_ENABLE_LOC", "xverif_loc_resolve", "xverif_bit_eval"),
-        ("XVERIF_MCP_ENABLE_CONTEXT", "xverif_context_status", "xverif_bit_eval"),
     ],
 )
 def test_tool_group_disable_stateless_groups(
@@ -238,26 +233,6 @@ def test_tool_group_disable_common(monkeypatch: pytest.MonkeyPatch):
     assert "xverif_tools" not in names
     assert "xverif_tool_help" not in names
     assert "xverif_debug_query" in names
-
-
-def test_context_write_requires_both_switches(monkeypatch: pytest.MonkeyPatch):
-    assert "xverif_context_init_config" not in _tool_names(monkeypatch)
-    assert "xverif_context_init_config" not in _tool_names(
-        monkeypatch,
-        {"XVERIF_MCP_ENABLE_CONTEXT_WRITE": "1"},
-    )
-    enabled = {
-        "XVERIF_MCP_ENABLE_CONTEXT": "1",
-        "XVERIF_MCP_ENABLE_CONTEXT_WRITE": "1",
-        "XVERIF_MCP_ENABLE_WRITE": "1",
-    }
-    names = _tool_names(monkeypatch, enabled)
-    assert "xverif_context_init_config" in names
-
-    content, _ = _call_tool(monkeypatch, "xverif_tools", {}, enabled)
-    payload = json.loads(content[0].text)
-    catalog = {tool["name"] for tool in payload["tools"]}
-    assert "xverif_context_init_config" in catalog
 
 
 def test_invalid_bool_policy_warning(monkeypatch: pytest.MonkeyPatch):

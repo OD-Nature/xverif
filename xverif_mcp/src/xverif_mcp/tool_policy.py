@@ -16,8 +16,6 @@ GROUP_ENV = {
     "bit": ("XVERIF_MCP_ENABLE_BIT", True),
     "entry": ("XVERIF_MCP_ENABLE_ENTRY", True),
     "loc": ("XVERIF_MCP_ENABLE_LOC", True),
-    "context": ("XVERIF_MCP_ENABLE_CONTEXT", True),
-    "context_write": ("XVERIF_MCP_ENABLE_CONTEXT_WRITE", False),
     "sva": ("XVERIF_MCP_ENABLE_SVA", True),
 }
 
@@ -53,20 +51,10 @@ def policy_warnings() -> list[str]:
         warning = _invalid_bool_warning(name, default)
         if warning:
             warnings.append(warning)
-    warning = _invalid_bool_warning("XVERIF_MCP_ENABLE_WRITE", False)
-    if warning:
-        warnings.append(warning)
     return warnings
 
 
 def group_enabled(group: str) -> bool:
-    if group == "context_write":
-        name, default = GROUP_ENV[group]
-        return (
-            group_enabled("context")
-            and env_bool(name, default)
-            and env_bool("XVERIF_MCP_ENABLE_WRITE", False)
-        )
     item = GROUP_ENV.get(group)
     if item is None:
         return False
@@ -76,7 +64,7 @@ def group_enabled(group: str) -> bool:
 
 def tool_enabled(group: str, write: bool = False) -> bool:
     if write:
-        return group_enabled("context_write")
+        return False
     return group_enabled(group)
 
 
@@ -84,7 +72,7 @@ def policy_summary() -> dict[str, Any]:
     groups = {group: group_enabled(group) for group in GROUP_ENV}
     return {
         "groups": groups,
-        "write_enabled": env_bool("XVERIF_MCP_ENABLE_WRITE", False),
+        "write_enabled": False,
         "warnings": policy_warnings(),
     }
 

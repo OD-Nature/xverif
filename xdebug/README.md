@@ -210,7 +210,7 @@ request 先写到 `tmp/`，再 atomic publish 到 `requests/`；daemon 用 `rena
 
 ### MCP wrapper
 
-`tools/xverif-mcp` 是基于 FastMCP SDK 的统一 MCP server。xdebug 作为设计/波形 stateful backend，通过 stdio-loop session 提供查询能力；xcov 作为 coverage stateful backend；其他 xverif 工具（xbit/xentry/xloc/xberif/xsva）以 stateless CLI adapter 方式接入。
+`tools/xverif-mcp` 是基于 FastMCP SDK 的统一 MCP server。xdebug 作为设计/波形 stateful backend，通过 stdio-loop session 提供查询能力；xcov 作为 coverage stateful backend；其他 xverif 工具（xbit/xentry/xloc/xsva）以 stateless CLI adapter 方式接入。
 
 MCP client 配置示例（direct 模式）：
 

@@ -19,7 +19,6 @@ def ensure_tool_import_paths() -> None:
         root / "xbit" / "src",
         root / "xentry" / "src",
         root / "xloc",
-        root / "xberif",
         root / "xsva",
     ]
     for path in reversed(paths):

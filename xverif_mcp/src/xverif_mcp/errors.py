@@ -33,8 +33,3 @@ def tool_timeout(tool: str, timeout_sec: float) -> Json:
     return error_payload("XVERIF_TOOL_TIMEOUT",
                          f"{tool} timed out after {timeout_sec:g}s",
                          tool=tool, timeout_sec=timeout_sec)
-
-
-def write_disabled(method: str) -> Json:
-    return error_payload("XVERIF_WRITE_DISABLED",
-                         f"Set XVERIF_MCP_ENABLE_WRITE=1 to enable {method}")

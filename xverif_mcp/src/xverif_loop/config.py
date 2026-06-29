@@ -77,10 +77,6 @@ def mcp_backend() -> str:
     return loop_backend()
 
 
-def enable_write() -> bool:
-    return os.environ.get("XVERIF_MCP_ENABLE_WRITE", "0") == "1"
-
-
 def default_timeout() -> float:
     return float(os.environ.get(_TIMEOUT_ENV, "360"))
 

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import importlib
-import sys
 from pathlib import Path
 
 
@@ -17,7 +15,6 @@ def test_stateless_adapters_do_not_use_cli_runner(monkeypatch):
 
     monkeypatch.setattr(StatelessCliRunner, "_run_raw", fail_run_raw)
 
-    from xverif_mcp.adapters.xberif import context_status
     from xverif_mcp.adapters.xbit import bit_eval
     from xverif_mcp.adapters.xentry import entry_decode
     from xverif_mcp.adapters.xloc import loc_resolve
@@ -43,20 +40,7 @@ def test_stateless_adapters_do_not_use_cli_runner(monkeypatch):
     assert loc["ok"] is True
     assert loc["line"] == 15
 
-    status = context_status(project_root=str(ROOT), output_format="json")
-    assert status["schema_version"] == "xberif.status.v1"
-
     sva = sva_list(str(ROOT / "xsva/tests/golden_ir/simple_impl/input.sva"),
                    output_format="json")
     assert sva["ok"] is True
     assert sva["items"][0]["name"] == "p_simple"
-
-
-def test_xberif_status_fallback_when_pathspec_missing(monkeypatch, tmp_path):
-    monkeypatch.setitem(sys.modules, "pathspec", None)
-    module = importlib.reload(importlib.import_module("xverif_mcp.adapters.xberif"))
-
-    status = module.context_status(project_root=str(tmp_path), output_format="json")
-
-    assert status["schema_version"] == "xberif.status.v1"
-    assert status["state"] == "not_configured"

@@ -28,7 +28,7 @@ tools/xverif-loop-client
 - `debug.query`
 - `cov.session.open/list/close/query`
 
-它不覆盖 xbit/xentry/xloc/xberif/xsva，也不等价于完整 MCP 工具集。
+它不覆盖 xbit/xentry/xloc/xsva，也不等价于完整 MCP 工具集。
 
 ## 与 raw CLI 的区别
 
