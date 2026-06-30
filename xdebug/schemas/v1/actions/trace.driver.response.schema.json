@@ -53,6 +53,9 @@
         },
         "truncated": {
           "type": "boolean"
+        },
+        "limit_hint": {
+          "type": "string"
         }
       },
       "additionalProperties": false

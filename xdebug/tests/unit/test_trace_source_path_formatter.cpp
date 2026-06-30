@@ -37,6 +37,20 @@ Json path_item(const std::string& file, int line, Json signal_path) {
     return Json{{"file", file}, {"line", line}, {"signal_path", signal_path}};
 }
 
+Json trace_raw_with_edges(const std::string& file, int count) {
+    Json raw;
+    raw["dependency_edges"] = Json::array();
+    for (int i = 1; i <= count; ++i) {
+        raw["dependency_edges"].push_back({
+            {"from", "top.src" + std::to_string(i)},
+            {"to", "top.dst" + std::to_string(i)},
+            {"file", file},
+            {"line", i}
+        });
+    }
+    return raw;
+}
+
 } // namespace
 
 int main() {
@@ -69,6 +83,14 @@ int main() {
     assert(count_substr(text, "9     top.b -> top.c") == 1);
     assert(text.find("\nsignal_path: ") == std::string::npos);
 
+    assert(xdebug_design::trace_result_limit_from_request(Json::object()) == 10);
+    assert(xdebug_design::trace_result_limit_from_request(
+               Json{{"limits", Json{{"max_results", 6}}}}) == 6);
+    assert(xdebug_design::trace_result_limit_from_request(
+               Json{{"args", Json{{"limit", 4}}}, {"limits", Json{{"max_results", 6}}}}) == 4);
+    assert(xdebug_design::trace_result_limit_from_request(
+               Json{{"args", Json{{"limit", 0}}}, {"limits", Json{{"max_results", 6}}}}) == 6);
+
     Json chain_response = {
         {"summary", Json{{"signal", "top.out"}, {"hop_count", 2}}},
         {"data", Json{{"hops", Json::array({
@@ -80,6 +102,29 @@ int main() {
     assert(chain_text.find("hop  line  signal_path") != std::string::npos);
     assert(chain_text.find("1    5     top.a -> top.b") != std::string::npos);
     assert(chain_text.find("2    9     top.b -> top.c") != std::string::npos);
+
+    Json default_limited = xdebug_design::simplify_trace_driver_load_payload(
+        trace_raw_with_edges(file, 12), "trace.load", "top.out", "load");
+    assert(default_limited["summary"]["path_count"] == 10);
+    assert(default_limited["summary"]["truncated"] == true);
+    assert(default_limited["summary"]["limit_hint"] ==
+           "returned first 10 trace entries; increase limits.max_results to return all results");
+    assert(default_limited["paths"].size() == 10);
+
+    Json explicit_limited = xdebug_design::simplify_trace_driver_load_payload(
+        trace_raw_with_edges(file, 12), "trace.load", "top.out", "load", 3);
+    assert(explicit_limited["summary"]["path_count"] == 3);
+    assert(explicit_limited["summary"]["truncated"] == true);
+    assert(explicit_limited["summary"]["limit_hint"] ==
+           "returned first 3 trace entries; increase limits.max_results to return all results");
+    assert(explicit_limited["paths"].size() == 3);
+
+    Json limited_response = {
+        {"summary", default_limited["summary"]},
+        {"data", Json{{"paths", default_limited["paths"]}}},
+    };
+    std::string limited_text = xdebug_design::render_source_path_xout("trace.load", limited_response);
+    assert(limited_text.find("limit_hint: returned first 10 trace entries; increase limits.max_results to return all results") != std::string::npos);
 
     unlink(file.c_str());
     unsetenv("XDEBUG_TRACE_SOURCE_CONTEXT_LINES");

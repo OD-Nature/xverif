@@ -46,7 +46,11 @@ public:
         TraceEngine engine;
         TraceResult result = engine.trace(signal, TraceMode::Driver, parse_trace_opts(args));
         Json raw = Json::parse(engine.render_ai_json(result));
-        Json out = simplify_trace_driver_load_payload(raw, action_name(), signal, "driver");
+        Json out = simplify_trace_driver_load_payload(raw,
+                                                      action_name(),
+                                                      signal,
+                                                      "driver",
+                                                      trace_result_limit_from_request(request));
         xdebug::append_common_blocks_to_payload(out);
         return out;
     }

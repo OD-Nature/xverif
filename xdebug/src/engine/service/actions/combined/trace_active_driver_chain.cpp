@@ -23,7 +23,10 @@ public:
         std::string requested_time = args.value("requested_time", std::string());
         Json raw = xdebug::build_active_driver_chain_payload(request, g_daidir_path, g_fsdb_path, g_fsdb_file);
         if (raw.contains("error")) return raw;
-        Json out = simplify_active_driver_chain_payload(raw, signal, requested_time);
+        Json out = simplify_active_driver_chain_payload(raw,
+                                                       signal,
+                                                       requested_time,
+                                                       trace_result_limit_from_request(request));
         xdebug::append_common_blocks_to_payload(out);
         return out;
     }

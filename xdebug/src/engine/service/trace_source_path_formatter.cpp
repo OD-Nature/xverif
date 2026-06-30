@@ -18,6 +18,8 @@ namespace xdebug_design {
 
 namespace {
 
+const int kDefaultTraceResultLimit = 10;
+
 std::string scalar_text(const Json& object, const char* key) {
     if (!object.is_object() || !object.contains(key)) return std::string();
     const Json& value = object[key];
@@ -146,6 +148,31 @@ void add_path_if_valid(Json& paths,
     if (!seen.insert(key.str()).second) return;
     Json item = make_source_path_item_from_location(file, line, signal_path);
     if (!item.empty()) paths.push_back(item);
+}
+
+int resolved_result_limit(int max_results) {
+    return max_results > 0 ? max_results : kDefaultTraceResultLimit;
+}
+
+bool apply_result_limit(Json& items, int max_results) {
+    if (!items.is_array()) return false;
+    int limit = resolved_result_limit(max_results);
+    if (static_cast<int>(items.size()) <= limit) return false;
+    Json limited = Json::array();
+    for (int i = 0; i < limit; ++i) limited.push_back(items[static_cast<size_t>(i)]);
+    items = limited;
+    return true;
+}
+
+std::string limit_hint(int max_results) {
+    int limit = resolved_result_limit(max_results);
+    return "returned first " + std::to_string(limit) +
+           " trace entries; increase limits.max_results to return all results";
+}
+
+void add_limit_hint(Json& summary, bool truncated, int max_results) {
+    if (!truncated || !summary.is_object()) return;
+    summary["limit_hint"] = limit_hint(max_results);
 }
 
 Json source_lines_from_file(const std::string& file, int line, int context_lines) {
@@ -313,6 +340,20 @@ void emit_source_group_xout(std::string& text, const SourceRenderGroup& group, i
 
 } // namespace
 
+int trace_result_limit_from_request(const Json& request) {
+    Json args = request.value("args", Json::object());
+    if (args.is_object() && args.contains("limit") && args["limit"].is_number_integer()) {
+        int limit = args["limit"].get<int>();
+        if (limit > 0) return limit;
+    }
+    Json limits = request.value("limits", Json::object());
+    if (limits.is_object() && limits.contains("max_results") && limits["max_results"].is_number_integer()) {
+        int limit = limits["max_results"].get<int>();
+        if (limit > 0) return limit;
+    }
+    return kDefaultTraceResultLimit;
+}
+
 Json source_window_from_location(const std::string& file, int line, int context_lines) {
     return source_lines_from_file(file, line, std::max(0, resolved_context_lines(context_lines)));
 }
@@ -353,7 +394,8 @@ Json make_source_path_item_from_npi_handle(npiHandle handle,
 Json simplify_trace_driver_load_payload(const Json& raw,
                                         const std::string& action,
                                         const std::string& signal,
-                                        const std::string& mode) {
+                                        const std::string& mode,
+                                        int max_results) {
     Json paths = Json::array();
     std::set<std::string> seen;
     Json edges = raw.value("dependency_edges", Json::array());
@@ -371,22 +413,27 @@ Json simplify_trace_driver_load_payload(const Json& raw,
         }
     }
 
+    bool limit_truncated = apply_result_limit(paths, max_results);
+    bool truncated = raw.value("truncated", false) || limit_truncated;
+
     Json out;
     out["summary"] = {
         {"signal", signal},
         {"mode", mode},
         {"path_count", static_cast<int>(paths.size())},
-        {"truncated", raw.value("truncated", false)}
+        {"truncated", truncated}
     };
+    add_limit_hint(out["summary"], limit_truncated, max_results);
     out["paths"] = paths;
-    out["truncated"] = raw.value("truncated", false);
+    out["truncated"] = truncated;
     (void)action;
     return out;
 }
 
 Json simplify_active_driver_payload(const Json& raw,
                                     const std::string& signal,
-                                    const std::string& requested_time) {
+                                    const std::string& requested_time,
+                                    int max_results) {
     Json paths = Json::array();
     std::set<std::string> seen;
     std::string active_time = raw.value("summary", Json::object()).value("active_time", std::string());
@@ -421,22 +468,27 @@ Json simplify_active_driver_payload(const Json& raw,
         }
     }
 
+    bool limit_truncated = apply_result_limit(paths, max_results);
+    bool truncated = raw.value("truncated", false) || limit_truncated;
+
     Json out;
     out["summary"] = {
         {"signal", signal},
         {"requested_time", requested_time},
         {"active_time", active_time},
         {"path_count", static_cast<int>(paths.size())},
-        {"truncated", raw.value("truncated", false)}
+        {"truncated", truncated}
     };
+    add_limit_hint(out["summary"], limit_truncated, max_results);
     out["paths"] = paths;
-    out["truncated"] = raw.value("truncated", false);
+    out["truncated"] = truncated;
     return out;
 }
 
 Json simplify_active_driver_chain_payload(const Json& raw,
                                           const std::string& signal,
-                                          const std::string& start_time) {
+                                          const std::string& start_time,
+                                          int max_results) {
     Json hops = Json::array();
     Json chain_object = raw.value("chain", Json::object());
     Json chain = chain_object.is_object() ? chain_object.value("chain", Json::array()) : Json::array();
@@ -460,6 +512,9 @@ Json simplify_active_driver_chain_payload(const Json& raw,
         }
     }
 
+    bool limit_truncated = apply_result_limit(hops, max_results);
+    bool truncated = raw.value("truncated", false) || limit_truncated;
+
     Json summary = raw.value("summary", Json::object());
     Json out;
     out["summary"] = {
@@ -467,10 +522,11 @@ Json simplify_active_driver_chain_payload(const Json& raw,
         {"start_time", start_time},
         {"hop_count", static_cast<int>(hops.size())},
         {"termination", summary.value("termination", raw.value("termination", std::string("unresolved")))},
-        {"truncated", raw.value("truncated", false)}
+        {"truncated", truncated}
     };
+    add_limit_hint(out["summary"], limit_truncated, max_results);
     out["hops"] = hops;
-    out["truncated"] = raw.value("truncated", false);
+    out["truncated"] = truncated;
     return out;
 }
 

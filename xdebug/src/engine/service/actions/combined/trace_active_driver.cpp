@@ -28,7 +28,10 @@ public:
         trace_request["args"]["include_trace"] = true;
         Json raw = xdebug::build_active_driver_payload(trace_request, g_daidir_path, g_fsdb_path, g_fsdb_file);
         if (raw.contains("error")) return raw;
-        Json out = simplify_active_driver_payload(raw, signal, requested_time);
+        Json out = simplify_active_driver_payload(raw,
+                                                  signal,
+                                                  requested_time,
+                                                  trace_result_limit_from_request(request));
         xdebug::append_common_blocks_to_payload(out);
         return out;
     }
