@@ -266,7 +266,8 @@ def test_mcp_direct_real_waveform_design_and_combined_sessions(
             )
         )
         assert design["ok"] is True
-        assert design["data"]["dependency_edges"]
+        assert design["data"]["paths"]
+        assert design["summary"]["path_count"] == len(design["data"]["paths"])
 
         combined_open = _json(
             _call(
@@ -296,7 +297,8 @@ def test_mcp_direct_real_waveform_design_and_combined_sessions(
             )
         )
         assert combined["ok"] is True
-        assert combined["summary"]["driver_status"] == "resolved"
+        assert combined["data"]["paths"]
+        assert combined["summary"]["path_count"] == len(combined["data"]["paths"])
 
         for name in ("mcp_combined", "mcp_design", "mcp_wave"):
             closed = _json(

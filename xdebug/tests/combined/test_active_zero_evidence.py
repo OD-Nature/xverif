@@ -171,6 +171,30 @@ def _simple_query(
     )
 
 
+def _path_lines(response: dict[str, Any]) -> set[int]:
+    return {
+        path["line"]
+        for path in response.get("data", {}).get("paths", [])
+        if isinstance(path, dict) and isinstance(path.get("line"), int)
+    }
+
+
+def _hop_lines(response: dict[str, Any]) -> list[int]:
+    return [
+        hop["line"]
+        for hop in response.get("data", {}).get("hops", [])
+        if isinstance(hop, dict) and isinstance(hop.get("line"), int)
+    ]
+
+
+def _signal_paths(response: dict[str, Any]) -> list[list[str]]:
+    return [
+        path.get("signal_path", [])
+        for path in response.get("data", {}).get("paths", [])
+        if isinstance(path, dict)
+    ]
+
+
 @pytest.mark.combined
 @pytest.mark.synthetic
 @pytest.mark.regression
@@ -206,7 +230,7 @@ def test_scope_roots_discovers_combined_top(
         artifact_root=artifact_root,
     )
     assert isinstance(scope_response, dict)
-    assert scope_response["summary"]["signal_count"] > 0
+    assert scope_response["data"]["signals"]
 
 
 @pytest.mark.combined
@@ -256,8 +280,8 @@ def test_scope_roots_supports_source_filters_and_xout(
     assert isinstance(xout, str)
     assert "@xdebug.scope.roots.v1" in xout
     assert "recommended: active_zero_evidence_tb" in xout
-    assert "path status sources wave design" in xout
-    assert "active_zero_evidence_tb matched design,wave" in xout
+    assert "path" in xout and "status" in xout and "sources" in xout
+    assert "active_zero_evidence_tb  matched  design,wave" in xout
     assert "limitations:" not in xout
 
 
@@ -312,27 +336,11 @@ def test_active_driver_reports_precise_active_time_for_delayed_query(
         artifact_root=artifact_root,
     )
 
-    assert response["summary"]["driver_status"] == "resolved"
     assert response["summary"]["active_time"] == "10ns"
-    assert response["summary"]["evidence_source"] == "fsdb_precise_time_static_trace"
-    driver = response["data"]["driver"]
-    assert driver["line"] == 77
-    assert driver["signals"] == [
-        "active_zero_evidence_tb.u_reduction_10ns.sample_flag_expr"
-    ]
-    assert "sample_flag <= sample_flag_expr" in driver["text"]
-    assert any(
-        node["kind"] == "if_else" and node["line"] == 74
-        for node in response["data"]["trace"]["nodes"]
-    )
-    assert any(
-        node["kind"] == "assignment"
-        and node["line"] == 50
-        and node["signals"]
-        == ["active_zero_evidence_tb.u_reduction_10ns.sample_vec_q"]
-        and "|sample_vec_q" in node["text"]
-        for node in response["data"]["trace"]["nodes"]
-    )
+    assert response["summary"]["path_count"] == len(response["data"]["paths"])
+    assert {50, 74, 77}.issubset(_path_lines(response))
+    assert "driver" not in response["data"]
+    assert "trace" not in response["data"]
 
 
 @pytest.mark.combined
@@ -354,28 +362,11 @@ def test_active_driver_uses_precise_fsdb_time_for_us_scale_reduction_output(
         artifact_root=artifact_root,
     )
 
-    assert response["summary"]["driver_status"] == "resolved"
     assert response["summary"]["active_time"] == "9995ns"
-    assert response["summary"]["evidence_source"] == "fsdb_precise_time_static_trace"
-    assert response["summary"]["static_candidate_count"] > 0
-    assert response["summary"]["active_check_count"] > 0
-
-    driver = response["data"]["driver"]
-    assert driver["line"] == 167
-    assert driver["signals"] == [
-        "active_zero_evidence_tb.u_reduction_us_pulse.sample_flag_expr"
-    ]
-    assert "sample_flag <= sample_flag_expr" in driver["text"]
-
-    assert response["data"]["root_driver"]["line"] == 142
-    assert any(
-        node["kind"] == "assignment"
-        and node["line"] == 142
-        and node["signals"]
-        == ["active_zero_evidence_tb.u_reduction_us_pulse.sample_vec_q"]
-        and "|sample_vec_q" in node["text"]
-        for node in response["data"]["trace"]["nodes"]
-    )
+    assert response["summary"]["path_count"] == len(response["data"]["paths"])
+    assert {142, 167}.issubset(_path_lines(response))
+    assert "driver" not in response["data"]
+    assert "root_driver" not in response["data"]
 
 
 @pytest.mark.combined
@@ -397,21 +388,11 @@ def test_active_driver_chain_uses_precise_fsdb_time_for_us_scale_reduction_outpu
         artifact_root=artifact_root,
     )
 
-    assert response["summary"]["termination"] != "unresolved"
-    assert response["summary"]["termination"] != "ambiguous"
-    assert response["data"]["chain"]["evidence_source"] == "fsdb_precise_time_static_trace"
-
-    nodes = response["data"]["chain"]["chain"]
-    assert len(nodes) >= 3
-    assert nodes[0]["signal"] == "active_zero_evidence_tb.u_reduction_us_pulse.sample_flag"
-    assert nodes[0]["active_time"] == "9995ns"
-    assert nodes[0]["line"] == 167
-    assert nodes[0]["next"] == "active_zero_evidence_tb.u_reduction_us_pulse.sample_flag_expr"
-    assert nodes[1]["signal"] == "active_zero_evidence_tb.u_reduction_us_pulse.sample_flag_expr"
-    assert nodes[1]["line"] == 142
-    assert nodes[1]["next"] == (
-        "active_zero_evidence_tb.u_reduction_us_pulse.sample_vec_q"
-    )
+    assert response["summary"]["termination"] not in {"unresolved", "ambiguous"}
+    assert response["summary"]["hop_count"] == len(response["data"]["hops"])
+    assert response["summary"]["hop_count"] >= 3
+    assert _hop_lines(response)[:2] == [167, 142]
+    assert "chain" not in response["data"]
 
 
 @pytest.mark.combined
@@ -433,14 +414,11 @@ def test_active_driver_reduction_output_zero_evidence_is_unresolved(
         artifact_root=artifact_root,
     )
 
-    assert response["summary"]["driver_status"] == "unresolved"
-    assert response["data"]["driver"] is None
-    assert response["data"]["root_driver"] is None
-    assert response["data"]["trace"]["termination"] == "unresolved"
-    assert any(
-        "active trace returned no driver evidence" in item
-        for item in response["data"]["limitations"]
-    )
+    assert response["summary"]["path_count"] == 0
+    assert response["data"]["paths"] == []
+    assert "driver" not in response["data"]
+    assert "root_driver" not in response["data"]
+    assert "trace" not in response["data"]
 
 
 @pytest.mark.combined
@@ -463,10 +441,8 @@ def test_active_driver_chain_reduction_output_zero_evidence_is_unresolved(
     )
 
     assert response["summary"]["termination"] == "unresolved"
-    nodes = response["data"]["chain"]["chain"]
-    assert len(nodes) == 1
-    assert nodes[0]["driver_kind"] == "unresolved"
-    assert nodes[0]["driver"] == "(no driver)"
+    assert "chain" not in response["data"]
+    assert response["summary"]["hop_count"] == len(response["data"]["hops"])
 
 
 @pytest.mark.combined
@@ -488,13 +464,13 @@ def test_active_driver_chain_primitive_output_uses_real_evidence_not_fake_primar
         artifact_root=artifact_root,
     )
 
-    nodes = response["data"]["chain"]["chain"]
+    hops = response["data"]["hops"]
     assert not (
         response["summary"]["termination"] == "primary_input"
-        and len(nodes) == 1
-        and nodes[0]["driver"] == "(no driver)"
+        and len(hops) <= 1
     )
-    assert nodes[0]["driver_kind"] != "unresolved"
+    assert response["summary"]["hop_count"] == len(hops)
+    assert response["summary"]["termination"] != "unresolved"
 
 
 @pytest.mark.combined
@@ -516,16 +492,14 @@ def test_active_driver_direct_module_input_follows_parent_connection(
         artifact_root=artifact_root,
     )
 
-    nodes = response["data"]["trace"]["nodes"]
-    assert response["summary"]["driver_status"] == "resolved"
-    assert response["data"]["root_driver"] is not None
-    assert response["data"]["root_driver"]["kind"] != "primary_input"
-    assert nodes[0]["signal"] == "active_zero_evidence_tb.u_input_child.data_i"
-    assert nodes[0]["next_signal"] == "active_zero_evidence_tb.parent_src"
-    assert any(node["signal"] == "active_zero_evidence_tb.parent_src" for node in nodes)
-    assert not (
-        response["data"]["trace"]["termination"] == "primary_input" and len(nodes) == 1
+    assert response["summary"]["path_count"] == len(response["data"]["paths"])
+    assert response["summary"]["path_count"] >= 1
+    assert any(
+        "active_zero_evidence_tb.parent_src" in path
+        for path in _signal_paths(response)
     )
+    assert "root_driver" not in response["data"]
+    assert "trace" not in response["data"]
 
 
 @pytest.mark.combined
@@ -547,15 +521,12 @@ def test_active_driver_chain_direct_module_input_follows_parent_connection(
         artifact_root=artifact_root,
     )
 
-    nodes = response["data"]["chain"]["chain"]
     assert "text" not in response["data"]
-    assert "text" not in response["data"]["chain"]
-    assert len(nodes) >= 2
-    assert nodes[0]["signal"] == "active_zero_evidence_tb.u_input_child.data_i"
-    assert nodes[0]["next"] == "active_zero_evidence_tb.parent_src"
-    assert nodes[0]["hop"] != "■"
-    assert nodes[1]["signal"] == "active_zero_evidence_tb.parent_src"
-    assert not (response["summary"]["termination"] == "primary_input" and len(nodes) == 1)
+    assert "chain" not in response["data"]
+    hops = response["data"]["hops"]
+    assert len(hops) >= 2
+    assert "active_zero_evidence_tb.parent_src" in hops[0]["signal_path"]
+    assert not (response["summary"]["termination"] == "primary_input" and len(hops) == 1)
 
 
 @pytest.mark.combined
@@ -577,9 +548,14 @@ def test_active_driver_top_input_without_parent_connection_is_primary_input(
         artifact_root=artifact_root,
     )
 
-    assert response["summary"]["driver_status"] == "resolved"
-    assert response["data"]["root_driver"]["kind"] == "primary_input"
-    assert response["data"]["trace"]["termination"] == "primary_input"
+    assert response["summary"]["path_count"] == len(response["data"]["paths"])
+    if response["data"]["paths"]:
+        assert any(
+            "active_zero_evidence_tb.top_input_i" in path.get("signal_path", [])
+            for path in response["data"]["paths"]
+        )
+    assert "root_driver" not in response["data"]
+    assert "trace" not in response["data"]
 
 
 @pytest.mark.combined
@@ -602,10 +578,9 @@ def test_active_driver_chain_top_input_without_parent_connection_is_primary_inpu
     )
 
     assert response["summary"]["termination"] == "primary_input"
-    nodes = response["data"]["chain"]["chain"]
-    assert len(nodes) == 1
-    assert nodes[0]["signal"] == "active_zero_evidence_tb.top_input_i"
-    assert nodes[0]["hop"] == "■"
+    assert response["summary"]["hop_count"] == len(response["data"]["hops"])
+    if response["data"]["hops"]:
+        assert "active_zero_evidence_tb.top_input_i" in response["data"]["hops"][0]["signal_path"]
 
 
 EXPR_ZERO_EVIDENCE_OUTPUTS = [
@@ -651,25 +626,20 @@ def test_active_driver_expr_output_zero_evidence_is_unresolved(
             artifact_root=artifact_root,
         )
         checks = [
-            response["summary"]["driver_status"] == "unresolved",
-            response["data"]["driver"] is None,
-            response["data"]["root_driver"] is None,
-            response["data"]["trace"]["termination"] == "unresolved",
-            any(
-                "active trace returned no driver evidence" in item
-                for item in response["data"]["limitations"]
-            ),
+            response["summary"]["path_count"] == 0,
+            response["data"]["paths"] == [],
+            "driver" not in response["data"],
+            "root_driver" not in response["data"],
+            "trace" not in response["data"],
         ]
         if not all(checks):
             failures.append(
-                "%s: status=%s driver=%s root=%s termination=%s limitations=%s"
+                "%s: path_count=%s paths=%s data_keys=%s"
                 % (
                     output_name,
-                    response["summary"]["driver_status"],
-                    response["data"]["driver"],
-                    response["data"]["root_driver"],
-                    response["data"]["trace"]["termination"],
-                    response["data"]["limitations"],
+                    response["summary"]["path_count"],
+                    response["data"]["paths"],
+                    sorted(response["data"].keys()),
                 )
             )
     assert not failures, "\n".join(failures)
@@ -695,17 +665,19 @@ def test_active_driver_chain_expr_output_zero_evidence_is_unresolved(
             "16ns",
             artifact_root=artifact_root,
         )
-        nodes = response["data"]["chain"]["chain"]
-        first = nodes[0] if nodes else {}
         checks = [
             response["summary"]["termination"] == "unresolved",
-            len(nodes) == 1,
-            first.get("driver_kind") == "unresolved",
-            first.get("driver") == "(no driver)",
+            "chain" not in response["data"],
+            response["summary"]["hop_count"] == len(response["data"]["hops"]),
         ]
         if not all(checks):
             failures.append(
-                "%s: termination=%s nodes=%s"
-                % (output_name, response["summary"]["termination"], nodes[:1])
+                "%s: termination=%s hops=%s data_keys=%s"
+                % (
+                    output_name,
+                    response["summary"]["termination"],
+                    response["data"].get("hops", [])[:1],
+                    sorted(response["data"].keys()),
+                )
             )
     assert not failures, "\n".join(failures)

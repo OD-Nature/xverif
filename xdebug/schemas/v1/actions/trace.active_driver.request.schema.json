@@ -60,15 +60,11 @@
         },
         "include_trace": {
           "type": "boolean",
-          "description": "Return full data.trace with nodes, edges, selected_path (default false for compact)"
+          "description": "Allow internal trace evidence collection; public output remains source_context plus signal_path."
         },
         "include_alias_candidates": {
           "type": "boolean",
           "description": "Include alias_candidates even when a unique alias was resolved"
-        },
-        "include_compat_fields": {
-          "type": "boolean",
-          "description": "Return backward-compatible statements/path/active_values/requested_values fields"
         },
         "clock": {
           "type": "string"
@@ -261,7 +257,7 @@
     },
     "output": {
       "type": "object",
-      "description": "Output format controls. verbosity=full|debug implies include_trace=true",
+      "description": "Output format controls. verbosity=full|debug does not restore legacy trace internals.",
       "properties": {
         "format": {
           "type": "string",

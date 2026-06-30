@@ -4,12 +4,29 @@
   "action": "trace.load",
   "summary": {
     "signal": "top.u.ready",
+    "mode": "load",
+    "path_count": 1,
     "truncated": false
   },
   "data": {
-    "evidence": {
-      "file": "rtl/foo.sv",
-      "line": 123
-    }
+    "paths": [
+      {
+        "file": "rtl/consumer.sv",
+        "line": 57,
+        "source_context": [
+          {"line": 54, "text": "always_ff @(posedge clk) begin", "active": false},
+          {"line": 55, "text": "  if (rst) begin", "active": false},
+          {"line": 56, "text": "    hold <= 1'b0;", "active": false},
+          {"line": 57, "text": "  end else if (ready) begin", "active": true},
+          {"line": 58, "text": "    hold <= data_i;", "active": false},
+          {"line": 59, "text": "  end", "active": false},
+          {"line": 60, "text": "end", "active": false}
+        ],
+        "signal_path": [
+          "top.u.ready",
+          "top.u.hold"
+        ]
+      }
+    ]
   }
 }

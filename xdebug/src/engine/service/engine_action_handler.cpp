@@ -66,55 +66,8 @@ static void render_data_value(xdebug::TextResponseBuilder& out,
     } else if (val.is_array() && val.size() > 0 && val[0].is_object()) {
         int count = (int)val.size();
         out.emit_section(key);
-
-        // Collect top-level scalar keys + flatten one level of object keys
-        std::vector<std::string> keys;
-        std::set<std::string> seen;
-        for (int i = 0; i < std::min(5, count); ++i) {
-            for (auto ki = val[i].begin(); ki != val[i].end(); ++ki) {
-                if (should_emit_scalar_key(ki.key(), ki.value())) {
-                    if (seen.insert(ki.key()).second) keys.push_back(ki.key());
-                } else if (ki.value().is_object()) {
-                    for (auto oi = ki.value().begin(); oi != ki.value().end(); ++oi) {
-                        std::string fkey = ki.key() + "." + oi.key();
-                        if (should_emit_scalar_key(oi.key(), oi.value()) &&
-                            seen.insert(fkey).second) keys.push_back(fkey);
-                    }
-                }
-            }
-        }
-
-        out.emit_row(keys);  // header
         int n = std::min(20, count);
-        for (int i = 0; i < n; ++i) {
-            std::vector<std::string> row;
-            for (const auto& k : keys) {
-                auto dot = k.find('.');
-                if (dot != std::string::npos) {
-                    // Walk nested path safely: "parent.child" -> obj["parent"]["child"]
-                    const Json* node = &val[i];
-                    std::string remain = k;
-                    while (node != nullptr && node->is_object()) {
-                        auto d = remain.find('.');
-                        std::string seg = remain.substr(0, d);
-                        if (d == std::string::npos) {
-                            row.push_back(xdebug::json_to_xout_value(
-                                node->value(seg, Json())));
-                            node = nullptr;  // done
-                        } else {
-                            auto it = node->find(seg);
-                            node = (it != node->end()) ? &(*it) : nullptr;
-                            remain = remain.substr(d + 1);
-                        }
-                    }
-                    if (node != nullptr) row.push_back("");  // unresolvable
-                } else {
-                    row.push_back(xdebug::json_to_xout_value(
-                        val[i].value(k, Json())));
-                }
-            }
-            out.emit_row(row);
-        }
+        out.emit_json_table(val, n);
         if (count > n)
             out.emit_kv("(+ " + std::to_string(count - n) + " more)", "");
     } else if (val.is_object()) {

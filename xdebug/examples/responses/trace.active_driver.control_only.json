@@ -16,44 +16,28 @@
     "signal": "top.u.state",
     "requested_time": "100ns",
     "active_time": "100ns",
-    "driver_status": "control_only",
-    "evidence_source": "fsdb_precise_time_static_trace",
-    "static_candidate_count": 1,
-    "active_check_count": 1,
-    "trace_node_count": 1,
-    "root_driver": {
-      "kind": "unknown",
-      "file": "",
-      "line": 0
-    }
+    "path_count": 1,
+    "truncated": false
   },
   "data": {
-    "driver": null,
-    "root_driver": null,
-    "controls": [
+    "paths": [
       {
-        "kind": "case_item",
-        "file": "rtl/foo.sv",
+        "file": "rtl/fifo.sv",
         "line": 88,
-        "text": "2'b11: state = next_state",
-        "signals": [
-          "top.u.mode"
+        "source_context": [
+          {"line": 85, "text": "always_comb begin", "active": false},
+          {"line": 86, "text": "  next_state = state;", "active": false},
+          {"line": 87, "text": "  unique case (mode)", "active": false},
+          {"line": 88, "text": "    2'b11: next_state = DRAIN;", "active": true},
+          {"line": 89, "text": "    default: next_state = IDLE;", "active": false},
+          {"line": 90, "text": "  endcase", "active": false},
+          {"line": 91, "text": "end", "active": false}
+        ],
+        "signal_path": [
+          "top.u.mode",
+          "top.u.state"
         ]
       }
-    ],
-    "events": [],
-    "values": {
-      "requested": {
-        "top.u.state": {
-          "value": "xx",
-          "known": false
-        }
-      },
-      "active": {}
-    },
-    "alias_candidates": [],
-    "limitations": [
-      "control context confirmed but NPI active evidence did not confirm specific assignment"
     ]
   },
   "error": null

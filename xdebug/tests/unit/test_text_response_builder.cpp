@@ -19,9 +19,9 @@ int main() {
     out.emit_warning("W", "line1\nline2");
     std::string text = out.str();
     assert(text.find("@xdebug.trace.driver.v1") == 0);
-    assert(text.find("summary:\n  signal: top.u.valid\n  known: true\n  count: 2") != std::string::npos);
+    assert(text.find("summary:\n  signal: top.u.valid\n  known : true\n  count : 2") != std::string::npos);
     assert(text.find("rows:\n  n0 top.u.valid reg with spaces") != std::string::npos);
-    assert(text.find("W line1\\nline2") != std::string::npos);
+    assert(text.find("warnings:\n  code  message\n  W     line1\\nline2") != std::string::npos);
     assert(text.find("empty") == std::string::npos);
 
     Json response = {
@@ -37,8 +37,8 @@ int main() {
     };
     text = render_xout_response(response);
     assert(text.find("@xdebug.value.at.v1") == 0);
-    assert(text.find("data:\n  signal: top.clk\n  time: 10ns") != std::string::npos);
-    assert(text.find("value: 'h1") != std::string::npos);
+    assert(text.find("data:\n  signal: top.clk\n  time  : 10ns") != std::string::npos);
+    assert(text.find("value : 'h1") != std::string::npos);
 
     Json sized_value = {
         {"value", "0x4000000c"},
@@ -79,9 +79,24 @@ int main() {
         }}
     };
     text = render_xout_response(table_response);
-    assert(text.find("cycle time fields\n  18 185ns data=32'h4000000c seq=16'h000c") != std::string::npos);
+    assert(text.find("cycle  time   fields\n  18     185ns  data=32'h4000000c seq=16'h000c") != std::string::npos);
     assert(text.find("bits:") == std::string::npos);
     assert(text.find("known: true") == std::string::npos);
+
+    Json events_response = {
+        {"api_version", "xdebug.v1"},
+        {"ok", true},
+        {"action", "event.export"},
+        {"data", {
+            {"events", Json::array({
+                Json{{"time", "10469.5ns"}, {"signals", Json{{"ready", "1'h0"}, {"valid", "1'h1"}}}},
+                Json{{"time", "10470.5ns"}, {"signals", Json{{"ready", "1'h0"}, {"valid", "1'h1"}, {"last", "1'h0"}}}}
+            })}
+        }}
+    };
+    text = render_xout_response(events_response);
+    assert(text.find("events:\n  time       ready  valid  last\n  10469.5ns  1'h0   1'h1") != std::string::npos);
+    assert(text.find("10470.5ns  1'h0   1'h1   1'h0") != std::string::npos);
 
     Json common_block_response = {
         {"api_version", "xdebug.v1"},
@@ -124,8 +139,8 @@ int main() {
     };
     text = render_xout_response(error);
     assert(text.find("@xdebug.error.v1") == 0);
-    assert(text.find("action: trace.driver") != std::string::npos);
-    assert(text.find("code: SIGNAL_NOT_FOUND") != std::string::npos);
-    assert(text.find("message: missing\\nsignal") != std::string::npos);
+    assert(text.find("action     : trace.driver") != std::string::npos);
+    assert(text.find("code       : SIGNAL_NOT_FOUND") != std::string::npos);
+    assert(text.find("message    : missing\\nsignal") != std::string::npos);
     return 0;
 }

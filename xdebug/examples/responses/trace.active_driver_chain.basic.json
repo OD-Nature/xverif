@@ -3,68 +3,47 @@
   "ok": true,
   "action": "trace.active_driver_chain",
   "summary": {
-    "signal": "top.data_out",
-    "requested_time": "50ns",
-    "start_time": "50ns",
-    "chain_length": 3,
-    "driver_status": "resolved",
+    "signal": "top.u.out",
+    "start_time": "26ns",
+    "hop_count": 2,
     "termination": "primary_input",
-    "evidence_source": "fsdb_precise_time_static_trace",
-    "static_candidate_count": 2,
-    "active_check_count": 1,
-    "temporal_boundaries": 0
+    "truncated": false
   },
   "data": {
-    "chain": [
+    "hops": [
       {
         "index": 0,
-        "signal": "top.data_out",
-        "time": "50ns",
-        "active_time": "50ns",
-        "value": "8'hA5",
-        "value_known": true,
-        "driver_kind": "cont_assign",
-        "driver": "assign out = mid",
-        "file": "tb.sv",
+        "file": "rtl/top.sv",
         "line": 88,
-        "hop": "→",
-        "next": "top.mid"
+        "source_context": [
+          {"line": 85, "text": "logic mid;", "active": false},
+          {"line": 86, "text": "", "active": false},
+          {"line": 87, "text": "always_comb begin", "active": false},
+          {"line": 88, "text": "  out = mid;", "active": true},
+          {"line": 89, "text": "end", "active": false}
+        ],
+        "signal_path": [
+          "top.u.mid",
+          "top.u.out"
+        ]
       },
       {
         "index": 1,
-        "signal": "top.mid",
-        "time": "50ns",
-        "active_time": "50ns",
-        "value": "8'hA5",
-        "value_known": true,
-        "driver_kind": "cont_assign",
-        "driver": "assign mid = in",
-        "file": "dut.sv",
-        "line": 45,
-        "hop": "→",
-        "next": "top.in"
-      },
-      {
-        "index": 2,
-        "signal": "top.in",
-        "time": "50ns",
-        "active_time": "50ns",
-        "value": "8'hA5",
-        "value_known": true,
-        "driver_kind": "primary_input",
-        "driver": "(primary input)",
-        "file": "",
-        "line": 0,
-        "hop": "■",
-        "next": ""
+        "file": "rtl/top.sv",
+        "line": 73,
+        "source_context": [
+          {"line": 70, "text": "assign src = in;", "active": false},
+          {"line": 71, "text": "", "active": false},
+          {"line": 72, "text": "always_ff @(posedge clk) begin", "active": false},
+          {"line": 73, "text": "  mid <= src;", "active": true},
+          {"line": 74, "text": "end", "active": false}
+        ],
+        "signal_path": [
+          "top.u.src",
+          "top.u.mid"
+        ]
       }
-    ],
-    "stats": {
-      "calls": 3,
-      "edgecheck_direct": 2,
-      "fallback": 0,
-      "temporal_boundaries": 0
-    },
-    "limitations": []
-  }
+    ]
+  },
+  "error": null
 }

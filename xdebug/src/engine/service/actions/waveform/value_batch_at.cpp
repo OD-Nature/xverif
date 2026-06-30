@@ -132,16 +132,19 @@ private:
         if (s.contains("signal_count")) out.emit_kv("signal_count", s["signal_count"]);
         out.emit_section("values");
         if (d.contains("values") && d["values"].is_array()) {
-            out.emit_row({"signal", "value", "status"});
+            std::vector<std::vector<std::string>> rows;
             for (const auto& item : d["values"]) {
                 if (!item.is_object()) continue;
-                out.emit_row({item.value("signal", std::string()),
-                              xdebug::json_to_xout_value(item.value("value", Json())),
-                              item.value("status", std::string())});
+                rows.push_back({item.value("signal", std::string()),
+                                xdebug::json_to_xout_value(item.value("value", Json())),
+                                item.value("status", std::string())});
             }
+            out.emit_table({"signal", "value", "status"}, rows);
         } else if (d.contains("values") && d["values"].is_object()) {
+            std::vector<std::vector<std::string>> rows;
             for (auto it = d["values"].begin(); it != d["values"].end(); ++it)
-                out.emit_row({it.key(), xdebug::json_to_xout_value(it.value())});
+                rows.push_back({it.key(), xdebug::json_to_xout_value(it.value())});
+            out.emit_table({"signal", "value"}, rows);
         }
         return out.str();
     }

@@ -333,49 +333,58 @@ def meta_truncated(expected: bool):
     return fn
 
 
-def root_driver_line(expected_line: int):
+def path_line(expected_line: int):
+    def fn(resp, raw):
+        paths = resp.get("data", {}).get("paths", [])
+        lines = {path.get("line", 0) for path in paths if isinstance(path, dict)}
+        if expected_line not in lines:
+            return False, f"data.paths lines are {sorted(lines)}, expected {expected_line}"
+        for path in paths:
+            if path.get("line") == expected_line:
+                if not path.get("signal_path"):
+                    return False, "matching path has empty signal_path"
+                if not any(row.get("active") for row in path.get("source_context", [])):
+                    return False, "matching path has no active source_context row"
+                break
+        return True, ""
+    return fn
+
+
+def path_count_at_least(expected_count: int):
+    def fn(resp, raw):
+        paths = resp.get("data", {}).get("paths", [])
+        if len(paths) < expected_count:
+            return False, f"data.paths has {len(paths)} entries, expected at least {expected_count}"
+        if resp.get("summary", {}).get("path_count") != len(paths):
+            return False, "summary.path_count does not match data.paths length"
+        return True, ""
+    return fn
+
+
+def signal_path_contains(expected_signal: str):
+    def fn(resp, raw):
+        for path in resp.get("data", {}).get("paths", []):
+            if expected_signal in path.get("signal_path", []):
+                return True, ""
+        return False, f"{expected_signal} not found in any signal_path"
+    return fn
+
+
+def no_legacy_active_fields():
     def fn(resp, raw):
         data = resp.get("data", {})
-        root = data.get("root_driver", None)
-        if root is None:
-            return False, "data.root_driver is missing"
-        line = root.get("line", 0)
-        if line != expected_line:
-            return False, f"root_driver.line is {line}, expected {expected_line}"
+        for field in ("root_driver", "driver", "trace", "controls", "events"):
+            if field in data:
+                return False, f"legacy field data.{field} is present"
         return True, ""
     return fn
 
 
-def root_driver_kind(expected_kind: str):
-    def fn(resp, raw):
-        data = resp.get("data", {})
-        root = data.get("root_driver", None)
-        if root is None:
-            return False, "data.root_driver is missing"
-        kind = root.get("kind", "")
-        if kind != expected_kind:
-            return False, f"root_driver.kind is '{kind}', expected '{expected_kind}'"
-        return True, ""
-    return fn
-
-
-def trace_has_alias_edge():
-    def fn(resp, raw):
-        trace = resp.get("data", {}).get("trace", {})
-        edges = trace.get("edges", [])
-        aliases = [e for e in edges if e.get("relation") == "alias"]
-        if not aliases:
-            return False, "no alias edge found in data.trace.edges"
-        return True, ""
-    return fn
-
-
-def driver_status_is(expected: str):
+def active_time_present():
     def fn(resp, raw):
         summary = resp.get("summary", {})
-        status = summary.get("driver_status", "")
-        if status != expected:
-            return False, f"summary.driver_status is '{status}', expected '{expected}'"
+        if "active_time" not in summary:
+            return False, "summary.active_time is missing"
         return True, ""
     return fn
 
@@ -457,34 +466,34 @@ def main():
     check("q_20ns: basic assignment resolution",
           ad_sid, "active_driver_tb.u_dut.q", "20ns",
           checks=[
-              driver_status_is("resolved"),
-              root_driver_line(18),
-              root_driver_kind("assignment"),
+              active_time_present(),
+              path_line(18),
+              no_legacy_active_fields(),
           ])
 
     # ── Test 2: comb_q_16ns (pass-through: should go comb_q=q -> q<=data_a) ──
     check("comb_q_16ns: pass-through recursion to line 18",
           ad_sid, "active_driver_tb.u_dut.comb_q", "16ns",
           checks=[
-              driver_status_is("resolved"),
-              root_driver_line(18),
-              root_driver_kind("assignment"),
+              active_time_present(),
+              path_line(18),
+              no_legacy_active_fields(),
           ])
 
     # ── Test 3: q_force_40ns ──
     check("q_force_40ns: force detection at line 82",
           ad_sid, "active_driver_tb.u_dut.q", "40ns",
           checks=[
-              root_driver_kind("force"),
-              root_driver_line(82),
+              path_line(82),
+              no_legacy_active_fields(),
           ])
 
     # ── Test 4: comb_q_x_50ns (control_only or resolved) ──
     def check_comb_q_x(resp, raw):
-        status = resp.get("summary", {}).get("driver_status", "")
-        if status in ("control_only", "resolved"):
+        summary = resp.get("summary", {})
+        if "path_count" in summary and "active_time" in summary:
             return True, ""
-        return False, f"driver_status is '{status}', expected 'control_only' or 'resolved'"
+        return False, "summary.path_count or summary.active_time is missing"
 
     check("comb_q_x_50ns: control_only for default/X branch",
           ad_sid, "active_driver_tb.u_dut.comb_q", "50ns",
@@ -495,25 +504,25 @@ def main():
           if_sid, "if_root_tb.u_sink.observed_q", "30ns",
           extra_args={"include_trace": True},
           checks=[
-              root_driver_line(23),
-              root_driver_kind("assignment"),
-              trace_has_alias_edge(),
+              path_line(23),
+              signal_path_contains("if_root_tb.u_sink.observed_q"),
+              no_legacy_active_fields(),
           ])
 
     # ── Test 6: if_link_data_20ns ──
     check("if_link_data_20ns: modport data trace to line 21",
           if_sid, "if_root_tb.link.data", "20ns",
           checks=[
-              root_driver_line(21),
-              root_driver_kind("assignment"),
+              path_line(21),
+              no_legacy_active_fields(),
           ])
 
     # ── Test 7: if_link_data_30ns ──
     check("if_link_data_30ns: modport data trace to line 23",
           if_sid, "if_root_tb.link.data", "30ns",
           checks=[
-              root_driver_line(23),
-              root_driver_kind("assignment"),
+              path_line(23),
+              no_legacy_active_fields(),
           ])
 
     # ── Test 8: include_trace_false ──
@@ -521,10 +530,10 @@ def main():
           ad_sid, "active_driver_tb.u_dut.q", "20ns",
           extra_args={"include_trace": False},
           checks=[
-              driver_status_is("resolved"),
-              root_driver_line(18),
+              active_time_present(),
+              path_line(18),
               field_not_present("data.trace.nodes"),
-              has_field("data.root_driver"),
+              field_not_present("data.root_driver"),
           ])
 
     # ── Test 9: limits_max_nodes ──

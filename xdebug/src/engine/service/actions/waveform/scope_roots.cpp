@@ -176,9 +176,9 @@ public:
         Json data = r.value("data", Json::object());
         Json roots = data.value("roots", Json::array());
         out.emit_section("roots");
-        out.emit_row({"path", "status", "sources", "wave", "design"});
+        std::vector<std::vector<std::string>> rows;
         for (const auto& root : roots) {
-            out.emit_row({
+            rows.push_back({
                 root.value("path", std::string()),
                 root.value("status", std::string()),
                 join_strings(root.value("sources", Json::array())),
@@ -186,7 +186,8 @@ public:
                 object_string_field(root.value("design", Json()), "full_name")
             });
         }
-        if (roots.empty()) out.emit_row({"[empty]", "", "", "", ""});
+        if (roots.empty()) rows.push_back({"[empty]", "", "", "", ""});
+        out.emit_table({"path", "status", "sources", "wave", "design"}, rows);
 
         Json limitations = data.value("limitations", Json::array());
         if (!limitations.empty()) {

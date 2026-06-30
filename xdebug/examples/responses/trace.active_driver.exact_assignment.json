@@ -16,113 +16,28 @@
     "signal": "top.u.ready",
     "requested_time": "100ns",
     "active_time": "95ns",
-    "driver_status": "resolved",
-    "evidence_source": "fsdb_precise_time_static_trace",
-    "static_candidate_count": 2,
-    "active_check_count": 1,
-    "trace_node_count": 2,
-    "root_driver": {
-      "kind": "assignment",
-      "file": "rtl/foo.sv",
-      "line": 123
-    }
+    "path_count": 1,
+    "truncated": false
   },
   "data": {
-    "driver": {
-      "kind": "assignment",
-      "file": "rtl/foo.sv",
-      "line": 123,
-      "text": "ready <= valid & ~full",
-      "signals": [
-        "top.u.valid",
-        "top.u.full"
-      ]
-    },
-    "controls": [
+    "paths": [
       {
-        "kind": "if",
-        "file": "rtl/foo.sv",
-        "line": 120,
-        "text": "if (state == IDLE)",
-        "signals": [
-          "top.u.state"
+        "file": "rtl/fifo.sv",
+        "line": 42,
+        "source_context": [
+          {"line": 39, "text": "always_comb begin", "active": false},
+          {"line": 40, "text": "  ready_n = 1'b0;", "active": false},
+          {"line": 41, "text": "  if (!full) begin", "active": false},
+          {"line": 42, "text": "    ready_n = valid_i;", "active": true},
+          {"line": 43, "text": "  end", "active": false},
+          {"line": 44, "text": "end", "active": false}
+        ],
+        "signal_path": [
+          "top.u.valid_i",
+          "top.u.ready"
         ]
       }
-    ],
-    "events": [],
-    "values": {
-      "requested": {
-        "top.u.ready": {
-          "value": "1",
-          "known": true
-        },
-        "top.u.valid": {
-          "value": "1",
-          "known": true
-        }
-      },
-      "active": {
-        "top.u.ready": {
-          "value": "1",
-          "known": true
-        }
-      }
-    },
-    "trace": {
-      "nodes": [
-        {
-          "id": "n0",
-          "role": "assignment",
-          "kind": "assignment",
-          "signal": "top.u.ready",
-          "signals": [
-            "top.u.valid",
-            "top.u.full"
-          ],
-          "file": "rtl/foo.sv",
-          "line": 123,
-          "text": "ready <= valid & ~full",
-          "active_time": "95ns",
-          "value": {
-            "value": "1",
-            "known": true
-          },
-          "next_signal": "",
-          "alias_kind": "none"
-        },
-        {
-          "id": "n1",
-          "role": "control",
-          "kind": "if",
-          "signal": "top.u.ready",
-          "signals": [
-            "top.u.state"
-          ],
-          "file": "rtl/foo.sv",
-          "line": 120,
-          "text": "if (state == IDLE)",
-          "active_time": "95ns",
-          "value": null,
-          "next_signal": "",
-          "alias_kind": "none"
-        }
-      ],
-      "edges": [
-        {
-          "from": "n0",
-          "to": "n1",
-          "relation": "control",
-          "confidence": "high"
-        }
-      ],
-      "selected_path": [
-        "n0",
-        "n1"
-      ],
-      "termination": "assignment"
-    },
-    "alias_candidates": [],
-    "limitations": []
+    ]
   },
   "error": null
 }

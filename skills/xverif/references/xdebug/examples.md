@@ -65,7 +65,7 @@ MCP 场景下先用 `xverif_debug_session_open` 打开 session，再用 `xverif_
 }
 ```
 
-最终回答保留 `ready` 的值、stall 时间、active assignment、guard 条件、`file:line` 和 confidence。
+最终回答保留 `ready` 的值、stall 时间、源码窗口中的有效行、`file:line` 和 `signal_path`。
 
 ## Valid 未被接受
 

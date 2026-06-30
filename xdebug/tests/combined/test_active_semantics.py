@@ -242,47 +242,60 @@ def test_active_trace_semantic_branches_and_gates(
             extra={"marker_lines": marker_lines, "request": request},
         )
 
+    def _active_lines(item: dict[str, Any]) -> list[int]:
+        return [
+            row["line"]
+            for row in item.get("source_context", [])
+            if row.get("active") is True
+        ]
+
+    def _path_lines(response: dict[str, Any]) -> set[int]:
+        lines: set[int] = set()
+        for item in response.get("data", {}).get("paths", []):
+            lines.update(_active_lines(item))
+        return lines
+
+    def _assert_source_paths(response: dict[str, Any], *, min_count: int = 1) -> None:
+        paths = response.get("data", {}).get("paths", [])
+        assert isinstance(paths, list)
+        assert len(paths) >= min_count
+        assert response["summary"]["path_count"] == len(paths)
+        for item in paths:
+            assert item.get("signal_path")
+            assert _active_lines(item)
+
+    def _assert_path_line(response: dict[str, Any], marker: str) -> None:
+        _assert_source_paths(response)
+        assert marker_lines[marker] in _path_lines(response)
+
     try:
         mux_b = active_driver("active_semantics_tb.u_dut.mux_y", "26ns")
-        assert mux_b["data"]["root_driver"]["line"] == marker_lines["MUX_ACTIVE_B"]
-        assert mux_b["data"]["root_driver"]["line"] != marker_lines["MUX_ACTIVE_A"]
+        _assert_path_line(mux_b, "MUX_ACTIVE_B")
+        assert marker_lines["MUX_ACTIVE_A"] not in _path_lines(mux_b)
 
         en_hold = active_driver("active_semantics_tb.u_dut.q_en", "26ns")
-        assert en_hold["data"]["root_driver"]["line"] == marker_lines["ENABLE_Q_EN_DATA"]
+        _assert_path_line(en_hold, "ENABLE_Q_EN_DATA")
         assert en_hold["summary"]["active_time"] == "15ns"
-        assert en_hold["summary"]["evidence_source"] == "fsdb_precise_time_static_trace"
-        assert en_hold["data"]["root_driver"]["line"] != marker_lines["HOLD_Q_EN"]
+        assert marker_lines["HOLD_Q_EN"] not in _path_lines(en_hold)
 
         handshake_hold = active_driver(
             "active_semantics_tb.u_dut.handshake_q", "26ns"
         )
-        assert (
-            handshake_hold["data"]["root_driver"]["line"]
-            == marker_lines["HANDSHAKE_PAYLOAD"]
-        )
+        _assert_path_line(handshake_hold, "HANDSHAKE_PAYLOAD")
         assert handshake_hold["summary"]["active_time"] == "15ns"
 
         handshake_payload = active_driver(
             "active_semantics_tb.u_dut.handshake_q", "36ns"
         )
-        assert (
-            handshake_payload["data"]["root_driver"]["line"]
-            == marker_lines["HANDSHAKE_PAYLOAD"]
-        )
+        _assert_path_line(handshake_payload, "HANDSHAKE_PAYLOAD")
         assert handshake_payload["summary"]["active_time"] == "35ns"
 
         arbiter_winner_1 = active_driver("active_semantics_tb.u_dut.arb_q", "26ns")
-        assert (
-            arbiter_winner_1["data"]["root_driver"]["line"]
-            == marker_lines["ARB_WINNER_1"]
-        )
-        assert (
-            arbiter_winner_1["data"]["root_driver"]["line"]
-            != marker_lines["ARB_WINNER_0"]
-        )
+        _assert_path_line(arbiter_winner_1, "ARB_WINNER_1")
+        assert marker_lines["ARB_WINNER_0"] not in _path_lines(arbiter_winner_1)
 
         arbiter_idle = active_driver("active_semantics_tb.u_dut.arb_q", "36ns")
-        assert arbiter_idle["data"]["root_driver"]["line"] == marker_lines["ARB_IDLE"]
+        _assert_path_line(arbiter_idle, "ARB_IDLE")
 
         truncated = active_driver(
             "active_semantics_tb.u_dut.q_en",
@@ -295,33 +308,29 @@ def test_active_trace_semantic_branches_and_gates(
             "active_semantics_tb.u_dut.chain_out",
             "26ns",
         )
-        nodes = chain["data"]["chain"]["chain"]
         assert "text" not in chain["data"]
-        assert "text" not in chain["data"]["chain"]
-        assert chain["summary"]["chain_length"] == 4
+        assert "chain" not in chain["data"]
+        assert chain["summary"]["hop_count"] == 4
         assert chain["summary"]["termination"] == "primary_input"
-        assert [node["signal"] for node in nodes] == [
-            "active_semantics_tb.u_dut.chain_out",
-            "active_semantics_tb.u_dut.chain_mid",
-            "active_semantics_tb.u_dut.chain_src",
-            "active_semantics_tb.chain_src",
+        hops = chain["data"]["hops"]
+        assert [hop["index"] for hop in hops] == [0, 1, 2, 3]
+        assert [_active_lines(hop)[0] for hop in hops] == [
+            marker_lines["CHAIN_OUT_ASSIGN"],
+            marker_lines["CHAIN_MID_ASSIGN"],
+            marker_lines["CHAIN_SRC_DRIVE"],
+            marker_lines["CHAIN_SRC_DRIVE"],
         ]
-        assert nodes[0]["line"] == marker_lines["CHAIN_OUT_ASSIGN"]
-        assert nodes[1]["line"] == marker_lines["CHAIN_MID_ASSIGN"]
-        assert nodes[2]["line"] == marker_lines["CHAIN_SRC_DRIVE"]
-        assert nodes[3]["line"] == marker_lines["CHAIN_SRC_DRIVE"]
-        assert nodes[0]["hop"] in {"→", "⏱"}
-        assert nodes[1]["hop"] == "→"
-        assert nodes[2]["hop"] == "→"
-        assert nodes[3]["hop"] == "■"
+        for hop in hops:
+            assert hop["signal_path"]
 
         active_xout = active_driver_xout("active_semantics_tb.u_dut.q_en", "16ns")
         assert active_xout.startswith("@xdebug.trace.active_driver.v1")
         assert "\nsummary:\n" in active_xout
-        assert "\ndriver:\n" in active_xout
-        assert "\ncontrols:\n" in active_xout
-        assert "\nevents:\n" in active_xout
-        assert "\nroot_cause:\n" in active_xout
+        assert "\nsource: " in active_xout
+        assert "\nsignal_path: " in active_xout
+        assert "\n>" in active_xout
+        for removed_section in ("\ndriver:\n", "\ncontrols:\n", "\nevents:\n", "\nroot_cause:\n"):
+            assert removed_section not in active_xout
 
         chain_xout = active_driver_chain_xout(
             "active_semantics_tb.u_dut.chain_out",
@@ -329,9 +338,12 @@ def test_active_trace_semantic_branches_and_gates(
         )
         assert chain_xout.startswith("@xdebug.trace.active_driver_chain.v1")
         assert "\nsummary:\n" in chain_xout
-        assert "\nchain:\n" in chain_xout
-        assert "\nstats:\n" in chain_xout
-        assert "\nchain_path:\n" in chain_xout
+        assert "\nhop 0:\n" in chain_xout
+        assert "\nsource: " in chain_xout
+        assert "\nsignal_path: " in chain_xout
+        assert "\n>" in chain_xout
+        for removed_section in ("\nchain:\n", "\nstats:\n", "\nchain_path:\n"):
+            assert removed_section not in chain_xout
         assert "\ntarget:\n" not in chain_xout
         assert "text:" not in chain_xout
         for expected_signal in [

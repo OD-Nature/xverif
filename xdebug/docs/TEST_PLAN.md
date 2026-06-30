@@ -751,7 +751,9 @@ fixture build 应缓存编译结果，区分：
 - `stop_reason`
 - `max_depth`
 - `reason_contains`
-- `driver_status`
+- `path_count`
+- `hop_count`
+- `signal_path`
 - `active_time`
 - `waveform_complete`
 

@@ -4,6 +4,8 @@
 #include <cctype>
 #include <cstdio>
 #include <cstdlib>
+#include <iomanip>
+#include <set>
 
 namespace xdebug {
 
@@ -202,6 +204,46 @@ std::string collapse_row_column(const std::string& input) {
     return out;
 }
 
+struct TableColumn {
+    std::string label;
+    std::string parent;
+    std::string key;
+};
+
+void collect_table_columns_from_item(const Json& item,
+                                     std::vector<TableColumn>& columns,
+                                     std::set<std::string>& seen) {
+    if (!item.is_object()) return;
+    for (auto it = item.begin(); it != item.end(); ++it) {
+        if (is_xout_scalar_json(it.value())) {
+            std::string label = sanitize_xout_key(it.key());
+            if (seen.insert(label).second) columns.push_back({label, std::string(), it.key()});
+        } else if (it.value().is_object()) {
+            for (auto child = it.value().begin(); child != it.value().end(); ++child) {
+                if (!is_xout_scalar_json(child.value())) continue;
+                std::string label = it.key() == "signals"
+                    ? sanitize_xout_key(child.key())
+                    : sanitize_xout_key(it.key() + "." + child.key());
+                if (seen.insert(label).second) columns.push_back({label, it.key(), child.key()});
+            }
+        }
+    }
+}
+
+std::string table_cell_value(const Json& item, const TableColumn& column) {
+    if (!item.is_object()) return std::string();
+    if (column.parent.empty()) {
+        auto it = item.find(column.key);
+        if (it == item.end()) return std::string();
+        return json_to_xout_value(*it);
+    }
+    auto parent = item.find(column.parent);
+    if (parent == item.end() || !parent->is_object()) return std::string();
+    auto child = parent->find(column.key);
+    if (child == parent->end()) return std::string();
+    return json_to_xout_value(*child);
+}
+
 } // namespace
 
 TextResponseBuilder::TextResponseBuilder(std::string tool) : tool_(std::move(tool)) {}
@@ -213,6 +255,7 @@ void TextResponseBuilder::emit_header(const std::string& action) {
 }
 
 void TextResponseBuilder::emit_section(const std::string& name) {
+    flush_kv_block();
     pending_section_ = sanitize_xout_key(name);
 }
 
@@ -222,14 +265,16 @@ void TextResponseBuilder::emit_kv(const std::string& key, const Json& value) {
     if (text.empty()) return;
     const bool nested = in_section_ || !pending_section_.empty();
     ensure_section();
-    write_line(std::string(nested ? "  " : "") + sanitize_xout_key(key) + ": " + text);
+    pending_kv_.push_back({std::string(nested ? "  " : ""), sanitize_xout_key(key), text});
 }
 
 void TextResponseBuilder::emit_kv(const std::string& key, const std::string& value) {
     if (value.empty()) return;
     const bool nested = in_section_ || !pending_section_.empty();
     ensure_section();
-    write_line(std::string(nested ? "  " : "") + sanitize_xout_key(key) + ": " + sanitize_xout_value(value));
+    pending_kv_.push_back({std::string(nested ? "  " : ""),
+                           sanitize_xout_key(key),
+                           sanitize_xout_value(value)});
 }
 
 void TextResponseBuilder::emit_kv(const std::string& key, const char* value) {
@@ -254,6 +299,7 @@ void TextResponseBuilder::emit_row(std::initializer_list<std::string> columns) {
 }
 
 void TextResponseBuilder::emit_row(const std::vector<std::string>& columns) {
+    flush_kv_block();
     std::string row;
     for (const auto& col : columns) {
         std::string text = collapse_row_column(sanitize_xout_value(col));
@@ -267,12 +313,84 @@ void TextResponseBuilder::emit_row(const std::vector<std::string>& columns) {
     write_line(std::string(nested ? "  " : "") + row);
 }
 
+void TextResponseBuilder::emit_table(const std::vector<std::string>& columns,
+                                     const std::vector<std::vector<std::string>>& rows) {
+    flush_kv_block();
+    if (columns.empty()) return;
+    std::vector<size_t> widths(columns.size(), 0);
+    std::vector<std::string> safe_columns;
+    safe_columns.reserve(columns.size());
+    for (size_t i = 0; i < columns.size(); ++i) {
+        safe_columns.push_back(collapse_row_column(sanitize_xout_key(columns[i])));
+        widths[i] = safe_columns.back().size();
+    }
+
+    std::vector<std::vector<std::string>> safe_rows;
+    safe_rows.reserve(rows.size());
+    for (const auto& row : rows) {
+        std::vector<std::string> safe_row;
+        safe_row.reserve(columns.size());
+        for (size_t i = 0; i < columns.size(); ++i) {
+            std::string cell;
+            if (i < row.size()) cell = collapse_row_column(sanitize_xout_value(row[i]));
+            widths[i] = std::max(widths[i], cell.size());
+            safe_row.push_back(cell);
+        }
+        safe_rows.push_back(std::move(safe_row));
+    }
+
+    auto emit_cells = [&](const std::vector<std::string>& cells) {
+        std::string line;
+        for (size_t i = 0; i < columns.size(); ++i) {
+            if (i) line += "  ";
+            std::string cell = i < cells.size() ? cells[i] : std::string();
+            line += cell;
+            if (i + 1 < columns.size() && cell.size() < widths[i])
+                line.append(widths[i] - cell.size(), ' ');
+        }
+        while (!line.empty() && line.back() == ' ') line.pop_back();
+        const bool nested = in_section_ || !pending_section_.empty();
+        ensure_section();
+        write_line(std::string(nested ? "  " : "") + line);
+    };
+
+    emit_cells(safe_columns);
+    for (const auto& row : safe_rows) emit_cells(row);
+}
+
+void TextResponseBuilder::emit_json_table(const Json& items, int max_rows) {
+    flush_kv_block();
+    if (!items.is_array() || items.empty()) return;
+    std::vector<TableColumn> columns;
+    std::set<std::string> seen;
+    int count = std::min(max_rows, static_cast<int>(items.size()));
+    for (int i = 0; i < count; ++i)
+        collect_table_columns_from_item(items[i], columns, seen);
+    if (columns.empty()) return;
+
+    std::vector<std::string> headers;
+    headers.reserve(columns.size());
+    for (const auto& column : columns) headers.push_back(column.label);
+
+    std::vector<std::vector<std::string>> rows;
+    rows.reserve(count);
+    for (int i = 0; i < count; ++i) {
+        std::vector<std::string> row;
+        row.reserve(columns.size());
+        for (const auto& column : columns)
+            row.push_back(table_cell_value(items[i], column));
+        rows.push_back(std::move(row));
+    }
+    emit_table(headers, rows);
+}
+
 void TextResponseBuilder::emit_warning(const std::string& code, const std::string& message) {
     emit_section("warnings");
-    emit_row({code, message});
+    emit_table({"code", "message"}, {{code, message}});
 }
 
 void TextResponseBuilder::emit_raw(const std::string& text) {
+    flush_kv_block();
     wrote_content_ = true;
     out_ << text;
 }
@@ -284,11 +402,25 @@ void TextResponseBuilder::emit_error(const Json& error) {
     if (error.contains("recoverable")) emit_kv("recoverable", error["recoverable"]);
 }
 
-std::string TextResponseBuilder::str() const {
+std::string TextResponseBuilder::str() {
+    flush_kv_block();
     std::string text = out_.str();
     while (!text.empty() && text.back() == '\n') text.pop_back();
     text.push_back('\n');
     return text;
+}
+
+void TextResponseBuilder::flush_kv_block() {
+    if (pending_kv_.empty()) return;
+    size_t width = 0;
+    for (const auto& item : pending_kv_) width = std::max(width, item.key.size());
+    for (const auto& item : pending_kv_) {
+        std::string line = item.indent + item.key;
+        if (item.key.size() < width) line.append(width - item.key.size(), ' ');
+        line += ": " + item.value;
+        write_line(line);
+    }
+    pending_kv_.clear();
 }
 
 void TextResponseBuilder::ensure_section() {

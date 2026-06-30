@@ -88,10 +88,10 @@ query "{\"api_version\":\"xdebug.v1\",\"action\":\"session.open\",\"target\":{\"
   | check_json 'd["ok"] and d["summary"]["session_id"] == "uart_ai"'
 
 query '{"api_version":"xdebug.v1","action":"trace.driver","target":{"session_id":"uart_ai"},"args":{"signal":"uart_16550.RXDin"},"limits":{"max_results":10},"output":{"verbosity":"full"}}' \
-  | check_json 'd["ok"] and d["data"]["assignment"]["rhs"]["op"] == "ternary" and len(d["data"]["dependency_edges"]) >= 2 and d["summary"]["confidence"] in ("high","medium")'
+  | check_json 'd["ok"] and d["summary"]["mode"] == "driver" and d["summary"]["path_count"] >= 1 and len(d["data"]["paths"]) == d["summary"]["path_count"] and all(p.get("source_context") and p.get("signal_path") and any(row.get("active") for row in p["source_context"]) for p in d["data"]["paths"]) and "assignment" not in d["data"] and "dependency_edges" not in d["data"]'
 
 query '{"api_version":"xdebug.v1","action":"trace.driver","target":{"session_id":"uart_ai"},"args":{"signal":"uart_16550.RXDin","include_statement_only":false},"limits":{"max_results":10},"output":{"verbosity":"full"}}' \
-  | check_json 'd["ok"] and not any(e.get("type") == "statement_only" or e.get("resolution") == "statement_only" for e in d["data"]["dependency_edges"])'
+  | check_json 'd["ok"] and d["summary"]["mode"] == "driver" and len(d["data"]["paths"]) == d["summary"]["path_count"] and "assignment" not in d["data"] and "dependency_edges" not in d["data"]'
 
 query '{"api_version":"xdebug.v1","action":"signal.canonicalize","target":{"session_id":"uart_ai"},"args":{"signal":"uart_16550.RXDin"}}' \
   | check_json 'd["ok"] and d["data"]["canonical"].endswith("RXDin")'

@@ -5,25 +5,26 @@
   "summary": {
     "signal": "top.u.ready",
     "mode": "driver",
-    "driver_count": 1,
-    "confidence": "high",
+    "path_count": 1,
     "truncated": false
   },
   "data": {
-    "drivers": [
+    "paths": [
       {
-        "signal": "top.u.ready",
-        "kind": "continuous_assign",
-        "rhs_signals": [
-          "top.u.valid",
-          "top.u.full"
+        "file": "rtl/fifo.sv",
+        "line": 42,
+        "source_context": [
+          {"line": 39, "text": "always_comb begin", "active": false},
+          {"line": 40, "text": "  ready_n = 1'b0;", "active": false},
+          {"line": 41, "text": "  if (!full) begin", "active": false},
+          {"line": 42, "text": "    ready_n = valid_i;", "active": true},
+          {"line": 43, "text": "  end", "active": false},
+          {"line": 44, "text": "end", "active": false}
         ],
-        "condition_signals": [
-          "top.u.full"
-        ],
-        "file": "rtl/foo.sv",
-        "line": 123,
-        "confidence": "high"
+        "signal_path": [
+          "top.u.valid_i",
+          "top.u.ready"
+        ]
       }
     ]
   }

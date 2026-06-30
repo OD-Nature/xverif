@@ -60,7 +60,7 @@
         },
         "include_trace": {
           "type": "boolean",
-          "description": "Return full data.trace with nodes, edges, selected_path (default false for compact)"
+          "description": "Allow internal trace evidence collection; public output remains source_context plus signal_path."
         },
         "include_alias_candidates": {
           "type": "boolean",
@@ -261,7 +261,7 @@
     },
     "output": {
       "type": "object",
-      "description": "Output format controls. verbosity=full|debug implies include_trace=true",
+      "description": "Output format controls. verbosity=full|debug does not restore legacy trace internals.",
       "properties": {
         "format": {
           "type": "string",

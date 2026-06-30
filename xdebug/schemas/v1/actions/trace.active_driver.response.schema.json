@@ -33,14 +33,19 @@
       "type": "object"
     },
     "session": {
-      "type": "object"
+      "type": [
+        "object",
+        "null"
+      ]
     },
     "summary": {
       "type": "object",
       "required": [
         "signal",
         "requested_time",
-        "driver_status"
+        "active_time",
+        "path_count",
+        "truncated"
       ],
       "properties": {
         "signal": {
@@ -52,315 +57,94 @@
         "active_time": {
           "type": "string"
         },
-        "driver_status": {
-          "type": "string",
-          "enum": [
-            "resolved",
-            "control_only",
-            "unresolved",
-            "ambiguous"
-          ]
-        },
-        "evidence_source": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "static_candidate_count": {
+        "path_count": {
           "type": "integer",
           "minimum": 0
         },
-        "active_check_count": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "statement_count": {
-          "type": "integer"
-        },
-        "trace_node_count": {
-          "type": "integer"
-        },
-        "root_driver": {
-          "type": "object",
-          "required": [
-            "kind",
-            "file",
-            "line"
-          ],
-          "properties": {
-            "kind": {
-              "type": "string",
-              "enum": [
-                "assignment",
-                "force",
-                "constant",
-                "primary_input",
-                "unknown"
-              ]
-            },
-            "file": {
-              "type": "string"
-            },
-            "line": {
-              "type": "integer"
-            }
-          }
+        "truncated": {
+          "type": "boolean"
         }
       },
-      "additionalProperties": true
+      "additionalProperties": false
     },
     "data": {
       "type": "object",
+      "required": [
+        "paths"
+      ],
       "properties": {
-        "signal": {
+        "summary": {
+          "type": "object"
+        },
+        "paths": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/source_path"
+          }
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "common_blocks": {
+          "type": "array"
+        }
+      },
+      "additionalProperties": false
+    },
+    "error": {},
+    "meta": {
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "source_path": {
+      "type": "object",
+      "required": [
+        "file",
+        "line",
+        "source_context",
+        "signal_path"
+      ],
+      "properties": {
+        "file": {
           "type": "string"
         },
-        "requested_time": {
-          "type": "string"
-        },
-        "active_time": {
-          "type": "string"
-        },
-        "driver_status": {
-          "type": "string",
-          "enum": [
-            "resolved",
-            "control_only",
-            "unresolved",
-            "ambiguous"
-          ]
-        },
-        "evidence_source": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "static_candidate_count": {
+        "line": {
           "type": "integer",
-          "minimum": 0
+          "minimum": 1
         },
-        "active_check_count": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "driver": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "properties": {
-            "kind": {
-              "type": "string"
-            },
-            "file": {
-              "type": "string"
-            },
-            "line": {
-              "type": "integer"
-            },
-            "text": {
-              "type": "string"
-            },
-            "signals": {
-              "type": "array",
-              "items": {
+        "source_context": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "line",
+              "text",
+              "active"
+            ],
+            "properties": {
+              "line": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "text": {
                 "type": "string"
-              }
-            }
-          }
-        },
-        "root_driver": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "required": [
-            "kind",
-            "file",
-            "line"
-          ],
-          "properties": {
-            "kind": {
-              "type": "string",
-              "enum": [
-                "assignment",
-                "force",
-                "constant",
-                "primary_input",
-                "unknown"
-              ]
-            },
-            "file": {
-              "type": "string"
-            },
-            "line": {
-              "type": "integer"
-            }
-          }
-        },
-        "controls": {
-          "type": "array",
-          "items": {
-            "type": "object"
-          }
-        },
-        "events": {
-          "type": "array",
-          "items": {
-            "type": "object"
-          }
-        },
-        "values": {
-          "type": "object",
-          "properties": {
-            "requested": {
-              "type": "object"
-            },
-            "active": {
-              "type": "object"
-            }
-          }
-        },
-        "trace": {
-          "type": "object",
-          "properties": {
-            "nodes": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "required": [
-                  "id",
-                  "role",
-                  "kind",
-                  "signal"
-                ],
-                "properties": {
-                  "id": {
-                    "type": "string"
-                  },
-                  "role": {
-                    "type": "string"
-                  },
-                  "kind": {
-                    "type": "string"
-                  },
-                  "signal": {
-                    "type": "string"
-                  },
-                  "signals": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  "file": {
-                    "type": "string"
-                  },
-                  "line": {
-                    "type": "integer"
-                  },
-                  "text": {
-                    "type": "string"
-                  },
-                  "active_time": {
-                    "type": "string"
-                  },
-                  "next_signal": {
-                    "type": "string"
-                  },
-                  "alias_kind": {
-                    "type": "string"
-                  }
-                }
+              },
+              "active": {
+                "type": "boolean"
               }
             },
-            "edges": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "required": [
-                  "from",
-                  "to",
-                  "relation"
-                ],
-                "properties": {
-                  "from": {
-                    "type": "string"
-                  },
-                  "to": {
-                    "type": "string"
-                  },
-                  "relation": {
-                    "type": "string"
-                  },
-                  "confidence": {
-                    "type": "string"
-                  }
-                }
-              }
-            },
-            "selected_path": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "termination": {
-              "type": "string",
-              "enum": [
-                "assignment",
-                "force",
-                "constant",
-                "primary_input",
-                "ambiguous",
-                "limit",
-                "unresolved"
-              ]
-            }
+            "additionalProperties": false
           }
         },
-        "alias_candidates": {
-          "type": "array",
-          "items": {
-            "type": "object"
-          }
-        },
-        "limitations": {
+        "signal_path": {
           "type": "array",
           "items": {
             "type": "string"
           }
-        },
-        "parity": {
-          "type": "object"
         }
       },
-      "additionalProperties": true
-    },
-    "findings": {
-      "type": "array"
-    },
-    "suggested_next_actions": {
-      "type": "array"
-    },
-    "warnings": {
-      "type": "array"
-    },
-    "error": {
-      "type": [
-        "object",
-        "null"
-      ]
-    },
-    "meta": {
-      "type": "object",
-      "properties": {
-        "truncated": {
-          "type": "boolean"
-        }
-      }
+      "additionalProperties": false
     }
   },
   "additionalProperties": true,

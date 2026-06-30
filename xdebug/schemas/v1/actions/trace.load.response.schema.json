@@ -31,21 +31,110 @@
     },
     "summary": {
       "type": "object",
-      "additionalProperties": true
+      "required": [
+        "signal",
+        "mode",
+        "path_count",
+        "truncated"
+      ],
+      "properties": {
+        "signal": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "load"
+          ]
+        },
+        "path_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
     },
     "data": {
       "type": "object",
-      "additionalProperties": true
-    },
-    "findings": {
-      "type": "array"
-    },
-    "warnings": {
-      "type": "array"
+      "required": [
+        "paths"
+      ],
+      "properties": {
+        "summary": {
+          "type": "object"
+        },
+        "paths": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/source_path"
+          }
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "common_blocks": {
+          "type": "array"
+        }
+      },
+      "additionalProperties": false
     },
     "error": {},
     "meta": {
       "type": "object"
+    }
+  },
+  "$defs": {
+    "source_path": {
+      "type": "object",
+      "required": [
+        "file",
+        "line",
+        "source_context",
+        "signal_path"
+      ],
+      "properties": {
+        "file": {
+          "type": "string"
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "source_context": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "line",
+              "text",
+              "active"
+            ],
+            "properties": {
+              "line": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "text": {
+                "type": "string"
+              },
+              "active": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "signal_path": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": true,

@@ -36,14 +36,20 @@ void emit_summary(TextResponseBuilder& out, const Json& response) {
 
 void emit_warnings(TextResponseBuilder& out, const Json& response) {
     if (!response.contains("warnings") || !response["warnings"].is_array()) return;
+    std::vector<std::vector<std::string>> rows;
     for (const auto& warning : response["warnings"]) {
         if (warning.is_string()) {
-            out.emit_warning("warning", warning.get<std::string>());
+            rows.push_back({"warning", warning.get<std::string>()});
         } else if (warning.is_object()) {
-            out.emit_warning(
+            rows.push_back({
                 scalar_text(warning, "code").empty() ? "warning" : scalar_text(warning, "code"),
-                scalar_text(warning, "message").empty() ? warning.dump() : scalar_text(warning, "message"));
+                scalar_text(warning, "message").empty() ? warning.dump() : scalar_text(warning, "message")
+            });
         }
+    }
+    if (!rows.empty()) {
+        out.emit_section("warnings");
+        out.emit_table({"code", "message"}, rows);
     }
 }
 
@@ -98,27 +104,8 @@ void render_data_value(TextResponseBuilder& out, const std::string& key,
     } else if (value.is_array() && !value.empty() && value[0].is_object()) {
         int count = static_cast<int>(value.size());
         out.emit_section(key);
-
-        std::vector<std::string> keys;
-        std::set<std::string> seen;
-        for (int i = 0; i < std::min(5, count); ++i) {
-            for (auto item = value[i].begin(); item != value[i].end(); ++item) {
-                if (should_emit_scalar_key(item.key(), item.value()) &&
-                    seen.insert(item.key()).second) {
-                    keys.push_back(item.key());
-                }
-            }
-        }
-
-        out.emit_row(keys);
         int n = std::min(20, count);
-        for (int i = 0; i < n; ++i) {
-            std::vector<std::string> row;
-            for (const auto& item_key : keys) {
-                row.push_back(json_to_xout_value(value[i].value(item_key, Json())));
-            }
-            out.emit_row(row);
-        }
+        out.emit_json_table(value, n);
         if (count > n) out.emit_kv("(+ " + std::to_string(count - n) + " more)", "");
     } else if (value.is_object()) {
         out.emit_section(key);

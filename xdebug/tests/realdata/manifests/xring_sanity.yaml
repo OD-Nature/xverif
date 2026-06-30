@@ -59,7 +59,7 @@ queries:
     expect:
       ok: true
       required_paths:
-        - summary.result_count
-        - data.assignment.location.file
+        - summary.path_count
+        - data.paths
       min:
-        summary.result_count: 1
+        summary.path_count: 1

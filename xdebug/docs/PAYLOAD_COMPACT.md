@@ -71,15 +71,15 @@ compact 默认回答四件事：谁驱动或加载信号、关键依赖是谁、
     "truncated": false
   },
   "data": {
-    "drivers": [
+    "paths": [
       {
-        "signal": "top.u.ready",
-        "kind": "continuous_assign",
-        "rhs_signals": ["top.u.valid", "top.u.full"],
-        "condition_signals": ["top.u.full"],
         "file": "rtl/foo.sv",
         "line": 123,
-        "confidence": "high"
+        "source_context": [
+          {"line": 120, "text": "always_comb begin", "active": false},
+          {"line": 123, "text": "  ready = valid && !full;", "active": true}
+        ],
+        "signal_path": ["top.u.valid", "top.u.ready"]
       }
     ]
   }
@@ -88,12 +88,12 @@ compact 默认回答四件事：谁驱动或加载信号、关键依赖是谁、
 
 默认隐藏：
 
-- 完整 assignment object
+- 内部 active/static trace 语句对象
 - normalized expression AST
-- source text
+- 候选全集
 - 低置信候选全集
 
-需要时用 `include_source`、`include_ast`、`include_candidates` 恢复。
+`full/debug` 输出不恢复旧内部字段，机器合同固定为源码窗口和信号路径。
 
 ### source.context
 

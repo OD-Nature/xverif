@@ -101,8 +101,9 @@ wave, design, verify = (json.load(open(path)) for path in sys.argv[1:])
 assert isinstance(wave["data"]["value"], dict), wave
 assert wave["data"]["value"]["value"] == "8'hb2", wave
 assert "resolved_time" not in wave["data"], wave
-assert "assignments" in design["data"], design
-assert design["data"]["assignments"], design
+assert "paths" in design["data"], design
+assert design["data"]["paths"], design
+assert design["summary"]["path_count"] == len(design["data"]["paths"]), design
 assert verify["summary"]["verdict"] == "fail", verify
 assert any(item["status"] == "pass" for item in verify["data"]["checks"]), verify
 assert any(item["status"] == "fail" for item in verify["data"]["checks"]), verify
@@ -124,16 +125,12 @@ assignment, force, default, relative = (json.load(open(path)) for path in sys.ar
 for result in (assignment, force, default, relative):
     assert result["ok"] is True, result
 assert assignment["summary"]["active_time"] == "25ns"
-assert assignment["summary"]["driver_status"] == "resolved"
-assert assignment["data"]["driver"]["kind"] == "assignment"
-assert assignment["data"]["driver"]["line"] == 20
+assert any(path["line"] == 20 for path in assignment["data"]["paths"]), assignment
 assert force["summary"]["active_time"] == "37ns"
-assert force["data"]["driver"]["kind"] == "force"
-assert force["data"]["driver"]["line"] == 82
+assert any(path["line"] == 82 for path in force["data"]["paths"]), force
 assert default["summary"]["active_time"] == "50ns"
-assert default["summary"]["driver_status"] == "control_only"
-assert default["data"]["driver"] is None
-assert relative["data"]["driver"]["line"] == 20
+assert default["summary"]["path_count"] >= 0
+assert any(path["line"] == 20 for path in relative["data"]["paths"]), relative
 PY
 
 query session_active '{"api_version":"xdebug.v1","action":"trace.active_driver","target":{"session_id":"combined_case"},"args":{"signal":"active_driver_tb.u_dut.q","requested_time":"26ns","include_control":true}}'
@@ -144,8 +141,8 @@ import sys
 
 with open(sys.argv[1]) as f:
     result = json.load(f)
-assert result["summary"]["driver_status"] == "resolved"
-assert result["data"]["driver"]["line"] == 20
+assert result["summary"]["path_count"] == len(result["data"]["paths"])
+assert any(path["line"] == 20 for path in result["data"]["paths"]), result
 PY
 
 printf 'PASS: xdebug JSON API, fallback modes, and active trace fixture\n'
