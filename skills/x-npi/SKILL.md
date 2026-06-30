@@ -34,6 +34,7 @@ from x_npi.coverage import open_covdb, coverage_items
 
 - 针对已经打开的 xdebug 会话做一次性 AI debug 时，使用 xdebug。
 - 需要批量 FSDB 扫描、事务提取、coverage database 查询、值分布统计或报告生成时，使用本 skill 编写 Python 脚本。
+- 做波形协议分析、事务统计、窗口验证或跨信号相关性判断时，必须基于同一个 `clock` 的上升沿或下降沿采样后再分析，不能用任意时间点或信号变化点直接下结论。默认建议使用下降沿（`clock_edge: "negedge"` / `posedge: false`），因为它通常避开 DUT/monitor 在上升沿附近的更新竞争；只有接口规范或 monitor 明确要求上升沿时才改用 `posedge`。
 - 需要 active-driver、active-driver-chain、`activeTime`、PVC active check、force/root-cause 分类，或在某个症状时间点做接口因果追踪时，改用 xdebug/C++ NPI。当前 Python `pynpi` 不暴露这些 active trace 所需 API。
 - coverage 百分比必须用 `covered / coverable` 计算；`count` 是 hit/sample count，不是 coverage pct。
 - coverage hole 输出必须保留 `excluded`、`unreachable`、`illegal` 等 status flags；bin 缺 file/line 时继承最近父对象 evidence，并标记继承来源。

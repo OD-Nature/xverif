@@ -104,7 +104,7 @@ def iter_signal_changes(file_handle: Any, signal: str, begin: int | None = None,
 
 
 def clock_edges(file_handle: Any, clock: str, begin: int | None = None, end: int | None = None,
-                posedge: bool = True, max_edges: int | None = None) -> List[int]:
+                posedge: bool = False, max_edges: int | None = None) -> List[int]:
     changes = list(iter_signal_changes(file_handle, clock, begin, end, max_changes=None))
     edges: List[int] = []
     prev = None
@@ -122,7 +122,7 @@ def clock_edges(file_handle: Any, clock: str, begin: int | None = None, end: int
 
 
 def edge_samples(file_handle: Any, clock: str, signals: Sequence[str], begin: int | None = None,
-                 end: int | None = None, posedge: bool = True,
+                 end: int | None = None, posedge: bool = False,
                  max_edges: int | None = None) -> List[Json]:
     edges = clock_edges(file_handle, clock, begin, end, posedge, max_edges)
     rows: List[Json] = []

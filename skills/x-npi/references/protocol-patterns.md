@@ -7,6 +7,8 @@
 
 这样可以让 pynpi 访问逻辑保持简单，也让协议逻辑能够在没有 license 的情况下做单元测试。
 
+所有协议脚本必须基于同一个 clock 的上升沿或下降沿采样行来判断 transfer、stall、latency 和 outstanding；不要直接用任意时间点、信号变化点或不同信号各自的变化时间拼协议事件。默认建议下降沿（`clock_edge: "negedge"` / `posedge: false`），因为它通常比上升沿更能避开 DUT/monitor 同沿更新竞争；只有协议规范或 monitor 采样点明确要求上升沿时才改用 `posedge`。
+
 ## APB
 
 必需配置项：
@@ -23,14 +25,22 @@
   "prdata": "top.prdata",
   "pready": "top.pready",
   "pslverr": "top.pslverr",
-  "posedge": true
+  "clock_edge": "negedge"
 }
 ```
 
 代码模式：
 
 ```python
-rows = edge_samples(fp, cfg["clk"], signals, posedge=cfg.get("posedge", True))
+def is_posedge(cfg):
+    edge = str(cfg.get("edge", cfg.get("clock_edge", ""))).lower()
+    if edge in {"posedge", "pos", "rising"}:
+        return True
+    if edge in {"negedge", "neg", "falling"}:
+        return False
+    return bool(cfg.get("posedge", False))
+
+rows = edge_samples(fp, cfg["clk"], signals, posedge=is_posedge(cfg))
 result = apb_summary(rows, cfg)
 ```
 
@@ -57,6 +67,7 @@ helper 会跟踪 pending writes、pending reads、ID、latency 和 outstanding s
 ```json
 {
   "clock": "top.clk",
+  "clock_edge": "negedge",
   "valid": "top.valid",
   "ready": "top.ready",
   "data": "top.data",

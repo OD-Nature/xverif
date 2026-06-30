@@ -33,7 +33,7 @@ def _is_posedge(cfg: dict) -> bool:
         return True
     if edge in {"negedge", "neg", "falling"}:
         return False
-    return bool(cfg.get("posedge", True))
+    return bool(cfg.get("posedge", False))
 
 
 def main() -> int:
