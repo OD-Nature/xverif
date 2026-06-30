@@ -80,6 +80,18 @@ xverif_cov_get_schema
 {"api_version":"xcov.v1","action":"code_coverage.holes","target":{"session_id":"cov0"},"args":{"scope":"uart_tb","metrics":["line","toggle","branch","condition","fsm","assert"],"limits":{"max_items":100}}}
 ```
 
+按通配过滤 code coverage hierarchy holes：
+
+```json
+{"api_version":"xcov.v1","action":"code_coverage.holes","target":{"session_id":"cov0"},"args":{"scope":"uart_tb","query":{"include_patterns":["*u_uart*"],"exclude_patterns":["*uvm*"],"match_field":"full_name"}}}
+```
+
+查询 function coverage holes：
+
+```json
+{"api_version":"xcov.v1","action":"function_coverage.holes","target":{"session_id":"cov0"},"args":{"levels":["bin"],"query":{"include_patterns":["*APB_accesses_cg*"],"match_field":"full_name"}}}
+```
+
 源码位置反查 coverage object：
 
 ```json
@@ -92,10 +104,10 @@ xverif_cov_get_schema
 {"api_version":"xcov.v1","action":"source.annotate","target":{"session_id":"cov0"},"args":{"file":"rtl/ctrl.sv","line":123,"window":3}}
 ```
 
-assert 结构化报告：
+assert 汇总：
 
 ```json
-{"api_version":"xcov.v1","action":"assert.report","target":{"session_id":"cov0"},"args":{"include_source":true}}
+{"api_version":"xcov.v1","action":"assert.summary","target":{"session_id":"cov0"}}
 ```
 
 导出 code coverage 未达标项：
@@ -104,7 +116,7 @@ assert 结构化报告：
 {"api_version":"xcov.v1","action":"export.code_coverage","target":{"session_id":"cov0"},"args":{"scope":"uart_tb","threshold_pct":100.0,"output":{"path":"code_coverage.md"}}}
 ```
 
-导出 functional coverage 未达标 bin：
+导出 function coverage 未达标 bin：
 
 ```json
 {"api_version":"xcov.v1","action":"export.function_coverage","target":{"session_id":"cov0"},"args":{"covergroup":"*","threshold_pct":100.0,"output":{"path":"function_coverage.md"}}}
@@ -133,34 +145,46 @@ object 层级：
 container、assert Attempt/Success/Failure bin，会被遍历用于上下文和证据，但不
 计入公开 summary 分母。
 
-`functional.summary` 的 covergroup score 按 URG group 页语义计算：优先取直接
-coverpoint/cross coverage 百分比的平均值；原始 covergroup 计数保留在
-`raw_covered/raw_coverable/raw_coverage_pct`。
+`function_coverage.summary` 的 covergroup score 按 URG group 页语义计算：优先取直接
+coverpoint/cross coverage 百分比的平均值；交互输出不暴露 score_basis/raw count
+等中间计算字段。
 
 ## Action 合同
 
-- `scope.summary` / `scope.children`：返回当前层次或子层次的扁平覆盖率字段，例如
+- `scope.summary`：返回当前层次的扁平覆盖率字段，例如
   `coverage_pct`、`line_pct`、`toggle_pct`、`branch_pct`、`condition_pct`、
   `fsm_pct`、`assert_pct`、`functional_pct`，并带 module 对应的 `file/line`
   evidence（若 NPI 暴露）。
-- `scope.search`：只返回 `name/full_name`，用于定位 hierarchy 名称。
+- `scope.children` / `scope.search`：只返回 `name/full_name/coverage_pct`，用于定位
+  hierarchy 名称和快速查看当前覆盖率。
 - `code_coverage.summary`：按 metric、scope 或 source file 汇总代码覆盖率。
-- `code_coverage.holes`：按输入 hierarchy 输出当前层次和子模块的覆盖率概览，不展开
-  具体 signal、branch、condition 或 bin。具体未覆盖项请使用
+- `code_coverage.holes`：按输入 hierarchy 输出当前层次和子模块的覆盖率概览，只保留
+  `name/full_name/coverage_pct/*_pct`，不展开具体 signal、branch、condition 或 bin，
+  也不输出 parent/depth/type/def_name/covered/coverable/missing/file/line。具体未覆盖项请使用
   `export.code_coverage`。
+- `function_coverage.summary`：按 covergroup、coverpoint、cross 或 bin 汇总功能覆盖率，
+  不输出 metric/name/full_name/score_basis/score_item_count/raw_* 字段。
+- `function_coverage.holes`：输出未覆盖的 function coverage 项，支持 `levels` 和
+  `query` glob 过滤；不输出 metric/name/full_name/score_basis/score_item_count/raw_* 字段。
 - `source.map`：按源码 file/line/window 反查 coverage item。
 - `source.annotate`：基于 NPI `file_name()/line_no()` evidence 和项目源码文件输出源码
   窗口。它可以挂接 line/branch/condition/toggle/assert object annotation，但不承诺
   URG HTML 专有展示标签，例如 `MISSING_ELSE`；除非后续 NPI API probe 证明这些标签
   可取。
-- `assert.report`：输出 assert/cover property/cover sequence 的 category/severity
-  summary，以及 attempts、real successes、failures、incomplete、first match。
+- `assert.summary`：输出 assert/cover property/cover sequence 的基础覆盖率和
+  attempts/real successes/without attempts；不输出 kind/category/severity/failures/
+  incomplete/first_match/file/line。详细报告请使用 `export.assert`。
 
 ## Markdown 导出
 
 `export.code_coverage`、`export.function_coverage`、`export.assert` 只输出 Markdown
 文件，不保留 `output.artifact_format` 选择。响应的 `summary.note` 会提示：需要复杂
 处理、二次统计或跨报告加工时，请调用 `x-npi` 学习 `pynpi` coverage API 并编写脚本。
+
+## XOUT 输出
+
+`xout` 中的 `items:` 使用对齐的纯文本表格：第一行是表头，后续每行对应一个 item。
+它不是 Markdown 表格，不使用 `|` 分隔。JSON 响应结构不受影响。
 
 导出路径使用 `args.output.path`：
 

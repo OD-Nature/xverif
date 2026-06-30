@@ -196,13 +196,13 @@ SCHEMAS: Dict[str, Json] = {
         args=_args(None, {"group_by": _string()}),
     ),
     "code_coverage.holes": _schema_entry("code_coverage.holes", target=_target(["session_id"])),
-    "functional.summary": _schema_entry(
-        "functional.summary",
+    "function_coverage.summary": _schema_entry(
+        "function_coverage.summary",
         target=_target(["session_id"]),
         args=_args(None, {"group_by": _string(), "levels": _string_array(FUNCTIONAL_LEVELS)}),
     ),
-    "functional.holes": _schema_entry(
-        "functional.holes",
+    "function_coverage.holes": _schema_entry(
+        "function_coverage.holes",
         target=_target(["session_id"]),
         args=_args(None, {"levels": _string_array(FUNCTIONAL_LEVELS)}),
     ),
@@ -225,8 +225,8 @@ SCHEMAS: Dict[str, Json] = {
             },
         ),
     ),
-    "assert.report": _schema_entry(
-        "assert.report",
+    "assert.summary": _schema_entry(
+        "assert.summary",
         target=_target(["session_id"]),
         args=_args(None, {"include_instances": _bool(), "include_source": _bool()}),
     ),

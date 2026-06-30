@@ -19,11 +19,11 @@ DEFAULT_LIMITS = {
     "scope.summary": 100,
     "code_coverage.summary": 100,
     "code_coverage.holes": 100,
-    "functional.summary": 100,
-    "functional.holes": 100,
+    "function_coverage.summary": 100,
+    "function_coverage.holes": 100,
     "source.map": 100,
     "source.annotate": 100,
-    "assert.report": 100,
+    "assert.summary": 100,
 }
 
 REGEX_HINT_CHARS = ("[", "]", "{", "}", "^", "$", "(", ")", "|", "+")

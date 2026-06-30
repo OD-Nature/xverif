@@ -22,8 +22,8 @@ P0_ACTIONS = [
     "tests.list", "metrics.list",
     "scope.summary", "scope.children", "scope.search",
     "code_coverage.summary", "code_coverage.holes",
-    "functional.summary", "functional.holes",
-    "source.map", "source.annotate", "assert.report",
+    "function_coverage.summary", "function_coverage.holes",
+    "source.map", "source.annotate", "assert.summary",
     "export.code_coverage", "export.function_coverage", "export.assert",
 ]
 
@@ -60,13 +60,13 @@ class Dispatcher:
                     rsp = self._scope(req, sess)
                 elif action in ("code_coverage.summary", "code_coverage.holes"):
                     rsp = self._code_coverage(req, sess)
-                elif action in ("functional.summary", "functional.holes"):
+                elif action in ("function_coverage.summary", "function_coverage.holes"):
                     rsp = self._functional(req, sess)
                 elif action == "source.map":
                     rsp = self._source_map(req, sess)
                 elif action == "source.annotate":
                     rsp = self._source_annotate(req, sess)
-                elif action == "assert.report":
+                elif action == "assert.summary":
                     rsp = self._assert_report(req, sess)
                 elif action.startswith("export."):
                     rsp = self._export(req, sess)
@@ -174,18 +174,19 @@ class Dispatcher:
         args = merged_action_args(req)
         query = query_args(args)
         scopes = _indexed_scopes(sess.backend.scopes())
-        if action == "scope.search":
-            rows = _scope_search_rows(scopes, args)
+        metrics = args.get("metrics") or METRICS
+        items = sess.backend.items(metrics=metrics, scope=args.get("scope"),
+                                  test=str(args.get("test", "merged")))
+        items = _coverage_score_rows(items)
+        coverage = _scope_coverage(items, metrics)
+        if action == "scope.summary":
+            rows = _scope_summary_rows(scopes, coverage, args)
+        elif action == "scope.children":
+            rows = _scope_children_rows(scopes, coverage, args)
+            rows = _project_scope_brief_rows(rows)
         else:
-            metrics = args.get("metrics") or METRICS
-            items = sess.backend.items(metrics=metrics, scope=args.get("scope"),
-                                      test=str(args.get("test", "merged")))
-            items = _coverage_score_rows(items)
-            coverage = _scope_coverage(items, metrics)
-            if action == "scope.summary":
-                rows = _scope_summary_rows(scopes, coverage, args)
-            else:
-                rows = _scope_children_rows(scopes, coverage, args)
+            rows = _scope_search_rows(scopes, coverage, args)
+            rows = _project_scope_brief_rows(rows)
         rows = filter_items(rows, query)
         rows = sort_items(rows, args.get("sort"))
         summary, inline, warnings = apply_output(action, args, rows)
@@ -203,6 +204,7 @@ class Dispatcher:
             items = sess.backend.items(metrics=metrics, scope=args.get("scope"),
                                       test=str(args.get("test", "merged")))
             rows = _code_coverage_hole_scope_rows(scopes, _coverage_score_rows(items), metrics, args)
+            rows = _project_code_coverage_hole_rows(rows)
         else:
             rows = sess.backend.items(metrics=metrics, scope=args.get("scope"),
                                       test=str(args.get("test", "merged")))
@@ -227,12 +229,15 @@ class Dispatcher:
                                   test=str(args.get("test", "merged")),
                                   functional_only=True)
         rows = _filter_functional_levels(rows, args.get("levels"))
-        if action == "functional.holes":
+        if action == "function_coverage.holes":
             rows = [r for r in rows if int(r.get("missing") or 0) > 0]
+            rows = filter_items(rows, query)
+            rows = _project_function_coverage_hole_rows(rows)
         else:
             group_by = str(args.get("group_by", "covergroup"))
             rows = _functional_summary_rows(rows, group_by)
-        rows = filter_items(rows, query)
+            rows = filter_items(rows, query)
+            rows = _project_function_coverage_summary_rows(rows, group_by)
         rows = sort_items(rows, args.get("sort"))
         summary, inline, warnings = apply_output(action, args, rows)
         summary.update({"session_id": sess.session_id, "test": args.get("test", "merged")})
@@ -315,19 +320,16 @@ class Dispatcher:
     def _assert_report(self, req: Json, sess) -> Json:
         args = merged_action_args(req)
         query = query_args(args)
-        rows, sections = _assert_report_rows(sess.backend.items(metrics=["assert"], scope=args.get("scope"),
-                                                               test=str(args.get("test", "merged"))),
-                                             include_source=bool(args.get("include_source", True)))
+        rows, _sections = _assert_report_rows(sess.backend.items(metrics=["assert"], scope=args.get("scope"),
+                                                                test=str(args.get("test", "merged"))),
+                                              include_source=False)
+        rows = _project_assert_summary_rows(rows)
         rows = filter_items(rows, query)
         rows = sort_items(rows, args.get("sort"))
-        summary, inline, warnings = apply_output("assert.report", args, rows)
+        summary, inline, warnings = apply_output("assert.summary", args, rows)
         summary.update({"session_id": sess.session_id, "scope": args.get("scope"),
                         "test": args.get("test", "merged")})
-        return ok_response(req, summary, {
-            "filters": filters_summary(query),
-            "sections": sections,
-            "items": inline,
-        }, warnings)
+        return ok_response(req, summary, {"filters": filters_summary(query), "items": inline}, warnings)
 
     def _export(self, req: Json, sess) -> Json:
         action = req["action"]
@@ -450,12 +452,12 @@ def _is_direct_child(scope: str, parent: Optional[str]) -> bool:
     return _scope_parent(scope) == parent
 
 
-def _scope_search_rows(scopes: Dict[str, Json], args: Json) -> List[Json]:
+def _scope_search_rows(scopes: Dict[str, Json], coverage: Dict[str, Json], args: Json) -> List[Json]:
     root = args.get("scope")
     rows = list(scopes.values())
     if root:
         rows = [r for r in rows if _is_descendant(str(r.get("full_name", "")), str(root))]
-    return [{"name": r.get("name"), "full_name": r.get("full_name")} for r in rows]
+    return [_merge_scope_coverage(r, coverage.get(str(r.get("full_name") or ""))) for r in rows]
 
 
 def _scope_summary_rows(scopes: Dict[str, Json], coverage: Dict[str, Json], args: Json) -> List[Json]:
@@ -569,6 +571,54 @@ def _merge_scope_coverage(scope: Json, cov: Optional[Json]) -> Json:
         row = next((m for m in metrics if m.get("metric") == metric), None)
         out[f"{metric}_pct"] = row.get("coverage_pct") if row else None
     return out
+
+
+def _project_columns(row: Json, columns: List[str]) -> Json:
+    return {key: row.get(key) for key in columns}
+
+
+def _project_scope_brief_rows(rows: List[Json]) -> List[Json]:
+    return [_project_columns(row, ["name", "full_name", "coverage_pct"]) for row in rows]
+
+
+def _project_code_coverage_hole_rows(rows: List[Json]) -> List[Json]:
+    columns = [
+        "name", "full_name", "coverage_pct",
+        "line_pct", "toggle_pct", "branch_pct", "condition_pct",
+        "fsm_pct", "assert_pct",
+    ]
+    return [_project_columns(row, columns) for row in rows]
+
+
+def _project_function_coverage_summary_rows(rows: List[Json], group_by: str) -> List[Json]:
+    columns = [
+        group_by, "covered", "coverable", "missing",
+        "coverage_pct", "raw_coverage_pct",
+    ]
+    return [_project_columns(row, columns) for row in rows]
+
+
+def _project_function_coverage_hole_rows(rows: List[Json]) -> List[Json]:
+    out: List[Json] = []
+    for row in rows:
+        ev = row.get("evidence") if isinstance(row.get("evidence"), dict) else {}
+        projected = _project_columns(row, [
+            "covergroup", "coverpoint", "cross", "bin",
+            "covered", "coverable", "count", "coverage_pct", "status",
+        ])
+        projected["file"] = ev.get("file")
+        projected["line"] = ev.get("line")
+        out.append(projected)
+    return out
+
+
+def _project_assert_summary_rows(rows: List[Json]) -> List[Json]:
+    columns = [
+        "name", "full_name", "covered", "coverable", "missing",
+        "coverage_pct", "status", "attempts", "real_successes",
+        "without_attempts",
+    ]
+    return [_project_columns(row, columns) for row in rows]
 
 
 def _code_metrics() -> List[str]:

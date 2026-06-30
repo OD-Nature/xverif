@@ -122,9 +122,10 @@ def test_new_urg_alignment_actions_are_in_schema_and_actions():
         "action": "actions", "output": {"response_format": "json"},
     })
     names = {row["name"] for row in actions["data"]["items"]}
-    for action in ("code_coverage.summary", "code_coverage.holes", "source.annotate",
-                   "assert.report", "export.code_coverage", "export.function_coverage",
-                   "export.assert"):
+    for action in ("code_coverage.summary", "code_coverage.holes",
+                   "function_coverage.summary", "function_coverage.holes",
+                   "source.annotate", "assert.summary", "export.code_coverage",
+                   "export.function_coverage", "export.assert"):
         assert action in names
         schema = dispatcher.dispatch({
             "api_version": "xcov.v1", "request_id": f"schema-{action}",
@@ -135,7 +136,8 @@ def test_new_urg_alignment_actions_are_in_schema_and_actions():
         assert schema["data"]["schema"]["properties"]["action"]["const"] == action
     removed = {"cov.summary", "cov.holes", "cov.object.get", "cov.object.search",
                "toggle.details", "export.summary", "export.holes",
-               "export.scope_tree", "export.functional"}
+               "export.scope_tree", "export.functional",
+               "functional.summary", "functional.holes", "assert.report"}
     assert not (names & removed)
     for action in removed:
         rsp = dispatcher.dispatch({
@@ -345,10 +347,45 @@ def test_scope_children_direct_vs_recursive():
     assert {i["full_name"] for i in direct["data"]["items"]} == {
         "top.u_dut.u_ctrl", "top.u_dut.u_fifo"
     }
+    assert all(set(i) == {"name", "full_name", "coverage_pct"}
+               for i in direct["data"]["items"])
     assert "top.u_dut.u_fifo" in {i["full_name"] for i in recursive["data"]["items"]}
 
 
-def test_scope_search_does_not_enrich_coverage():
+def test_scope_summary_xout_uses_compact_items_and_coverage_table():
+    dispatcher = _dispatch_opened()
+    rsp = dispatcher.dispatch({
+        "api_version": "xcov.v1", "request_id": "scope-xout",
+        "action": "scope.summary", "target": {"session_id": "cov0"},
+        "args": {"scope": "top.u_dut"},
+    })
+    xout = render_xout(rsp)
+    assert "items:\n  name   full_name  covered  coverable  missing  coverage_pct" in xout
+    assert "u_dut  top.u_dut  2        9          7        22.2222" in xout
+    assert "\ncoverage:\n  metric      coverage_pct" in xout
+    assert "line        100.0" in xout
+    assert "toggle      0.0" in xout
+    assert "parent" not in xout.split("items:", 1)[1].split("coverage:", 1)[0]
+    assert "line_pct" not in xout
+
+
+def test_scope_children_xout_only_shows_name_full_name_coverage_pct():
+    dispatcher = _dispatch_opened()
+    rsp = dispatcher.dispatch({
+        "api_version": "xcov.v1", "request_id": "children-xout",
+        "action": "scope.children", "target": {"session_id": "cov0"},
+        "args": {"scope": "top.u_dut"},
+    })
+    xout = render_xout(rsp)
+    assert "items:\n  name    full_name         coverage_pct" in xout
+    assert "u_ctrl  top.u_dut.u_ctrl  20.0" in xout
+    assert "u_fifo  top.u_dut.u_fifo  0.0" in xout
+    items_text = xout.split("items:", 1)[1]
+    assert "covered" not in items_text
+    assert "line_pct" not in items_text
+
+
+def test_scope_search_returns_brief_coverage_rows():
     dispatcher = _dispatch_opened()
     rsp = dispatcher.dispatch({
         "api_version": "xcov.v1", "request_id": "search",
@@ -358,7 +395,8 @@ def test_scope_search_does_not_enrich_coverage():
     })
     assert rsp["ok"] is True
     assert rsp["data"]["items"][0]["full_name"] == "top.u_dut.u_fifo"
-    assert "coverage_pct" not in rsp["data"]["items"][0]
+    assert set(rsp["data"]["items"][0]) == {"name", "full_name", "coverage_pct"}
+    assert rsp["data"]["items"][0]["coverage_pct"] == 0.0
 
 
 def test_export_code_coverage_writes_markdown_only(tmp_path, monkeypatch):
@@ -383,13 +421,13 @@ def test_functional_levels_filter():
     dispatcher = _dispatch_opened()
     bins = dispatcher.dispatch({
         "api_version": "xcov.v1", "request_id": "func-bin",
-        "action": "functional.holes", "target": {"session_id": "cov0"},
+        "action": "function_coverage.holes", "target": {"session_id": "cov0"},
         "args": {"levels": ["bin"]},
         "output": {"format": "json"},
     })
     cps = dispatcher.dispatch({
         "api_version": "xcov.v1", "request_id": "func-cp",
-        "action": "functional.holes", "target": {"session_id": "cov0"},
+        "action": "function_coverage.holes", "target": {"session_id": "cov0"},
         "args": {"levels": ["coverpoint"]},
         "output": {"format": "json"},
     })
@@ -397,16 +435,49 @@ def test_functional_levels_filter():
     assert cps["summary"]["matched_count"] == 1
 
 
+def test_function_coverage_holes_glob_filters_full_name_and_covergroup():
+    dispatcher = _dispatch_opened()
+    full_name = dispatcher.dispatch({
+        "api_version": "xcov.v1", "request_id": "func-filter-full",
+        "action": "function_coverage.holes", "target": {"session_id": "cov0"},
+        "args": {
+            "levels": ["bin"],
+            "query": {"include_patterns": ["*zero_credit"], "match_field": "full_name"},
+        },
+        "output": {"format": "json"},
+    })
+    covergroup = dispatcher.dispatch({
+        "api_version": "xcov.v1", "request_id": "func-filter-cg",
+        "action": "function_coverage.holes", "target": {"session_id": "cov0"},
+        "args": {
+            "levels": ["bin"],
+            "query": {"include_patterns": ["cg_*"], "match_field": "covergroup"},
+        },
+        "output": {"format": "json"},
+    })
+    assert full_name["ok"] is True
+    assert full_name["summary"]["matched_count"] == 1
+    assert full_name["data"]["items"][0]["bin"] == "zero_credit"
+    assert covergroup["ok"] is True
+    assert covergroup["summary"]["matched_count"] == 1
+    assert covergroup["data"]["items"][0]["covergroup"] == "cg_credit"
+
+
 def test_functional_summary_uses_requested_level_only():
     dispatcher = _dispatch_opened()
     rsp = dispatcher.dispatch({
         "api_version": "xcov.v1", "request_id": "func-summary",
-        "action": "functional.summary", "target": {"session_id": "cov0"},
+        "action": "function_coverage.summary", "target": {"session_id": "cov0"},
         "output": {"format": "json"},
     })
     assert rsp["ok"] is True
     assert rsp["summary"]["matched_count"] == 1
     assert rsp["data"]["items"][0]["coverable"] == 1
+    forbidden = {
+        "metric", "name", "full_name", "score_basis", "score_item_count",
+        "raw_covered", "raw_coverable", "raw_missing",
+    }
+    assert not (set(rsp["data"]["items"][0]) & forbidden)
 
 
 def test_code_summary_uses_urg_score_rows_only():
@@ -452,15 +523,19 @@ def test_functional_bin_evidence_is_inherited_from_parent():
     dispatcher = _dispatch_opened()
     rsp = dispatcher.dispatch({
         "api_version": "xcov.v1", "request_id": "func-bin-evidence",
-        "action": "functional.holes", "target": {"session_id": "cov0"},
+        "action": "function_coverage.holes", "target": {"session_id": "cov0"},
         "args": {"levels": ["bin"]},
         "output": {"format": "json"},
     })
     assert rsp["ok"] is True
     item = rsp["data"]["items"][0]
-    assert item["evidence"] == {"file": "verif/env/uart_coverage.sv", "line": 22}
-    assert item["evidence_source"]["inherited"] is True
-    assert item["evidence_source"]["type"] == "npiCovCoverpoint"
+    assert item["file"] == "verif/env/uart_coverage.sv"
+    assert item["line"] == 22
+    forbidden = {
+        "metric", "name", "full_name", "score_basis", "score_item_count",
+        "raw_covered", "raw_coverable", "raw_missing", "evidence", "evidence_source",
+    }
+    assert not (set(item) & forbidden)
 
 
 def test_code_coverage_holes_reports_hierarchy_coverage_only():
@@ -481,7 +556,38 @@ def test_code_coverage_holes_reports_hierarchy_coverage_only():
     assert item["condition_pct"] == 0.0
     assert "branch_bin" not in item
     assert "toggle_signal" not in item
+    forbidden = {"parent", "depth", "type", "def_name", "covered", "coverable", "missing",
+                 "file", "line"}
+    assert not (set(item) & forbidden)
     assert "note" in rsp["summary"]
+
+
+def test_code_coverage_holes_glob_filters_hierarchy_rows():
+    dispatcher = _dispatch_opened()
+    include = dispatcher.dispatch({
+        "api_version": "xcov.v1", "request_id": "code-filter-include",
+        "action": "code_coverage.holes", "target": {"session_id": "cov0"},
+        "args": {
+            "scope": "top.u_dut",
+            "metrics": ["toggle", "branch", "condition"],
+            "query": {"include_patterns": ["*u_ctrl"], "match_field": "full_name"},
+        },
+        "output": {"format": "json"},
+    })
+    exclude = dispatcher.dispatch({
+        "api_version": "xcov.v1", "request_id": "code-filter-exclude",
+        "action": "code_coverage.holes", "target": {"session_id": "cov0"},
+        "args": {
+            "scope": "top.u_dut",
+            "metrics": ["toggle", "branch", "condition"],
+            "query": {"exclude_patterns": ["*u_fifo"], "match_field": "full_name"},
+        },
+        "output": {"format": "json"},
+    })
+    assert include["ok"] is True
+    assert [row["full_name"] for row in include["data"]["items"]] == ["top.u_dut.u_ctrl"]
+    assert exclude["ok"] is True
+    assert "top.u_dut.u_fifo" not in {row["full_name"] for row in exclude["data"]["items"]}
 
 
 def test_source_annotate_returns_source_window_and_annotations(tmp_path):
@@ -525,34 +631,50 @@ def test_function_coverage_export_groups_bins_by_covergroup(tmp_path, monkeypatc
     assert "verif/env/uart_coverage.sv:22" not in text
 
 
-def test_assert_report_summarizes_bins_and_sections():
+def test_assert_summary_summarizes_bins_without_report_fields():
     dispatcher = _dispatch_opened()
     rsp = dispatcher.dispatch({
-        "api_version": "xcov.v1", "request_id": "assert-report",
-        "action": "assert.report", "target": {"session_id": "cov0"},
+        "api_version": "xcov.v1", "request_id": "assert-summary",
+        "action": "assert.summary", "target": {"session_id": "cov0"},
         "output": {"format": "json"},
     })
     assert rsp["ok"] is True
-    item = next(row for row in rsp["data"]["items"] if row["kind"] == "assertion")
+    item = next(row for row in rsp["data"]["items"]
+                if row["full_name"] == "top.u_dut.u_ctrl.p_ready")
     assert item["attempts"] == 10
     assert item["real_successes"] == 8
-    assert item["failures"] == 1
-    assert item["incomplete"] == 1
-    assert rsp["data"]["sections"]["assert_summary"]["failure"] == 1
-    assert rsp["data"]["sections"]["cover_sequence_summary"]["first_match"] == 3
+    forbidden = {"kind", "category", "severity", "failures", "incomplete",
+                 "first_match", "file", "line", "evidence"}
+    assert not (set(item) & forbidden)
+    assert "sections" not in rsp["data"]
 
 
-def test_xout_flattens_evidence_source():
+def test_xout_function_coverage_holes_uses_projected_fields():
     dispatcher = _dispatch_opened()
     rsp = dispatcher.dispatch({
         "api_version": "xcov.v1", "request_id": "func-bin-xout",
-        "action": "functional.holes", "target": {"session_id": "cov0"},
+        "action": "function_coverage.holes", "target": {"session_id": "cov0"},
         "args": {"levels": ["bin"]},
     })
     xout = render_xout(rsp)
     assert "evidence_source={" not in xout
-    assert "evidence_source.inherited=true" in xout
-    assert "evidence_source.type=npiCovCoverpoint" in xout
+    assert "evidence_source.inherited" not in xout
+    assert "covergroup  coverpoint" in xout
+    assert "  - metric=functional" not in xout
+
+
+def test_xout_items_render_as_aligned_plain_text_table():
+    dispatcher = _dispatch_opened()
+    rsp = dispatcher.dispatch({
+        "api_version": "xcov.v1", "request_id": "metrics-xout",
+        "action": "metrics.list", "target": {"session_id": "cov0"},
+    })
+    xout = render_xout(rsp)
+    assert "items:\n  metric" in xout
+    assert "  - metric=" not in xout
+    assert "metric      covered  coverable  missing  coverage_pct" in xout
+    assert "line        1        1          0        100.0" in xout
+    assert "toggle      0        2          2        0.0" in xout
 
 
 def test_xout_contains_code_coverage_hierarchy_fields_without_metrics_json():
@@ -564,22 +686,30 @@ def test_xout_contains_code_coverage_hierarchy_fields_without_metrics_json():
     })
     xout = render_xout(rsp)
     assert "metrics={" not in xout
-    assert "condition_pct=0.0" in xout
+    assert "condition_pct" in xout
+    assert "0.0" in xout
     assert "condition_bin=" not in xout
+    assert "  - name=" not in xout
+    items_text = xout.split("items:", 1)[1]
+    assert "parent" not in items_text
+    assert "coverable" not in items_text
     assert "summary:" in xout
     assert "note:" in xout
 
 
-def test_xout_contains_sections_and_nested_counts_for_new_actions():
+def test_xout_assert_summary_omits_report_fields():
     dispatcher = _dispatch_opened()
     assert_rsp = dispatcher.dispatch({
         "api_version": "xcov.v1", "request_id": "assert-xout",
-        "action": "assert.report", "target": {"session_id": "cov0"},
+        "action": "assert.summary", "target": {"session_id": "cov0"},
     })
     assert_xout = render_xout(assert_rsp)
-    assert "sections:" in assert_xout
-    assert "assert_summary:" in assert_xout
-    assert "failures=1" in assert_xout
+    assert "sections:" not in assert_xout
+    assert "name" in assert_xout
+    assert "full_name" in assert_xout
+    assert "attempts  real_successes  without_attempts" in assert_xout
+    assert "failures" not in assert_xout
+    assert "incomplete" not in assert_xout
 
 
 def test_branch_mask_hint_decoding():
@@ -650,8 +780,9 @@ def test_branch_mask_in_xout():
     })
     xout = render_xout(rsp)
     assert "branch_mask={" not in xout
-    assert "branch_mask.encoding=one_hot" in xout
-    assert "branch_mask.branch_arm_index=2" in xout
+    assert "branch_mask.encoding" in xout
+    assert "branch_mask.branch_arm_index" in xout
+    assert "one_hot" in xout
 
 
 def test_test_each_is_explicitly_unsupported():
