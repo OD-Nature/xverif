@@ -37,7 +37,7 @@
 
 ### `data.common_blocks`
 
-`trace.driver`、`trace.load`、`trace.query`、`trace.expand`、`trace.graph`、`trace.explain`、`trace.path`、`trace.active_driver` 和 `trace.active_driver_chain` 支持可选 common block 提示。通过环境变量指定配置：
+`trace.driver`、`trace.load`、`trace.query`、`trace.expand`、`trace.path`、`trace.active_driver` 和 `trace.active_driver_chain` 支持可选 common block 提示。通过环境变量指定配置：
 
 ```text
 XDEBUG_COMMON_BLOCKS=/path/to/common_blocks.json
@@ -470,7 +470,7 @@ full/include 字段：
 | `data.fsdb_candidates[]` | array | 可能对应 FSDB path |
 | `data.port_mappings[]` | array | 当前为空数组 |
 
-### `trace.expand` / `trace.graph`
+### `trace.expand`
 
 compact 默认：
 
@@ -517,21 +517,6 @@ debug/full 或 include：
 | `edge_count` | number | 该查询产生 edge 数 |
 | `truncated` | boolean | 该 trace 是否截断 |
 | `confidence` | string | 置信度 |
-
-### `trace.explain`
-
-| 路径 | 类型 | 含义 |
-| --- | --- | --- |
-| `summary.root_signal` | string | root |
-| `summary.direction` | string | direction |
-| `summary.node_count` | number | underlying graph node 数 |
-| `summary.edge_count` | number | underlying graph edge 数 |
-| `summary.explanation_count` | number | explanations 数 |
-| `summary.skipped_empty_dependency_count` | number | 被跳过空依赖数 |
-| `summary.truncated` | boolean | 是否截断 |
-| `data.explanations[]` | array | 解释项 |
-| `data.trace` | object | `include_trace` 或 full/debug |
-| `data.expanded_queries[]` | array | `include_expanded_queries` 或 full/debug |
 
 `data.explanations[]` item：
 
@@ -624,56 +609,6 @@ AST node 常见字段：
 | `name` | string | signal node 名 |
 | `value` | string | const 值 |
 | `text` | string | unknown/text fallback |
-
-### `procedural.assignment`
-
-| 路径 | 类型 | 含义 |
-| --- | --- | --- |
-| `summary.signal` | string | 目标信号 |
-| `summary.assignment_count` | number | assignment 数 |
-| `summary.branch_count` | number | branch assignments 数 |
-| `summary.default_count` | number | default/unconditional 数 |
-| `summary.confidence` | string | 置信度 |
-| `data.procedural_assignment.target` | string | 目标 |
-| `data.procedural_assignment.enclosing_block` | object | enclosing block |
-| `data.procedural_assignment.assignments[]` | array | 归一化 assignment |
-| `data.procedural_assignment.default_assignments[]` | array | 默认 assignments |
-| `data.procedural_assignment.branch_assignments[]` | array | 分支 assignments |
-| `data.procedural_assignment.control_dependencies[]` | array | 控制依赖 |
-| `data.procedural_assignment.dependency_edges[]` | array | 依赖 edge |
-| `data.procedural_assignment.confidence` | string | 置信度 |
-| `data.procedural_assignment.confidence_reason` | string | 置信度说明 |
-
-assignment item 常见字段：`source`、`location.file`、`location.line`、`rhs`、`rhs_signals[]`、`active_conditions[]`、`assignment_role`。
-
-### `sequential.update`
-
-| 路径 | 类型 | 含义 |
-| --- | --- | --- |
-| `summary.signal` | string | 目标信号 |
-| `summary.rule_count` | number | rule 数 |
-| `summary.clock` | string/null | 推断 clock |
-| `summary.reset` | string/null | 推断 reset |
-| `summary.confidence` | string | 置信度 |
-| `data.sequential_update.target` | string | 目标信号 |
-| `data.sequential_update.clock` | string/null | clock |
-| `data.sequential_update.reset` | string/null | reset |
-| `data.sequential_update.event_controls[]` | array | event control |
-| `data.sequential_update.rules[]` | array | 更新规则 |
-| `data.sequential_update.confidence` | string | 置信度 |
-| `data.sequential_update.confidence_reason` | string | 说明 |
-
-rule item：
-
-| 字段 | 类型 | 含义 |
-| --- | --- | --- |
-| `kind` | string | `reset`、`increment`、`decrement`、`hold`、`update` |
-| `condition` | object | 条件 |
-| `next_value` | object | RHS AST |
-| `next_value_text` | string | RHS 文本 |
-| `rhs_signals[]` | array | RHS 信号 |
-| `source` | string | 源码 |
-| `location` | object | file/line |
 
 ### `fsm.explain`
 
@@ -1372,8 +1307,7 @@ long stall finding：`type:"long_stall"`、`severity`、`begin`、`end`、`cycle
 | action | compact 默认保留 | 需要 include/full 的字段 |
 | --- | --- | --- |
 | `trace.driver/load/query` | summary + compact drivers/loads | assignment、dependency_edges、source、AST、候选全集 |
-| `trace.expand/graph` | graph | trace、expanded_queries、debug dedup 统计 |
-| `trace.explain` | explanations | trace、expanded_queries |
+| `trace.expand` | graph | trace、expanded_queries、debug dedup 统计 |
 | `trace.path` | found/paths | graph |
 | `source.context` | file/line/symbol/context_kind/enclosing | context 源码行 |
 | `value.at` | string value + known | resolved_time、raw value object |
@@ -1410,13 +1344,9 @@ trace.query
 signal.resolve
 signal.canonicalize
 trace.expand
-trace.graph
 trace.path
-trace.explain
 source.context
 expr.normalize
-procedural.assignment
-sequential.update
 fsm.explain
 ```
 

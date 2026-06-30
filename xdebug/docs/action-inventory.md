@@ -47,13 +47,9 @@ example 和 contract test 迁移使用。状态定义：
 | `signal.resolve` | design | stable | design | design engine forward | partial |
 | `signal.canonicalize` | design | stable | design | design engine forward | partial |
 | `trace.expand` | design | stable | design | design engine forward | regression |
-| `trace.graph` | design | stable | design | design engine forward | regression |
 | `trace.path` | design | stable | design | design engine forward | partial |
-| `trace.explain` | design | stable | design | design engine forward | partial |
 | `source.context` | design | stable | none | design engine forward | regression |
 | `expr.normalize` | design | stable | none | design engine forward | partial |
-| `procedural.assignment` | design | stable | design | design engine forward | partial |
-| `sequential.update` | design | stable | design | design engine forward | partial |
 | `fsm.explain` | design | stable | design | design engine forward | partial |
 
 ## Waveform Actions

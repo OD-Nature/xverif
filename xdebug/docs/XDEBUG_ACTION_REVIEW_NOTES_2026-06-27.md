@@ -20,7 +20,7 @@ Reason:
 
 ## Delete Candidates
 
-### `control.explain`
+### `control explanation view`
 
 Decision: mark as delete candidate.
 
@@ -29,7 +29,7 @@ Reason:
 - Real XOUT on the UART design fixture returned no useful control dependency information for the reviewed signal.
 - The action does not currently provide enough actionable explanation to justify keeping it as a public action.
 
-### `counter.explain`
+### `counter explanation view`
 
 Decision: mark as delete candidate.
 
@@ -308,14 +308,14 @@ Initial review note:
 
 `apb.transfer_window` is compact and readable. It is close to a filtered `apb.query`, but the explicit time-window framing is useful for local APB debug.
 
-### `control.explain`
+### `control explanation view`
 
 Request intent:
 
 ```json
 {
   "api_version": "xdebug.v1",
-  "action": "control.explain",
+  "action": "control explanation view",
   "target": {"session_id": "<opened design session for UART fixture>"},
   "args": {
     "signal": "uart_tx.bit_counter"
@@ -327,7 +327,7 @@ Request intent:
 XOUT:
 
 ```text
-@xdebug.control.explain.v1
+@xdebug.control explanation view.v1
 summary:
   signal: uart_tx.bit_counter
   control_dependency_count: 0
@@ -338,21 +338,21 @@ data:
 
 Review decision:
 
-Mark `control.explain` as a delete candidate.
+Mark `control explanation view` as a delete candidate.
 
 Reason:
 
 - The reviewed real output is effectively empty and does not explain a useful control relationship.
 - Keeping this as a public action risks giving AI a tool that looks semantic but returns little actionable content.
 
-### `counter.explain`
+### `counter explanation view`
 
 Request intent:
 
 ```json
 {
   "api_version": "xdebug.v1",
-  "action": "counter.explain",
+  "action": "counter explanation view",
   "target": {"session_id": "<opened design session for UART fixture>"},
   "args": {
     "signal": "uart_tx.bit_counter"
@@ -364,7 +364,7 @@ Request intent:
 XOUT:
 
 ```text
-@xdebug.counter.explain.v1
+@xdebug.counter explanation view.v1
 summary:
   signal: uart_tx.bit_counter
   counter_like: false
@@ -381,7 +381,7 @@ counter:
 
 Review decision:
 
-Mark `counter.explain` as a delete candidate.
+Mark `counter explanation view` as a delete candidate.
 
 Reason:
 

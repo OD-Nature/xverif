@@ -9,14 +9,10 @@ std::unique_ptr<EngineActionHandler> make_trace_load_handler();
 std::unique_ptr<EngineActionHandler> make_signal_resolve_handler();
 std::unique_ptr<EngineActionHandler> make_trace_query_handler();
 std::unique_ptr<EngineActionHandler> make_trace_expand_handler();
-std::unique_ptr<EngineActionHandler> make_trace_graph_handler();
 std::unique_ptr<EngineActionHandler> make_trace_path_handler();
-std::unique_ptr<EngineActionHandler> make_trace_explain_handler();
 std::unique_ptr<EngineActionHandler> make_signal_canonicalize_handler();
 std::unique_ptr<EngineActionHandler> make_source_context_handler();
 std::unique_ptr<EngineActionHandler> make_expr_normalize_handler();
-std::unique_ptr<EngineActionHandler> make_procedural_assignment_handler();
-std::unique_ptr<EngineActionHandler> make_sequential_update_handler();
 std::unique_ptr<EngineActionHandler> make_fsm_explain_handler();
 
 void register_design_handlers(EngineActionRegistry& r) {
@@ -25,14 +21,10 @@ void register_design_handlers(EngineActionRegistry& r) {
     r.add(make_signal_resolve_handler());
     r.add(make_trace_query_handler());
     r.add(make_trace_expand_handler());
-    r.add(make_trace_graph_handler());
     r.add(make_trace_path_handler());
-    r.add(make_trace_explain_handler());
     r.add(make_signal_canonicalize_handler());
     r.add(make_source_context_handler());
     r.add(make_expr_normalize_handler());
-    r.add(make_procedural_assignment_handler());
-    r.add(make_sequential_update_handler());
     r.add(make_fsm_explain_handler());
 }
 

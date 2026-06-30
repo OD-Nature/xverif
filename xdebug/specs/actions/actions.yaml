@@ -919,28 +919,6 @@
       ]
     },
     {
-      "name": "procedural.assignment",
-      "category": "design",
-      "status": "stable",
-      "requires": "design",
-      "handler_kind": "engine_forward",
-      "schemas": {
-        "request": "schemas/v1/actions/procedural.assignment.request.schema.json",
-        "response": "schemas/v1/actions/procedural.assignment.response.schema.json"
-      },
-      "examples": {
-        "request": [
-          "examples/requests/procedural.assignment.basic.json"
-        ],
-        "response": [
-          "examples/responses/procedural.assignment.basic.json"
-        ]
-      },
-      "required_args": [
-        "signal"
-      ]
-    },
-    {
       "name": "sampled_pulse.inspect",
       "category": "waveform",
       "status": "experimental",
@@ -1019,28 +997,6 @@
           "examples/responses/scope.roots.basic.json"
         ]
       }
-    },
-    {
-      "name": "sequential.update",
-      "category": "design",
-      "status": "stable",
-      "requires": "design",
-      "handler_kind": "engine_forward",
-      "schemas": {
-        "request": "schemas/v1/actions/sequential.update.request.schema.json",
-        "response": "schemas/v1/actions/sequential.update.response.schema.json"
-      },
-      "examples": {
-        "request": [
-          "examples/requests/sequential.update.basic.json"
-        ],
-        "response": [
-          "examples/responses/sequential.update.basic.json"
-        ]
-      },
-      "required_args": [
-        "signal"
-      ]
     },
     {
       "name": "session.close",
@@ -1379,50 +1335,6 @@
         ],
         "response": [
           "examples/responses/trace.expand.basic.json"
-        ]
-      },
-      "required_args": [
-        "signal"
-      ]
-    },
-    {
-      "name": "trace.explain",
-      "category": "design",
-      "status": "stable",
-      "requires": "design",
-      "handler_kind": "engine_forward",
-      "schemas": {
-        "request": "schemas/v1/actions/trace.explain.request.schema.json",
-        "response": "schemas/v1/actions/trace.explain.response.schema.json"
-      },
-      "examples": {
-        "request": [
-          "examples/requests/trace.explain.basic.json"
-        ],
-        "response": [
-          "examples/responses/trace.explain.basic.json"
-        ]
-      },
-      "required_args": [
-        "signal"
-      ]
-    },
-    {
-      "name": "trace.graph",
-      "category": "design",
-      "status": "stable",
-      "requires": "design",
-      "handler_kind": "engine_forward",
-      "schemas": {
-        "request": "schemas/v1/actions/trace.graph.request.schema.json",
-        "response": "schemas/v1/actions/trace.graph.response.schema.json"
-      },
-      "examples": {
-        "request": [
-          "examples/requests/trace.graph.basic.json"
-        ],
-        "response": [
-          "examples/responses/trace.graph.basic.json"
         ]
       },
       "required_args": [

@@ -104,9 +104,7 @@ void apply_arg_contract(ActionSpec& spec) {
         {"list.export", {"name"}, 1},
         {"list.validate", {"name"}, 1},
         {"list.value_at", {"name", "time"}, 2},
-        {"procedural.assignment", {"signal"}, 1},
         {"rc.generate", {"config_path", "rc_path"}, 2},
-        {"sequential.update", {"signal"}, 1},
         {"signal.canonicalize", {"signal"}, 1},
         {"signal.changes", {"signal"}, 1},
         {"signal.resolve", {"signal"}, 1},
@@ -125,8 +123,6 @@ void apply_arg_contract(ActionSpec& spec) {
         {"trace.active_driver_chain", {"signal", "requested_time"}, 2},
         {"trace.driver", {"signal"}, 1},
         {"trace.expand", {"signal"}, 1},
-        {"trace.explain", {"signal"}, 1},
-        {"trace.graph", {"signal"}, 1},
         {"trace.load", {"signal"}, 1},
         {"trace.path", {"from_signal", "to_signal"}, 2},
         {"trace.query", {"signal"}, 1},
@@ -179,9 +175,9 @@ void register_design(ActionRegistry& r) {
     const char* names[] = {
         "trace.driver", "trace.load", "trace.query",
         "signal.resolve", "signal.canonicalize",
-        "trace.expand", "trace.graph", "trace.path", "trace.explain",
+        "trace.expand", "trace.path",
         "source.context", "expr.normalize",
-        "procedural.assignment", "sequential.update", "fsm.explain",
+        "fsm.explain",
     };
     for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); ++i) {
         ResourceRequirement resource = ResourceRequirement::Design;

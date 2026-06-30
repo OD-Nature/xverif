@@ -32,7 +32,7 @@ xdebug 负责 exact resolve 和事实查询。候选信号名应先用外部 `rg
 
 1. 用 `value.at`、`signal.statistics`、`counter.statistics`、`signal.changes` 或 `window.verify` 确认波形症状：周期统计用 `signal.statistics`，counter min/max/average 用 `counter.statistics`，跳变时间线用 `signal.changes`，窗口保持用 `window.verify`。
 2. 对精确信号执行 `trace.driver` 或 `trace.load`。
-3. 用 `trace.explain` 或 `trace.path` 连接关键依赖。
+3. 用 `trace.expand` 或 `trace.path` 连接关键依赖。
 4. 只有在最终取证时，对 `source.context` 打开 `include_source=true`。
 5. 只有 compact findings 不够时，才请求 `include_trace`、`include_rows` 或 `include_transactions`。
 

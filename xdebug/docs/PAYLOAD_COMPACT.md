@@ -95,7 +95,7 @@ compact 默认回答四件事：谁驱动或加载信号、关键依赖是谁、
 
 需要时用 `include_source`、`include_ast`、`include_candidates` 恢复。
 
-### trace.expand / trace.graph
+### trace.expand
 
 compact 默认只保留图结构：
 
@@ -124,29 +124,6 @@ compact 默认只保留图结构：
 - dedup/relation/aggregate 详细统计
 
 需要时用 `include_trace`、`include_expanded_queries`、`include_raw_edges`、`include_debug`。
-
-### trace.explain
-
-compact 默认只保留解释和证据：
-
-```json
-{
-  "data": {
-    "explanations": [
-      {
-        "from": "top.u.full",
-        "to": "top.u.ready",
-        "reason": "ready is gated by fifo full",
-        "file": "rtl/foo.sv",
-        "line": 123,
-        "confidence": "high"
-      }
-    ]
-  }
-}
-```
-
-完整 trace 过程只在 `include_trace=true` 或 `full/debug` 返回。
 
 ### trace.path
 

@@ -206,7 +206,7 @@ file transport directory:
 
 request 先写到 `tmp/`，再 atomic publish 到 `requests/`；daemon 用 `rename()` 抢到 `claims/`；response 写到 `responses/`，client 读完后默认归档到 `done/`。过期 request、坏 request、stale claim 和 client timeout 进入 `failed/`。如果旧 session 目录里还有 `locks/`，它只是历史残留，可以忽略。
 
-普通 file transport 请求默认等待 300 秒，可用 `XDEBUG_FILE_TRANSPORT_TIMEOUT_MS` 调整；ping/quit 默认等待 2 秒，可用 `XDEBUG_FILE_TRANSPORT_PING_TIMEOUT_MS` 调整。大窗口 `axi.analysis`、`signal.changes` 或深层 `trace.graph` 如果确实需要更久，优先调普通请求 timeout，不要改 ping timeout。`XDEBUG_FILE_KEEP_HISTORY=1` 默认保留证据链；`XDEBUG_FILE_CLAIM_TIMEOUT_MS`、`XDEBUG_FILE_POLL_INTERVAL_MS`、`XDEBUG_FILE_MAX_JSON_BYTES`、`XDEBUG_FILE_DONE_TTL_SEC`、`XDEBUG_FILE_FAILED_TTL_SEC` 可用于高级排障和清理。
+普通 file transport 请求默认等待 300 秒，可用 `XDEBUG_FILE_TRANSPORT_TIMEOUT_MS` 调整；ping/quit 默认等待 2 秒，可用 `XDEBUG_FILE_TRANSPORT_PING_TIMEOUT_MS` 调整。大窗口 `axi.analysis`、`signal.changes` 或深层 trace 展开如果确实需要更久，优先调普通请求 timeout，不要改 ping timeout。`XDEBUG_FILE_KEEP_HISTORY=1` 默认保留证据链；`XDEBUG_FILE_CLAIM_TIMEOUT_MS`、`XDEBUG_FILE_POLL_INTERVAL_MS`、`XDEBUG_FILE_MAX_JSON_BYTES`、`XDEBUG_FILE_DONE_TTL_SEC`、`XDEBUG_FILE_FAILED_TTL_SEC` 可用于高级排障和清理。
 
 ### MCP wrapper
 
@@ -553,12 +553,12 @@ compact 默认不返回大字段，例如 `expanded_queries`、`raw_edges`、`al
 }
 ```
 
-查询依赖图：
+展开依赖图：
 
 ```json
 {
   "api_version": "xdebug.v1",
-  "action": "trace.graph",
+  "action": "trace.expand",
   "target": {"daidir": "simv.daidir"},
   "args": {
     "signal": "top.u.ready",
@@ -851,7 +851,7 @@ APB 配置的基础字段为 `paddr/pwdata/prdata/pwrite/penable/psel/clk/rst_n`
 
 1. 用 `value.at` 或 `event.export` 找到异常时间。
 2. 用 `value.batch_at` 取相关握手、状态、数据寄存器。
-3. 用 `trace.driver` 或 `trace.graph` 查设计依赖。
+3. 用 `trace.driver` 或 `trace.expand` 查设计依赖。
 4. 如果两类资源都有，用 `trace.active_driver` 给出当前时间点的生效驱动。
 5. 只有当 compact 证据不足时，再打开 `include_source`、`include_trace`、`include_rows` 等细节。
 

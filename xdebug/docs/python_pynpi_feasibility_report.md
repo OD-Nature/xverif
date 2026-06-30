@@ -196,8 +196,8 @@ C++ NPI headers 暴露 `npi_fsdb_trans.h`、C++ L1 FSDB helper、force tag、rea
 | `schema/actions/batch` | 高 | 不依赖 NPI 特殊能力 | 需要保持 JSON/schema contract。 |
 | `session.*` | 高 | `npisys.init/load_design/end`、`waveform.open/close` 可用 | 长生命周期、stderr/stdout 隔离、license failure handling 需重建。 |
 | `trace.driver/load` | 高 | `pynpi.lang.trace_driver*_2/trace_load*_2` 可用 | 输出字段和 C++ handle lifetime 要 A/B。 |
-| `trace.expand/graph/path/explain/control.explain` | 中高 | 基础 trace API 可用 | xdebug 图算法和控制依赖逻辑要完整移植。 |
-| `source.context/expr.normalize/procedural.assignment/sequential.update/fsm/counter` | 中 | `pynpi.lang` 有 AST/handle/get_hdl_info 能力 | 需要逐个确认当前 C++ 用到的 property/relationship 在 Python wrapper 中可访问。 |
+| `trace.expand/graph/path/explain/control explanation view` | 中高 | 基础 trace API 可用 | xdebug 图算法和控制依赖逻辑要完整移植。 |
+| `source.context/expr.normalize/procedural assignment view/sequential update view/fsm/counter` | 中 | `pynpi.lang` 有 AST/handle/get_hdl_info 能力 | 需要逐个确认当前 C++ 用到的 property/relationship 在 Python wrapper 中可访问。 |
 | `signal.resolve/canonicalize/interface.resolve/port.trace/instance.map` | 中 | `handle_by_name`、`handle/iterate/scan/get/get_str` 可用 | interface/modport 规则复杂，必须 fixture 回归。 |
 | `value.at/value.batch_at` | 高 | `waveform.sig_value_at/sig_vec_value_at` 可用 | 四态/X/Z 格式要对齐 xdebug `LogicValue` contract。 |
 | `scope.list/list.*` | 中高 | waveform scope/sig traversal 可用 | `rc.generate` 和 list registry 是业务逻辑。 |

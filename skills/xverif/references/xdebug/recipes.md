@@ -97,12 +97,12 @@ MCP 场景下，本文所有原生 xdebug action 都通过 `xverif_debug_query` 
 1. `detect_anomaly` 查 `unknown_xz`。
 2. `signal.changes` 找第一个 X/Z 出现时间。
 3. 有 combined 资源时用 `trace.active_driver` 在该时间查生效 driver。
-4. 用 `trace.graph` 向上游扩展，寻找 X/Z 源。
+4. 用 `trace.expand` 向上游扩展，寻找 X/Z 源。
 
 ## Counter / FSM 异常
 
 1. `value.at` 或 `signal.statistics` 确认状态/计数异常。
-2. `fsm.explain` 或 `sequential.update` 获取更新规则。
+2. `fsm.explain` 获取状态更新规则。
 3. `trace.driver` 查更新条件。
 4. `source.context` 获取 `file:line` evidence。
 
@@ -115,7 +115,7 @@ MCP 场景下，本文所有原生 xdebug action 都通过 `xverif_debug_query` 
 3. `trace.active_driver` 做 active trace。
 4. `resolved`：保留 driver kind、file/line、active_time、control evidence。
 5. `control_only`：继续查 control signal 值，不要宣称已解析 direct data driver。
-6. `unresolved`：回到 `trace.driver`、`trace.graph` 或源码 `rg` 缩小信号路径。
+6. `unresolved`：回到 `trace.driver`、`trace.expand` 或源码 `rg` 缩小信号路径。
 
 ```json
 {

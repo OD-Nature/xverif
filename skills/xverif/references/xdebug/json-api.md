@@ -256,24 +256,6 @@ file transport directory:
 }
 ```
 
-### trace.graph
-
-```json
-{
-  "api_version": "xdebug.v1",
-  "action": "trace.graph",
-  "target": {"daidir": "simv.daidir"},
-  "args": {
-    "signal": "top.u.ready",
-    "direction": "driver"
-  },
-  "limits": {
-    "max_depth": 3,
-    "max_results": 80
-  }
-}
-```
-
 ### trace.path
 
 ```json

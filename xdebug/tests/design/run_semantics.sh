@@ -80,7 +80,7 @@ printf '%s\n' '{"api_version":"xdebug.v1","action":"actions"}' | "$XDEBUG" --jso
 import json,sys
 d=json.load(sys.stdin)["data"]
 assert "trace.driver" in d["implemented"]
-assert "sequential.update" in d["implemented"]
+assert "fsm.explain" in d["implemented"]
 '
 
 printf '%s\n' '{"api_version":"xdebug.v1","action":"schema"}' | "$XDEBUG" --json - | python3 -c 'import json,sys; assert json.load(sys.stdin)["ok"]'
@@ -120,18 +120,6 @@ query '{"api_version":"xdebug.v1","action":"expr.normalize","args":{"expr":"vali
 
 query "{\"api_version\":\"xdebug.v1\",\"action\":\"session.open\",\"target\":{\"daidir\":\"$P3_DB\"},\"args\":{\"name\":\"p3_ai\"}}" \
   | check_json 'd["ok"] and d["summary"]["session_id"] == "p3_ai"'
-
-query '{"api_version":"xdebug.v1","action":"procedural.assignment","target":{"session_id":"p3_ai"},"args":{"signal":"p3_sem_top.u_mid.u_leaf.out"},"limits":{"max_results":30}}' \
-  | check_json 'd["ok"] and d["summary"]["assignment_count"] >= 1 and d["data"]["procedural_assignment"]["branch_assignments"]'
-
-query '{"api_version":"xdebug.v1","action":"trace.explain","target":{"session_id":"p3_ai"},"args":{"signal":"p3_sem_top.u_mid.u_leaf.out","direction":"driver"},"limits":{"max_depth":1,"max_nodes":20,"max_edges":80}}' \
-  | check_json 'd["ok"] and d["summary"]["explanation_count"] >= 1 and d["summary"]["skipped_empty_dependency_count"] >= 0 and not any(x.get("related_signals") == [""] for x in d["data"]["explanations"]) and any(any(e.get("type") == "control_dependency" for e in x.get("evidence", [])) for x in d["data"]["explanations"])'
-
-query '{"api_version":"xdebug.v1","action":"trace.explain","target":{"session_id":"p3_ai"},"args":{"signal":"p3_sem_top.u_mid.u_leaf.bus.ready","direction":"driver"},"limits":{"max_depth":1,"max_nodes":20,"max_edges":80}}' \
-  | check_json 'd["ok"] and any(x.get("confidence") == "high" for x in d["data"]["explanations"]) and not any(x.get("related_signals") == [""] for x in d["data"]["explanations"])'
-
-query '{"api_version":"xdebug.v1","action":"sequential.update","target":{"session_id":"p3_ai"},"args":{"signal":"p3_sem_top.u_mid.u_leaf.count"},"limits":{"max_results":30}}' \
-  | check_json 'd["ok"] and d["summary"]["rule_count"] >= 1 and any(r["kind"] in ("reset","increment","decrement","hold") for r in d["data"]["sequential_update"]["rules"])'
 
 query '{"api_version":"xdebug.v1","action":"fsm.explain","target":{"session_id":"p3_ai"},"args":{"signal":"p3_sem_top.u_mid.u_leaf.state_q"},"limits":{"max_results":30}}' \
   | check_json 'd["ok"] and d["summary"]["transition_count"] >= 1 and d["data"]["fsm"]["transitions"]'

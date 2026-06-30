@@ -26,15 +26,11 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | `expr.normalize` | stable | none | 规范化表达式。 | 无 design 时做字符串级规范化；有 design/signal 时可结合设计赋值信息。 | 把表达式转成 agent 更易处理的结构。 | required: expr |
 | `fsm.explain` | stable | design | 解释 FSM 状态。 | 围绕 state signal 分析状态更新和转移条件。 | 帮助理解状态机为什么跳转。 | required: signal |
-| `procedural.assignment` | stable | design | 分析过程赋值。 | 查找 always/procedural assignment 的分支、条件和 RHS。 | 解释寄存器或变量在哪些分支被赋值。 | required: signal |
-| `sequential.update` | stable | design | 分析时序更新规则。 | 识别 reset/hold/increment/decrement 等寄存器更新模式。 | 解释状态或计数器每拍如何演进。 | required: signal |
 | `signal.canonicalize` | stable | design | 返回信号 canonical 名称。 | 基于设计解析结果选出规范路径。 | 让后续 action 使用稳定路径。 | required: signal |
 | `signal.resolve` | stable | design | 解析设计信号。 | 在设计数据库里查找 signal 并返回候选/规范路径。 | 消除层次或别名不确定性。 | required: signal |
 | `source.context` | stable | none | 读取源码上下文。 | 按 file/line 读取附近源码并尝试识别 enclosing 结构。 | 把查询结果锚定到可读源码位置。 | required: file, line |
 | `trace.driver` | stable | design | 查找信号直接 driver。 | 调用设计 trace 能力分析赋值、依赖和来源。 | 解释某个信号由什么驱动。 | required: signal |
 | `trace.expand` | stable | design | 展开 driver/load 图。 | 从 root signal 递归 trace，做节点/边限制和去重聚合。 | 生成可供 AI 总结的因果图。 | required: signal |
-| `trace.explain` | stable | design | 解释信号因果。 | 在 trace 结果上抽取解释、证据和置信度。 | 给用户可读的根因说明。 | required: signal |
-| `trace.graph` | stable | design | 生成 trace 图结构。 | 基于 trace.expand 类似结果组织 graph payload。 | 给可视化或图分析使用。 | required: signal |
 | `trace.load` | stable | design | 查找信号 load。 | 从设计数据库遍历信号使用点。 | 回答信号影响到哪里。 | required: signal |
 | `trace.path` | stable | design | 寻找两个信号之间路径。 | 在设计依赖图中从 from_signal 到 to_signal 搜索。 | 证明两个信号是否存在因果连接。 | required: from_signal, to_signal |
 | `trace.query` | stable | design | 执行通用 trace 查询。 | 按方向和参数调度设计 trace 逻辑。 | 提供低层 trace 入口。 | required: signal |

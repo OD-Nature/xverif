@@ -76,16 +76,12 @@ ENGINE_SRCS = src/engine/main.cpp \
               src/engine/service/actions/design/design_action_support.cpp \
               src/engine/service/actions/design/expr_normalize.cpp \
               src/engine/service/actions/design/fsm_explain.cpp \
-              src/engine/service/actions/design/procedural_assignment.cpp \
               src/engine/service/actions/design/register_design_handlers.cpp \
-              src/engine/service/actions/design/sequential_update.cpp \
               src/engine/service/actions/design/signal_canonicalize.cpp \
               src/engine/service/actions/design/signal_resolve.cpp \
               src/engine/service/actions/design/source_context.cpp \
               src/engine/service/actions/design/trace_driver.cpp \
               src/engine/service/actions/design/trace_expand.cpp \
-              src/engine/service/actions/design/trace_explain.cpp \
-              src/engine/service/actions/design/trace_graph.cpp \
               src/engine/service/actions/design/trace_load.cpp \
               src/engine/service/actions/design/trace_path.cpp \
               src/engine/service/actions/design/trace_query.cpp \

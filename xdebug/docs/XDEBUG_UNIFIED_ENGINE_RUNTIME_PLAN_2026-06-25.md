@@ -141,7 +141,7 @@ public xdebug CLI / stdio-loop / MCP
   - `src/design/commands/cmd_ai.h`
   - `src/design/service/router.cpp`
 - 迁移仍有价值的 design action helper 到 engine handler 或 design helper 模块。
-- `trace.*`、`source.*`、`expr.normalize`、`procedural.assignment`、`sequential.update`、`fsm.explain`、`counter.explain`、`port.trace`、`instance.map`、`interface.resolve` 必须全部只通过 engine handler registry 可达。
+- `trace.*`、`source.*`、`expr.normalize`、`procedural assignment view`、`sequential update view`、`fsm.explain`、`counter explanation view`、`port.trace`、`instance.map`、`interface.resolve` 必须全部只通过 engine handler registry 可达。
 
 ### 阶段 6：删除 standalone waveform runtime
 

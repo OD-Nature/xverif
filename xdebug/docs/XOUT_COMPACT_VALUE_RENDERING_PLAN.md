@@ -56,7 +56,7 @@ These actions currently do not need dedicated value-object XOUT examples:
 - `window.verify`
 - `handshake.inspect`
 - `signal.trend`
-- design-only actions such as `trace.driver`, `trace.expand`, `trace.graph`,
+- design-only actions such as `trace.driver`, `trace.expand`,
   `source.context`, and `interface.resolve`
 
 ## Expected XOUT Examples
