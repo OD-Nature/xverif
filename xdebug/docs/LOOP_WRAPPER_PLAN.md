@@ -15,7 +15,7 @@ The first version covers only stateful `xdebug` and `xcov` operations:
 
 It is not a replacement for all MCP tools.  Stateless tools such as `xbit`,
 `xentry`, `xloc`, and `xsva` stay MCP-only or CLI-only for this rollout.
-`xberif` is maintained as a separate persistent-memory skill rather than a
+`xwiki` is maintained as a separate persistent-memory skill rather than a
 loop-wrapper backend.
 
 ## Implementation Status

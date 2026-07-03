@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Validate an xberif verification LLM wiki.
+"""Validate an xwiki verification LLM wiki.
 
-The wiki root is normally provided by XBERIF_WIKI_DIR. This script intentionally
+The wiki root is normally provided by XWIKI_DIR. This script intentionally
 uses only the Python standard library so it can run from Codex or Claude hooks.
 """
 from __future__ import annotations
@@ -16,8 +16,9 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote
 
-ENV_NAME = "XBERIF_WIKI_DIR"
-REQUIRED_FRONTMATTER = ("type", "title", "description")
+ENV_NAME = "XWIKI_DIR"
+REQUIRED_FRONTMATTER = ("type", "title", "description", "object_type")
+OBJECT_TYPES = {"de", "dv", "de_issue", "dv_issue"}
 RESERVED_NAMES = {"index.md", "log.md"}
 INDEX_DIR = "_index"
 LINK_RE = re.compile(r"!?\[[^\]]*\]\(([^)\s]+(?:\s+\"[^\"]*\")?)\)")
@@ -51,9 +52,9 @@ def _resolve_wiki_dir(args: argparse.Namespace) -> tuple[Path | None, list[Findi
     if not raw.strip():
         return None, [
             Finding(
-                "XBERIF_WIKI_DIR_MISSING",
+                "XWIKI_DIR_MISSING",
                 ENV_NAME,
-                f"{ENV_NAME} is not set; ask the user for the xberif wiki path.",
+                f"{ENV_NAME} is not set; ask the user for the xwiki wiki path.",
             )
         ]
     path = Path(raw).expanduser()
@@ -171,16 +172,20 @@ def _validate_log(root: Path, path: Path, text: str, findings: list[Finding]) ->
             findings.append(Finding("LOG_DATE_HEADING_INVALID", rel_path, f"invalid log heading: {line}"))
 
 
-def _validate_concept(root: Path, path: Path, text: str, findings: list[Finding]) -> None:
+def _validate_markdown_frontmatter(root: Path, path: Path, text: str, findings: list[Finding]) -> None:
     rel_path = _rel(path, root)
     parsed = _parse_frontmatter(text)
     if parsed is None:
-        findings.append(Finding("FRONTMATTER_MISSING", rel_path, "concept file must start with YAML frontmatter"))
+        findings.append(Finding("FRONTMATTER_MISSING", rel_path, "markdown file must start with YAML frontmatter"))
         return
     meta, _body = parsed
     for key in REQUIRED_FRONTMATTER:
         if not meta.get(key):
             findings.append(Finding("FRONTMATTER_FIELD_MISSING", rel_path, f"missing required frontmatter field: {key}"))
+    object_type = meta.get("object_type", "")
+    if object_type and object_type not in OBJECT_TYPES:
+        allowed = ", ".join(sorted(OBJECT_TYPES))
+        findings.append(Finding("OBJECT_TYPE_INVALID", rel_path, f"object_type must be one of: {allowed}"))
     in_deprecated_dir = rel_path.startswith("archive/") or rel_path.startswith("deprecated/")
     is_deprecated = meta.get("deprecated", "").lower() == "true"
     if in_deprecated_dir and not is_deprecated:
@@ -204,11 +209,9 @@ def validate_wiki(root: Path) -> list[Finding]:
         except UnicodeDecodeError:
             findings.append(Finding("UTF8_INVALID", _rel(path, root), "markdown file must be UTF-8"))
             continue
-        rel = _rel(path, root)
+        _validate_markdown_frontmatter(root, path, text, findings)
         if path.name == "log.md" and path.parent == root:
             _validate_log(root, path, text, findings)
-        elif path.name not in RESERVED_NAMES and not rel.startswith(f"{INDEX_DIR}/"):
-            _validate_concept(root, path, text, findings)
         _validate_links(root, path, text, findings)
     return findings
 
@@ -216,7 +219,7 @@ def validate_wiki(root: Path) -> list[Finding]:
 def _payload(ok: bool, wiki_dir: Path | None, findings: list[Finding]) -> dict[str, Any]:
     return {
         "ok": ok,
-        "schema_version": "xberif.wiki_validation.v1",
+        "schema_version": "xwiki.validation.v1",
         "wiki_dir": str(wiki_dir) if wiki_dir is not None else None,
         "error_count": len(findings),
         "errors": [finding.as_dict() for finding in findings],
@@ -236,15 +239,15 @@ def _print_cli(payload: dict[str, Any], output_format: str) -> None:
 
 def _print_claude_stop(payload: dict[str, Any]) -> None:
     if payload["ok"]:
-        print(json.dumps({"decision": "approve", "systemMessage": "xberif wiki validation passed"}, ensure_ascii=False))
+        print(json.dumps({"decision": "approve", "systemMessage": "xwiki wiki validation passed"}, ensure_ascii=False))
         return
     reason = "; ".join(f"{e['code']} {e['path']}: {e['message']}" for e in payload["errors"][:8])
     print(
         json.dumps(
             {
                 "decision": "block",
-                "reason": "xberif wiki validation failed: " + reason,
-                "systemMessage": "Fix the xberif LLM wiki before stopping.",
+                "reason": "xwiki wiki validation failed: " + reason,
+                "systemMessage": "Fix the xwiki LLM wiki before stopping.",
             },
             ensure_ascii=False,
         )
@@ -260,7 +263,7 @@ def _print_claude_file(payload: dict[str, Any]) -> None:
                         "hookEventName": "PreToolUse",
                         "permissionDecision": "allow",
                     },
-                    "systemMessage": "xberif wiki validation passed",
+                    "systemMessage": "xwiki wiki validation passed",
                 },
                 ensure_ascii=False,
             )
@@ -274,7 +277,7 @@ def _print_claude_file(payload: dict[str, Any]) -> None:
                     "hookEventName": "PreToolUse",
                     "permissionDecision": "deny",
                 },
-                "systemMessage": "xberif wiki validation failed: " + reason,
+                "systemMessage": "xwiki wiki validation failed: " + reason,
             },
             ensure_ascii=False,
         )
@@ -282,7 +285,7 @@ def _print_claude_file(payload: dict[str, Any]) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Validate an xberif verification LLM wiki")
+    parser = argparse.ArgumentParser(description="Validate an xwiki verification LLM wiki")
     parser.add_argument("--wiki-dir", help=f"Wiki root. Defaults to ${ENV_NAME}.")
     parser.add_argument("--root", help="Project root for resolving relative --wiki-dir and hook file paths.")
     parser.add_argument("--format", choices=("text", "json"), default="text")

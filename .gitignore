@@ -28,8 +28,8 @@ regression/*
 !xentry/tests/**
 !xwaveform/tests/
 !xwaveform/tests/**
-!xberif/tests/
-!xberif/tests/**
+!skills/xwiki/tests/
+!skills/xwiki/tests/**
 !xcov/tests/
 !xcov/tests/**
 !xsva/tests/

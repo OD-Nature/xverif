@@ -1,8 +1,8 @@
-# xberif Wiki CRUD
+# xwiki Wiki CRUD
 
 ## Read
 
-1. 确认 `XBERIF_WIKI_DIR` 已定义。
+1. 确认 `XWIKI_DIR` 已定义。
 2. 先读 `index.md`。
 3. 按候选主题读取 concept 页面。
 4. 需要反向关系时读 `_index/backlinks.md`；没有该文件时用 `rg` 在 wiki 内查引用。

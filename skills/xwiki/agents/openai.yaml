@@ -1,8 +1,8 @@
 interface:
-  display_name: xberif
+  display_name: xwiki
   short_description: 维护芯片验证项目的持续记忆 LLM wiki，复用 DUT、环境、workflow 与 debug 上下文。
   default_prompt: >
-    使用 xberif 查询或维护由 XBERIF_WIKI_DIR 指向的验证项目 LLM wiki，
+    使用 xwiki 查询或维护由 XWIKI_DIR 指向的验证项目 LLM wiki，
     严格执行 LLM Wiki 编译流程，逐步通过 index、concept、backlinks 和
     rg 查询验证环境、DUT 功能、接口、testbench、sequence、checker、
     coverage、BT/IT/ST/SoC workflow 与 debug 入口，并把新知识写回 wiki。

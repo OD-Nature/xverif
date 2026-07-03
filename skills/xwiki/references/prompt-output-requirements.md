@@ -1,4 +1,4 @@
-# xberif Prompt Output Requirements
+# xwiki Prompt Output Requirements
 
 生成或更新验证 topic 总结时，除对应 topic prompt 的内容要求外，还必须遵守以下输出约束：
 
