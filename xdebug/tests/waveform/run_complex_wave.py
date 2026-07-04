@@ -560,6 +560,7 @@ def run_nonaxi(xdebug, fsdb):
             ("apb_default_negedge", make_apb_config(), "negedge", None),
             ("apb_dual", make_apb_config(edge="dual"), "dual", "before"),
             ("apb_pos_before", make_apb_config(edge="posedge", sample_point="before"), "posedge", "before"),
+            ("apb_pos_after", make_apb_config(edge="posedge", sample_point="after"), "posedge", "after"),
         ]
         for name, config, expected_edge, expected_sample_point in apb_modes:
             loaded = r.query("apb.config.load", args={"name": name, "config": config})
@@ -574,6 +575,10 @@ def run_nonaxi(xdebug, fsdb):
             rd_count = r.query("apb.query", args={"name": name, "direction": "rd"})
             require(wr_count["summary"]["count"] >= 1, "APB write count empty for {}".format(name))
             require(rd_count["summary"]["count"] >= 1, "APB read count empty for {}".format(name))
+        apb_before_first = r.query("apb.query", args={"name": "apb_pos_before", "direction": "wr", "num": 1})
+        apb_after_first = r.query("apb.query", args={"name": "apb_pos_after", "direction": "wr", "num": 1})
+        require(apb_before_first["data"]["transaction"]["time"] > apb_after_first["data"]["transaction"]["time"],
+                "APB posedge before should observe the completion one edge later than after")
 
         event_cfg = os.path.join(NONAXI_DIR, "config", "event0.json")
         r.query("event.config.load", args={"name": "evt0", "config_path": event_cfg})
@@ -633,6 +638,44 @@ def run_nonaxi(xdebug, fsdb):
         })
         require(len(race_after["data"]["events"]) == 1, "event.find posedge after did not observe new values")
         require_clock_summary(race_after, "posedge", "after")
+        r.query("stream.config.load", args={"streams": [
+            {
+                "name": "race_before_stream",
+                "clock": "ai_complex_top.clk",
+                "edge": "posedge",
+                "sample_point": "before",
+                "reset": "!ai_complex_top.rst_n",
+                "vld": "ai_complex_top.event_vld",
+                "rdy": "ai_complex_top.event_race",
+                "data": "ai_complex_top.event_payload",
+            },
+            {
+                "name": "race_after_stream",
+                "clock": "ai_complex_top.clk",
+                "edge": "posedge",
+                "sample_point": "after",
+                "reset": "!ai_complex_top.rst_n",
+                "vld": "ai_complex_top.event_vld",
+                "rdy": "ai_complex_top.event_race",
+                "data": "ai_complex_top.event_payload",
+            },
+        ]})
+        stream_before = r.query("stream.query", args={
+            "stream": "race_before_stream",
+            "query": "summary",
+            "time_range": {"begin": "100ns", "end": "110ns"},
+        })
+        stream_after = r.query("stream.query", args={
+            "stream": "race_after_stream",
+            "query": "summary",
+            "time_range": {"begin": "100ns", "end": "110ns"},
+        })
+        require_clock_summary(stream_before, "posedge", "before")
+        require_clock_summary(stream_after, "posedge", "after")
+        require(stream_before["summary"]["transfer_count"] == 0,
+                "stream posedge before should not observe same-edge event_vld/event_race transfer")
+        require(stream_after["summary"]["transfer_count"] == 1,
+                "stream posedge after should observe same-edge event_vld/event_race transfer")
         exported = r.query("event.export", args={"name": "evt0", "expr": "vld && !rdy", "time_range": {"begin": "0ns", "end": "200ns"}, "limit": 1})
         require(len(exported["data"]["events"]) == 1, "event.export limit failed")
         require_clock_summary(exported, "posedge")

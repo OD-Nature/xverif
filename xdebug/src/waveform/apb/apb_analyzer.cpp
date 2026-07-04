@@ -158,8 +158,12 @@ bool ApbAnalyzer::analyze(const std::string& name, npiFsdbFileHandle file, const
     std::string old_clk_val;
     std::string new_clk_val;
     npiFsdbTime group_time = 0;
+    std::vector<std::string> group_start_values = values;
     npiFsdbTime curr_time = 0;
     npiFsdbSigHandle changed_sig = nullptr;
+    bool sample_before_edge =
+        clock_sample.edge != ClockEdgeKind::Negedge &&
+        clock_sample.sample_point == ClockSamplePointKind::Before;
 
     auto finish_group = [&]() {
         if (!have_group || !clk_changed) return;
@@ -167,17 +171,19 @@ bool ApbAnalyzer::analyze(const std::string& name, npiFsdbFileHandle file, const
         is_target_edge = clock_edge_transition_matches(clock_sample.edge,
                                                        old_clk_val == "1",
                                                        new_clk_val == "1");
-        if (is_target_edge) process_edge(group_time, values);
+        if (is_target_edge) process_edge(group_time, sample_before_edge ? group_start_values : values);
     };
 
     while (iter.iter_next(curr_time, changed_sig) > 0) {
         if (!have_group) {
             have_group = true;
             group_time = curr_time;
+            group_start_values = values;
         } else if (curr_time != group_time) {
             finish_group();
             group_time = curr_time;
             clk_changed = false;
+            group_start_values = values;
         }
 
         npiFsdbValue val;

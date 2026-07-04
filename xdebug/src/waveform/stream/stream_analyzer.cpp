@@ -73,6 +73,51 @@ std::string stream_value_key(const StreamValue& value) {
     return value.bits.empty() ? "<none>" : value.bits;
 }
 
+std::string sample_bits_from_raw(std::string text) {
+    if (text.size() >= 2 && text[0] == '\'' &&
+        (text[1] == 'b' || text[1] == 'B' || text[1] == 'h' || text[1] == 'H' ||
+         text[1] == 'd' || text[1] == 'D')) {
+        text = text.substr(2);
+    }
+    std::string bits;
+    for (char c : text) {
+        if (c == '_' || std::isspace(static_cast<unsigned char>(c))) continue;
+        if (c == '0' || c == '1' || c == 'x' || c == 'X' || c == 'z' || c == 'Z') {
+            bits.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+        }
+    }
+    return bits.empty() ? "x" : bits;
+}
+
+bool collect_signal_values_before(npiFsdbFileHandle file,
+                                  const std::vector<std::string>& signals,
+                                  npiFsdbTime time,
+                                  std::map<std::string, StreamValue>& values,
+                                  std::string& error) {
+    values.clear();
+    for (const auto& signal : signals) {
+        npiFsdbSigHandle handle = npi_fsdb_sig_by_name(file, signal.c_str(), NULL);
+        if (!handle) {
+            error = "signal not found: " + signal;
+            return false;
+        }
+        SignalChangeCursor cursor(handle, npiFsdbBinStrVal);
+        if (!cursor.valid()) {
+            error = "failed to create signal cursor: " + signal;
+            return false;
+        }
+        npiFsdbTime value_time = 0;
+        std::string raw;
+        if (!cursor.prev_before(time, value_time, raw)) {
+            error = "failed to read signal before sample point: " + signal;
+            return false;
+        }
+        std::string bits = sample_bits_from_raw(raw);
+        values[signal] = StreamValue{bits, bits.find_first_of("xz") == std::string::npos};
+    }
+    return true;
+}
+
 Json fields_json(const std::map<std::string, StreamValue>& fields) {
     Json out = Json::object();
     for (const auto& kv : fields) out[kv.first] = stream_value_json(kv.second);
@@ -351,11 +396,18 @@ bool StreamAnalyzer::analyze(npiFsdbFileHandle file, const StreamConfig& config,
     };
 
     int cycle = 0;
+    bool sample_before_edge =
+        clock_sample.edge != ClockEdgeKind::Negedge &&
+        clock_sample.sample_point == ClockSamplePointKind::Before;
     for (size_t edge_index = 0; edge_index < edge_times.size(); ++edge_index) {
         npiFsdbTime t = edge_times[edge_index];
         analysis.clock_edges++;
         std::map<std::string, StreamValue> values;
-        if (!stream_collect_signal_values(file, deps, t, values, error)) return false;
+        if (sample_before_edge) {
+            if (!collect_signal_values_before(file, deps, t, values, error)) return false;
+        } else {
+            if (!stream_collect_signal_values(file, deps, t, values, error)) return false;
+        }
 
         auto eval = [&](StreamExpression& expr, const std::string& label) -> StreamValue {
             if (expr.text().empty()) return StreamValue{"0", true};
