@@ -238,7 +238,7 @@ class XdebugLoopSession:
                 req = {
                     "request_id": f"quit-{_safe_name(self.alias)}",
                     "trace_id": _trace_id(self.alias, f"quit-{_safe_name(self.alias)}"),
-                    "api_version": "xdebug.v1", "action": "stdio.quit",
+                    "api_version": self.api_version, "action": "stdio.quit",
                 }
                 self._call_raw(req, timeout=close_timeout() / 2)
                 cleanup["stdio_quit"] = "ok"

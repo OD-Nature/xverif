@@ -28,6 +28,14 @@ P0_ACTIONS = [
 ]
 
 
+def _safe_error_response(req: Json, exc: XcovError) -> Json:
+    detail = dict(exc.detail)
+    if "action" in detail:
+        detail["requested_action"] = detail.pop("action")
+    return error_response(req.get("action", ""), req.get("request_id", "req-unknown"),
+                          exc.code, exc.message, **detail)
+
+
 class Dispatcher:
     def __init__(self, sessions: SessionManager | None = None) -> None:
         self.sessions = sessions or SessionManager()
@@ -78,8 +86,7 @@ class Dispatcher:
                              {"response": response_summary_for_log(rsp)})
             return rsp
         except XcovError as exc:
-            rsp = error_response(req.get("action", ""), req.get("request_id", "req-unknown"),
-                                 exc.code, exc.message, **exc.detail)
+            rsp = _safe_error_response(req, exc)
             elapsed = int((time.monotonic() - start) * 1000)
             log_action_event("public", sid, action, "end", False, elapsed,
                              {"response": response_summary_for_log(rsp)})

@@ -178,6 +178,27 @@ def test_stdio_loop_fake_holes():
     assert out[2]["json"]["summary"]["matched_count"] == 1
 
 
+def test_stdio_loop_unknown_action_returns_error_without_crash():
+    reqs = [
+        {"api_version": "xcov.v1", "request_id": "open",
+         "action": "session.open", "target": {"vdb": "fake"},
+         "args": {"name": "cov0", "fake": True}},
+        {"api_version": "xcov.v1", "request_id": "bad",
+         "action": "cov.holes", "target": {"session_id": "cov0"}},
+    ]
+    proc = subprocess.run([str(XCOV), "--stdio-loop"],
+                          input="\n".join(json.dumps(req) for req in reqs) + "\n",
+                          text=True, capture_output=True, check=False,
+                          cwd=str(ROOT))
+    assert proc.returncode == 0, proc.stderr
+    out = [json.loads(line) for line in proc.stdout.splitlines()]
+    assert out[0]["protocol"] == "xcov-stdio-loop"
+    assert out[2]["id"] == "bad"
+    assert out[2]["ok"] is False
+    assert out[2]["json"]["error"]["code"] == "ACTION_NOT_FOUND"
+    assert out[2]["json"]["error"]["detail.requested_action"] == "cov.holes"
+
+
 def test_tests_list_defaults_to_name_filter():
     dispatcher = _dispatch_opened()
     rsp = dispatcher.dispatch({

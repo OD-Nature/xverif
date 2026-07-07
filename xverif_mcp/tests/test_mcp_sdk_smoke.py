@@ -189,7 +189,7 @@ def test_cov_session_fake_lifecycle(monkeypatch: pytest.MonkeyPatch):
         )
         queried = await server.mcp.call_tool(
             "xverif_cov_query",
-            {"session": "cov_fake", "action": "cov.holes",
+            {"session": "cov_fake", "action": "code_coverage.holes",
              "args": {"metrics": ["toggle", "branch"]},
              "limits": {"max_items": 1},
              "output_format": "json"},
@@ -204,7 +204,7 @@ def test_cov_session_fake_lifecycle(monkeypatch: pytest.MonkeyPatch):
     opened_payload = json.loads(opened[0].text)
     queried_payload = json.loads(queried[0].text)
     assert opened_payload["ok"] is True
-    assert queried_payload["summary"]["matched_count"] == 3
+    assert queried_payload["summary"]["matched_count"] == 1
     assert queried_payload["summary"]["returned"] == 1
 
 
@@ -329,7 +329,7 @@ def test_batch_fake_lifecycle(tmp_path, monkeypatch: pytest.MonkeyPatch):
         json.dumps({"tool": "xverif_cov_session_open",
                      "args": {"name": "cov_fake", "vdb": "fake"}}),
         json.dumps({"tool": "xverif_cov_query",
-                     "args": {"session": "cov_fake", "action": "cov.holes",
+                     "args": {"session": "cov_fake", "action": "code_coverage.holes",
                               "args": {"metrics": ["line"], "limits": {"max_items": 2}},
                               "output_format": "json"}}),
         json.dumps({"tool": "xverif_cov_session_close",
