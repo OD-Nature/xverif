@@ -1,11 +1,12 @@
 # xdebug transport 参考
 
-本文聚焦 xdebug 原生 file transport。当登录机或本机无法连接计算节点 TCP 端口，但两侧能访问同一个共享 home/session 目录时，使用 xdebug 原生 `transport:"file"`。它不是额外 wrapper，不需要 agent 手工读写文件。
+本文聚焦 xdebug 原生 file transport。file transport 是显式例外路径：只有用户明确要求，或项目文档明确要求在共享 home/session 目录上跨边界通信时，才使用 xdebug 原生 `transport:"file"`。它不是额外 wrapper，不需要 agent 手工读写文件。
 
 ## 使用时机
 
 使用 file transport：
 
+- 用户明确要求使用 file transport，或项目文档明确要求该路径。
 - LSF / batch 计算节点上的 daemon 不能被登录机 TCP 直连。
 - UDS socket 不能跨节点或跨 namespace 使用。
 - 用户明确说明共享文件系统可见。
@@ -15,6 +16,7 @@
 - 同机本地普通调试；默认 UDS 即可。
 - 远程 TCP 明确可达且用户授权使用 TCP。
 - 想手工构造 request/response 文件；agent 必须走 xdebug JSON API。
+- 仅因为 `SESSION_UNHEALTHY child_exited`、旧 session 冲突或 UDS bind 问题想做 fallback；应先关闭旧 session、换新名字重开或保留错误上下文。
 
 ## 打开 session
 

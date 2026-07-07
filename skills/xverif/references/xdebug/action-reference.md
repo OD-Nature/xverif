@@ -40,7 +40,7 @@
 | `session.gc` | stable | none | 清理过期 session。 | 扫描 session 管理状态并回收可释放项。 | 避免长期运行时积累无用资源。 | none |
 | `session.kill` | stable | session | 强制移除指定 session。 | 按 target.session_id 清理记录和关联资源。 | 处理异常残留 session。 | required: target.session_id |
 | `session.list` | stable | session | 列出当前 session。 | 读取 SessionManager 中的活动 session 元数据。 | 确认已有 session_id 和资源类型。 | none |
-| `session.open` | stable | any | 打开 design/waveform session。 | 解析 target 中的 daidir/fsdb，初始化统一 engine session 和底层资源。 | 建立后续 design/waveform 查询的资源上下文。 | none |
+| `session.open` | stable | any | 打开 design/waveform session。 | 解析 target 中的 daidir/fsdb，初始化统一 engine session 和底层资源。 | 建立后续 design/waveform 查询的资源上下文。 | required: name |
 ## Design Actions
 | action | status | resource | purpose | how it works | objective | args contract |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -90,7 +90,7 @@
 | `list.validate` | stable | waveform | 验证 list 中信号是否存在。 | 逐条检查 FSDB signal handle。 | 发现过期或错误路径。 | required: name |
 | `list.value_at` | stable | waveform | 读取 list 内所有信号在指定时间的值。 | 加载 list 后按 clock/time 对所有信号做同一时刻批量读取。 | 快速比较一组相关信号。 | required: name, time, clock |
 | `sampled_pulse.inspect` | experimental | waveform | 检查未被 clock 采到的 valid 短脉冲。 | 按 clock 采样 valid，同时扫描 valid 原始变化；若 valid 在两个采样边沿间拉高但没有采样边沿看到高电平，则报 unsampled_valid_pulse。可选 payload/payloads 用于补风险现场。 | 解释仿真里“波形有脉冲但 DUT 没采到”的问题。 | required: clock, valid |
-| `scope.list` | stable | waveform | 列出 FSDB scope 或信号。 | 从 waveform 数据库遍历 scope，按 path/depth/limit 截断；无 scope 时列根层级。 | 帮助定位真实层次和信号路径。 | none |
+| `scope.list` | stable | waveform | 列出 FSDB scope 或信号。 | 从 waveform 数据库遍历 scope，按 path/recursive/max_depth 遍历或截断；无 scope 时列根层级。 | 帮助定位真实层次和信号路径。 | none |
 | `scope.roots` | stable | any | 发现 waveform/design 根。 | 合并 FSDB 根和可用设计根信息。 | 判断 session 绑定的顶层和路径规范。 | none |
 | `signal.changes` | stable | waveform | 读取信号变化点。 | 扫描 FSDB value changes，支持窗口、limit 和聚合。 | 看信号何时跳变。 | required: signal |
 | `signal.stability` | stable | waveform | 检查信号窗口内是否稳定。 | 基于 signal.changes 判断是否只有初始值或无变化。 | 确认控制/状态信号是否保持不变。 | required: signal |

@@ -1100,6 +1100,9 @@
         "request": "schemas/v1/actions/session.open.request.schema.json",
         "response": "schemas/v1/actions/session.open.response.schema.json"
       },
+      "required_args": [
+        "name"
+      ],
       "examples": {
         "request": [
           "examples/requests/session.open.basic.json"

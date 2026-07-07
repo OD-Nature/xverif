@@ -5,7 +5,8 @@
   "type": "object",
   "required": [
     "api_version",
-    "action"
+    "action",
+    "args"
   ],
   "properties": {
     "api_version": {
@@ -59,7 +60,9 @@
         }
       },
       "additionalProperties": false,
-      "required": []
+      "required": [
+        "name"
+      ]
     },
     "limits": {
       "type": "object"
@@ -76,5 +79,5 @@
   "x-purpose": "打开 design/waveform session。",
   "x-how_it_works": "解析 target 中的 daidir/fsdb，初始化统一 engine session 和底层资源。",
   "x-when_to_use": "建立后续 design/waveform 查询的资源上下文。",
-  "x-arg_contract_notes": "no required args"
+  "x-arg_contract_notes": "required: name"
 }
