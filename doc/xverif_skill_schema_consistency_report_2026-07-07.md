@@ -5,7 +5,7 @@
 范围：
 
 - `skills/xverif/`
-- `/home/yian/.codex/skills/xverif/`
+- `~/.codex/skills/xverif/`
 - `xdebug/schemas/v1/actions/*.request.schema.json`
 - `xcov/xcov/schemas.py`
 - `xverif_mcp/src/xverif_mcp/server.py`
@@ -14,7 +14,7 @@
 
 ## 总结
 
-`skills/xverif` 与已安装的 `/home/yian/.codex/skills/xverif` 当前完全同步，没有镜像差异。
+`skills/xverif` 与已安装的 `~/.codex/skills/xverif` 当前完全同步，没有镜像差异。
 
 主要不一致集中在 xdebug 的 action 参数描述与 request schema 之间。xcov 示例与 `xcov/xcov/schemas.py` 当前 schema 对齐；xbit、xentry、xloc、xsva 文档与 MCP wrapper 签名未发现明显参数名漂移。
 
@@ -129,7 +129,7 @@ skill 文档中这些 action 的 required 描述或示例没有 `clock`：
 
 ## 已确认无明显问题的部分
 
-- repo 内 `skills/xverif` 与安装版 `/home/yian/.codex/skills/xverif` 无 diff。
+- repo 内 `skills/xverif` 与安装版 `~/.codex/skills/xverif` 无 diff。
 - xcov 文档中的 JSON 示例与 `xcov/xcov/schemas.py` 当前 request schema 对齐。
 - MCP 文档中 `xverif_tools`、`xverif_tool_help` 名称有效，二者在 `xverif_mcp/src/xverif_mcp/server.py` 后半段有定义。
 - `skills/xverif/references/mcp/overview.md` 对 batch 参数嵌套的描述与 `xverif_batch` 实现一致。
@@ -145,9 +145,9 @@ skill 文档中这些 action 的 required 描述或示例没有 `clock`：
 ## 检查命令摘要
 
 ```bash
-diff -qr skills/xverif /home/yian/.codex/skills/xverif
+diff -qr skills/xverif ~/.codex/skills/xverif
 
-/home/yian/miniconda3/bin/python - <<'PY'
+~/miniconda3/bin/python - <<'PY'
 import json, pathlib
 for p in sorted(pathlib.Path('xdebug/schemas/v1/actions').glob('*.request.schema.json')):
     data = json.load(open(p))
@@ -382,7 +382,7 @@ APB/AXI 文档正文又常用 read/write 语义描述 transaction，这与 schem
 
 本计划把 `xdebug` action 参数从“文档修补”升级为“schema + runtime + tests + skill docs”一致性修复。目标是消除 required 漂移、同义字段混用、示例非法字段，以及 MCP/native 参数命名不一致。
 
-实施完成后同步 repo 内 `skills/xverif` 到安装版 `/home/yian/.codex/skills/xverif`。
+实施完成后同步 repo 内 `skills/xverif` 到安装版 `~/.codex/skills/xverif`。
 
 ### Public API / Contract Changes
 
@@ -448,7 +448,7 @@ APB/AXI 文档正文又常用 read/write 语义描述 transaction，这与 schem
   - 对 `skills/xverif/references/xdebug/*.md` 中所有 `xdebug.v1` JSON 示例做 schema 校验。
   - 对 enum 值做额外校验，特别是 AXI direction。
 - Skill mirror：
-  - 实施后 `diff -qr skills/xverif /home/yian/.codex/skills/xverif` 必须无差异。
+  - 实施后 `diff -qr skills/xverif ~/.codex/skills/xverif` 必须无差异。
 
 ### Assumptions
 
@@ -484,10 +484,10 @@ APB/AXI 文档正文又常用 read/write 语义描述 transaction，这与 schem
 
 已验证：
 
-- `/home/yian/miniconda3/bin/python xdebug/tools/validate_examples.py`：通过，145 examples。
-- `/home/yian/miniconda3/bin/python xdebug/tools/sync_runtime_request_schemas.py --check`：通过。
-- `/home/yian/miniconda3/bin/python xdebug/tools/sync_action_schema_hints.py --check`：通过。
-- `/home/yian/miniconda3/bin/python xdebug/tools/check_action_contract.py`：通过，71 action specs。
+- `~/miniconda3/bin/python xdebug/tools/validate_examples.py`：通过，145 examples。
+- `~/miniconda3/bin/python xdebug/tools/sync_runtime_request_schemas.py --check`：通过。
+- `~/miniconda3/bin/python xdebug/tools/sync_action_schema_hints.py --check`：通过。
+- `~/miniconda3/bin/python xdebug/tools/check_action_contract.py`：通过，71 action specs。
 - `make -C xdebug schema-test`：通过。
 - `make -C xdebug contract-test`：通过。
 - 自定义 request schema 探针：通过，覆盖 `clock` 必填、`session.kill target.session_id`、stream `name` 拒绝、AXI `rd` 拒绝、`output_dir/requested_time` 拒绝。
@@ -496,4 +496,4 @@ APB/AXI 文档正文又常用 read/write 语义描述 transaction，这与 schem
 当前未完成/待确认：
 
 - `xverif_mcp/tests/test_mcp_sdk_smoke.py` 中 coverage fake lifecycle 仍失败，错误为 xcov stdio-loop transport lost；该失败发生在 `xverif_cov_query` fake session，不属于本轮 xdebug 参数合同链路，但在完整 MCP 测试报告中需要单独处理。
-- 安装版 skill mirror `/home/yian/.codex/skills/xverif` 已同步；`diff -qr skills/xverif /home/yian/.codex/skills/xverif` 无输出。
+- 安装版 skill mirror `~/.codex/skills/xverif` 已同步；`diff -qr skills/xverif ~/.codex/skills/xverif` 无输出。

@@ -31,7 +31,7 @@
         "id": "fix3_wave",
         "session_id": "fix3_wave",
         "mode": "waveform",
-        "fsdb": "/home/yian/xverif/xdebug/testdata/waveform/ai_complex_wave/out/waves.fsdb",
+        "fsdb": "~/xverif/xdebug/testdata/waveform/ai_complex_wave/out/waves.fsdb",
         "socket_path": "/tmp/xdebug_action_sampling3/home/.xdebug/engine/sessions/fix3_wave_98a8c8559b4b1b69/socket",
         "transport": "uds",
         "file_dir": "/tmp/xdebug_action_sampling3/home/.xdebug/engine/sessions/fix3_wave_98a8c8559b4b1b69/transport",

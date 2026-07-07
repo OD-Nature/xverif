@@ -6,11 +6,11 @@ HTML，不返回占位 note。
 
 ## 本地依据
 
-- Verdi 安装：`$VERDI_HOME=/home/yian/Synopsys/verdi/V-2023.12-SP2`
+- Verdi 安装：`$VERDI_HOME=~/Synopsys/verdi/V-2023.12-SP2`
 - Python Coverage 文档：`$VERDI_HOME/doc/Python_NPI_Coverage.pdf`
 - 可检索文本：`$VERDI_HOME/doc/.Python_NPI_Coverage.txt.gz`
 - Coverage C header：`$VERDI_HOME/share/NPI/inc/npi_cov.h`
-- 真实 VDB probe：`/home/yian/uart_example/sim/merged.vdb`
+- 真实 VDB probe：`~/uart_example/sim/merged.vdb`
 
 真实 probe 已在沙箱外运行，原因是 pynpi/VDB/license 访问属于 NPI/EDA 动作。
 

@@ -1,6 +1,6 @@
 name: xring_sanity
-fsdb: /home/yian/xring/dv/run/out/sanity/test/tc_sanity_10q_100db/waves.fsdb
-daidir: /home/yian/xring/dv/run/out/sanity/build/simv.daidir
+fsdb: ~/xring/dv/run/out/sanity/test/tc_sanity_10q_100db/waves.fsdb
+daidir: ~/xring/dv/run/out/sanity/build/simv.daidir
 top: xring_tb_top
 tags: [realdata, smoke, xring, combined]
 timeout_sec: 240

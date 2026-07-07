@@ -48,7 +48,7 @@
           "text": "uart_16550.RXDin"
         },
         "location": {
-          "file": "/home/yian/xverif/xdebug/testdata/design/uart/uart_16550.sv",
+          "file": "~/xverif/xdebug/testdata/design/uart/uart_16550.sv",
           "line": 164
         },
         "npi_type": 8,
@@ -95,7 +95,7 @@
             "text": "uart_16550.RXDin"
           },
           "location": {
-            "file": "/home/yian/xverif/xdebug/testdata/design/uart/uart_16550.sv",
+            "file": "~/xverif/xdebug/testdata/design/uart/uart_16550.sv",
             "line": 164
           },
           "npi_type": 8,
@@ -164,7 +164,7 @@
             "op_type": 32,
             "text": "(uart_16550.loopback ? uart_16550.TXD : uart_16550.RXD)"
           },
-          "file": "/home/yian/xverif/xdebug/testdata/design/uart/uart_16550.sv",
+          "file": "~/xverif/xdebug/testdata/design/uart/uart_16550.sv",
           "from": "uart_16550.loopback",
           "line": 164,
           "resolution": "signal",
@@ -202,7 +202,7 @@
             "op_type": 32,
             "text": "(uart_16550.loopback ? uart_16550.TXD : uart_16550.RXD)"
           },
-          "file": "/home/yian/xverif/xdebug/testdata/design/uart/uart_16550.sv",
+          "file": "~/xverif/xdebug/testdata/design/uart/uart_16550.sv",
           "from": "uart_16550.TXD",
           "line": 164,
           "resolution": "signal",
@@ -240,7 +240,7 @@
             "op_type": 32,
             "text": "(uart_16550.loopback ? uart_16550.TXD : uart_16550.RXD)"
           },
-          "file": "/home/yian/xverif/xdebug/testdata/design/uart/uart_16550.sv",
+          "file": "~/xverif/xdebug/testdata/design/uart/uart_16550.sv",
           "from": "uart_16550.RXD",
           "line": 164,
           "resolution": "signal",
@@ -251,11 +251,11 @@
         }
       ],
       "files": [
-        "/home/yian/xverif/xdebug/testdata/design/uart/uart_16550.sv"
+        "~/xverif/xdebug/testdata/design/uart/uart_16550.sv"
       ],
       "results": [
         {
-          "file": "/home/yian/xverif/xdebug/testdata/design/uart/uart_16550.sv",
+          "file": "~/xverif/xdebug/testdata/design/uart/uart_16550.sv",
           "line": 164,
           "resolution": "signal",
           "role": "driver",
@@ -263,7 +263,7 @@
           "source": "assign RXDin = loopback ? TXD : RXD;"
         },
         {
-          "file": "/home/yian/xverif/xdebug/testdata/design/uart/uart_16550.sv",
+          "file": "~/xverif/xdebug/testdata/design/uart/uart_16550.sv",
           "line": 164,
           "resolution": "signal",
           "role": "driver",
@@ -271,7 +271,7 @@
           "source": "assign RXDin = loopback ? TXD : RXD;"
         },
         {
-          "file": "/home/yian/xverif/xdebug/testdata/design/uart/uart_16550.sv",
+          "file": "~/xverif/xdebug/testdata/design/uart/uart_16550.sv",
           "line": 164,
           "resolution": "signal",
           "role": "driver",

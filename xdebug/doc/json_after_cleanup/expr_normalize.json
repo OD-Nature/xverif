@@ -68,7 +68,7 @@
           "text": "uart_16550.RXDin"
         },
         "location": {
-          "file": "/home/yian/xverif/xdebug/testdata/design/uart/uart_16550.sv",
+          "file": "~/xverif/xdebug/testdata/design/uart/uart_16550.sv",
           "line": 164
         },
         "npi_type": 8,

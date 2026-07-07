@@ -28,7 +28,7 @@ xeda-runner run --action sim --target compile --option TEST=smoke_test --option 
 正常执行时终端和 `~/.xeda_runner/<pid>.log` 同步输出：
 
 ```
-[xeda-runner] log: /home/yian/.xeda_runner/543212.log
+[xeda-runner] log: ~/.xeda_runner/543212.log
 [xeda-runner] runner_pid=543212 runner_pgid=543212
 [xeda-runner] child_pid=543213 child_pgid=543212
 [xeda-runner] action=sim target=compile

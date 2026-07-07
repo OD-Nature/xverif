@@ -43,9 +43,9 @@
         "signals": [
           "active_semantics_tb.u_dut.data_b"
         ],
-        "file": "/home/yian/xverif/xdebug/testdata/combined/active_semantics/active_semantics_tb.sv",
+        "file": "~/xverif/xdebug/testdata/combined/active_semantics/active_semantics_tb.sv",
         "line": 43,
-        "text": "npiAssignment, active_semantics_tb.u_dut.mux_y = data_b;, {/home/yian/xverif/xdebug/testdata/combined/active_semantics/active_semantics_tb.sv : 43}",
+        "text": "npiAssignment, active_semantics_tb.u_dut.mux_y = data_b;, {~/xverif/xdebug/testdata/combined/active_semantics/active_semantics_tb.sv : 43}",
         "active_time": "22ns",
         "value": {
           "value": "10110001",
@@ -56,7 +56,7 @@
       },
       "root_driver": {
         "kind": "assignment",
-        "file": "/home/yian/xverif/xdebug/testdata/combined/active_semantics/active_semantics_tb.sv",
+        "file": "~/xverif/xdebug/testdata/combined/active_semantics/active_semantics_tb.sv",
         "line": 43
       },
       "controls": [
@@ -68,9 +68,9 @@
           "signals": [
             "active_semantics_tb.u_dut.sel"
           ],
-          "file": "/home/yian/xverif/xdebug/testdata/combined/active_semantics/active_semantics_tb.sv",
+          "file": "~/xverif/xdebug/testdata/combined/active_semantics/active_semantics_tb.sv",
           "line": 40,
-          "text": "npiIfElse, active_semantics_tb.u_dut.if (sel) ... else ..., {/home/yian/xverif/xdebug/testdata/combined/active_semantics/active_semantics_tb.sv : 40}",
+          "text": "npiIfElse, active_semantics_tb.u_dut.if (sel) ... else ..., {~/xverif/xdebug/testdata/combined/active_semantics/active_semantics_tb.sv : 40}",
           "active_time": "22ns",
           "value": {
             "value": "10110001",

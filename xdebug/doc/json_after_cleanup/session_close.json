@@ -25,10 +25,10 @@
         "id": "json_after_missing_wave",
         "session_id": "json_after_missing_wave",
         "mode": "waveform",
-        "fsdb": "/home/yian/xverif/xdebug/testdata/waveform/ai_complex_wave/out/waves.fsdb",
-        "socket_path": "/home/yian/.xdebug/engine/sessions/json_after_missi_684029234a189b91/socket",
+        "fsdb": "~/xverif/xdebug/testdata/waveform/ai_complex_wave/out/waves.fsdb",
+        "socket_path": "~/.xdebug/engine/sessions/json_after_missi_684029234a189b91/socket",
         "transport": "uds",
-        "file_dir": "/home/yian/.xdebug/engine/sessions/json_after_missi_684029234a189b91/transport",
+        "file_dir": "~/.xdebug/engine/sessions/json_after_missi_684029234a189b91/transport",
         "server_host": "localhost.localdomain"
       },
       "backends": {

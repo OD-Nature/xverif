@@ -36,9 +36,9 @@ AXI_SIM_LOG = os.path.join(
     "sim.log",
 )
 DEFAULT_AXI_ENV = {
-    "AXI_REFERENCE_ROOT": "/home/yian/axi_test/test",
-    "SVT_VIP_INCDIR": "/home/yian/axi_test/test/include/sverilog",
-    "SVT_VIP_SRCDIR": "/home/yian/axi_test/test/src/sverilog/vcs",
+    "AXI_REFERENCE_ROOT": "~/axi_test/test",
+    "SVT_VIP_INCDIR": "~/axi_test/test/include/sverilog",
+    "SVT_VIP_SRCDIR": "~/axi_test/test/src/sverilog/vcs",
 }
 DEFAULT_QUERY_TIMEOUT_MS = int(os.environ.get("XDEBUG_QUERY_TIMEOUT_MS", "120000"))
 PROGRESS_HEARTBEAT_SEC = int(os.environ.get("XDEBUG_PROGRESS_HEARTBEAT_SEC", "30"))

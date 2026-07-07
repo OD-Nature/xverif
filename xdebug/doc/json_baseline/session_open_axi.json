@@ -3,7 +3,7 @@
     "api_version": "xdebug.v1",
     "action": "session.open",
     "target": {
-      "fsdb": "/home/yian/xverif/xdebug/testdata/waveform/axi_vip_real/out/regression/test/axi_multi_id_test/waves.fsdb"
+      "fsdb": "~/xverif/xdebug/testdata/waveform/axi_vip_real/out/regression/test/axi_multi_id_test/waves.fsdb"
     },
     "args": {
       "name": "sample_axi"
@@ -24,7 +24,7 @@
       "id": "sample_axi",
       "session_id": "sample_axi",
       "mode": "waveform",
-      "fsdb": "/home/yian/xverif/xdebug/testdata/waveform/axi_vip_real/out/regression/test/axi_multi_id_test/waves.fsdb",
+      "fsdb": "~/xverif/xdebug/testdata/waveform/axi_vip_real/out/regression/test/axi_multi_id_test/waves.fsdb",
       "socket_path": "/tmp/xdebug_action_sampling/home/.xdebug/engine/sessions/sample_axi_9d07aef7cdfe10de/socket",
       "transport": "uds",
       "file_dir": "/tmp/xdebug_action_sampling/home/.xdebug/engine/sessions/sample_axi_9d07aef7cdfe10de/transport",
@@ -39,7 +39,7 @@
         "id": "sample_axi",
         "session_id": "sample_axi",
         "mode": "waveform",
-        "fsdb": "/home/yian/xverif/xdebug/testdata/waveform/axi_vip_real/out/regression/test/axi_multi_id_test/waves.fsdb",
+        "fsdb": "~/xverif/xdebug/testdata/waveform/axi_vip_real/out/regression/test/axi_multi_id_test/waves.fsdb",
         "socket_path": "/tmp/xdebug_action_sampling/home/.xdebug/engine/sessions/sample_axi_9d07aef7cdfe10de/socket",
         "transport": "uds",
         "file_dir": "/tmp/xdebug_action_sampling/home/.xdebug/engine/sessions/sample_axi_9d07aef7cdfe10de/transport",

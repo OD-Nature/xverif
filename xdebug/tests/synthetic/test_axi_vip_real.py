@@ -11,9 +11,9 @@ from runner import ArtifactWriter, CommandRunner, RunResult
 
 
 DEFAULT_AXI_ENV = {
-    "AXI_REFERENCE_ROOT": "/home/yian/axi_test/test",
-    "SVT_VIP_INCDIR": "/home/yian/axi_test/test/include/sverilog",
-    "SVT_VIP_SRCDIR": "/home/yian/axi_test/test/src/sverilog/vcs",
+    "AXI_REFERENCE_ROOT": "~/axi_test/test",
+    "SVT_VIP_INCDIR": "~/axi_test/test/include/sverilog",
+    "SVT_VIP_SRCDIR": "~/axi_test/test/src/sverilog/vcs",
 }
 
 

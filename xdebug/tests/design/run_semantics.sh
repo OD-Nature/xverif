@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 XDEBUG="$ROOT_DIR/../tools/xdebug"
 UART_DB="${UART_DB:-$ROOT_DIR/testdata/design/uart/simv.daidir}"
-IFACE_DB="${IFACE_DB:-/home/yian/worken/mod_port_trace/test/testcases/interface_port/simv.daidir}"
+IFACE_DB="${IFACE_DB:-~/worken/mod_port_trace/test/testcases/interface_port/simv.daidir}"
 P3_DB="${P3_DB:-$ROOT_DIR/testdata/design/p3_semantics/out/simv.daidir}"
 TMP_HOME="$(mktemp -d)"
 

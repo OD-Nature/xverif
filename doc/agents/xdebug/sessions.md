@@ -1,0 +1,120 @@
+# xdebug Session 系统
+
+session 系统用于复用 daidir、fsdb、engine 和 transport 资源。session 合同错误会直接影响 MCP、stdio-loop、long-running debug 和环境排障。
+
+## Public Session Actions
+
+常见 action：
+
+- `session.open`
+- `session.list`
+- `session.close`
+- `session.kill`
+- `session.gc`
+- `session.doctor`
+
+要求：
+
+- `session.open` 的 `args.name` 必填。
+- 后续原生 request 使用 `target.session_id` 选择 session。
+- `session.close` 和 `session.kill` 的公开合同使用 `target.session_id`。
+- `session.gc` 不接受随意清理参数，按 schema 调用。
+- `session.doctor` 用于诊断当前 session 资源、transport 和 backend 状态。
+
+## Session 生命周期
+
+典型流程：
+
+1. `session.open` 读取 `target.daidir`、`target.fsdb` 和 `args.name`。
+2. frontend session catalog 记录 name/session_id 和资源。
+3. 需要 engine 的资源打开 backend session。
+4. engine transport ready 后，query 可复用 session。
+5. `session.close` 正常释放资源。
+6. `session.kill` 用于异常残留清理。
+7. `session.gc` 清理过期或不可用项。
+
+## Frontend 与 Backend Session
+
+frontend session：
+
+- 面向用户和 MCP 暴露。
+- 保存资源绑定和 backend 映射。
+
+backend session：
+
+- engine 内部资源实例。
+- 管理 NPI/FSDB/transport/worker 生命周期。
+
+要求：
+
+- frontend/backend 映射必须可诊断。
+- backend crash 后 frontend 不得假装 session 仍健康。
+- close/kill 必须处理部分失败并保留错误上下文。
+
+## SESSION_LOST
+
+含义：
+
+- MCP/stdio-loop 或 manager 侧已经丢失 session 映射。
+- 旧 session 不可继续复用。
+
+处理：
+
+- 不要继续对同名 session query。
+- 重新 `session.open` 一个明确名字。
+- 保留原错误上下文，避免覆盖根因。
+
+## SESSION_UNHEALTHY
+
+常见原因：
+
+- engine child exited。
+- backend ready timeout。
+- NPI/FSDB 初始化失败。
+- transport endpoint 不可达。
+
+处理：
+
+- 先查 lifecycle/transport log。
+- 不要自动切换 file transport。
+- 先关闭旧 session、换新名字重开，或把错误上下文返回给用户。
+
+## SESSION_TRANSPORT_FAILED
+
+常见原因：
+
+- UDS socket 不存在或不可达。
+- TCP connect failed。
+- file transport request timeout、expired、stale claim。
+
+处理：
+
+- 不复用该 session。
+- 检查 transport log 的 phase 和 endpoint。
+- 如果是沙箱网络/文件系统差异，先做 sandbox-vs-host 对照。
+
+## MCP Session 语义
+
+MCP debug 工具：
+
+- open：`xverif_debug_session_open(name, fsdb=None, daidir=None, ...)`
+- query：`xverif_debug_query(session_id, action, args=None, ...)`
+- close：`xverif_debug_session_close(name=..., session_id=...)`
+
+要求：
+
+- MCP 参数名必须映射到原生 `target.session_id`。
+- batch nested args 中，outer args 是 MCP tool 参数，inner args 是 xdebug action 参数。
+- SESSION_LOST 后必须重新 open。
+
+## Session 测试
+
+优先测试：
+
+- `make -C xdebug test-session`
+- `make -C xdebug mcp-session-test`
+- `make -C xdebug log-test`
+- `xverif_mcp/tests/test_session_errors.py`
+- `xverif_mcp/tests/test_stdio_loop_session_lifecycle.py`
+
+真实 LSF 或 license 相关 session 测试按根目录 `AGENTS.md` 在沙箱外执行。

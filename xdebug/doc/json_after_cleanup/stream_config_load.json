@@ -9,7 +9,7 @@
       "session_id": "fix_stream"
     },
     "args": {
-      "config_path": "/home/yian/xverif/xdebug/testdata/waveform/stream_v1/config/streams.json",
+      "config_path": "~/xverif/xdebug/testdata/waveform/stream_v1/config/streams.json",
       "mode": "replace"
     }
   },

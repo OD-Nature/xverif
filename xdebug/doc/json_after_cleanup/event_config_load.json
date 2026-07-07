@@ -10,7 +10,7 @@
     },
     "args": {
       "name": "evt0",
-      "config_path": "/home/yian/xverif/xdebug/testdata/waveform/ai_complex_wave/config/event0.json"
+      "config_path": "~/xverif/xdebug/testdata/waveform/ai_complex_wave/config/event0.json"
     }
   },
   "response": {

@@ -31,7 +31,7 @@
         "id": "sample_wave",
         "session_id": "sample_wave",
         "mode": "waveform",
-        "fsdb": "/home/yian/xverif/xdebug/testdata/waveform/ai_complex_wave/out/waves.fsdb",
+        "fsdb": "~/xverif/xdebug/testdata/waveform/ai_complex_wave/out/waves.fsdb",
         "socket_path": "/tmp/xdebug_action_sampling/home/.xdebug/engine/sessions/sample_wave_98f4709ce8a8a5b3/socket",
         "transport": "uds",
         "file_dir": "/tmp/xdebug_action_sampling/home/.xdebug/engine/sessions/sample_wave_98f4709ce8a8a5b3/transport",

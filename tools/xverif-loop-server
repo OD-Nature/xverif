@@ -8,8 +8,8 @@ export PYTHONPATH="$root/xverif_mcp/src:$root:${PYTHONPATH:-}"
 
 python_bin="${PYTHON:-}"
 if [[ -z "$python_bin" ]]; then
-  if [[ -x /home/yian/miniconda3/bin/python ]]; then
-    python_bin=/home/yian/miniconda3/bin/python
+  if [[ -x ~/miniconda3/bin/python ]]; then
+    python_bin=~/miniconda3/bin/python
   else
     python_bin=python3
   fi

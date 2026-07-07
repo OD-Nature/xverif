@@ -38,7 +38,7 @@
     "data": {
       "matches": [
         {
-          "file": "/home/yian/xverif/xdebug/testdata/design/uart/uart_16550.sv",
+          "file": "~/xverif/xdebug/testdata/design/uart/uart_16550.sv",
           "line": 147,
           "signal": "uart_16550.RXDin",
           "type": "net"

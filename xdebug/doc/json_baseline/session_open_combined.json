@@ -3,8 +3,8 @@
     "api_version": "xdebug.v1",
     "action": "session.open",
     "target": {
-      "daidir": "/home/yian/xverif/xdebug/testdata/combined/active_driver/out/simv.daidir",
-      "fsdb": "/home/yian/xverif/xdebug/testdata/combined/active_driver/out/waves.fsdb"
+      "daidir": "~/xverif/xdebug/testdata/combined/active_driver/out/simv.daidir",
+      "fsdb": "~/xverif/xdebug/testdata/combined/active_driver/out/waves.fsdb"
     },
     "args": {
       "name": "sample_combined"
@@ -25,8 +25,8 @@
       "id": "sample_combined",
       "session_id": "sample_combined",
       "mode": "combined",
-      "daidir": "/home/yian/xverif/xdebug/testdata/combined/active_driver/out/simv.daidir",
-      "fsdb": "/home/yian/xverif/xdebug/testdata/combined/active_driver/out/waves.fsdb",
+      "daidir": "~/xverif/xdebug/testdata/combined/active_driver/out/simv.daidir",
+      "fsdb": "~/xverif/xdebug/testdata/combined/active_driver/out/waves.fsdb",
       "socket_path": "/tmp/xdebug_action_sampling/home/.xdebug/engine/sessions/sample_combined_046ab20da633bbd9/socket",
       "transport": "uds",
       "file_dir": "/tmp/xdebug_action_sampling/home/.xdebug/engine/sessions/sample_combined_046ab20da633bbd9/transport",
@@ -41,8 +41,8 @@
         "id": "sample_combined",
         "session_id": "sample_combined",
         "mode": "combined",
-        "daidir": "/home/yian/xverif/xdebug/testdata/combined/active_driver/out/simv.daidir",
-        "fsdb": "/home/yian/xverif/xdebug/testdata/combined/active_driver/out/waves.fsdb",
+        "daidir": "~/xverif/xdebug/testdata/combined/active_driver/out/simv.daidir",
+        "fsdb": "~/xverif/xdebug/testdata/combined/active_driver/out/waves.fsdb",
         "socket_path": "/tmp/xdebug_action_sampling/home/.xdebug/engine/sessions/sample_combined_046ab20da633bbd9/socket",
         "transport": "uds",
         "file_dir": "/tmp/xdebug_action_sampling/home/.xdebug/engine/sessions/sample_combined_046ab20da633bbd9/transport",

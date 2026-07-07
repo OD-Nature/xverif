@@ -150,6 +150,6 @@ Validation commands:
 make -C xdebug -j4
 make -C xdebug schema-test
 make -C xdebug contract-test
-/home/yian/miniconda3/bin/python -m pytest xdebug/tests/synthetic/test_stream_v1_real_waveform.py -q
+~/miniconda3/bin/python -m pytest xdebug/tests/synthetic/test_stream_v1_real_waveform.py -q
 ```
 

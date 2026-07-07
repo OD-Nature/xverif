@@ -46,7 +46,7 @@
             "value_known": true,
             "driver_kind": "assignment",
             "driver": "active_semantics_tb.u_dut.assign chain_out = chain_mid,",
-            "file": "/home/yian/xverif/xdebug/testdata/combined/active_semantics/active_semantics_tb.sv",
+            "file": "~/xverif/xdebug/testdata/combined/active_semantics/active_semantics_tb.sv",
             "line": 28,
             "hop": "⏱",
             "next": "active_semantics_tb.u_dut.chain_mid"
@@ -60,7 +60,7 @@
             "value_known": true,
             "driver_kind": "assignment",
             "driver": "active_semantics_tb.u_dut.assign chain_mid = chain_src,",
-            "file": "/home/yian/xverif/xdebug/testdata/combined/active_semantics/active_semantics_tb.sv",
+            "file": "~/xverif/xdebug/testdata/combined/active_semantics/active_semantics_tb.sv",
             "line": 27,
             "hop": "→",
             "next": "active_semantics_tb.u_dut.chain_src"
@@ -74,7 +74,7 @@
             "value_known": true,
             "driver_kind": "assignment",
             "driver": "active_semantics_tb.chain_src = 'h31;,",
-            "file": "/home/yian/xverif/xdebug/testdata/combined/active_semantics/active_semantics_tb.sv",
+            "file": "~/xverif/xdebug/testdata/combined/active_semantics/active_semantics_tb.sv",
             "line": 149,
             "hop": "→",
             "next": "active_semantics_tb.chain_src"
@@ -88,7 +88,7 @@
             "value_known": true,
             "driver_kind": "assignment",
             "driver": "active_semantics_tb.chain_src = 'h31;,",
-            "file": "/home/yian/xverif/xdebug/testdata/combined/active_semantics/active_semantics_tb.sv",
+            "file": "~/xverif/xdebug/testdata/combined/active_semantics/active_semantics_tb.sv",
             "line": 149,
             "hop": "■",
             "next": ""

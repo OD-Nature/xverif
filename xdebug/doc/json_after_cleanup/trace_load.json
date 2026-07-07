@@ -46,7 +46,7 @@
           "name": ""
         },
         "location": {
-          "file": "/home/yian/xverif/xdebug/testdata/design/uart/uart_rx.sv",
+          "file": "~/xverif/xdebug/testdata/design/uart/uart_rx.sv",
           "line": 26
         },
         "npi_type": 44,
@@ -65,7 +65,7 @@
             "name": ""
           },
           "location": {
-            "file": "/home/yian/xverif/xdebug/testdata/design/uart/uart_rx.sv",
+            "file": "~/xverif/xdebug/testdata/design/uart/uart_rx.sv",
             "line": 26
           },
           "npi_type": 44,
@@ -85,7 +85,7 @@
             "text": "uart_16550.rx_channel.filter[0]"
           },
           "location": {
-            "file": "/home/yian/xverif/xdebug/testdata/design/uart/uart_rx.sv",
+            "file": "~/xverif/xdebug/testdata/design/uart/uart_rx.sv",
             "line": 69
           },
           "npi_type": 3,
@@ -111,7 +111,7 @@
             "npi_type": 36,
             "text": "uart_16550.rx_channel.RXD"
           },
-          "file": "/home/yian/xverif/xdebug/testdata/design/uart/uart_rx.sv",
+          "file": "~/xverif/xdebug/testdata/design/uart/uart_rx.sv",
           "from": "uart_16550.rx_channel.RXD",
           "line": 69,
           "resolution": "signal",
@@ -128,7 +128,7 @@
             "npi_type": 49,
             "text": "uart_16550.rx_channel.filter[0]"
           },
-          "file": "/home/yian/xverif/xdebug/testdata/design/uart/uart_rx.sv",
+          "file": "~/xverif/xdebug/testdata/design/uart/uart_rx.sv",
           "from": "uart_16550.RXDin",
           "line": 69,
           "resolution": "signal",
@@ -139,11 +139,11 @@
         }
       ],
       "files": [
-        "/home/yian/xverif/xdebug/testdata/design/uart/uart_rx.sv"
+        "~/xverif/xdebug/testdata/design/uart/uart_rx.sv"
       ],
       "results": [
         {
-          "file": "/home/yian/xverif/xdebug/testdata/design/uart/uart_rx.sv",
+          "file": "~/xverif/xdebug/testdata/design/uart/uart_rx.sv",
           "line": 26,
           "resolution": "signal",
           "role": "load",
@@ -151,7 +151,7 @@
           "source": "  input RXD,"
         },
         {
-          "file": "/home/yian/xverif/xdebug/testdata/design/uart/uart_rx.sv",
+          "file": "~/xverif/xdebug/testdata/design/uart/uart_rx.sv",
           "line": 69,
           "resolution": "signal",
           "role": "rhs_use",
@@ -159,7 +159,7 @@
           "source": "    filter[0] <= RXD;"
         },
         {
-          "file": "/home/yian/xverif/xdebug/testdata/design/uart/uart_rx.sv",
+          "file": "~/xverif/xdebug/testdata/design/uart/uart_rx.sv",
           "line": 69,
           "resolution": "signal",
           "role": "lhs_target",

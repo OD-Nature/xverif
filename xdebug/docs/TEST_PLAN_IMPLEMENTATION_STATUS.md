@@ -49,9 +49,9 @@
 已执行并通过：
 
 ```bash
-PYTHON=/home/yian/miniconda3/bin/python make clean all
-PYTHON=/home/yian/miniconda3/bin/python make test-regression
-PYTHON=/home/yian/miniconda3/bin/python make test-nightly
+PYTHON=~/miniconda3/bin/python make clean all
+PYTHON=~/miniconda3/bin/python make test-regression
+PYTHON=~/miniconda3/bin/python make test-nightly
 ```
 
 `test-nightly` 覆盖：
@@ -78,13 +78,13 @@ real LSF 仍按计划作为可选项；未设置 `XDEBUG_ENABLE_REAL_LSF=1` 时�
 本轮继续验证了当前 HEAD 的分层入口：
 
 ```bash
-PYTHON=/home/yian/miniconda3/bin/python make test-fast
-PYTHON=/home/yian/miniconda3/bin/python make test-synthetic
-PYTHON=/home/yian/miniconda3/bin/python make test-session
-PYTHON=/home/yian/miniconda3/bin/python make test-mcp-direct
-PYTHON=/home/yian/miniconda3/bin/python make test-mcp-fake-lsf
-PYTHON=/home/yian/miniconda3/bin/python make test-realdata-smoke
-PYTHON=/home/yian/miniconda3/bin/python make test-vip
+PYTHON=~/miniconda3/bin/python make test-fast
+PYTHON=~/miniconda3/bin/python make test-synthetic
+PYTHON=~/miniconda3/bin/python make test-session
+PYTHON=~/miniconda3/bin/python make test-mcp-direct
+PYTHON=~/miniconda3/bin/python make test-mcp-fake-lsf
+PYTHON=~/miniconda3/bin/python make test-realdata-smoke
+PYTHON=~/miniconda3/bin/python make test-vip
 ```
 
 其中 `test-fast` 可在普通沙箱内运行；所有需要 NPI、Verdi/VCS、FSDB、daidir、

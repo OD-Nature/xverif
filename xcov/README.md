@@ -38,8 +38,8 @@ VCS、VIP、真实 coverage probe 必须在沙箱外运行。
 
 ```text
 Python 3.11
-VERDI_HOME=/home/yian/Synopsys/verdi/V-2023.12-SP2
-示例 VDB=/home/yian/uart_example/sim/merged.vdb
+VERDI_HOME=~/Synopsys/verdi/V-2023.12-SP2
+示例 VDB=~/uart_example/sim/merged.vdb
 ```
 
 ## MCP 工具

@@ -25,9 +25,9 @@ BUILD    = build
 LIBEXEC  = libexec
 EXE      = xdebug
 PYTHON  ?= python3
-AXI_REFERENCE_ROOT ?= /home/yian/axi_test/test
-SVT_VIP_INCDIR ?= /home/yian/axi_test/test/include/sverilog
-SVT_VIP_SRCDIR ?= /home/yian/axi_test/test/src/sverilog/vcs
+AXI_REFERENCE_ROOT ?= ~/axi_test/test
+SVT_VIP_INCDIR ?= ~/axi_test/test/include/sverilog
+SVT_VIP_SRCDIR ?= ~/axi_test/test/src/sverilog/vcs
 
 CORE_SRCS = src/core/common/tool_config.cpp \
             src/core/common/env_config.cpp \

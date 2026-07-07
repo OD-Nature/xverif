@@ -1,6 +1,6 @@
 # xcov action xout examples
 
-本文件由真实 VDB `/home/yian/uart_example/sim/merged.vdb` 生成。每个条目包含请求 JSON 和真实 `xout` 返回。
+本文件由真实 VDB `~/uart_example/sim/merged.vdb` 生成。每个条目包含请求 JSON 和真实 `xout` 返回。
 
 生成约束：使用真实 NPI backend，不解析 URG HTML，不包含旧 action。
 
@@ -53,7 +53,7 @@ XOUT_END request_id=actions
 ### Request
 
 ```json
-{"api_version":"xcov.v1","request_id":"open","action":"session.open","target":{"vdb":"/home/yian/uart_example/sim/merged.vdb"},"args":{"name":"live-doc","reuse":false}}
+{"api_version":"xcov.v1","request_id":"open","action":"session.open","target":{"vdb":"~/uart_example/sim/merged.vdb"},"args":{"name":"live-doc","reuse":false}}
 ```
 
 ### XOUT
@@ -65,7 +65,7 @@ XOUT_BEGIN request_id=open action=session.open
 summary:
   session_id: live-doc
   state: alive
-  vdb: /home/yian/uart_example/sim/merged.vdb
+  vdb: ~/uart_example/sim/merged.vdb
   test_count: 1
   top_scope_count: null
   worker: npi_python
@@ -94,7 +94,7 @@ XOUT_BEGIN request_id=session-status action=session.status
 summary:
   session_id: live-doc
   state: alive
-  vdb: /home/yian/uart_example/sim/merged.vdb
+  vdb: ~/uart_example/sim/merged.vdb
   test_count: 1
   top_scope_count: null
   worker: npi_python
@@ -137,7 +137,7 @@ filters:
 
 items:
   name
-  /home/yian/uart_example/sim/merged.vdb/test
+  ~/uart_example/sim/merged.vdb/test
 
 XOUT_END request_id=tests-list
 ```
@@ -465,9 +465,9 @@ filters:
 
 items:
   covergroup                                     coverpoint  cross    bin          covered  coverable  count  coverage_pct  status       file                                                            line
-  uart_tb.APB_PROTOCOL_MONITOR::APB_accesses_cg  ERR         null     err          0        1          0      0.0           not_covered  /home/yian/uart_example/sim/../protocol_monitor/apb_monitor.sv  130
-  uart_tb.APB_PROTOCOL_MONITOR::APB_accesses_cg  null        APB_CVR  [write|err]  0        1          0      0.0           not_covered  /home/yian/uart_example/sim/../protocol_monitor/apb_monitor.sv  135
-  uart_tb.APB_PROTOCOL_MONITOR::APB_accesses_cg  null        APB_CVR  [read|err]   0        1          0      0.0           not_covered  /home/yian/uart_example/sim/../protocol_monitor/apb_monitor.sv  135
+  uart_tb.APB_PROTOCOL_MONITOR::APB_accesses_cg  ERR         null     err          0        1          0      0.0           not_covered  ~/uart_example/sim/../protocol_monitor/apb_monitor.sv  130
+  uart_tb.APB_PROTOCOL_MONITOR::APB_accesses_cg  null        APB_CVR  [write|err]  0        1          0      0.0           not_covered  ~/uart_example/sim/../protocol_monitor/apb_monitor.sv  135
+  uart_tb.APB_PROTOCOL_MONITOR::APB_accesses_cg  null        APB_CVR  [read|err]   0        1          0      0.0           not_covered  ~/uart_example/sim/../protocol_monitor/apb_monitor.sv  135
 
 XOUT_END request_id=function-holes
 ```
@@ -700,7 +700,7 @@ XOUT_BEGIN request_id=session-close action=session.close
 summary:
   session_id: live-doc
   state: closed
-  vdb: /home/yian/uart_example/sim/merged.vdb
+  vdb: ~/uart_example/sim/merged.vdb
   test_count: 1
   top_scope_count: null
   worker: npi_python
