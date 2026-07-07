@@ -38,10 +38,6 @@
         "host": {
           "type": "string"
         },
-        "id": {
-          "type": "string",
-          "description": "目标 xdebug session 标识；session_id 的兼容别名。"
-        },
         "name": {
           "type": "string",
           "description": "已保存配置、游标、列表或接口配置名称。"
@@ -80,5 +76,5 @@
   "x-purpose": "打开 design/waveform session。",
   "x-how_it_works": "解析 target 中的 daidir/fsdb，初始化统一 engine session 和底层资源。",
   "x-when_to_use": "建立后续 design/waveform 查询的资源上下文。",
-  "x-arg_contract_notes": "none"
+  "x-arg_contract_notes": "no required args"
 }

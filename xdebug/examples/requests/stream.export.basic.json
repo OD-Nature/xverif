@@ -8,8 +8,12 @@
     "stream": "req_stream",
     "kind": "transfer",
     "format": "tsv",
-    "start": "0ns",
-    "end": "1us",
-    "output_file": "/tmp/req_stream.tsv"
+    "time_range": {
+      "begin": "0ns",
+      "end": "1us"
+    },
+    "output": {
+      "path": "/tmp/req_stream.tsv"
+    }
   }
 }

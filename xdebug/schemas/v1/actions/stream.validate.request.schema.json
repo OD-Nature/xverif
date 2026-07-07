@@ -30,33 +30,18 @@
         "stream"
       ],
       "properties": {
-        "begin": {
-          "type": "string",
-          "description": "查询窗口起始时间。"
-        },
         "channel": {
           "type": "string"
         },
         "dynamic": {
           "type": "boolean"
         },
-        "end": {
-          "type": "string",
-          "description": "查询窗口结束时间。"
-        },
         "limit": {
-          "type": "integer"
+          "type": "integer",
+          "description": "返回、扫描或导出的数量上限。"
         },
         "max_edges": {
           "type": "integer"
-        },
-        "name": {
-          "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。"
-        },
-        "start": {
-          "type": "string",
-          "description": "查询窗口起始时间。"
         },
         "stream": {
           "type": "string",

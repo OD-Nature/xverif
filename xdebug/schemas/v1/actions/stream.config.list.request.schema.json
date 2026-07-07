@@ -63,5 +63,5 @@
   "x-purpose": "列出 stream 配置。",
   "x-how_it_works": "读取已保存 stream 定义。",
   "x-when_to_use": "查看可查询的 stream。",
-  "x-arg_contract_notes": "none"
+  "x-arg_contract_notes": "no required args"
 }

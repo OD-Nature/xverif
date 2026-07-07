@@ -34,25 +34,9 @@
           "type": "boolean",
           "description": "Return only counts, first/last/final values, and warnings; omit data.changes rows."
         },
-        "begin": {
-          "type": "string",
-          "description": "查询窗口起始时间。"
-        },
-        "end": {
-          "type": "string",
-          "description": "查询窗口结束时间。"
-        },
-        "from": {
-          "type": "string"
-        },
         "limit": {
-          "type": "integer"
-        },
-        "max_events": {
-          "type": "integer"
-        },
-        "max_samples": {
-          "type": "integer"
+          "type": "integer",
+          "description": "返回、扫描或导出的数量上限。"
         },
         "mode": {
           "type": "string"
@@ -76,9 +60,6 @@
             "ms",
             "s"
           ]
-        },
-        "to": {
-          "type": "string"
         }
       },
       "additionalProperties": false,

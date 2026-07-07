@@ -8,8 +8,8 @@ namespace xdebug_waveform {
 
 int direction_filter(const Json& args) {
     std::string direction = args.value("direction", std::string("all"));
-    if (direction == "wr" || direction == "write") return 1;
-    if (direction == "rd" || direction == "read") return 2;
+    if (direction == "write") return 1;
+    if (direction == "read") return 2;
     return 0;
 }
 

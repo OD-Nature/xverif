@@ -100,8 +100,9 @@ public:
         std::string kind = args.value("kind", std::string("transfer"));
         std::string format = args.value("format", std::string("tsv"));
         if (format != "tsv" && format != "csv" && format != "xout") return err("INVALID_REQUEST", "format must be tsv, csv, or xout");
-        std::string output = args.value("output_file", std::string());
-        if (kind == "packet_beats" && output.empty()) return err("MISSING_FIELD", "packet_beats export requires output_file");
+        Json output_arg = args.value("output", Json::object());
+        std::string output = output_arg.value("path", std::string());
+        if (kind == "packet_beats" && output.empty()) return err("MISSING_FIELD", "packet_beats export requires output.path");
         if (output.empty()) {
             std::ostringstream oss;
             oss << xdebug_waveform::xdebug_waveform_stream_exports_dir(xdebug_waveform::g_session_id)

@@ -30,9 +30,6 @@
     "args": {
       "type": "object",
       "properties": {
-        "at": {
-          "type": "string"
-        },
         "clock": {
           "type": "string",
           "description": "采样、统计或协议检查使用的 clock 信号路径。"
@@ -93,7 +90,7 @@
   "additionalProperties": false,
   "description": "verify.conditions: 在单个时间验证条件集合。",
   "x-purpose": "在单个时间验证条件集合。",
-  "x-how_it_works": "解析 time，读取条件引用信号并求值。",
+  "x-how_it_works": "解析 clock/time，读取条件引用信号并求值。",
   "x-when_to_use": "检查某个时间点的多条件事实。",
-  "x-arg_contract_notes": "required: conditions, time"
+  "x-arg_contract_notes": "required: conditions, time, clock"
 }

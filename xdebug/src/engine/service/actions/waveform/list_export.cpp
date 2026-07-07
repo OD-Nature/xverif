@@ -45,12 +45,10 @@ public:
             return Json({{"error","LIST_NOT_FOUND"},{"message",n}});
 
         Json tr = a.value("time_range", Json::object());
-        std::string bs = tr.value("begin", tr.value("from", std::string()));
-        std::string es = tr.value("end", tr.value("to", std::string()));
-        if (bs.empty()) bs = a.value("start", a.value("begin", a.value("from", std::string())));
-        if (es.empty()) es = a.value("end", a.value("to", std::string()));
+        std::string bs = tr.value("begin", std::string());
+        std::string es = tr.value("end", std::string());
         if (bs.empty() || es.empty())
-            return Json({{"error","MISSING_FIELD"},{"message","list.export requires begin/end"}});
+            return Json({{"error","MISSING_FIELD"},{"message","list.export requires args.time_range.begin/end"}});
 
         npiFsdbTime begin = 0, end = 0;
         std::string time_error;
@@ -63,7 +61,8 @@ public:
             return Json({{"error","TIME_RANGE_TOO_SMALL"},{"message","list.export requires at least 256ns; use list.value_at or value.batch_at for point reads"}});
 
         std::string format = a.value("format", std::string("u64bin"));
-        std::string output_dir = a.value("output_dir", std::string());
+        Json output = a.value("output", Json::object());
+        std::string output_dir = output.value("path", std::string());
         if (output_dir.empty()) {
             output_dir = xdebug_waveform::xdebug_waveform_list_exports_dir(xdebug_waveform::g_session_id)
                 + "/" + n + "_" + std::to_string(begin) + "_" + std::to_string(end)

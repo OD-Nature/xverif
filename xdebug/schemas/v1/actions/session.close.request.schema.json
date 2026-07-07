@@ -5,7 +5,8 @@
   "type": "object",
   "required": [
     "api_version",
-    "action"
+    "action",
+    "target"
   ],
   "properties": {
     "api_version": {
@@ -25,31 +26,27 @@
     },
     "target": {
       "type": "object",
+      "required": [
+        "session_id"
+      ],
       "properties": {
-        "session_id": {
-          "type": "string",
-          "description": "目标 xdebug session 标识。"
-        }
-      },
-      "additionalProperties": true
-    },
-    "args": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "目标 xdebug session 标识；session_id 的兼容别名。"
-        },
-        "name": {
-          "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。"
-        },
         "session_id": {
           "type": "string",
           "description": "目标 xdebug session 标识。"
         }
       },
       "additionalProperties": false
+    },
+    "args": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "description": "目标 xdebug session 标识。"
+        }
+      },
+      "additionalProperties": false,
+      "required": []
     },
     "limits": {
       "type": "object"
@@ -104,5 +101,5 @@
   "x-purpose": "关闭指定 session。",
   "x-how_it_works": "释放该 session 的 runtime 资源并从管理器移除。",
   "x-when_to_use": "结束不再使用的调试上下文。",
-  "x-arg_contract_notes": "required: target.session_id or args.session_id or args.id"
+  "x-arg_contract_notes": "no required args"
 }

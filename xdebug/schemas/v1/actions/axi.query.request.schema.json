@@ -39,14 +39,10 @@
         "direction": {
           "type": "string",
           "enum": [
-            "wr",
-            "rd",
+            "write",
+            "read",
             "all"
           ]
-        },
-        "id": {
-          "type": "string",
-          "description": "目标 xdebug session 标识；session_id 的兼容别名。"
         },
         "include_transactions": {
           "type": "boolean"

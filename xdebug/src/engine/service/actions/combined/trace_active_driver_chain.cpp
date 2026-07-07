@@ -20,7 +20,7 @@ public:
     Json run(const Json& request, EngineActionContext& ctx) const override {
         Json args = request.value("args", Json::object());
         std::string signal = args.value("signal", std::string());
-        std::string requested_time = args.value("requested_time", std::string());
+        std::string requested_time = args.value("time", std::string());
         Json raw = xdebug::build_active_driver_chain_payload(request, g_daidir_path, g_fsdb_path, g_fsdb_file);
         if (raw.contains("error")) return raw;
         Json out = simplify_active_driver_chain_payload(raw,

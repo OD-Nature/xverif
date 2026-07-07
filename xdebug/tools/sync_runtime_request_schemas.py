@@ -23,13 +23,9 @@ ADDITIONAL_ARG_SCHEMAS: dict[str, dict[str, Any]] = {
     "analysis": {"type": "string", "enum": ["latency", "osd", "outstanding"]},
     "address": {"type": "string"},
     "addr": {"type": "string"},
-    "after": {"type": "string"},
     "aggregate": {"type": "object"},
     "aggregate_only": {"type": "boolean"},
-    "around": {"type": "string"},
-    "at": {"type": "string"},
     "auth_token": {"type": "string"},
-    "before": {"type": "string"},
     "bind": {"type": "string"},
     "bind_host": {"type": "string"},
     "channel": {"type": "string"},
@@ -42,10 +38,8 @@ ADDITIONAL_ARG_SCHEMAS: dict[str, dict[str, Any]] = {
     "edge": {"type": "string", "enum": ["posedge", "negedge", "dual"]},
     "events": {"type": "boolean"},
     "field_scope": {"type": "string"},
-    "from": {"type": "string"},
     "group_by": {"type": "array"},
     "host": {"type": "string"},
-    "id": {"type": "string"},
     "include_alias_candidates": {"type": "boolean"},
     "include_compat_fields": {"type": "boolean"},
     "include_control": {"type": "boolean"},
@@ -62,20 +56,21 @@ ADDITIONAL_ARG_SCHEMAS: dict[str, dict[str, Any]] = {
     "note": {"type": "string"},
     "num": {"type": "integer"},
     "origin": {"type": "string"},
-    "output_dir": {"type": "string"},
-    "output_prefix": {"type": "string"},
+    "output": {
+        "type": "object",
+        "required": ["path"],
+        "properties": {"path": {"type": "string"}},
+        "additionalProperties": False,
+    },
     "packet_index": {"type": "integer"},
     "path": {"type": "string"},
     "role": {"type": "string"},
     "rules": {"oneOf": [{"type": "array"}, {"type": "object"}]},
-    "scan_limit": {"type": "integer"},
     "sample_point": {"type": "string", "enum": ["before", "after"]},
     "slice_hint": {"type": "object"},
     "source": {"type": "string"},
     "symbol": {"type": "string"},
     "time_unit": {"type": "string", "enum": ["auto", "fs", "ps", "ns", "us", "ms", "s"]},
-    "to": {"type": "string"},
-    "top_n": {"type": "integer"},
     "transport": {"type": "string", "enum": ["uds", "tcp", "file"]},
     "verbose": {"type": "boolean"},
 }
@@ -85,20 +80,20 @@ EXTRA_ARGS_BY_ACTION: dict[str, set[str]] = {
     "apb.cursor": {"direction"},
     "apb.config.load": {"config", "config_path"},
     "apb.query": {"direction", "address", "addr", "num", "last"},
-    "apb.transfer_window": {"limit", "max_events", "time_range"},
-    "axi.analysis": {"analysis", "direction", "id"},
-    "axi.channel_stall": {"channel", "limit", "max_events", "max_samples", "rules", "time_range"},
+    "apb.transfer_window": {"limit", "time_range"},
+    "axi.analysis": {"analysis", "direction"},
+    "axi.channel_stall": {"channel", "limit", "rules", "time_range"},
     "axi.config.load": {"config", "config_path"},
     "axi.cursor": {"direction"},
-    "axi.export": {"begin", "end", "format", "output_prefix", "start", "time_range", "to"},
-    "axi.latency_outlier": {"limit", "max_events", "time_range", "top_n"},
-    "axi.outstanding_timeline": {"limit", "max_events", "time_range"},
-    "axi.query": {"direction", "address", "addr", "id", "num", "last"},
-    "axi.request_response_pair": {"limit", "max_events", "time_range"},
+    "axi.export": {"format", "output", "time_range"},
+    "axi.latency_outlier": {"limit", "time_range"},
+    "axi.outstanding_timeline": {"limit", "time_range"},
+    "axi.query": {"direction", "address", "addr", "num", "last"},
+    "axi.request_response_pair": {"limit", "time_range"},
     "batch": {"mode"},
-    "counter.statistics": {"edge", "limit", "max_events", "sample_point"},
-    "detect_abnormal": {"limit", "max_events", "max_findings", "max_samples", "time_range"},
-    "event.config.list": {"name"},
+    "counter.statistics": {"edge", "limit", "sample_point"},
+    "detect_abnormal": {"limit", "time_range"},
+    "event.config.list": {"limit", "name"},
     "event.config.load": {"config_path"},
     "event.export": {
         "aggregate",
@@ -106,12 +101,10 @@ EXTRA_ARGS_BY_ACTION: dict[str, set[str]] = {
         "edge",
         "group_by",
         "limit",
-        "max_events",
         "mode",
         "name",
         "rst_n",
         "sample_point",
-        "scan_limit",
         "time_range",
     },
     "event.find": {
@@ -120,45 +113,41 @@ EXTRA_ARGS_BY_ACTION: dict[str, set[str]] = {
         "edge",
         "group_by",
         "limit",
-        "max_events",
         "mode",
         "name",
         "rst_n",
         "sample_point",
-        "scan_limit",
         "time_range",
     },
-    "expr.eval_at": {"edge", "limit", "max_events", "sample_point", "time_range"},
+    "expr.eval_at": {"edge", "limit", "sample_point", "time_range"},
     "expr.normalize": {"include_statement_only", "limit", "no_statement_only", "role", "signal"},
-    "handshake.inspect": {"data", "edge", "limit", "max_events", "max_findings", "max_samples", "rules", "sample_point", "time_range"},
+    "handshake.inspect": {"data", "edge", "limit", "rules", "sample_point", "time_range"},
     "list.delete": {"index"},
-    "list.export": {"begin", "end", "limit", "output_file"},
+    "list.export": {"limit", "output", "time_range"},
     "list.show": {"name"},
     "sampled_pulse.inspect": {
         "edge",
         "limit",
-        "max_events",
-        "max_samples",
         "payloads",
         "sample_point",
         "time_range",
     },
     "scope.list": {"max_depth", "recursive"},
-    "session.close": {"id", "name", "session_id"},
-    "session.doctor": {"id", "name", "session_id"},
-    "session.gc": {"id", "name", "session_id"},
-    "session.kill": {"id", "name"},
-    "session.list": {"id", "name", "session_id"},
-    "session.open": {"bind", "bind_host", "host", "id", "port", "session_id", "transport"},
-    "signal.changes": {"aggregate_only", "begin", "end", "from", "limit", "max_events", "max_samples", "mode", "time_range", "to"},
-    "signal.stability": {"around", "at", "begin", "conditions", "end", "from", "limit", "max_events", "max_samples", "mode", "signals", "time_range", "to"},
-    "signal.statistics": {"around", "at", "begin", "clock", "conditions", "edge", "end", "from", "limit", "max_events", "max_samples", "mode", "sample_point", "signals", "time_range", "to"},
+    "session.close": set(),
+    "session.doctor": set(),
+    "session.gc": set(),
+    "session.kill": set(),
+    "session.list": set(),
+    "session.open": {"bind", "bind_host", "host", "port", "session_id", "transport"},
+    "signal.changes": {"aggregate_only", "limit", "mode", "time_range"},
+    "signal.stability": {"conditions", "limit", "mode", "signals", "time_range"},
+    "signal.statistics": {"clock", "conditions", "edge", "limit", "mode", "sample_point", "signals", "time_range"},
     "source.context": {"context_lines", "symbol"},
     "stream.config.load": {"config", "config_path", "file", "mode"},
-    "stream.export": {"begin", "channel", "limit", "name", "time_range"},
-    "stream.query": {"begin", "channel", "field_scope", "limit", "match", "name", "packet_index", "time_range"},
-    "stream.show": {"name"},
-    "stream.validate": {"begin", "channel", "end", "limit", "name", "start"},
+    "stream.export": {"channel", "limit", "output", "time_range"},
+    "stream.query": {"channel", "field_scope", "limit", "match", "packet_index", "time_range"},
+    "stream.show": set(),
+    "stream.validate": {"channel", "limit", "time_range"},
     "trace.active_driver": {
         "include_alias_candidates",
         "include_compat_fields",
@@ -169,11 +158,11 @@ EXTRA_ARGS_BY_ACTION: dict[str, set[str]] = {
     "trace.active_driver_chain": {"limits"},
     "trace.driver": {"include_statement_only", "limit", "no_statement_only", "role"},
     "trace.load": {"include_statement_only", "limit", "no_statement_only", "role"},
-    "value.at": {"at", "edge", "sample_point", "slice_hint"},
-    "value.batch_at": {"at", "edge", "sample_point"},
+    "value.at": {"edge", "sample_point", "slice_hint"},
+    "value.batch_at": {"edge", "sample_point"},
     "list.value_at": {"edge", "format", "sample_point"},
-    "verify.conditions": {"at", "edge", "sample_point"},
-    "window.verify": {"edge", "limit", "max_events", "sample_point", "time_range"},
+    "verify.conditions": {"edge", "sample_point"},
+    "window.verify": {"edge", "limit", "sample_point", "time_range"},
 }
 
 
@@ -268,7 +257,7 @@ def collect_arg_schemas(specs: list[dict[str, Any]]) -> dict[str, dict[str, Any]
         },
         "description": "detect_abnormal checks. Each item must be an object with type; string shorthand is not supported.",
     }
-    arg_schemas["direction"] = {"type": "string", "enum": ["wr", "rd", "all"]}
+    arg_schemas["direction"] = {"type": "string", "enum": ["write", "read", "all"]}
     arg_schemas["format"] = {
         "type": "string",
         "enum": [
@@ -321,6 +310,18 @@ def sync_schema(schema: dict[str, Any], spec: dict[str, Any], arg_schemas: dict[
     for key, value in TOP_LEVEL_PROPERTIES.items():
         properties.setdefault(key, copy.deepcopy(value))
     properties["action"] = {"type": "string", "enum": [action]}
+    if spec.get("required_target"):
+        updated["required"].append("target")
+        properties["target"] = {
+            "type": "object",
+            "required": list(spec["required_target"]),
+            "properties": {
+                "session_id": {"type": "string", "description": PARAM_DESCRIPTIONS["session_id"]},
+            },
+            "additionalProperties": False,
+        }
+    else:
+        properties.setdefault("target", copy.deepcopy(TOP_LEVEL_PROPERTIES["target"]))
 
     args = properties.setdefault("args", {"type": "object"})
     args["type"] = "object"
@@ -339,6 +340,17 @@ def sync_schema(schema: dict[str, Any], spec: dict[str, Any], arg_schemas: dict[
         args["anyOf"] = [{"required": list(group)} for group in groups]
     else:
         args.pop("anyOf", None)
+    conditionals = spec.get("conditional_required_args", [])
+    if conditionals:
+        args["allOf"] = [
+            {
+                "if": {"properties": {key: {"const": value} for key, value in conditional.get("when", {}).items()}},
+                "then": {"required": list(conditional.get("required", []))},
+            }
+            for conditional in conditionals
+        ]
+    else:
+        args.pop("allOf", None)
     updated["additionalProperties"] = False
     return updated
 

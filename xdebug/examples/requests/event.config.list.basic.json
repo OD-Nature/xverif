@@ -5,6 +5,6 @@
     "session_id": "case_a"
   },
   "args": {
-    "max_examples": 5
+    "limit": 5
   }
 }

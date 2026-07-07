@@ -11,6 +11,6 @@
       "ready": "top.u.ready"
     },
     "expr": "valid && !ready",
-    "max_examples": 5
+    "limit": 5
   }
 }

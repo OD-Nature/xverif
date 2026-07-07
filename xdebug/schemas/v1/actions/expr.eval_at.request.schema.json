@@ -43,10 +43,8 @@
           "description": "需要求值或匹配的布尔表达式。"
         },
         "limit": {
-          "type": "integer"
-        },
-        "max_events": {
-          "type": "integer"
+          "type": "integer",
+          "description": "返回、扫描或导出的数量上限。"
         },
         "sample_point": {
           "type": "string",
@@ -115,7 +113,7 @@
   "additionalProperties": false,
   "description": "expr.eval_at: 在指定时间求布尔/表达式值。",
   "x-purpose": "在指定时间求布尔/表达式值。",
-  "x-how_it_works": "把 signals alias 映射到 FSDB 信号，读取 time 值后交给表达式求值器。",
+  "x-how_it_works": "把 signals alias 映射到 FSDB 信号，按 clock/time 采样后交给表达式求值器。",
   "x-when_to_use": "用自然表达式检查组合条件。",
-  "x-arg_contract_notes": "required: expr, time, signals"
+  "x-arg_contract_notes": "required: expr, time, signals, clock"
 }

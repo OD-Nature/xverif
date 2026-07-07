@@ -56,7 +56,7 @@ Batch execution (xverif_batch):
   IMPORTANT — nested args: tools like xverif_debug_query and xverif_cov_query
   have their own "args" parameter.  In a batch line, the outer "args" maps to
   the tool's MCP parameters, and the inner "args" maps to the action's arguments:
-    {"tool":"xverif_debug_query","args":{"action":"value.at","args":{"signal":"top.clk","time":"10ns"}}}
+    {"tool":"xverif_debug_query","args":{"session_id":"s0","action":"value.at","args":{"signal":"top.clk","time":"10ns","clock":"top.clk"}}}
 
   Step 1 — write the batch file (bash inline):
     cat > /tmp/batch.ndjson << 'EOF'
@@ -238,7 +238,7 @@ async def xverif_batch(batch_file: str, output_file: str) -> dict:
 
     For tools that have their own nested ``args`` parameter (e.g.
     xverif_debug_query, xverif_cov_query), the inner args must be nested:
-    ``{"tool":"xverif_debug_query","args":{"action":"value.at","args":{"signal":"top.clk","time":"10ns"}}}``
+    ``{"tool":"xverif_debug_query","args":{"session_id":"s0","action":"value.at","args":{"signal":"top.clk","time":"10ns","clock":"top.clk"}}}``
 
     Returns ``{total, ok_count, failed_count, output_file}``.
     """
@@ -373,7 +373,7 @@ def xverif_debug_session_close(
 
 @xverif_tool("debug")
 def xverif_debug_query(
-    session: str,
+    session_id: str,
     action: str,
     args: Optional[dict] = None,
     limits: Optional[dict] = None,
@@ -390,7 +390,7 @@ def xverif_debug_query(
 
     Args:
         action: The xdebug action name (e.g. "value.at", "trace.drivers").
-        session: Explicit session alias or session_id returned by session_open.
+        session_id: Explicit session alias or session_id returned by session_open.
         args: Action-specific arguments dict.
         limits: Query limits dict (max_rows, timeout, etc.).
         output: Output control dict (rarely needed).
@@ -405,7 +405,7 @@ def xverif_debug_query(
     return debug.query(
         action=action,
         args=args or {},
-        session=session,
+        session=session_id,
         limits=limits,
         output=output,
         output_format=output_format,
@@ -773,8 +773,8 @@ TOOL_CATALOG = [
                     "Line: {\"tool\":\"<name>\",\"args\":{<params>}}. "
                     "Nested args for debug_query/cov_query: "
                     "{\"tool\":\"xverif_debug_query\",\"args\":"
-                    "{\"session\":\"case_a\",\"action\":\"value.at\","
-                    "\"args\":{\"signal\":\"top.clk\",\"time\":\"10ns\"}}}"},
+                    "{\"session_id\":\"case_a\",\"action\":\"value.at\","
+                    "\"args\":{\"signal\":\"top.clk\",\"time\":\"10ns\",\"clock\":\"top.clk\"}}}"},
     # debug
     {"name": "xverif_debug_list_actions", "category": "debug", "backend": "xdebug",
      "stateful": False, "requires_session": False,
@@ -929,25 +929,26 @@ def xverif_tool_help(name: str) -> dict:
 
 
 @xverif_tool("debug")
-def xverif_wave_value_at(signal: str, time: str = "0ns",
-                          session: str = "",
+def xverif_wave_value_at(signal: str, clock: str, time: str = "0ns",
+                          session_id: str = "",
                           output_format: str = "xout") -> Any:
     """Get a signal value at a specific time (alias for value.at).
 
     Args:
         signal: Full hierarchical signal path.
+        clock: Sampling clock signal path.
         time: Target time string (e.g. "100ns", "1us").
-        session: Explicit session alias or session_id.
+        session_id: Explicit session alias or session_id.
         output_format: "xout", "json", or "envelope".
     """
-    return debug.query(action="value.at", args={"signal": signal, "time": time},
-                       session=session, output_format=output_format)
+    return debug.query(action="value.at", args={"signal": signal, "time": time, "clock": clock},
+                       session=session_id, output_format=output_format)
 
 
 @xverif_tool("debug")
 def xverif_wave_changes(signal: str, begin: str = "0ns",
                                 end: str = "100ns",
-                                session: str = "",
+                                session_id: str = "",
                                 output_format: str = "xout") -> Any:
     """Get all value changes for a signal in a time window.
 
@@ -955,34 +956,34 @@ def xverif_wave_changes(signal: str, begin: str = "0ns",
         signal: Full hierarchical signal path.
         begin: Start time (e.g. "0ns").
         end: End time (e.g. "100ns").
-        session: Explicit session alias or session_id.
+        session_id: Explicit session alias or session_id.
         output_format: "xout", "json", or "envelope".
     """
     return debug.query(action="signal.changes",
-                       args={"signal": signal, "begin": begin, "end": end},
-                       session=session, output_format=output_format)
+                       args={"signal": signal, "time_range": {"begin": begin, "end": end}},
+                       session=session_id, output_format=output_format)
 
 
 @xverif_tool("debug")
-def xverif_wave_generate_rc(config_path: str, rc_path: str,
-                              session: str = "",
+def xverif_wave_generate_rc(config_path: str, path: str,
+                              session_id: str = "",
                               output_format: str = "xout") -> Any:
     """Generate recovery context from config (alias for rc.generate).
 
     Args:
         config_path: Path to RC config file.
-        rc_path: Output path for generated RC.
-        session: Explicit session alias or session_id.
+        path: Output path for generated RC.
+        session_id: Explicit session alias or session_id.
         output_format: "json" or "xout".
     """
     return debug.query(action="rc.generate",
-                       args={"config_path": config_path, "rc_path": rc_path},
-                       session=session, output_format=output_format)
+                       args={"config_path": config_path, "output": {"path": path}},
+                       session=session_id, output_format=output_format)
 
 
 @xverif_tool("debug")
 def xverif_waveform_render_list(
-    session: str,
+    session_id: str,
     name: str,
     begin: str,
     end: str,
@@ -1005,9 +1006,9 @@ def xverif_waveform_render_list(
         "format": export_format,
     }
     if output_dir:
-        args["output_dir"] = output_dir
+        args["output"] = {"path": output_dir}
     exported = debug.query(
-        session=session,
+        session=session_id,
         action="list.export",
         args=args,
         output_format="json",
@@ -1055,19 +1056,19 @@ def xverif_waveform_render_list(
 
 @xverif_tool("debug")
 def xverif_design_trace_driver(signal: str, time: str = "0ns",
-                                session: str = "",
+                                session_id: str = "",
                                 output_format: str = "xout") -> Any:
     """Trace the active driver of a signal at a specific time.
 
     Args:
         signal: Full hierarchical signal path.
         time: Target time string.
-        session: Explicit session alias or session_id.
+        session_id: Explicit session alias or session_id.
         output_format: "xout", "json", or "envelope".
     """
     return debug.query(action="trace.driver",
                        args={"signal": signal, "time": time},
-                       session=session, output_format=output_format)
+                       session=session_id, output_format=output_format)
 
 
 # ---------------------------------------------------------------------------

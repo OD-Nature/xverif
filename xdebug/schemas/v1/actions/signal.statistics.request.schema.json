@@ -30,16 +30,6 @@
     "args": {
       "type": "object",
       "properties": {
-        "around": {
-          "type": "string"
-        },
-        "at": {
-          "type": "string"
-        },
-        "begin": {
-          "type": "string",
-          "description": "查询窗口起始时间。"
-        },
         "clock": {
           "type": "string",
           "description": "采样、统计或协议检查使用的 clock 信号路径。"
@@ -55,21 +45,9 @@
           "type": "string",
           "description": "clock sampling 使用的边沿：posedge、negedge 或 dual。"
         },
-        "end": {
-          "type": "string",
-          "description": "查询窗口结束时间。"
-        },
-        "from": {
-          "type": "string"
-        },
         "limit": {
-          "type": "integer"
-        },
-        "max_events": {
-          "type": "integer"
-        },
-        "max_samples": {
-          "type": "integer"
+          "type": "integer",
+          "description": "返回、扫描或导出的数量上限。"
         },
         "mode": {
           "type": "string"
@@ -118,9 +96,6 @@
             "ms",
             "s"
           ]
-        },
-        "to": {
-          "type": "string"
         }
       },
       "additionalProperties": false,

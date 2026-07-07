@@ -20,7 +20,7 @@ public:
     Json run(const Json& request, EngineActionContext& ctx) const override {
         Json args = request.value("args", Json::object());
         std::string signal = args.value("signal", std::string());
-        std::string requested_time = args.value("requested_time", std::string());
+        std::string requested_time = args.value("time", std::string());
         Json trace_request = request;
         if (!trace_request.contains("args") || !trace_request["args"].is_object()) {
             trace_request["args"] = Json::object();

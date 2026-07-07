@@ -99,11 +99,11 @@ void apply_arg_contract(ActionSpec& spec) {
         {"list.add", {"name", "signal"}, 2},
         {"list.create", {"name"}, 1},
         {"list.delete", {"name"}, 1},
-        {"list.diff", {"name", "begin", "end"}, 3},
+        {"list.diff", {"name", "time_range"}, 2},
         {"list.export", {"name"}, 1},
         {"list.validate", {"name"}, 1},
         {"list.value_at", {"name", "time", "clock"}, 3},
-        {"rc.generate", {"config_path", "rc_path"}, 2},
+        {"rc.generate", {"config_path", "output"}, 2},
         {"signal.canonicalize", {"signal"}, 1},
         {"signal.changes", {"signal"}, 1},
         {"signal.resolve", {"signal"}, 1},
@@ -115,8 +115,8 @@ void apply_arg_contract(ActionSpec& spec) {
         {"stream.validate", {"stream"}, 1},
         {"stream.query", {"stream", "query"}, 2},
         {"stream.export", {"stream"}, 1},
-        {"trace.active_driver", {"signal", "requested_time"}, 2},
-        {"trace.active_driver_chain", {"signal", "requested_time"}, 2},
+        {"trace.active_driver", {"signal", "time"}, 2},
+        {"trace.active_driver_chain", {"signal", "time"}, 2},
         {"trace.driver", {"signal"}, 1},
         {"trace.load", {"signal"}, 1},
         {"value.at", {"signal", "time", "clock"}, 3},
@@ -131,8 +131,8 @@ void apply_arg_contract(ActionSpec& spec) {
         }
     }
 
-    const char* direction[] = {"wr", "rd"};
-    const char* cursor_direction[] = {"wr", "rd", "all"};
+    const char* direction[] = {"write", "read"};
+    const char* cursor_direction[] = {"write", "read", "all"};
     const char* cursor_op[] = {"begin", "next", "prev", "pre", "last"};
     const char* value_format[] = {"h", "hex", "b", "bin", "binary", "d", "dec", "decimal", "array_indexed"};
     if (spec.name == "apb.query" || spec.name == "axi.query") {

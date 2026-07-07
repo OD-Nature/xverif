@@ -101,7 +101,7 @@ Json catalog_schema_response(const Json& request) {
         {"combined_action", {
             {"action", "trace.active_driver"},
             {"required_target", Json::array({"daidir", "fsdb"})},
-            {"required_args", Json::array({"signal", "requested_time"})},
+            {"required_args", Json::array({"signal", "time"})},
             {"optional_args", Json::array({"include_control", "include_parity"})}
         }},
         {"contract", {

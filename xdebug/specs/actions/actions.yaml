@@ -185,10 +185,6 @@
       "required_arg_groups": [
         [
           "time_range"
-        ],
-        [
-          "start",
-          "end"
         ]
       ]
     },
@@ -823,8 +819,7 @@
       },
       "required_args": [
         "name",
-        "begin",
-        "end"
+        "time_range"
       ]
     },
     {
@@ -1011,7 +1006,10 @@
         "response": [
           "examples/responses/session.close.basic.json"
         ]
-      }
+      },
+      "required_target": [
+        "session_id"
+      ]
     },
     {
       "name": "session.doctor",
@@ -1068,7 +1066,10 @@
         "response": [
           "examples/responses/session.kill.basic.json"
         ]
-      }
+      },
+      "required_target": [
+        "session_id"
+      ]
     },
     {
       "name": "session.list",
@@ -1261,7 +1262,7 @@
       },
       "required_args": [
         "signal",
-        "requested_time"
+        "time"
       ]
     },
     {
@@ -1284,7 +1285,7 @@
       },
       "required_args": [
         "signal",
-        "requested_time"
+        "time"
       ]
     },
     {
@@ -1351,7 +1352,7 @@
       },
       "required_args": [
         "config_path",
-        "rc_path"
+        "output"
       ]
     },
     {
@@ -1595,7 +1596,7 @@
             "kind": "packet_beats"
           },
           "required": [
-            "output_file"
+            "output"
           ]
         }
       ]

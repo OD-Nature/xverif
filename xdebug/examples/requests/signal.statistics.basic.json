@@ -8,7 +8,7 @@
     "signal": "top.u.ready",
     "clock": "top.clk",
     "time_range": {
-      "start": "100ns",
+      "begin": "100ns",
       "end": "200ns"
     }
   }

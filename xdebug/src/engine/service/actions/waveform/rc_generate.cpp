@@ -38,10 +38,11 @@ public:
     Json run(const Json& r, EngineActionContext& ctx) const override {
         Json a = r.value("args", Json::object());
         std::string config_path = a.value("config_path", "");
-        std::string rc_path = a.value("rc_path", "");
+        Json output = a.value("output", Json::object());
+        std::string rc_path = output.value("path", "");
         bool allow_invalid = a.value("allow_invalid", false);
         if (config_path.empty() || rc_path.empty())
-            return Json({{"error","MISSING_FIELD"},{"message","args.config_path and args.rc_path required"}});
+            return Json({{"error","MISSING_FIELD"},{"message","args.config_path and args.output.path required"}});
 
         // Read config file
         std::ifstream in(config_path);

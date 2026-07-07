@@ -38,9 +38,12 @@ public:
     bool needs_waveform() const override { return true; }
     Json run(const Json& r, EngineActionContext& ctx) const override {
         Json a = r.value("args", Json::object());
-        std::string n = a.value("name", ""), bs = a.value("begin", ""), es = a.value("end", "");
+        Json tr = a.value("time_range", Json::object());
+        std::string n = a.value("name", "");
+        std::string bs = tr.value("begin", "");
+        std::string es = tr.value("end", "");
         if (n.empty() || bs.empty() || es.empty())
-            return Json({{"error","MISSING_FIELD"},{"message","args.name+begin+end"}});
+            return Json({{"error","MISSING_FIELD"},{"message","args.name and args.time_range.begin/end"}});
         xdebug_waveform::SignalList lst;
         if (!read_list_storage(n, lst))
             return Json({{"error","LIST_NOT_FOUND"},{"message",n}});

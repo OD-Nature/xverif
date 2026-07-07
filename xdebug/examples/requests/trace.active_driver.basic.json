@@ -6,7 +6,7 @@
   },
   "args": {
     "signal": "top.u.ready",
-    "requested_time": "120ns",
+    "time": "120ns",
     "include_trace": false
   }
 }

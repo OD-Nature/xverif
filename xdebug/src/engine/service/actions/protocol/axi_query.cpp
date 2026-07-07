@@ -68,8 +68,8 @@ public:
         if (!ensure_axi_analyzed(name, cfg, err))
             return Json({{"error","ANALYZE_FAILED"},{"message",err}});
 
-        std::string dir = a.value("direction", "wr");
-        bool is_write = (dir != "rd");
+        std::string dir = a.value("direction", "write");
+        bool is_write = (dir != "read");
         std::string addr_str = a.value("address", a.value("addr", ""));
         std::string id_str = a.value("id", "");
         int num = a.value("num", -1);

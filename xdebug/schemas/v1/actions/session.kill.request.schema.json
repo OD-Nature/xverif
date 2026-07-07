@@ -5,7 +5,8 @@
   "type": "object",
   "required": [
     "api_version",
-    "action"
+    "action",
+    "target"
   ],
   "properties": {
     "api_version": {
@@ -25,31 +26,27 @@
     },
     "target": {
       "type": "object",
+      "required": [
+        "session_id"
+      ],
       "properties": {
-        "session_id": {
-          "type": "string",
-          "description": "目标 xdebug session 标识。"
-        }
-      },
-      "additionalProperties": true
-    },
-    "args": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "目标 xdebug session 标识；session_id 的兼容别名。"
-        },
-        "name": {
-          "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。"
-        },
         "session_id": {
           "type": "string",
           "description": "目标 xdebug session 标识。"
         }
       },
       "additionalProperties": false
+    },
+    "args": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "description": "目标 xdebug session 标识。"
+        }
+      },
+      "additionalProperties": false,
+      "required": []
     },
     "limits": {
       "type": "object"
@@ -102,7 +99,7 @@
   "additionalProperties": false,
   "description": "session.kill: 强制移除指定 session。",
   "x-purpose": "强制移除指定 session。",
-  "x-how_it_works": "按 session_id 清理记录和关联资源。",
+  "x-how_it_works": "按 target.session_id 清理记录和关联资源。",
   "x-when_to_use": "处理异常残留 session。",
-  "x-arg_contract_notes": "required: target.session_id or args.session_id or args.id"
+  "x-arg_contract_notes": "no required args"
 }

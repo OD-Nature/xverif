@@ -11,6 +11,8 @@
       "end": "1us"
     },
     "format": "tsv",
-    "output_prefix": "/tmp/if0_axi"
+    "output": {
+      "path": "/tmp/if0_axi"
+    }
   }
 }

@@ -69,5 +69,5 @@
   "x-purpose": "发现 waveform/design 根。",
   "x-how_it_works": "合并 FSDB 根和可用设计根信息。",
   "x-when_to_use": "判断 session 绑定的顶层和路径规范。",
-  "x-arg_contract_notes": "none"
+  "x-arg_contract_notes": "no required args"
 }

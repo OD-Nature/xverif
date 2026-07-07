@@ -34,10 +34,8 @@
           "type": "boolean"
         },
         "limit": {
-          "type": "integer"
-        },
-        "max_events": {
-          "type": "integer"
+          "type": "integer",
+          "description": "返回、扫描或导出的数量上限。"
         },
         "name": {
           "type": "string",
@@ -58,9 +56,6 @@
             "ms",
             "s"
           ]
-        },
-        "top_n": {
-          "type": "integer"
         }
       },
       "additionalProperties": false,

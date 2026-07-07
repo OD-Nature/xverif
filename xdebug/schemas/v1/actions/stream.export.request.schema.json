@@ -30,16 +30,8 @@
         "stream"
       ],
       "properties": {
-        "begin": {
-          "type": "string",
-          "description": "查询窗口起始时间。"
-        },
         "channel": {
           "type": "string"
-        },
-        "end": {
-          "type": "string",
-          "description": "查询窗口结束时间。"
         },
         "format": {
           "type": "string",
@@ -64,19 +56,21 @@
           "description": "导出或查询的结果类型。"
         },
         "limit": {
-          "type": "integer"
+          "type": "integer",
+          "description": "返回、扫描或导出的数量上限。"
         },
-        "name": {
-          "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。"
-        },
-        "output_file": {
-          "type": "string",
-          "description": "导出结果写入的文件路径。"
-        },
-        "start": {
-          "type": "string",
-          "description": "查询窗口起始时间。"
+        "output": {
+          "type": "object",
+          "required": [
+            "path"
+          ],
+          "properties": {
+            "path": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "description": "导出配置对象；路径统一使用 output.path。"
         },
         "stream": {
           "type": "string",
@@ -111,7 +105,7 @@
           },
           "then": {
             "required": [
-              "output_file"
+              "output"
             ]
           }
         }
@@ -133,7 +127,7 @@
   "additionalProperties": false,
   "description": "stream.export: 导出 stream 查询结果。",
   "x-purpose": "导出 stream 查询结果。",
-  "x-how_it_works": "运行 stream query 后按 kind/format 写出。packet_beats 需要 output_file。",
+  "x-how_it_works": "运行 stream query 后按 kind/format 写出。packet_beats 需要 output.path。",
   "x-when_to_use": "把流数据输出给外部脚本。",
-  "x-arg_contract_notes": "required: stream; when kind=packet_beats: output_file"
+  "x-arg_contract_notes": "required: stream; when kind=packet_beats: output"
 }

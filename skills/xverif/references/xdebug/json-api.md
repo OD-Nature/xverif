@@ -19,10 +19,11 @@ MCP query 形态示例：
   "action": "value.batch_at",
   "args": {
     "time": "100ns",
+    "clock": "top.u.clk",
     "signals": ["top.u.valid", "top.u.ready", "top.u.data"],
-    "format": "hex"
+    "format": "hex",
+    "limit": 100
   },
-  "limits": {"max_items": 100},
   "output": {"verbosity": "compact"},
   "output_format": "json"
 }
@@ -51,7 +52,7 @@ MCP query 形态示例：
     "daidir": "simv.daidir",
     "fsdb": "waves.fsdb"
   },
-  "args": {},
+  "args": {"signal": "top.u.ready"},
   "limits": {},
   "output": {
     "verbosity": "compact",
@@ -157,7 +158,8 @@ trace XOUT 源码窗口可用 `XDEBUG_TRACE_SOURCE_CONTEXT_LINES` 控制上下�
   },
   "args": {
     "signal": "top.clk",
-    "time": "10ns"
+    "time": "10ns",
+    "clock": "top.clk"
   }
 }
 ```
@@ -232,13 +234,10 @@ trace XOUT 源码窗口可用 `XDEBUG_TRACE_SOURCE_CONTEXT_LINES` 控制上下�
 ```json
 {
   "args": {
-    "max_items": 20,
-    "max_examples": 5
+    "limit": 20
   },
   "limits": {
     "max_rows": 1000,
-    "max_events": 1000,
-    "max_samples": 1000000,
     "max_depth": 3,
     "max_paths": 10
   }
@@ -286,6 +285,7 @@ trace XOUT 源码窗口可用 `XDEBUG_TRACE_SOURCE_CONTEXT_LINES` 控制上下�
   "args": {
     "signal": "top.u.valid",
     "time": "100ns",
+    "clock": "top.clk",
     "format": "hex"
   }
 }
@@ -300,6 +300,7 @@ trace XOUT 源码窗口可用 `XDEBUG_TRACE_SOURCE_CONTEXT_LINES` 控制上下�
   "target": {"session_id": "case_a"},
   "args": {
     "time": "100ns",
+    "clock": "top.clk",
     "signals": ["top.u.valid", "top.u.ready", "top.u.data"],
     "format": "hex"
   }
@@ -323,8 +324,9 @@ trace XOUT 源码窗口可用 `XDEBUG_TRACE_SOURCE_CONTEXT_LINES` 控制上下�
   "target": {"session_id": "case_a"},
   "args": {
     "config_path": "wave_view.json",
-    "rc_path": "signal.rc",
-    "include_preview": true
+    "output": {
+      "path": "signal.rc"
+    }
   }
 }
 ```
@@ -396,6 +398,7 @@ trace XOUT 源码窗口可用 `XDEBUG_TRACE_SOURCE_CONTEXT_LINES` 控制上下�
   "target": {"session_id": "case_a"},
   "args": {
     "time": "100ns",
+    "clock": "top.clk",
     "conditions": [
       {"signal": "top.u.valid", "op": "==", "value": "1"},
       {"signal": "top.u.ready", "op": "==", "value": "0"}
@@ -418,7 +421,7 @@ trace XOUT 源码窗口可用 `XDEBUG_TRACE_SOURCE_CONTEXT_LINES` 控制上下�
   },
   "args": {
     "signal": "top.u.ready",
-    "requested_time": "120ns",
+    "time": "120ns",
     "include_control": true
   }
 }

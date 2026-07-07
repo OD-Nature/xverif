@@ -6,7 +6,8 @@
   },
   "args": {
     "config_path": "wave_view.json",
-    "rc_path": "signal.rc",
-    "include_preview": true
+    "output": {
+      "path": "signal.rc"
+    }
   }
 }

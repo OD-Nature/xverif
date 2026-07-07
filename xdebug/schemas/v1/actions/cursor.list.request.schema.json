@@ -60,5 +60,5 @@
   "x-purpose": "列出游标。",
   "x-how_it_works": "读取当前 session 的 cursor 存储。",
   "x-when_to_use": "查看可复用的命名时间点。",
-  "x-arg_contract_notes": "none"
+  "x-arg_contract_notes": "no required args"
 }

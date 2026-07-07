@@ -90,5 +90,5 @@
   "x-purpose": "加载 APB 配置。",
   "x-how_it_works": "保存 APB interface 信号映射。",
   "x-when_to_use": "定义后续 APB 查询对象。",
-  "x-arg_contract_notes": "required: name"
+  "x-arg_contract_notes": "required: name; also one of: config / config_path"
 }

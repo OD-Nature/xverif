@@ -5,7 +5,6 @@
     "daidir": "simv.daidir"
   },
   "args": {
-    "signal": "top.u.ready",
-    "max_items": 20
+    "signal": "top.u.ready"
   }
 }

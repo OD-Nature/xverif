@@ -56,5 +56,5 @@
   "x-purpose": "返回指定 action 的 request/response JSON schema。",
   "x-how_it_works": "按 action/kind 查 checked-in schema 文件并原样返回。",
   "x-when_to_use": "让调用方先校验参数和响应结构。",
-  "x-arg_contract_notes": "none"
+  "x-arg_contract_notes": "no required args"
 }

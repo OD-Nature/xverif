@@ -7,7 +7,7 @@
   "args": {
     "signal": "top.u.ready",
     "time_range": {
-      "start": "100ns",
+      "begin": "100ns",
       "end": "200ns"
     },
     "aggregate_only": true

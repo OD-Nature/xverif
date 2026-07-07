@@ -91,7 +91,7 @@ def build_action_args(sig: str, clk: str, session_name: str) -> dict[str, dict]:
     "event.config.list": {},
     "cursor.list": {},
     "list.create": {"name": "l2_test_list"},
-    "event.export": {"expr": f"{clk} == 1", "clk": clk, "signals": {clk: clk}, "max_examples": 2},
+    "event.export": {"expr": f"{clk} == 1", "clock": clk, "signals": {clk: clk}, "limit": 2},
     "trace.load": {"signal": sig},
 }
 
@@ -234,7 +234,7 @@ async def test_l2_basic(session: ClientSession, cfg: dict, action_args: dict) ->
 
     for action, args in action_args.items():
         result = await session.call_tool("xverif_debug_query", {
-            "action": action, "session": sn, "args": args, "output_format": "json",
+            "action": action, "session_id": sn, "args": args, "output_format": "json",
         })
         data = json.loads(result.content[0].text)
         if isinstance(data, dict):
@@ -261,17 +261,17 @@ async def test_with_signal(session: ClientSession, cfg: dict, signal: str) -> tu
         return 0, 1
 
     l3_actions = {
-        "value.at": {"signal": signal, "time": "1ns"},
-        "value.batch_at": {"signals": [signal], "time": "1ns"},
+        "value.at": {"signal": signal, "time": "1ns", "clock": clk},
+        "value.batch_at": {"signals": [signal], "time": "1ns", "clock": clk},
         "signal.statistics": {"signal": signal},
         "counter.statistics": {"clock": clk, "time_range": {"begin": "0ns", "end": "200ns"}, "vld": signal, "cnt": signal},
-        "signal.changes": {"signal": signal, "time_range": {"start": "0ns", "end": "200ns"}, "aggregate_only": True},
-        "signal.stability": {"signal": signal, "time_range": {"start": "0ns", "end": "200ns"}},
+        "signal.changes": {"signal": signal, "time_range": {"begin": "0ns", "end": "200ns"}, "aggregate_only": True},
+        "signal.stability": {"signal": signal, "time_range": {"begin": "0ns", "end": "200ns"}},
         "signal.canonicalize": {"signal": signal},
         "trace.driver": {"signal": signal},
-        "trace.active_driver": {"signal": signal, "requested_time": "1ns"},
-        "expr.eval_at": {"expr": signal, "time": "1ns", "signals": {signal: signal}},
-        "event.find": {"expr": f"{clk} == 1", "clk": clk, "signals": {clk: clk}, "max_examples": 3},
+        "trace.active_driver": {"signal": signal, "time": "1ns"},
+        "expr.eval_at": {"expr": signal, "time": "1ns", "signals": {signal: signal}, "clock": clk},
+        "event.find": {"expr": f"{clk} == 1", "clock": clk, "signals": {clk: clk}, "limit": 3},
         "window.verify": {"conditions": [
             {"expr": signal, "signals": {signal: signal}, "op": "==", "value": "1"}
         ], "time_range": {"begin": "0ns", "end": "1us"}, "clock": clk},
@@ -279,7 +279,7 @@ async def test_with_signal(session: ClientSession, cfg: dict, signal: str) -> tu
 
     for action, args in l3_actions.items():
         result = await session.call_tool("xverif_debug_query", {
-            "action": action, "session": sn, "args": args, "output_format": "json",
+            "action": action, "session_id": sn, "args": args, "output_format": "json",
         })
         data = json.loads(result.content[0].text)
         if isinstance(data, dict):
@@ -298,7 +298,7 @@ async def test_with_signal(session: ClientSession, cfg: dict, signal: str) -> tu
     # XOUT format test
     print(f"\n{Colors.CYAN}--- 输出格式测试 ---{Colors.RESET}")
     result = await session.call_tool("xverif_debug_query", {
-        "action": "value.at", "session": sn, "args": {"signal": signal, "time": "1ns"},
+        "action": "value.at", "session_id": sn, "args": {"signal": signal, "time": "1ns", "clock": clk},
     })
     xout_text = result.content[0].text
     if xout_text.startswith("@xdebug."):
@@ -323,8 +323,8 @@ async def discover_signal(session: ClientSession, cfg: dict) -> str | None:
         sig = cfg.get(key)
         if sig:
             result = await session.call_tool("xverif_debug_query", {
-                "action": "value.at", "session": sn,
-                "args": {"signal": sig, "time": "1ns"}, "output_format": "json",
+                "action": "value.at", "session_id": sn,
+                "args": {"signal": sig, "time": "1ns", "clock": cfg.get("clock", sig)}, "output_format": "json",
             })
             d = json.loads(result.content[0].text)
             if isinstance(d, dict) and d.get("ok"):
@@ -333,7 +333,7 @@ async def discover_signal(session: ClientSession, cfg: dict) -> str | None:
 
     # Strategy 1: scope.list
     result = await session.call_tool("xverif_debug_query", {
-        "action": "scope.list", "session": sn,
+        "action": "scope.list", "session_id": sn,
         "args": {"path": "", "recursive": True, "max_depth": 5}, "output_format": "json",
     })
     d = json.loads(result.content[0].text)

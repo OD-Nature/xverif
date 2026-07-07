@@ -33,8 +33,8 @@
         "direction": {
           "type": "string",
           "enum": [
-            "wr",
-            "rd",
+            "write",
+            "read",
             "all"
           ]
         },

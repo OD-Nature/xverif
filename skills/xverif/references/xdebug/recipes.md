@@ -34,6 +34,7 @@ MCP 场景下，本文所有原生 xdebug action 都通过 `xverif_debug_query` 
   "target": {"session_id": "case_a"},
   "args": {
     "time": "@stall",
+    "clock": "top.clk",
     "signals": ["top.u.valid", "top.u.ready", "top.u.full", "top.u.state_q"],
     "format": "hex"
   }
@@ -103,9 +104,7 @@ MCP 场景下，本文所有原生 xdebug action 都通过 `xverif_debug_query` 
   "args": {
     "name": "axi0",
     "analysis": "latency",
-    "direction": "read",
-    "time_range": {"begin": "0ns", "end": "100us"},
-    "max_items": 20
+    "direction": "read"
   }
 }
 ```
@@ -132,7 +131,7 @@ MCP 场景下，本文所有原生 xdebug action 都通过 `xverif_debug_query` 
 
 ## 当前生效 driver join
 
-使用条件：必须有 `daidir + fsdb + signal + requested_time`。
+使用条件：必须有 `daidir + fsdb + signal + time`。
 
 1. 波形侧先定位异常时间。
 2. `value.batch_at` 取相关信号。
@@ -148,7 +147,7 @@ MCP 场景下，本文所有原生 xdebug action 都通过 `xverif_debug_query` 
   "target": {"session_id": "case_a"},
   "args": {
     "signal": "top.u.ready",
-    "requested_time": "@stall",
+    "time": "@stall",
     "include_control": true,
     "include_parity": true
   }

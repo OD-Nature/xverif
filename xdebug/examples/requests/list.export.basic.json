@@ -11,6 +11,8 @@
       "end": "1us"
     },
     "format": "u64bin",
-    "output_dir": "/tmp/if0_list_export"
+    "output": {
+      "path": "/tmp/if0_list_export"
+    }
   }
 }

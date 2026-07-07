@@ -6,7 +6,9 @@
   },
   "args": {
     "name": "if0",
-    "begin": "100ns",
-    "end": "200ns"
+    "time_range": {
+      "begin": "100ns",
+      "end": "200ns"
+    }
   }
 }

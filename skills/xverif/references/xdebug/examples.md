@@ -58,7 +58,7 @@ MCP 场景下先用 `xverif_debug_session_open` 打开 session，再用 `xverif_
   "action": "trace.active_driver",
   "args": {
     "signal": "top.u_if.ready",
-    "requested_time": "@stall",
+    "time": "@stall",
     "include_control": true
   },
   "output_format": "json"
@@ -155,7 +155,7 @@ MCP 场景下先用 `xverif_debug_session_open` 打开 session，再用 `xverif_
     "name": "axi0",
     "channel": "r",
     "time_range": {"begin": "0ns", "end": "100us"},
-    "max_items": 20
+    "limit": 20
   },
   "output_format": "json"
 }
@@ -192,7 +192,7 @@ MCP 场景下先用 `xverif_debug_session_open` 打开 session，再用 `xverif_
     "signals": ["top.u_if.data_leaf0", "top.u_if.data_leaf1", "top.u_if.valid", "top.u_if.ready"],
     "time_range": {"begin": "0ns", "end": "100us"},
     "checks": [{"type": "unknown_xz"}],
-    "max_findings": 20
+    "limit": 20
   },
   "output_format": "json"
 }
@@ -266,9 +266,9 @@ MCP 场景下先用 `xverif_debug_session_open` 打开 session，再用 `xverif_
   "action": "rc.generate",
   "args": {
     "config_path": "wave_view.json",
-    "rc_path": "signal.rc",
-    "include_preview": true,
-    "max_preview_lines": 40
+    "output": {
+      "path": "signal.rc"
+    }
   },
   "output_format": "json"
 }

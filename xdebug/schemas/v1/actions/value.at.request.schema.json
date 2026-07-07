@@ -30,9 +30,6 @@
     "args": {
       "type": "object",
       "properties": {
-        "at": {
-          "type": "string"
-        },
         "clock": {
           "type": "string",
           "description": "采样、统计或协议检查使用的 clock 信号路径。"
@@ -111,7 +108,7 @@
   "additionalProperties": false,
   "description": "value.at: 读取单个信号在指定时间的值。",
   "x-purpose": "读取单个信号在指定时间的值。",
-  "x-how_it_works": "解析时间，定位 FSDB signal handle，读取该时刻值并格式化。",
+  "x-how_it_works": "解析 time/clock，定位 FSDB signal handle，读取该时刻值并格式化。",
   "x-when_to_use": "回答某个时间点信号是什么。",
-  "x-arg_contract_notes": "required: signal, time"
+  "x-arg_contract_notes": "required: signal, time, clock"
 }

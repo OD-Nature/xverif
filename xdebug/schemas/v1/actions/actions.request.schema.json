@@ -47,5 +47,5 @@
   "x-purpose": "列出当前运行时公开 action catalog。",
   "x-how_it_works": "读取 ActionRegistry 中注册的 spec，返回 implemented/removed/modes/descriptors。",
   "x-when_to_use": "让 agent 在调用前发现真实可用能力。",
-  "x-arg_contract_notes": "none"
+  "x-arg_contract_notes": "no required args"
 }

@@ -30,17 +30,13 @@
     "args": {
       "type": "object",
       "properties": {
-        "begin": {
-          "type": "string",
-          "description": "查询窗口起始时间。"
-        },
-        "end": {
-          "type": "string",
-          "description": "查询窗口结束时间。"
-        },
         "name": {
           "type": "string",
           "description": "已保存配置、游标、列表或接口配置名称。"
+        },
+        "time_range": {
+          "type": "object",
+          "description": "查询或分析的时间窗口。"
         },
         "time_unit": {
           "type": "string",
@@ -58,8 +54,7 @@
       "additionalProperties": false,
       "required": [
         "name",
-        "begin",
-        "end"
+        "time_range"
       ]
     },
     "limits": {
@@ -73,9 +68,9 @@
     }
   },
   "additionalProperties": false,
-  "description": "list.diff: 查找 list 在两个时间点之间的首次差异。",
-  "x-purpose": "查找 list 在两个时间点之间的首次差异。",
-  "x-how_it_works": "解析 begin/end 后扫描 list 内信号变化。",
+  "description": "list.diff: 查找 list 在时间窗口内的首次差异。",
+  "x-purpose": "查找 list 在时间窗口内的首次差异。",
+  "x-how_it_works": "解析 time_range.begin/end 后扫描 list 内信号变化。",
   "x-when_to_use": "定位一组信号何时开始不同。",
-  "x-arg_contract_notes": "required: name, begin, end"
+  "x-arg_contract_notes": "required: name, time_range"
 }

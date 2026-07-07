@@ -50,7 +50,7 @@ public:
         // instead of the requested window end.
         Json args = request.value("args", Json::object());
         if (name_ == "signal.changes") {
-            int limit = args.value("limit", args.value("max_events", 1000));
+            int limit = args.value("limit", 1000);
             size_t matched = result.value("returned_change_rows", static_cast<size_t>(0));
             if (limit >= 0 && matched > static_cast<size_t>(limit))
                 result["truncated"] = true;

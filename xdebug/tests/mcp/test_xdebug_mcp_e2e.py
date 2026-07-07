@@ -208,7 +208,7 @@ def test_mcp_direct_real_waveform_design_and_combined_sessions(
                 server,
                 "xverif_debug_query",
                 {
-                    "session": "mcp_wave",
+                    "session_id": "mcp_wave",
                     "action": "value.at",
                     "args": {
                         "signal": "ai_complex_top.sig_a",
@@ -228,7 +228,7 @@ def test_mcp_direct_real_waveform_design_and_combined_sessions(
                 server,
                 "xverif_debug_query",
                 {
-                    "session": "mcp_wave",
+                    "session_id": "mcp_wave",
                     "action": "value.at",
                     "args": {
                         "signal": "ai_complex_top.no_such",
@@ -260,7 +260,7 @@ def test_mcp_direct_real_waveform_design_and_combined_sessions(
                 server,
                 "xverif_debug_query",
                 {
-                    "session": "mcp_design",
+                    "session_id": "mcp_design",
                     "action": "trace.driver",
                     "args": {"signal": "uart_16550.RXDin"},
                     "output_format": "json",
@@ -288,7 +288,7 @@ def test_mcp_direct_real_waveform_design_and_combined_sessions(
                 server,
                 "xverif_debug_query",
                 {
-                    "session": "mcp_combined",
+                    "session_id": "mcp_combined",
                     "action": "trace.active_driver",
                     "args": {
                         "signal": "active_driver_tb.u_dut.q",
@@ -336,7 +336,7 @@ def test_mcp_direct_matches_cli_normalized_json_response(
                 server,
                 "xverif_debug_query",
                 {
-                    "session": "mcp_cli_equiv",
+                    "session_id": "mcp_cli_equiv",
                     "action": "value.at",
                     "args": {
                         "signal": "ai_complex_top.sig_a",
@@ -419,7 +419,7 @@ def test_mcp_batch_runs_real_session_workflow(
         {
             "tool": "xverif_debug_query",
             "args": {
-                "session": "batch_wave",
+                "session_id": "batch_wave",
                 "action": "value.at",
                 "args": {"signal": "ai_complex_top.sig_a", "clock": "ai_complex_top.clk", "time": "75ns"},
                 "output_format": "json",
@@ -497,7 +497,7 @@ def test_mcp_fake_lsf_launches_real_xdebug_stdio_loop(
                 server,
                 "xverif_debug_query",
                 {
-                    "session": "fake_lsf_wave",
+                    "session_id": "fake_lsf_wave",
                     "action": "value.at",
                     "args": {
                         "signal": "ai_complex_top.sig_a",
@@ -587,7 +587,7 @@ def test_mcp_fake_lsf_child_crash_evicts_session(
                 server,
                 "xverif_debug_query",
                 {
-                    "session": "fake_lsf_crash",
+                    "session_id": "fake_lsf_crash",
                     "action": "value.at",
                     "args": {
                         "signal": "ai_complex_top.sig_a",
@@ -648,7 +648,7 @@ def test_mcp_real_lsf_optional_waveform_smoke(
                 server,
                 "xverif_debug_query",
                 {
-                    "session": "real_lsf_wave",
+                    "session_id": "real_lsf_wave",
                     "action": "value.at",
                     "args": {
                         "signal": "ai_complex_top.sig_a",

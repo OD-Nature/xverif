@@ -90,5 +90,5 @@
   "x-purpose": "加载 AXI 配置。",
   "x-how_it_works": "保存 AXI channel 信号映射。",
   "x-when_to_use": "定义后续 AXI 查询对象。",
-  "x-arg_contract_notes": "required: name"
+  "x-arg_contract_notes": "required: name; also one of: config / config_path"
 }

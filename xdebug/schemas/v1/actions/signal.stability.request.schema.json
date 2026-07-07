@@ -30,16 +30,6 @@
     "args": {
       "type": "object",
       "properties": {
-        "around": {
-          "type": "string"
-        },
-        "at": {
-          "type": "string"
-        },
-        "begin": {
-          "type": "string",
-          "description": "查询窗口起始时间。"
-        },
         "conditions": {
           "type": "array",
           "items": {
@@ -47,24 +37,9 @@
           },
           "description": "需要验证的条件列表。"
         },
-        "end": {
-          "type": "string",
-          "description": "查询窗口结束时间。"
-        },
-        "from": {
-          "type": "string"
-        },
         "limit": {
-          "type": "integer"
-        },
-        "max_events": {
-          "type": "integer"
-        },
-        "max_items": {
-          "type": "integer"
-        },
-        "max_samples": {
-          "type": "integer"
+          "type": "integer",
+          "description": "返回、扫描或导出的数量上限。"
         },
         "mode": {
           "type": "string"
@@ -105,9 +80,6 @@
             "ms",
             "s"
           ]
-        },
-        "to": {
-          "type": "string"
         }
       },
       "additionalProperties": false,

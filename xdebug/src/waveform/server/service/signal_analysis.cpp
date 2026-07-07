@@ -329,7 +329,7 @@ Json ai_signal_changes(const Json& args, std::string& error) {
     }
     npiFsdbTime begin = 0, end = 0;
     if (!json_time_range(args, begin, end, error)) return Json();
-    int limit = args.value("limit", args.value("max_events", 1000));
+    int limit = args.value("limit", 1000);
     std::string mode = args.value("mode", std::string("head"));
     bool aggregate_only = args.value("aggregate_only", false);
     bool include_rows = args.value("include_rows", args.value("include_all_changes", false));

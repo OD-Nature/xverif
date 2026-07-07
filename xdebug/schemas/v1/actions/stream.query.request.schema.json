@@ -31,16 +31,8 @@
         "query"
       ],
       "properties": {
-        "begin": {
-          "type": "string",
-          "description": "查询窗口起始时间。"
-        },
         "channel": {
           "type": "string"
-        },
-        "end": {
-          "type": "string",
-          "description": "查询窗口结束时间。"
         },
         "field_scope": {
           "type": "string",
@@ -51,14 +43,11 @@
           ]
         },
         "limit": {
-          "type": "integer"
+          "type": "integer",
+          "description": "返回、扫描或导出的数量上限。"
         },
         "match": {
           "type": "object"
-        },
-        "name": {
-          "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。"
         },
         "packet_index": {
           "type": "integer",
@@ -74,10 +63,6 @@
             }
           ],
           "description": "stream 查询条件。"
-        },
-        "start": {
-          "type": "string",
-          "description": "查询窗口起始时间。"
         },
         "stream": {
           "type": "string",

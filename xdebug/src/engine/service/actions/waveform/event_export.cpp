@@ -121,13 +121,9 @@ public:
                          {"message","args.mode must be first, last, or all"}});
         }
 
-        int scan_limit = 0;
         if (export_mode_) {
-            int max_examples = args.value(
-                "max_examples",
-                args.value("max_events",
-                           args.value("limit", limits.value("max_rows", 1000))));
-            query.limit = max_examples > 0 ? max_examples : 1000;
+            int limit = args.value("limit", limits.value("max_rows", 1000));
+            query.limit = limit > 0 ? limit : 1000;
         } else if (mode == "first") {
             query.limit = 1;
             // The candidate-change fast path can skip a match when a sampled
@@ -135,13 +131,11 @@ public:
             // full clock-edge scan here so "first" is semantically exact.
             query.fast_find = false;
         } else if (mode == "last") {
-            scan_limit = args.value("scan_limit", limits.value("max_rows", 10000));
-            query.limit = scan_limit > 0 ? scan_limit : 10000;
+            int limit = args.value("limit", limits.value("max_rows", 10000));
+            query.limit = limit > 0 ? limit : 10000;
         } else {
-            int max_events = args.value(
-                "limit",
-                args.value("max_events", limits.value("max_rows", 1000)));
-            query.limit = max_events > 0 ? max_events : 1000;
+            int limit = args.value("limit", limits.value("max_rows", 1000));
+            query.limit = limit > 0 ? limit : 1000;
         }
 
         std::vector<EventRecord> records;
@@ -218,7 +212,6 @@ public:
         auto formatted_range = xdebug_core::format_time_range(g_fsdb_file, tbegin, tend);
         out["begin"] = formatted_range.first;
         out["end"] = formatted_range.second;
-        if (scan_limit > 0) out["scan_limit"] = scan_limit;
         out["sampling_mode"] = "clock_edge";
         out["clock"] = config.clock_sample.clock;
         out["edge"] = clock_edge_kind_text(config.clock_sample.edge);

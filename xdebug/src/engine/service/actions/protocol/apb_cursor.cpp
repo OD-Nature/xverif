@@ -51,7 +51,7 @@ public:
             return Json({{"error","ANALYZE_FAILED"},{"message",err}});
 
         std::string dir = a.value("direction", "all");
-        int filter = (dir == "wr") ? 1 : (dir == "rd") ? 2 : 0;
+        int filter = (dir == "write") ? 1 : (dir == "read") ? 2 : 0;
 
         const ApbTransaction* txn = nullptr;
         bool ok = false;

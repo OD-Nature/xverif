@@ -384,12 +384,12 @@ nlohmann::ordered_json build_active_driver_chain_payload(const Json& request,
     (void)fsdb_path;
     Json args = request.value("args", Json::object());
     std::string signal = args.value("signal", "");
-    std::string req_time = args.value("requested_time", "");
+    std::string req_time = args.value("time", "");
     std::string clk_period = args.value("clk_period", "10ns");
 
     if (signal.empty() || req_time.empty())
         return nlohmann::ordered_json{{"error", "MISSING_FIELD"},
-            {"message", "requires args.signal and args.requested_time"}};
+            {"message", "requires args.signal and args.time"}};
     if (!fsdb)
         return nlohmann::ordered_json{{"error", "FSDB_NOT_OPEN"},
             {"message", "FSDB handle is null"}};

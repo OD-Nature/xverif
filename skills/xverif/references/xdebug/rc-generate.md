@@ -23,8 +23,9 @@
   },
   "args": {
     "config_path": "wave_view.json",
-    "rc_path": "signal.rc",
-    "include_preview": true
+    "output": {
+      "path": "signal.rc"
+    }
   }
 }
 ```
@@ -33,11 +34,9 @@
 
 | 字段 | 说明 |
 | --- | --- |
-| `args.config_path` | 必填；rc 配置 JSON 文件路径；兼容别名 `json_path` |
-| `args.rc_path` | 必填；生成 rc 文件路径；兼容别名 `output_path` |
+| `args.config_path` | 必填；rc 配置 JSON 文件路径 |
+| `args.output.path` | 必填；生成 rc 文件路径 |
 | `args.allow_invalid` | 默认 `false`；校验失败时是否仍生成 rc |
-| `args.include_preview` | 默认 `false`；是否在响应中返回 rc 预览 |
-| `args.max_preview_lines` | 默认 `40` |
 
 ## 配置示例
 

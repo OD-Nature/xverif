@@ -34,9 +34,6 @@
           "type": "string",
           "description": "输入配置文件路径。"
         },
-        "max_examples": {
-          "type": "integer"
-        },
         "name": {
           "type": "string",
           "description": "已保存配置、游标、列表或接口配置名称。"

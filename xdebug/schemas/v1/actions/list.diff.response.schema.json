@@ -49,6 +49,6 @@
     }
   },
   "additionalProperties": true,
-  "description": "list.diff response: 查找 list 在两个时间点之间的首次差异。",
+  "description": "list.diff response: 查找 list 在时间窗口内的首次差异。",
   "x-output_notes": "返回该 action 的 summary/data/error/meta；具体字段以 response schema 和 response example 为准。"
 }

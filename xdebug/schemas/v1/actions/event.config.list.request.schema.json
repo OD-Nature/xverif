@@ -29,8 +29,9 @@
     "args": {
       "type": "object",
       "properties": {
-        "max_examples": {
-          "type": "integer"
+        "limit": {
+          "type": "integer",
+          "description": "返回、扫描或导出的数量上限。"
         },
         "name": {
           "type": "string",
@@ -67,5 +68,5 @@
   "x-purpose": "列出事件配置。",
   "x-how_it_works": "读取 EventManager 中保存的配置名和摘要。",
   "x-when_to_use": "查看可用事件查询模板。",
-  "x-arg_contract_notes": "none"
+  "x-arg_contract_notes": "no required args"
 }

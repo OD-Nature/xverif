@@ -6,6 +6,6 @@
   },
   "args": {
     "name": "if0",
-    "max_examples": 5
+    "config_path": "events.json"
   }
 }

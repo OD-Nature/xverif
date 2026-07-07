@@ -58,16 +58,8 @@
           "description": "detect_abnormal checks. Each item must be an object with type; string shorthand is not supported."
         },
         "limit": {
-          "type": "integer"
-        },
-        "max_events": {
-          "type": "integer"
-        },
-        "max_findings": {
-          "type": "integer"
-        },
-        "max_samples": {
-          "type": "integer"
+          "type": "integer",
+          "description": "返回、扫描或导出的数量上限。"
         },
         "signals": {
           "oneOf": [

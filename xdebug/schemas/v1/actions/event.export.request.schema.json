@@ -52,13 +52,8 @@
           "type": "array"
         },
         "limit": {
-          "type": "integer"
-        },
-        "max_events": {
-          "type": "integer"
-        },
-        "max_examples": {
-          "type": "integer"
+          "type": "integer",
+          "description": "返回、扫描或导出的数量上限。"
         },
         "mode": {
           "type": "string"
@@ -77,10 +72,6 @@
             "after"
           ],
           "description": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。"
-        },
-        "scan_limit": {
-          "type": "integer",
-          "minimum": 1
         },
         "signals": {
           "oneOf": [

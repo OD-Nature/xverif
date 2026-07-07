@@ -28,20 +28,7 @@
     },
     "args": {
       "type": "object",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "目标 xdebug session 标识；session_id 的兼容别名。"
-        },
-        "name": {
-          "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。"
-        },
-        "session_id": {
-          "type": "string",
-          "description": "目标 xdebug session 标识。"
-        }
-      },
+      "properties": {},
       "additionalProperties": false,
       "required": []
     },
@@ -60,5 +47,5 @@
   "x-purpose": "清理过期 session。",
   "x-how_it_works": "扫描 session 管理状态并回收可释放项。",
   "x-when_to_use": "避免长期运行时积累无用资源。",
-  "x-arg_contract_notes": "none"
+  "x-arg_contract_notes": "no required args"
 }

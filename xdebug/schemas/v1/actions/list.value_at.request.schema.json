@@ -105,7 +105,7 @@
   "additionalProperties": false,
   "description": "list.value_at: 读取 list 内所有信号在指定时间的值。",
   "x-purpose": "读取 list 内所有信号在指定时间的值。",
-  "x-how_it_works": "加载 list 后对所有信号做同一时刻批量读取。",
+  "x-how_it_works": "加载 list 后按 clock/time 对所有信号做同一时刻批量读取。",
   "x-when_to_use": "快速比较一组相关信号。",
-  "x-arg_contract_notes": "required: name, time"
+  "x-arg_contract_notes": "required: name, time, clock"
 }

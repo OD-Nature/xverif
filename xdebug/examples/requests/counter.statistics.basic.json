@@ -19,6 +19,6 @@
       }
     },
     "cnt": "{top.cnt_hi,top.cnt_lo}",
-    "max_samples": 1000
+    "limit": 1000
   }
 }

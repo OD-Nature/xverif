@@ -34,12 +34,18 @@
           "type": "string",
           "description": "输入配置文件路径。"
         },
-        "include_preview": {
-          "type": "boolean"
-        },
-        "rc_path": {
-          "type": "string",
-          "description": "输出 nWave rc 文件路径。"
+        "output": {
+          "type": "object",
+          "required": [
+            "path"
+          ],
+          "properties": {
+            "path": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "description": "导出配置对象；路径统一使用 output.path。"
         },
         "time_unit": {
           "type": "string",
@@ -56,7 +62,7 @@
       },
       "required": [
         "config_path",
-        "rc_path"
+        "output"
       ],
       "additionalProperties": false
     },
@@ -73,7 +79,7 @@
   "additionalProperties": false,
   "description": "rc.generate: 根据分组生成波形 rc。",
   "x-purpose": "根据分组生成波形 rc。",
-  "x-how_it_works": "读取配置并写出 rc_path，返回 group/signal 统计。",
+  "x-how_it_works": "读取配置并写出 output.path，返回 group/signal 统计。",
   "x-when_to_use": "把调试信号集合导入波形工具。",
-  "x-arg_contract_notes": "required: config_path, rc_path"
+  "x-arg_contract_notes": "required: config_path, output"
 }

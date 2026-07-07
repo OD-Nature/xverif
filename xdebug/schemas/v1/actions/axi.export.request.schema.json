@@ -33,14 +33,6 @@
         "name"
       ],
       "properties": {
-        "begin": {
-          "type": "string",
-          "description": "查询窗口起始时间。"
-        },
-        "end": {
-          "type": "string",
-          "description": "查询窗口结束时间。"
-        },
         "format": {
           "type": "string",
           "enum": [
@@ -63,12 +55,18 @@
           "type": "string",
           "description": "已保存配置、游标、列表或接口配置名称。"
         },
-        "output_prefix": {
-          "type": "string"
-        },
-        "start": {
-          "type": "string",
-          "description": "查询窗口起始时间。"
+        "output": {
+          "type": "object",
+          "required": [
+            "path"
+          ],
+          "properties": {
+            "path": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "description": "导出配置对象；路径统一使用 output.path。"
         },
         "time_range": {
           "type": "object",
@@ -85,9 +83,6 @@
             "ms",
             "s"
           ]
-        },
-        "to": {
-          "type": "string"
         }
       },
       "additionalProperties": false,
@@ -95,12 +90,6 @@
         {
           "required": [
             "time_range"
-          ]
-        },
-        {
-          "required": [
-            "start",
-            "end"
           ]
         }
       ]
@@ -118,7 +107,7 @@
   "additionalProperties": false,
   "description": "axi.export: 导出 AXI 数据。",
   "x-purpose": "导出 AXI 数据。",
-  "x-how_it_works": "按 name 和时间范围查询 AXI，再按 format/output_prefix 写出。",
+  "x-how_it_works": "按 name 和 time_range 查询 AXI，再按 format/output.path 写出。",
   "x-when_to_use": "给外部表格或脚本分析。",
-  "x-arg_contract_notes": "required: name; also one of: time_range / start + end"
+  "x-arg_contract_notes": "required: name; also one of: time_range"
 }

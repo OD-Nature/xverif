@@ -1191,11 +1191,11 @@ nlohmann::ordered_json build_active_driver_payload(const Json& request,
     const std::string action = "trace.active_driver";
     const Json args = request.value("args", Json::object());
     const std::string signal_name = args.value("signal", std::string());
-    const std::string requested_time = args.value("requested_time", std::string());
+    const std::string requested_time = args.value("time", std::string());
 
     if (signal_name.empty() || requested_time.empty()) {
         return make_error(request, action, "MISSING_FIELD",
-                          "args.signal and args.requested_time are required");
+                          "args.signal and args.time are required");
     }
     if (!fsdb) {
         return make_error(request, action, "FSDB_NOT_OPEN", "FSDB handle is null");

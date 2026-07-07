@@ -38,7 +38,8 @@
           "type": "boolean"
         },
         "limit": {
-          "type": "integer"
+          "type": "integer",
+          "description": "返回、扫描或导出的数量上限。"
         },
         "no_statement_only": {
           "type": "boolean"

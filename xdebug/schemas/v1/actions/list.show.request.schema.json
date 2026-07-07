@@ -64,5 +64,5 @@
   "x-purpose": "显示信号列表内容。",
   "x-how_it_works": "读取 ListManager 存储并返回 index/signal。",
   "x-when_to_use": "确认 list 当前包含哪些信号。",
-  "x-arg_contract_notes": "none"
+  "x-arg_contract_notes": "no required args"
 }

@@ -52,16 +52,8 @@
           "description": "clock sampling 使用的边沿：posedge、negedge 或 dual。"
         },
         "limit": {
-          "type": "integer"
-        },
-        "max_events": {
-          "type": "integer"
-        },
-        "max_findings": {
-          "type": "integer"
-        },
-        "max_samples": {
-          "type": "integer"
+          "type": "integer",
+          "description": "返回、扫描或导出的数量上限。"
         },
         "ready": {
           "type": "string",

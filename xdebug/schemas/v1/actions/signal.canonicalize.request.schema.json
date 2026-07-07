@@ -30,9 +30,6 @@
     "args": {
       "type": "object",
       "properties": {
-        "max_items": {
-          "type": "integer"
-        },
         "signal": {
           "type": "string",
           "description": "目标信号路径。"

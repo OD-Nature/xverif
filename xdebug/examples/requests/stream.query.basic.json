@@ -7,8 +7,10 @@
   "args": {
     "stream": "req_stream",
     "query": "summary",
-    "start": "0ns",
-    "end": "1us",
+    "time_range": {
+      "begin": "0ns",
+      "end": "1us"
+    },
     "limit": 32
   }
 }

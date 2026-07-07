@@ -30,10 +30,6 @@
         "stream"
       ],
       "properties": {
-        "name": {
-          "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。"
-        },
         "stream": {
           "type": "string",
           "description": "已保存 stream 配置名称。"

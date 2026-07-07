@@ -21,13 +21,11 @@ REFERENCE_PATH = (
 
 
 PARAM_DESCRIPTIONS = {
-    "begin": "查询窗口起始时间。",
     "clock": "采样、统计或协议检查使用的 clock 信号路径。",
     "cnt": "计数器统计使用的 counter 信号路径。",
     "conditions": "需要验证的条件列表。",
     "config": "内联配置对象。",
     "config_path": "输入配置文件路径。",
-    "end": "查询窗口结束时间。",
     "edge": "clock sampling 使用的边沿：posedge、negedge 或 dual。",
     "expr": "需要求值或匹配的布尔表达式。",
     "file": "源码文件路径。",
@@ -35,19 +33,17 @@ PARAM_DESCRIPTIONS = {
     "index": "列表中要删除的信号序号。",
     "kind": "导出或查询的结果类型。",
     "line": "源码行号。",
+    "limit": "返回、扫描或导出的数量上限。",
     "name": "已保存配置、游标、列表或接口配置名称。",
     "op": "游标移动或协议浏览操作。",
-    "output_file": "导出结果写入的文件路径。",
+    "output": "导出配置对象；路径统一使用 output.path。",
     "query": "stream 查询条件。",
-    "rc_path": "输出 nWave rc 文件路径。",
     "ready": "valid-ready 握手中的 ready 信号路径。",
-    "requested_time": "需要解释或追溯的目标时间点。",
     "requests": "batch action 中按顺序执行的 request 列表。",
     "sample_point": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。",
     "session_id": "目标 xdebug session 标识。",
     "signal": "目标信号路径。",
     "signals": "信号列表，或 alias 到信号路径的映射。",
-    "start": "查询窗口起始时间。",
     "stream": "已保存 stream 配置名称。",
     "streams": "需要加载的 stream 配置列表。",
     "time": "查询或验证的目标时间点。",
@@ -103,13 +99,35 @@ def required_related_args(spec: dict[str, Any]) -> set[str]:
     return keys
 
 
+def arg_contract_notes(spec: dict[str, Any]) -> str:
+    parts: list[str] = []
+    required = list(spec.get("required_args", []))
+    if required:
+        parts.append("required: " + ", ".join(required))
+
+    groups = spec.get("required_arg_groups", [])
+    if groups:
+        choices = [" + ".join(group) for group in groups]
+        parts.append("also one of: " + " / ".join(choices))
+
+    for conditional in spec.get("conditional_required_args", []):
+        when = conditional.get("when", {})
+        required_when = conditional.get("required", [])
+        if not when or not required_when:
+            continue
+        when_text = ", ".join(f"{key}={value}" for key, value in when.items())
+        parts.append(f"when {when_text}: " + ", ".join(required_when))
+
+    return "; ".join(parts) if parts else "no required args"
+
+
 def update_request_schema(schema: dict[str, Any], spec: dict[str, Any], hint: dict[str, str]) -> None:
     name = spec["name"]
     schema["description"] = f"{name}: {hint['purpose']}"
     schema["x-purpose"] = hint["purpose"]
     schema["x-how_it_works"] = hint["how_it_works"]
     schema["x-when_to_use"] = hint["when_to_use"]
-    schema["x-arg_contract_notes"] = hint["arg_contract_notes"]
+    schema["x-arg_contract_notes"] = arg_contract_notes(spec)
 
     args = schema.get("properties", {}).get("args")
     if not isinstance(args, dict):

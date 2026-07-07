@@ -7,6 +7,16 @@
 - design action 读取 daidir/NPI 设计事实；waveform action 读取 FSDB；combined action 同时使用两者。
 - `trace.*` 和 `trace.active_driver*` 可通过 `XDEBUG_COMMON_BLOCKS` 追加 common block 提示；只在返回 payload 的 `file` 精确命中配置时追加 `data.common_blocks`，原有输出不改写。
 
+## Recommended Field Dictionary
+
+- session 标识统一写 `session_id`；native xdebug request 使用 `target.session_id`，MCP `xverif_debug_query` 使用 `session_id` 参数。
+- 单点时间统一写 `time`。
+- 时间窗口统一写 `time_range.begin` / `time_range.end`。
+- 数量上限统一写 `args.limit`。
+- stream action 统一写 `stream`，不写 `name`。
+- AXI/APB direction 统一写 `read` / `write` / `all`。
+- 导出路径统一写 `args.output.path`；不同 action 可把该 path 解释为文件、目录或文件前缀。
+
 ## Waveform Action Boundaries
 
 - `detect_abnormal`：raw waveform smoke scan。用于找 `unknown_xz`、周期内异常短脉冲/毛刺 `glitch`、长时间不变 `stuck`。可传多个信号；对 packed struct / aggregate payload，AI 必须直接传最终 leaf signal path，例如 `top.u.payload.opcode`，不要传 struct aggregate path 后期待 xdebug 自动展开。它不单独证明 valid/ready 协议 bug，`stuck` 命中后还要结合协议上下文解释。
@@ -25,10 +35,10 @@
 ## Session Actions
 | action | status | resource | purpose | how it works | objective | args contract |
 | --- | --- | --- | --- | --- | --- | --- |
-| `session.close` | stable | session | 关闭指定 session。 | 释放该 session 的 runtime 资源并从管理器移除。 | 结束不再使用的调试上下文。 | required: target.session_id or args.session_id or args.id |
+| `session.close` | stable | session | 关闭指定 session。 | 释放该 session 的 runtime 资源并从管理器移除。 | 结束不再使用的调试上下文。 | required: target.session_id |
 | `session.doctor` | stable | session | 诊断当前 session。 | 检查 session 资源、路径和可访问状态。 | 定位 daidir/fsdb/session 绑定问题。 | none |
 | `session.gc` | stable | none | 清理过期 session。 | 扫描 session 管理状态并回收可释放项。 | 避免长期运行时积累无用资源。 | none |
-| `session.kill` | stable | session | 强制移除指定 session。 | 按 session_id 清理记录和关联资源。 | 处理异常残留 session。 | required: session_id |
+| `session.kill` | stable | session | 强制移除指定 session。 | 按 target.session_id 清理记录和关联资源。 | 处理异常残留 session。 | required: target.session_id |
 | `session.list` | stable | session | 列出当前 session。 | 读取 SessionManager 中的活动 session 元数据。 | 确认已有 session_id 和资源类型。 | none |
 | `session.open` | stable | any | 打开 design/waveform session。 | 解析 target 中的 daidir/fsdb，初始化统一 engine session 和底层资源。 | 建立后续 design/waveform 查询的资源上下文。 | none |
 ## Design Actions
@@ -49,7 +59,7 @@
 | `apb.query` | stable | waveform | 查询 APB transfer。 | 按 APB 配置扫描 PSEL/PENABLE/PREADY 等握手和地址数据。 | 抽取 APB 读写访问。 | required: name |
 | `apb.transfer_window` | experimental | waveform | 实验性 APB 窗口分析。 | 围绕指定 APB transfer 返回相关信号窗口。 | 解释单笔 APB 访问现场。 | required: name |
 | `axi.analysis` | stable | waveform | 汇总 AXI 行为。 | 基于 AXI 解析结果统计 channel、latency、stall 等。 | 快速判断 AXI 接口健康度。 | required: name |
-| `axi.export` | stable | waveform | 导出 AXI 数据。 | 按 name 和时间范围查询 AXI，再按 format/output_prefix 写出。 | 给外部表格或脚本分析。 | required: name<br>also one of: time_range / start + end |
+| `axi.export` | stable | waveform | 导出 AXI 数据。 | 按 name 和 time_range 查询 AXI，再按 format/output.path 写出。 | 给外部表格或脚本分析。 | required: name<br>also one of: time_range |
 | `axi.channel_stall` | experimental | waveform | 实验性 AXI stall 分析。 | 按 channel 检查 valid 高 ready 低的持续窗口。 | 定位背压和阻塞。 | required: name |
 | `axi.config.list` | stable | waveform | 列出 AXI 配置。 | 读取 AXI 配置存储。 | 查看可用 AXI interface 名称。 | required: name |
 | `axi.config.load` | stable | waveform | 加载 AXI 配置。 | 保存 AXI channel 信号映射。 | 定义后续 AXI 查询对象。 | required: name |
@@ -69,35 +79,35 @@
 | `event.config.load` | stable | waveform | 保存事件查询配置。 | 将 name/clock/edge/sample_point/signals/reset 等配置写入 EventManager。 | 复用常见事件查询上下文。 | required: name |
 | `event.export` | stable | waveform | 导出满足表达式的事件。 | 与 event.find 同样分析，但按 export 模式返回/写出更多命中数据；表达式支持布尔组合、相等比较和大小比较。 | 把事件列表交给后处理或报告。 | required: expr<br>also one of: name / clock + signals |
 | `event.find` | stable | waveform | 查找满足表达式的事件样例。 | 用 name 配置或 inline clock/signals 构建 EventQuery，按 clock sampling 模式扫描表达式命中；表达式支持布尔组合、相等比较和大小比较。 | 快速找到协议条件发生的时间。 | required: expr<br>also one of: name / clock + signals |
-| `expr.eval_at` | stable | waveform | 在指定时间求布尔/表达式值。 | 把 signals alias 映射到 FSDB 信号，读取 time 值后交给表达式求值器。 | 用自然表达式检查组合条件。 | required: expr, time, signals |
+| `expr.eval_at` | stable | waveform | 在指定时间求布尔/表达式值。 | 把 signals alias 映射到 FSDB 信号，按 clock/time 采样后交给表达式求值器。 | 用自然表达式检查组合条件。 | required: expr, time, signals, clock |
 | `handshake.inspect` | stable | waveform | 检查 valid/ready 握手。 | 按 clock 采样 valid/ready/data，统计 stall、transfer 和数据稳定性违规。 | 定位握手停顿和协议风险。 | required: clock, valid, ready |
 | `list.add` | stable | waveform | 向信号列表追加一个信号。 | 检查 signal 在 FSDB 中存在后写入 ListManager。 | 逐步构建观察列表。 | required: name, signal |
 | `list.create` | stable | waveform | 创建命名信号列表。 | 在 ListManager 存储中创建 list，并可追加初始 signals。 | 为一组信号建立可复用集合。 | required: name |
 | `list.delete` | stable | waveform | 从信号列表删除信号或 index。 | 按 name 找 list，再用 signal 或 index 删除条目。 | 维护已保存观察列表。 | required: name<br>also one of: signal / index |
-| `list.diff` | stable | waveform | 查找 list 在两个时间点之间的首次差异。 | 解析 begin/end 后扫描 list 内信号变化。 | 定位一组信号何时开始不同。 | required: name, begin, end |
+| `list.diff` | stable | waveform | 查找 list 在时间窗口内的首次差异。 | 解析 time_range.begin/end 后扫描 list 内信号变化。 | 定位一组信号何时开始不同。 | required: name, time_range |
 | `list.export` | stable | waveform | 导出 list 数据。 | 读取 list 信号并按请求格式写出波形表。 | 把窗口数据交给外部分析。 | required: name |
 | `list.show` | stable | waveform | 显示信号列表内容。 | 读取 ListManager 存储并返回 index/signal。 | 确认 list 当前包含哪些信号。 | none |
 | `list.validate` | stable | waveform | 验证 list 中信号是否存在。 | 逐条检查 FSDB signal handle。 | 发现过期或错误路径。 | required: name |
-| `list.value_at` | stable | waveform | 读取 list 内所有信号在指定时间的值。 | 加载 list 后对所有信号做同一时刻批量读取。 | 快速比较一组相关信号。 | required: name, time |
+| `list.value_at` | stable | waveform | 读取 list 内所有信号在指定时间的值。 | 加载 list 后按 clock/time 对所有信号做同一时刻批量读取。 | 快速比较一组相关信号。 | required: name, time, clock |
 | `sampled_pulse.inspect` | experimental | waveform | 检查未被 clock 采到的 valid 短脉冲。 | 按 clock 采样 valid，同时扫描 valid 原始变化；若 valid 在两个采样边沿间拉高但没有采样边沿看到高电平，则报 unsampled_valid_pulse。可选 payload/payloads 用于补风险现场。 | 解释仿真里“波形有脉冲但 DUT 没采到”的问题。 | required: clock, valid |
 | `scope.list` | stable | waveform | 列出 FSDB scope 或信号。 | 从 waveform 数据库遍历 scope，按 path/depth/limit 截断；无 scope 时列根层级。 | 帮助定位真实层次和信号路径。 | none |
 | `scope.roots` | stable | any | 发现 waveform/design 根。 | 合并 FSDB 根和可用设计根信息。 | 判断 session 绑定的顶层和路径规范。 | none |
 | `signal.changes` | stable | waveform | 读取信号变化点。 | 扫描 FSDB value changes，支持窗口、limit 和聚合。 | 看信号何时跳变。 | required: signal |
 | `signal.stability` | stable | waveform | 检查信号窗口内是否稳定。 | 基于 signal.changes 判断是否只有初始值或无变化。 | 确认控制/状态信号是否保持不变。 | required: signal |
 | `signal.statistics` | stable | waveform | 统计信号活动。 | 无 clock 时统计原始变化；有 clock 时按边沿采样，统计 known/high/low/unknown。 | 量化活跃度、占空和采样质量。 | required: signal |
-| `rc.generate` | stable | waveform | 根据分组生成波形 rc。 | 读取配置并写出 rc_path，返回 group/signal 统计。 | 把调试信号集合导入波形工具。 | required: config_path, rc_path |
-| `value.at` | stable | waveform | 读取单个信号在指定时间的值。 | 解析时间，定位 FSDB signal handle，读取该时刻值并格式化。 | 回答某个时间点信号是什么。 | required: signal, time |
-| `value.batch_at` | stable | waveform | 批量读取多个信号值。 | 对 signals 列表在同一时间执行 FSDB 读取。 | 减少多信号同一时刻检查的开销。 | required: signals, time |
-| `verify.conditions` | stable | waveform | 在单个时间验证条件集合。 | 解析 time，读取条件引用信号并求值。 | 检查某个时间点的多条件事实。 | required: conditions, time |
+| `rc.generate` | stable | waveform | 根据分组生成波形 rc。 | 读取配置并写出 output.path，返回 group/signal 统计。 | 把调试信号集合导入波形工具。 | required: config_path, output |
+| `value.at` | stable | waveform | 读取单个信号在指定时间的值。 | 解析 time/clock，定位 FSDB signal handle，读取该时刻值并格式化。 | 回答某个时间点信号是什么。 | required: signal, time, clock |
+| `value.batch_at` | stable | waveform | 批量读取多个信号值。 | 对 signals 列表按同一 clock/time 执行 FSDB 读取。 | 减少多信号同一时刻检查的开销。 | required: signals, time, clock |
+| `verify.conditions` | stable | waveform | 在单个时间验证条件集合。 | 解析 clock/time，读取条件引用信号并求值。 | 检查某个时间点的多条件事实。 | required: conditions, time, clock |
 | `window.verify` | stable | waveform | 按 clock 在窗口内验证条件。 | 按 clock edge 采样 signals，逐个 condition 统计 pass/fail/unknown。 | 判断协议或断言类条件是否持续满足。 | required: clock, conditions |
 | `stream.config.load` | stable | waveform | 加载 stream 配置。 | 把 stream 定义写入 stream manager。 | 定义 valid/ready/data 类流接口。 | required: streams |
 | `stream.config.list` | stable | waveform | 列出 stream 配置。 | 读取已保存 stream 定义。 | 查看可查询的 stream。 | none |
 | `stream.show` | stable | waveform | 显示 stream 定义和摘要。 | 按 stream 名读取配置并返回字段。 | 确认 stream 绑定了哪些信号。 | required: stream |
 | `stream.validate` | stable | waveform | 验证 stream 配置。 | 检查 stream 信号在 FSDB 中是否可解析。 | 提前发现错误信号路径。 | required: stream |
 | `stream.query` | stable | waveform | 查询 stream transfer。 | 按 stream 配置和 query 条件扫描握手/beat。 | 抽取流事务或 beats。 | required: stream, query |
-| `stream.export` | stable | waveform | 导出 stream 查询结果。 | 运行 stream query 后按 kind/format 写出。packet_beats 需要 output_file。 | 把流数据输出给外部脚本。 | required: stream<br>when kind=packet_beats: output_file |
+| `stream.export` | stable | waveform | 导出 stream 查询结果。 | 运行 stream query 后按 kind/format 写出。packet_beats 需要 output.path。 | 把流数据输出给外部脚本。 | required: stream<br>when kind=packet_beats: output |
 ## Combined Actions
 | action | status | resource | purpose | how it works | objective | args contract |
 | --- | --- | --- | --- | --- | --- | --- |
-| `trace.active_driver` | stable | combined | 在指定时间找 active driver。 | 结合 waveform 当前值和 design 依赖，定位 requested_time 的有效驱动证据。 | 回答“此刻是谁真正驱动了它”。 | required: signal, requested_time |
-| `trace.active_driver_chain` | stable | combined | 展开 active driver 链。 | 从 signal/requested_time 递归追溯 active driver。 | 给出跨级根因链。 | required: signal, requested_time |
+| `trace.active_driver` | stable | combined | 在指定时间找 active driver。 | 结合 waveform 当前值和 design 依赖，定位 time 的有效驱动证据。 | 回答“此刻是谁真正驱动了它”。 | required: signal, time |
+| `trace.active_driver_chain` | stable | combined | 展开 active driver 链。 | 从 signal/time 递归追溯 active driver。 | 给出跨级根因链。 | required: signal, time |

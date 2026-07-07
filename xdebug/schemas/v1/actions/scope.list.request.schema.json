@@ -70,5 +70,5 @@
   "x-purpose": "列出 FSDB scope 或信号。",
   "x-how_it_works": "从 waveform 数据库遍历 scope，按 path/depth/limit 截断；无 scope 时列根层级。",
   "x-when_to_use": "帮助定位真实层次和信号路径。",
-  "x-arg_contract_notes": "none"
+  "x-arg_contract_notes": "no required args"
 }

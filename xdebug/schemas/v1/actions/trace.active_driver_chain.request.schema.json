@@ -48,13 +48,13 @@
         "limits": {
           "type": "object"
         },
-        "requested_time": {
-          "type": "string",
-          "description": "需要解释或追溯的目标时间点。"
-        },
         "signal": {
           "type": "string",
           "description": "目标信号路径。"
+        },
+        "time": {
+          "type": "string",
+          "description": "查询或验证的目标时间点。"
         },
         "time_unit": {
           "type": "string",
@@ -72,7 +72,7 @@
       "additionalProperties": false,
       "required": [
         "signal",
-        "requested_time"
+        "time"
       ]
     },
     "limits": {
@@ -131,7 +131,7 @@
   "additionalProperties": false,
   "description": "trace.active_driver_chain: 展开 active driver 链。",
   "x-purpose": "展开 active driver 链。",
-  "x-how_it_works": "从 signal/requested_time 递归追溯 active driver。",
+  "x-how_it_works": "从 signal/time 递归追溯 active driver。",
   "x-when_to_use": "给出跨级根因链。",
-  "x-arg_contract_notes": "required: signal, requested_time"
+  "x-arg_contract_notes": "required: signal, time"
 }

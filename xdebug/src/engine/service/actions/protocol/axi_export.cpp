@@ -37,13 +37,11 @@ public:
         std::string begin_s;
         std::string end_s;
         if (tr.is_object()) {
-            begin_s = tr.value("begin", tr.value("from", std::string()));
-            end_s = tr.value("end", tr.value("to", std::string()));
+            begin_s = tr.value("begin", std::string());
+            end_s = tr.value("end", std::string());
         }
-        if (begin_s.empty()) begin_s = a.value("start", a.value("begin", std::string()));
-        if (end_s.empty()) end_s = a.value("end", a.value("to", std::string()));
         if (begin_s.empty() || end_s.empty())
-            return Json({{"error","MISSING_FIELD"},{"message","axi.export requires args.time_range.begin/end or args.start/end"}});
+            return Json({{"error","MISSING_FIELD"},{"message","axi.export requires args.time_range.begin/end"}});
 
         npiFsdbTime begin = 0, end = 0;
         std::string time_err;
@@ -58,7 +56,8 @@ public:
         if (format != "tsv" && format != "csv")
             return Json({{"error","INVALID_REQUEST"},{"message","format must be tsv or csv"}});
 
-        std::string output_prefix = a.value("output_prefix", std::string());
+        Json output = a.value("output", Json::object());
+        std::string output_prefix = output.value("path", std::string());
         if (output_prefix.empty()) {
             std::ostringstream oss;
             oss << xdebug_waveform_axi_exports_dir(g_session_id)

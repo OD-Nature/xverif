@@ -38,7 +38,8 @@
           "description": "Allow internal trace evidence collection; public output remains source_context plus signal_path."
         },
         "limit": {
-          "type": "integer"
+          "type": "integer",
+          "description": "返回、扫描或导出的数量上限。"
         },
         "no_statement_only": {
           "type": "boolean"

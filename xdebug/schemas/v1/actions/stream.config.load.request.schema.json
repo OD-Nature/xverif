@@ -101,5 +101,5 @@
   "x-purpose": "加载 stream 配置。",
   "x-how_it_works": "把 stream 定义写入 stream manager。",
   "x-when_to_use": "定义 valid/ready/data 类流接口。",
-  "x-arg_contract_notes": "required: streams"
+  "x-arg_contract_notes": "also one of: streams / config / config_path / file"
 }
