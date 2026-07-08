@@ -267,6 +267,9 @@ def collect_arg_schemas(specs: list[dict[str, Any]]) -> dict[str, dict[str, Any]
                         arg_schemas[key] = copy.deepcopy(value)
     for key, value in ADDITIONAL_ARG_SCHEMAS.items():
         arg_schemas.setdefault(key, copy.deepcopy(value))
+    # Keep generic channel open for stream/APB-style uses; action-specific
+    # channel enums are applied in sync_schema().
+    arg_schemas["channel"] = copy.deepcopy(ADDITIONAL_ARG_SCHEMAS["channel"])
     arg_schemas["match"] = copy.deepcopy(ADDITIONAL_ARG_SCHEMAS["match"])
 
     arg_schemas["checks"] = {
@@ -382,6 +385,12 @@ def sync_schema(schema: dict[str, Any], spec: dict[str, Any], arg_schemas: dict[
                 "enum": ["transfer", "packet", "packet_beats"],
                 "description": "导出或查询的结果类型。",
             }
+    if action == "axi.channel_stall" and "channel" in selected_props:
+        selected_props["channel"] = {
+            "type": "string",
+            "enum": ["aw", "w", "b", "ar", "r"],
+            "description": "AXI channel to inspect.",
+        }
     args["properties"] = selected_props
     args["additionalProperties"] = False
     groups = spec.get("required_arg_groups", [])

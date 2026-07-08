@@ -403,6 +403,16 @@ void TextResponseBuilder::emit_error(const Json& error) {
     if (error.contains("code")) emit_kv("code", error["code"]);
     if (error.contains("message")) emit_kv("message", error["message"]);
     if (error.contains("recoverable")) emit_kv("recoverable", error["recoverable"]);
+    if (error.contains("invalid_arg")) emit_kv("invalid_arg", error["invalid_arg"]);
+    if (error.contains("expected")) emit_kv("expected", error["expected"]);
+    if (error.contains("received_type")) emit_kv("received_type", error["received_type"]);
+    if (error.contains("allowed_values")) emit_kv("allowed_values", error["allowed_values"]);
+    if (error.contains("required_any_of")) emit_kv("required_any_of", error["required_any_of"]);
+    if (error.contains("did_you_mean")) emit_kv("did_you_mean", error["did_you_mean"]);
+    if (error.contains("correct_example")) {
+        emit_section("correct_example");
+        emit_kv("json", error["correct_example"]);
+    }
 }
 
 std::string TextResponseBuilder::str() {

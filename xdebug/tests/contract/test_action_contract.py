@@ -178,6 +178,215 @@ def test_runtime_request_schemas_are_strict_and_synced(xdebug_root: Path) -> Non
 
 
 @pytest.mark.contract
+def test_bad_parameter_schema_errors_include_ai_repair_hints(
+    cli_runner: CliRunner,
+) -> None:
+    cases = [
+        (
+            {
+                "api_version": "xdebug.v1",
+                "action": "apb.query",
+                "args": {"name": "apb0", "direction": "read", "limit": 10},
+            },
+            "args.limit",
+            "args.query.limit",
+            None,
+        ),
+        (
+            {
+                "api_version": "xdebug.v1",
+                "action": "event.find",
+                "args": {"expr": "valid"},
+            },
+            "args",
+            None,
+            ["args.name", "args.clock + args.signals"],
+        ),
+        (
+            {
+                "api_version": "xdebug.v1",
+                "action": "stream.config.load",
+                "args": {},
+            },
+            "args",
+            None,
+            ["args.streams", "args.config", "args.config_path", "args.file"],
+        ),
+        (
+            {
+                "api_version": "xdebug.v1",
+                "action": "trace.active_driver_chain",
+                "args": {"signal": "top.q", "time": "10ns", "depth": 4},
+            },
+            "args.depth",
+            "limits.max_depth",
+            None,
+        ),
+        (
+            {
+                "api_version": "xdebug.v1",
+                "action": "stream.query",
+                "args": {"name": "req_stream", "query": "summary"},
+            },
+            "args.name",
+            "args.stream",
+            None,
+        ),
+        (
+            {
+                "api_version": "xdebug.v1",
+                "action": "session.doctor",
+                "target": {"session_id": 123},
+            },
+            "target.session_id",
+            None,
+            None,
+        ),
+        (
+            {
+                "api_version": "xdebug.v1",
+                "action": "session.list",
+                "target": {"session_id": 123},
+            },
+            "target.session_id",
+            None,
+            None,
+        ),
+        (
+            {
+                "api_version": "xdebug.v1",
+                "action": "axi.channel_stall",
+                "args": {"name": "if0", "channel": "zz"},
+            },
+            "args.channel",
+            None,
+            None,
+        ),
+    ]
+    for request, invalid_arg, did_you_mean, required_any_of in cases:
+        result = cli_runner.run(request, output_format="json")
+        assert not result.ok, request
+        error = result.response["error"]
+        assert error["code"] == "INVALID_REQUEST"
+        assert error["invalid_arg"] == invalid_arg
+        assert "correct_example" in error
+        assert invalid_arg in error["message"]
+        if did_you_mean is not None:
+            assert error["did_you_mean"] == did_you_mean
+            assert did_you_mean in error["message"]
+        if required_any_of is not None:
+            assert error["required_any_of"] == required_any_of
+            for item in required_any_of:
+                assert item in error["message"]
+
+
+@pytest.mark.contract
+def test_all_actions_unknown_args_report_correct_example(
+    cli_runner: CliRunner,
+) -> None:
+    catalog = _runtime_catalog(cli_runner)
+    for action in catalog["data"]["implemented"]:
+        request = {
+            "api_version": "xdebug.v1",
+            "action": action,
+            "args": {"__bad_param__": True},
+        }
+        result = cli_runner.run(request, output_format="json")
+        assert not result.ok, action
+        error = result.response["error"]
+        assert error["code"] == "INVALID_REQUEST", action
+        assert "invalid_arg" in error, action
+        assert "correct_example" in error, action
+
+
+@pytest.mark.contract
+def test_bad_parameter_xout_shows_correct_example(cli_runner: CliRunner) -> None:
+    result = cli_runner.run(
+        {
+            "api_version": "xdebug.v1",
+            "action": "apb.query",
+            "args": {"name": "apb0", "direction": "read", "limit": 10},
+        },
+        output_format="xout",
+    )
+    assert not result.ok
+    assert "invalid_arg" in result.stdout_raw
+    assert "args.limit" in result.stdout_raw
+    assert "did_you_mean" in result.stdout_raw
+    assert "args.query.limit" in result.stdout_raw
+    assert "correct_example" in result.stdout_raw
+
+
+@pytest.mark.contract
+def test_bad_parameter_runtime_errors_include_ai_repair_hints(
+    cli_runner: CliRunner,
+    xdebug_root: Path,
+) -> None:
+    fsdb = xdebug_root / "testdata" / "waveform" / "ai_complex_wave" / "out" / "waves.fsdb"
+    session_name = "bad_param_runtime_contract"
+    opened = cli_runner.run(
+        {
+            "api_version": "xdebug.v1",
+            "action": "session.open",
+            "target": {"fsdb": str(fsdb)},
+            "args": {"name": session_name},
+        },
+        output_format="json",
+        timeout_sec=120,
+    )
+    assert opened.ok, opened.stdout_raw + opened.stderr_raw
+    session = opened.response.get("session") or opened.response["data"]["session"]
+    target = {"session_id": session.get("id") or session.get("session_id") or session_name}
+    try:
+        cases = [
+            {
+                "api_version": "xdebug.v1",
+                "action": "window.verify",
+                "target": target,
+                "args": {
+                    "clock": "ai_complex_top.clk",
+                    "conditions": [
+                        {
+                            "expr": "a == 8'h22",
+                            "signals": {"a": "ai_complex_top.sig_a"},
+                            "mode": "always",
+                        }
+                    ],
+                    "time_range": {"begin": "100ns", "end": "0ns"},
+                },
+            },
+            {
+                "api_version": "xdebug.v1",
+                "action": "counter.statistics",
+                "target": target,
+                "args": {
+                    "clock": "ai_complex_top.clk",
+                    "time_range": {"begin": "100ns", "end": "0ns"},
+                    "vld": {"expr": "vld", "signals": {"vld": "ai_complex_top.sig_valid"}},
+                    "cnt": "ai_complex_top.sig_a",
+                },
+            },
+        ]
+        for request in cases:
+            result = cli_runner.run(request, output_format="json", timeout_sec=120)
+            assert not result.ok, result.stdout_raw + result.stderr_raw
+            error = result.response["error"]
+            assert error["code"] in ("TIME_RANGE_INVALID", "TIME_SPEC_INVALID")
+            assert error["invalid_arg"] == "args.time_range.end"
+            assert "correct_example" in error
+    finally:
+        cli_runner.run(
+            {
+                "api_version": "xdebug.v1",
+                "action": "session.close",
+                "target": target,
+            },
+            output_format="json",
+            timeout_sec=120,
+        )
+
+
+@pytest.mark.contract
 def test_action_schemas_explain_purpose_and_required_args(xdebug_root: Path) -> None:
     specs = _load_json(xdebug_root / "specs" / "actions" / "actions.yaml")[
         "actions"

@@ -651,7 +651,8 @@ Json Dispatcher::dispatch_impl(const Json& request) {
         if (validation.data.is_object() && !validation.data.empty()) response["data"] = validation.data;
         if (response["error"].is_object() && validation.data.is_object()) {
             static const char* keys[] = {
-                "invalid_arg", "expected", "received_type", "allowed_values", "schema_path"
+                "invalid_arg", "expected", "received_type", "allowed_values", "schema_path",
+                "required_any_of", "did_you_mean", "correct_example"
             };
             for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); ++i) {
                 if (validation.data.contains(keys[i])) response["error"][keys[i]] = validation.data[keys[i]];
@@ -810,6 +811,13 @@ bool Dispatcher::send_to_socket(const std::string& session_id,
         response = make_error(request, action,
             err.value("code", "INTERNAL_ENGINE_FAILED"),
             err.value("message", "engine server error"), true);
+        static const char* public_error_keys[] = {
+            "invalid_arg", "expected", "received_type", "allowed_values", "schema_path",
+            "required_any_of", "did_you_mean", "correct_example"
+        };
+        for (const char* key : public_error_keys) {
+            if (err.is_object() && err.contains(key)) response["error"][key] = err[key];
+        }
         Json details = engine_resp.value("details", Json::object());
         if (details.is_object() && !details.empty()) {
             if (details.contains("summary") && details["summary"].is_object()) {
@@ -827,6 +835,9 @@ bool Dispatcher::send_to_socket(const std::string& session_id,
                 for (const char* key : {"recoverable", "candidates", "suggested_actions"}) {
                     if (detail_error.contains(key)) response["error"][key] = detail_error[key];
                 }
+            }
+            for (const char* key : public_error_keys) {
+                if (details.contains(key)) response["error"][key] = details[key];
             }
             if (details.contains("warnings") && details["warnings"].is_array())
                 response["warnings"] = details["warnings"];

@@ -300,8 +300,15 @@ bool json_time_range(const Json& args,
         };
         std::string begin_s = read_time_key("begin", "from", "0ns");
         std::string end_s   = read_time_key("end",   "to",   "max");
-        return parse_user_time(begin_s.c_str(), false, begin, error) &&
-               parse_user_time(end_s.c_str(), true, end, error);
+        if (!parse_user_time(begin_s.c_str(), false, begin, error) ||
+            !parse_user_time(end_s.c_str(), true, end, error)) {
+            return false;
+        }
+        if (end < begin) {
+            error = "TIME_RANGE_INVALID: args.time_range.end is before args.time_range.begin";
+            return false;
+        }
+        return true;
     }
 
     std::string around_s = args.value("around", std::string());

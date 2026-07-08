@@ -55,6 +55,7 @@ description: >
 
 - 脚本解析或字段比较时使用 JSON；不要解析默认人类文本。
 - 不确定 action 参数时，先查 `actions` 和 action-specific `schema`，不要猜字段。
+- xdebug 参数错误时先读结构化错误提示：`invalid_arg` 指出错字段，`expected` / `allowed_values` 说明允许形态，`did_you_mean` 给出旧字段或错位置的替代字段，`required_any_of` 说明互斥必填组，`correct_example` 给出最小正确请求模板。默认 xout 也会显示这些字段；不要只看自由文本 `message`。
 - xdebug clock sampling 默认优先用 `edge:"negedge"`；只有 posedge monitor、DUT posedge 语义或采样边界 race 证据需要时才用 `edge:"posedge"`。使用 posedge 时注意 `sample_point:"before"` 和 `"after"` 可能不同，尤其数据与 clock edge 同时间变化时；必须用 posedge 时默认推荐 `sample_point:"before"`。`edge:"dual"` 只用于 DDR、真实双沿协议或特殊 bring-up，不作为普通 valid/ready、AXI、APB 默认选择。
 - xdebug `stream.*` 是重要通用能力，不限标准总线。只要查询任务能抽象成 `clock + vld + data`，并可选 `rdy`、`bp`、`sop/eop`、`channel_id`，就优先考虑 `stream.config.load` + `stream.query` / `stream.export`。适用对象包括外部接口、模块内部 valid-ready 交互、pipeline stage、FIFO/queue 出入口、仲裁请求授予、RM/scoreboard 内部任务流等。
 - 对所有需要 `*.config.load` 的 xdebug action，优先复用被调试项目内已有的 xdebug 配置目录和关键信号路径文档；不要每次从 0 推导列表。若用户工作目录缺少这两项，主动询问用户是否创建，例如 `xdebug/configs/` 和 `xdebug/signals.md`，并建议把维护规则写入该项目的 `AGENTS.md`。还要主动询问用户是否使用 xwiki 维护长期项目记忆；用户确认前不要默认创建或写入 xwiki。

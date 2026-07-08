@@ -289,6 +289,94 @@ OrderedJson enum_values_from_schema(const PlainJson* schema) {
     return plain_to_ordered((*schema)["enum"]);
 }
 
+OrderedJson compact_correct_example(const OrderedJson& example) {
+    if (!example.is_object()) return OrderedJson();
+    OrderedJson out = OrderedJson::object();
+    if (example.contains("api_version")) out["api_version"] = example["api_version"];
+    if (example.contains("action")) out["action"] = example["action"];
+    if (example.contains("target")) out["target"] = example["target"];
+    if (example.contains("args")) out["args"] = example["args"];
+    if (example.contains("limits")) out["limits"] = example["limits"];
+    if (example.contains("output")) out["output"] = example["output"];
+    return out;
+}
+
+std::string did_you_mean_for(const std::string& action,
+                             const std::string& invalid_arg,
+                             const std::string& extra_property) {
+    if (invalid_arg == "args.limit" && (action == "apb.query" || action == "axi.query"))
+        return "args.query.limit";
+    if (invalid_arg == "args.num" && (action == "apb.query" || action == "axi.query"))
+        return "args.query.index";
+    if (invalid_arg == "args.name" && action.compare(0, 7, "stream.") == 0)
+        return "args.stream";
+    if (invalid_arg == "args.stream" && action.compare(0, 7, "stream.") == 0)
+        return "args.stream";
+    if (invalid_arg == "args.depth" && action == "trace.active_driver_chain")
+        return "limits.max_depth";
+    if (invalid_arg == "args.at") return "args.time";
+    if (invalid_arg == "args.path") return "args.output.path";
+    if (invalid_arg == "args.list_name" || invalid_arg == "args.config_name" ||
+        invalid_arg == "args.interface")
+        return "args.name";
+    if (invalid_arg == "args.valid" && action == "counter.statistics") return "args.vld";
+    if (invalid_arg == "args.count" && action == "counter.statistics") return "args.cnt";
+    if (invalid_arg == "args.signal" && (action == "value.batch_at" || action == "detect_abnormal"))
+        return "args.signals";
+    if (invalid_arg == "args.checks" && action == "verify.conditions") return "args.conditions";
+    if (extra_property == "begin" || extra_property == "from" || invalid_arg == "args.begin" ||
+        invalid_arg == "args.from")
+        return "args.time_range.begin";
+    if (extra_property == "end" || extra_property == "to" || invalid_arg == "args.end" ||
+        invalid_arg == "args.to")
+        return "args.time_range.end";
+    return "";
+}
+
+OrderedJson required_any_of_for(const std::string& action, const std::string& invalid_arg) {
+    if (invalid_arg != "args" && invalid_arg != "$") return OrderedJson();
+    if (action == "event.find" || action == "event.export")
+        return OrderedJson::array({"args.name", "args.clock + args.signals"});
+    if (action == "apb.config.load" || action == "axi.config.load")
+        return OrderedJson::array({"args.config", "args.config_path"});
+    if (action == "stream.config.load")
+        return OrderedJson::array({"args.streams", "args.config", "args.config_path", "args.file"});
+    if (action == "axi.export")
+        return OrderedJson::array({"args.time_range"});
+    if (action == "list.delete")
+        return OrderedJson::array({"args.signal", "args.index"});
+    return OrderedJson();
+}
+
+std::string join_json_array(const OrderedJson& values) {
+    if (!values.is_array()) return "";
+    std::ostringstream oss;
+    for (size_t i = 0; i < values.size(); ++i) {
+        if (i) oss << " or ";
+        if (values[i].is_string()) oss << values[i].get<std::string>();
+        else oss << values[i].dump();
+    }
+    return oss.str();
+}
+
+std::string friendly_validation_message(const std::string& raw,
+                                        const std::string& invalid_arg,
+                                        const std::string& expected,
+                                        const OrderedJson& allowed,
+                                        const OrderedJson& required_any_of,
+                                        const std::string& did_you_mean) {
+    std::ostringstream oss;
+    oss << "invalid parameter " << invalid_arg << ": " << raw;
+    if (!did_you_mean.empty()) oss << "; use " << did_you_mean << " instead";
+    if (required_any_of.is_array() && !required_any_of.empty())
+        oss << "; provide one of: " << join_json_array(required_any_of);
+    else if (!expected.empty())
+        oss << "; expected " << expected;
+    if (allowed.is_array() && !allowed.empty())
+        oss << "; allowed values: " << allowed.dump();
+    return oss.str();
+}
+
 std::string expected_from_schema(const PlainJson* schema, const std::string& fallback_message) {
     if (!schema || !schema->is_object()) return fallback_message;
     if (schema->contains("type")) {
@@ -319,6 +407,7 @@ public:
 
 RuntimeSchemaValidationResult make_validation_error(const CachedValidator& cached,
                                                     const PlainJson& instance,
+                                                    const std::string& action,
                                                     const ValidationIssue& issue) {
     RuntimeSchemaValidationResult result;
     result.ok = false;
@@ -342,6 +431,13 @@ RuntimeSchemaValidationResult make_validation_error(const CachedValidator& cache
     PlainJson received;
     bool has_received = plain_pointer_get(instance, pointer, received);
     std::string invalid_arg = pointer_to_arg_path(pointer);
+    if (missing_property == "stream" && action.compare(0, 7, "stream.") == 0 &&
+        instance.is_object() && instance.contains("args") && instance["args"].is_object() &&
+        instance["args"].contains("name")) {
+        invalid_arg = "args.name";
+        pointer = "/args/name";
+        has_received = plain_pointer_get(instance, pointer, received);
+    }
     std::string expected = additional_property ? "no additional properties allowed" :
                                                  expected_from_schema(schema_node, issue.message);
     if (additional_property && is_legacy_clock_sampling_field(extra_property)) {
@@ -360,6 +456,14 @@ RuntimeSchemaValidationResult make_validation_error(const CachedValidator& cache
     OrderedJson allowed = enum_values_from_schema(schema_node);
     if (!allowed.is_null()) result.data["allowed_values"] = allowed;
     if (!cached.example.is_null()) result.data["example"] = cached.example;
+    OrderedJson correct_example = compact_correct_example(cached.example);
+    if (!correct_example.is_null()) result.data["correct_example"] = correct_example;
+    std::string did_you_mean = did_you_mean_for(action, invalid_arg, extra_property);
+    if (!did_you_mean.empty()) result.data["did_you_mean"] = did_you_mean;
+    OrderedJson required_any_of = required_any_of_for(action, invalid_arg);
+    if (!required_any_of.is_null()) result.data["required_any_of"] = required_any_of;
+    result.message = friendly_validation_message(issue.message, invalid_arg, expected, allowed,
+                                                 required_any_of, did_you_mean);
     result.summary = {
         {"invalid_arg", invalid_arg},
         {"message", result.message}
@@ -409,7 +513,7 @@ RuntimeSchemaValidationResult RuntimeSchemaValidator::validate_request(const std
         return result;
     }
     if (!handler.issues.empty()) {
-        return make_validation_error(*cached, instance, handler.issues.front());
+        return make_validation_error(*cached, instance, action, handler.issues.front());
     }
     return result;
 }

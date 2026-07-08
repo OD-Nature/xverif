@@ -9,6 +9,7 @@
 - 不引入同义字段，除非有明确迁移计划和 deprecated 说明。
 - 删除或收紧字段时，同步 runtime、schema、examples、docs、skill、MCP、tests。
 - 错误码是机器合同，不能只依赖 message 文本。
+- 参数错误必须可恢复：schema 层和 action handler 层都应尽量返回 `invalid_arg`、`expected`、`allowed_values`、`did_you_mean`、`required_any_of`、`correct_example` 等结构化字段。
 
 ## JSON 处理
 
@@ -23,6 +24,7 @@
 - full/debug 只用于维护工具或排查工具本身。
 - 大列表、timeline、trace、source_text 必须受 include 和 limit 控制。
 - XOUT 与 JSON 输出都要保持结构稳定。
+- 新增错误字段时必须同时检查 JSON response 和 XOUT 渲染；AI 默认看 xout 时也应能直接修正下一次请求。
 
 ## 时间和值语义
 

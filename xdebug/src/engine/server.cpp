@@ -276,7 +276,90 @@ static Json error_response(const std::string& code, const std::string& message) 
             {"data", nullptr}, {"error", {{"code", code}, {"message", message}}}};
 }
 
-static Json action_error_response(const Json& data) {
+static Json compact_correct_example(const Json& request) {
+    Json out = Json::object();
+    out["api_version"] = "xdebug.v1";
+    out["action"] = request.value("action", std::string());
+    if (request.contains("target")) out["target"] = request["target"];
+    if (request.contains("args")) out["args"] = request["args"];
+    if (request.contains("limits")) out["limits"] = request["limits"];
+    if (request.contains("output")) out["output"] = request["output"];
+    return out;
+}
+
+static void patch_example_path(Json& example, const std::string& invalid_arg, const Json& value) {
+    if (!example.is_object()) return;
+    if (invalid_arg == "args.time_range.begin" || invalid_arg == "args.time_range.end") {
+        Json& args = example["args"];
+        if (!args.is_object()) args = Json::object();
+        args["time_range"] = {{"begin", "0ns"}, {"end", "100ns"}};
+    } else if (invalid_arg == "args.channel") {
+        example["args"]["channel"] = value;
+    }
+}
+
+static void enrich_runtime_parameter_error(const Json& request, Json& error, Json& data) {
+    std::string action = request.value("action", std::string());
+    std::string message = error.value("message", data.value("message", std::string()));
+    if (message.find("INVALID_REQUEST:") == 0) error["code"] = "INVALID_REQUEST";
+    if (message.find("TIME_RANGE_INVALID:") == 0) error["code"] = "TIME_RANGE_INVALID";
+    if (message.find("TIME_SPEC_INVALID:") == 0) error["code"] = "TIME_SPEC_INVALID";
+    Json example = compact_correct_example(request);
+    if (message.find("end time is before begin time") != std::string::npos ||
+        message.find("args.time_range.end is before args.time_range.begin") != std::string::npos) {
+        error["invalid_arg"] = "args.time_range.end";
+        error["expected"] = "time_range.end must be greater than or equal to time_range.begin";
+        patch_example_path(example, "args.time_range.end", Json());
+    } else if (message.find("Invalid time") != std::string::npos ||
+               message.find("TIME_SPEC_INVALID") != std::string::npos) {
+        std::string invalid = "args.time";
+        Json args = request.value("args", Json::object());
+        if (args.is_object() && args.contains("time_range") && args["time_range"].is_object()) {
+            Json tr = args["time_range"];
+            if (tr.contains("begin")) invalid = "args.time_range.begin";
+            if (tr.contains("end") && message.find("end") != std::string::npos)
+                invalid = "args.time_range.end";
+        }
+        error["invalid_arg"] = invalid;
+        error["expected"] = "time string such as 10ns, 100ps, or max for end";
+        patch_example_path(example, invalid, Json());
+    } else if (message.find("Clock signal not found") != std::string::npos) {
+        error["invalid_arg"] = "args.clock";
+        error["expected"] = "existing clock signal path";
+    } else if (message.find("Signal not found") != std::string::npos ||
+               message.find("signal not found") != std::string::npos) {
+        error["invalid_arg"] = "args.signal";
+        error["expected"] = "existing signal path";
+    } else if (message.find("AXI config not found") != std::string::npos ||
+               message.find("APB config not found") != std::string::npos ||
+               message.find("CONFIG_NOT_FOUND") != std::string::npos) {
+        error["invalid_arg"] = "args.name";
+        error["expected"] = "name of a previously loaded config";
+    }
+    Json args = request.value("args", Json::object());
+    if (action == "axi.channel_stall" && args.is_object() && args.contains("channel") &&
+        args["channel"].is_string()) {
+        std::string c = args["channel"].get<std::string>();
+        if (c != "aw" && c != "w" && c != "b" && c != "ar" && c != "r") {
+            error["invalid_arg"] = "args.channel";
+            error["expected"] = "one of aw, w, b, ar, r";
+            error["allowed_values"] = Json::array({"aw", "w", "b", "ar", "r"});
+            patch_example_path(example, "args.channel", "ar");
+        }
+    }
+    if (error.contains("invalid_arg")) {
+        if (!error.contains("correct_example")) error["correct_example"] = example;
+        static const char* keys[] = {
+            "invalid_arg", "expected", "received_type", "allowed_values",
+            "required_any_of", "did_you_mean", "correct_example"
+        };
+        for (const char* key : keys) {
+            if (error.contains(key)) data[key] = error[key];
+        }
+    }
+}
+
+static Json action_error_response(const Json& request, const Json& data) {
     Json error = data.value("error", Json());
     std::string code = "ACTION_FAILED";
     std::string message = data.value("message", std::string("action failed"));
@@ -291,17 +374,20 @@ static Json action_error_response(const Json& data) {
         }
     }
     Json response = error_response(code, message);
+    Json mutable_data = data;
     if (error.is_object()) {
         if (error.contains("recoverable")) response["error"]["recoverable"] = error["recoverable"];
         if (error.contains("suggested_actions")) response["error"]["suggested_actions"] = error["suggested_actions"];
     }
+    enrich_runtime_parameter_error(request, response["error"], mutable_data);
     static const char* detail_keys[] = {
-        "invalid_arg", "expected", "allowed_types", "example", "received_type"
+        "invalid_arg", "expected", "allowed_types", "allowed_values", "example",
+        "received_type", "required_any_of", "did_you_mean", "correct_example"
     };
     for (const char* key : detail_keys) {
-        if (data.contains(key)) response["error"][key] = data[key];
+        if (mutable_data.contains(key)) response["error"][key] = mutable_data[key];
     }
-    response["details"] = data;
+    response["details"] = mutable_data;
     return response;
 }
 
@@ -322,7 +408,8 @@ static Json schema_validation_error_response(const Json& request,
         response["summary"] = validation.summary;
     }
     static const char* detail_keys[] = {
-        "invalid_arg", "expected", "allowed_values", "example", "received_type", "schema_path"
+        "invalid_arg", "expected", "allowed_values", "example", "received_type",
+        "schema_path", "required_any_of", "did_you_mean", "correct_example"
     };
     for (const char* key : detail_keys) {
         if (validation.data.is_object() && validation.data.contains(key)) {
@@ -544,7 +631,7 @@ static bool handle_client(int client_fd, bool& should_quit) {
             "unhandled exception while running action " + action));
     }
     if (data.contains("error"))
-        return send_response(client_fd, action_error_response(data));
+        return send_response(client_fd, action_error_response(request, data));
     Json resp = ok_response(data);
     // Propagate truncation flag from handler to response envelope.
     if (data.contains("truncated") && data["truncated"].is_boolean())

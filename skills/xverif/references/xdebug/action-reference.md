@@ -16,6 +16,7 @@
 - stream action 统一写 `stream`，不写 `name`。
 - AXI/APB direction 以 action-specific schema 为准；query action 用 `read` / `write`，cursor/analysis 等 action 可按 schema 使用 `all`。
 - 导出路径统一写 `args.output.path`；不同 action 可把该 path 解释为文件、目录或文件前缀。
+- 参数错误时先读 `invalid_arg`、`expected`、`allowed_values`、`did_you_mean`、`required_any_of` 和 `correct_example`。这些字段可能来自 schema 层，也可能来自 action handler 层；不要只凭 `message` 猜下一次请求。
 
 ## Waveform Action Boundaries
 

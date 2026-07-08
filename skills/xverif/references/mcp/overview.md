@@ -17,6 +17,7 @@
 - raw request 不走 MCP-managed session manager，也不维护 stdio-loop/LSF job。
 - 需要长期 session 时使用 `xverif_debug_session_open` + `xverif_debug_query`。
 - raw request 默认返回 xout 文本；只有脚本读取字段、验证 JSON schema 或调试 envelope 时才显式请求 JSON/envelope。
+- xdebug 参数错误时，MCP 默认 xout 会显示 backend 的 `invalid_arg`、`did_you_mean`、`required_any_of` 和 `correct_example`。优先按这些字段修正请求；不要因为第一次参数写错就切换到 raw request 或其它 transport。
 
 ## batch
 

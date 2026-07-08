@@ -16,18 +16,47 @@ bool is_missing_session_selector(const RequestEnvelope& request) {
     return true;
 }
 
+Json session_target_example(const std::string& action) {
+    return {
+        {"api_version", "xdebug.v1"},
+        {"action", action},
+        {"target", {{"session_id", "case_a"}}},
+        {"args", Json::object()}
+    };
+}
+
 void normalize_session_selector_error(const RequestEnvelope& request, ValidationResult& result) {
     if (!is_missing_session_selector(request)) return;
     const std::string expected = "target.session_id";
     result.message = expected + " is required";
     result.data = {
         {"invalid_arg", expected},
-        {"expected", "non-empty string session id"}
+        {"expected", "non-empty string session id"},
+        {"correct_example", session_target_example(request.action)}
     };
     result.summary = {
         {"invalid_arg", expected},
         {"message", result.message}
     };
+}
+
+bool reject_invalid_session_selector(const RequestEnvelope& request, ValidationResult& result) {
+    if (!request.target.is_object() || !request.target.contains("session_id")) return false;
+    if (request.target["session_id"].is_string() &&
+        !request.target["session_id"].get<std::string>().empty()) {
+        return false;
+    }
+    result.ok = false;
+    result.code = "INVALID_REQUEST";
+    result.message = "invalid parameter target.session_id: expected non-empty string session id";
+    result.data = {
+        {"invalid_arg", "target.session_id"},
+        {"expected", "non-empty string session id"},
+        {"received_type", request.target["session_id"].type_name()},
+        {"correct_example", session_target_example(request.action)}
+    };
+    result.summary = {{"invalid_arg", "target.session_id"}, {"message", result.message}};
+    return true;
 }
 
 } // namespace
@@ -46,6 +75,8 @@ ValidationResult RequestValidator::validate(const RequestEnvelope& request, cons
         result.message = "request action does not match ActionSpec";
         return result;
     }
+
+    if (reject_invalid_session_selector(request, result)) return result;
 
     xdebug_core::RuntimeSchemaValidator validator;
     xdebug_core::RuntimeSchemaValidationResult schema_result =

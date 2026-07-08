@@ -31,7 +31,15 @@
       "type": "object",
       "properties": {
         "channel": {
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "aw",
+            "w",
+            "b",
+            "ar",
+            "r"
+          ],
+          "description": "AXI channel to inspect."
         },
         "include_transactions": {
           "type": "boolean"

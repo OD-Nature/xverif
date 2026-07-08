@@ -224,7 +224,11 @@ Json ai_axi_channel_stall(const Json& args, std::string& error) {
     else if (channel == "w") { valid = cfg.wvalid; ready = cfg.wready; }
     else if (channel == "b") { valid = cfg.bvalid; ready = cfg.bready; }
     else if (channel == "r") { valid = cfg.rvalid; ready = cfg.rready; }
-    else { valid = cfg.arvalid; ready = cfg.arready; channel = "ar"; }
+    else if (channel == "ar") { valid = cfg.arvalid; ready = cfg.arready; }
+    else {
+        error = "INVALID_REQUEST: args.channel must be one of aw, w, b, ar, r";
+        return Json();
+    }
 
     ClockSampleSpec clock_sample = cfg.clock_sample;
     if (!normalize_clock_sample_spec(g_fsdb_file, clock_sample, error)) return Json();

@@ -85,6 +85,15 @@ common_blocks:
 | `recoverable` | boolean | 修改请求或恢复 session 后是否可重试 |
 | `candidates` | array | 可选候选项，通常用于 resolve 失败 |
 | `suggested_actions` | array | 可选恢复动作 |
+| `invalid_arg` | string | 参数错误时指出错误字段路径，例如 `args.time_range.end` |
+| `expected` | string | 参数错误时期望的类型、范围或语义 |
+| `received_type` | string | 参数类型错误时的实际 JSON 类型 |
+| `allowed_values` | array | enum 或有限取值列表 |
+| `did_you_mean` | string | 常见错字段对应的正确字段路径 |
+| `required_any_of` | array | `anyOf` 必填组说明 |
+| `correct_example` | object | 最小正确请求模板，可用于直接修正下一次调用 |
+
+参数错误要先读 `invalid_arg`、`did_you_mean`、`required_any_of` 和 `correct_example`。schema 层错误和 action handler 层语义错误都会尽量给出这些字段；默认 xout 也会显示同名信息，便于 AI 不请求 JSON 时修正下一次调用。
 
 常见 `error.code`：
 
@@ -99,6 +108,7 @@ SESSION_UNHEALTHY
 SIGNAL_NOT_FOUND
 SOURCE_NOT_FOUND
 TIME_SPEC_INVALID
+TIME_RANGE_INVALID
 TIME_OUT_OF_RANGE
 CURSOR_NOT_FOUND
 CLOCK_OFFSET_UNSUPPORTED
