@@ -43,7 +43,7 @@ def forbidden_native_session_error(action: str | None) -> Json:
             "error_layer": "wrapper",
             "invalid_arg": "action",
             "expected": "use MCP session tools instead of native session.* actions",
-            "example_note": "示例仅说明当前 MCP 入口的 session 生命周期工具形态；不要在 xverif_debug_query/raw_request 中调用 native session.* action。",
+            "example_note": "示例仅说明当前 MCP 入口的 session 生命周期工具形态；不要在 xverif_debug_query 中调用 native session.* action。",
             "correct_example": {"tool": tool, "args": args},
             "next_actions": [
                 "xverif_debug_session_open",

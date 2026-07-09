@@ -327,24 +327,6 @@ def xverif_debug_get_schema(action: str, kind: str = "request") -> dict:
 
 
 @xverif_tool("debug")
-def xverif_debug_raw_request(request: dict, output_format: str = "xout") -> Any:
-    """Run a complete xdebug JSON request (one-shot, no session).
-
-    This tool does NOT use sessions. For session-based queries, use
-    xverif_debug_query instead.
-
-    Args:
-        request: A full xdebug JSON request object with api_version, action, args, etc.
-        output_format: "xout" (default), "json", or "envelope".
-    """
-    if not isinstance(request, dict):
-        return _tool_error("INVALID_ARGUMENT", "request must be a JSON object")
-    if is_forbidden_native_session_action(request.get("action")):
-        return forbidden_native_session_error(request.get("action"))
-    return debug.request(request, output_format)
-
-
-@xverif_tool("debug")
 def xverif_debug_session_open(
     name: str,
     daidir: Optional[str] = None,
@@ -790,9 +772,6 @@ TOOL_CATALOG = [
     {"name": "xverif_debug_get_schema", "category": "debug", "backend": "xdebug",
      "stateful": False, "requires_session": False,
      "description": "Return an action-specific xdebug JSON schema."},
-    {"name": "xverif_debug_raw_request", "category": "debug", "backend": "xdebug",
-     "stateful": False, "requires_session": False,
-     "description": "Run a complete xdebug JSON request (one-shot, no session)."},
     {"name": "xverif_debug_session_open", "category": "debug", "backend": "xdebug",
      "stateful": True, "requires_session": True,
      "description": "Open a loop-backed xdebug session (direct or LSF)."},

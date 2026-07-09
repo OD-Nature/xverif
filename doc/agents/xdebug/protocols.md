@@ -44,7 +44,7 @@ frontend CLI 接受单个 JSON request，输出 JSON 或 XOUT。
 - 机器可读输出只能出现在 stdout。
 - log、debug、daemon lifecycle 信息写入 log 或 stderr。
 - JSON parse 失败先返回 `INVALID_JSON` 相关错误，不猜测波形或设计问题。
-- MCP `xverif_debug_raw_request` 默认请求 XOUT 时，wrapper 返回 backend XOUT 文本；不能再把成功 XOUT 当 JSON 解析错误。只有 `output_format:"json"` 或 `"envelope"` 才按 JSON dict 解析。
+- MCP xdebug 不暴露原生 envelope raw request；需要完整 `xdebug.v1` envelope 时使用 CLI/SDK-free 入口。
 
 ## Stdio-loop 协议
 

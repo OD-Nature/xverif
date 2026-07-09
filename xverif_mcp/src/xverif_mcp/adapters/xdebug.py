@@ -35,30 +35,6 @@ class XverifDebugAdapter:
         return self._one_shot({"api_version": "xdebug.v1", "action": "schema",
                                "args": {"action": action, "kind": kind}})
 
-    def request(self, request: dict, output_format: str = "json") -> Any:
-        from xverif_mcp.runner import StatelessCliRunner
-        runner = StatelessCliRunner()
-        req = dict(request)
-        req.setdefault("api_version", "xdebug.v1")
-        wants_json = output_format in ("json", "envelope")
-        argv = ["--json", "-"] if wants_json else ["--text", "-"]
-        raw = runner._run_raw("xdebug", argv, json.dumps(req))
-        if output_format == "xout":
-            if raw["exit_code"] != 0:
-                if raw["stdout"].lstrip().startswith("@xdebug."):
-                    return raw["stdout"]
-                from xverif_mcp.errors import cli_failed
-                return cli_failed("xdebug", raw["exit_code"], raw["stdout"],
-                                  raw["stderr"])
-            return raw["stdout"]
-        try:
-            payload = json.loads(raw["stdout"])
-        except Exception:
-            return {"ok": False, "error": {"code": "BAD_JSON",
-                                            "message": raw["stdout"],
-                                            "stderr": raw["stderr"]}}
-        return payload
-
     def _one_shot(self, req: Json) -> Json:
         from xverif_mcp.runner import StatelessCliRunner
         req = dict(req)

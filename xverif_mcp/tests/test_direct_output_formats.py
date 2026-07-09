@@ -10,7 +10,6 @@ from pathlib import Path
 
 import pytest
 
-from xverif_mcp.adapters.xdebug import XverifDebugAdapter
 from xverif_mcp.runner import StatelessCliRunner
 
 
@@ -112,34 +111,3 @@ class TestXverifOutputFormats:
         assert isinstance(result, dict)
         assert not result.get("ok")
         assert result["error"]["code"] == "XVERIF_CLI_FAILED"
-
-    def test_xdebug_raw_adapter_xout_returns_backend_text(self, tmp_path, monkeypatch):
-        script = _make_fake_xdebug(tmp_path)
-        monkeypatch.setattr(
-            StatelessCliRunner,
-            "tool_path",
-            lambda self, tool: str(script),
-        )
-        adapter = XverifDebugAdapter()
-        result = adapter.request(
-            {"api_version": "xdebug.v1", "action": "actions"},
-            output_format="xout",
-        )
-        assert isinstance(result, str)
-        assert result.startswith("@xdebug.")
-
-    def test_xdebug_raw_adapter_json_returns_dict(self, tmp_path, monkeypatch):
-        script = _make_fake_xdebug(tmp_path)
-        monkeypatch.setattr(
-            StatelessCliRunner,
-            "tool_path",
-            lambda self, tool: str(script),
-        )
-        adapter = XverifDebugAdapter()
-        result = adapter.request(
-            {"api_version": "xdebug.v1", "action": "actions"},
-            output_format="json",
-        )
-        assert isinstance(result, dict)
-        assert result["ok"] is True
-        assert result["summary"]["format"] == "json"

@@ -129,7 +129,7 @@ def test_mcp_tools_list(monkeypatch: pytest.MonkeyPatch):
     assert "xverif_session_list" not in names
     assert "xverif_session_use" not in names
     assert "xverif_session_close" not in names
-    assert "xverif_debug_raw_request" in names
+    assert "xverif_debug_raw_request" not in names
     assert "xverif_waveform_render_list" in names
     assert "xverif_tools" in names
     assert "xverif_bit_eval" in names

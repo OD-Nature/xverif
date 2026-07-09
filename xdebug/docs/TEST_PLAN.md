@@ -244,7 +244,7 @@ public runtime action 以 `xdebug/src/api/action_registry_init.cpp` 为准。
   inventory 描述不完全一致。
 - MCP docstring 示例写有不存在的 `trace.drivers`，实际 action 是
   `trace.driver`。
-- `xverif_debug_raw_request` 的签名默认 xout，但 docstring 写成 JSON 默认。（2026-07-08 已修复为默认 xout 文案，并让 xout 返回文本。）
+- MCP xdebug raw request 入口已移除；完整 `xdebug.v1` envelope 验证走 CLI/SDK-free 入口。
 - `xverif_mcp/tools/test_actions.py` 文案仍称 75 个 action，当前硬编码列表为
   76 个非 removed action。
 - active-trace-chain README 提到的 `common/`、`expected/` 和 verdict 流程与

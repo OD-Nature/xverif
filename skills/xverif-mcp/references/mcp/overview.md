@@ -11,13 +11,13 @@
 
 如果不确定哪些工具暴露，先调用 `xverif_tools`。`XVERIF_MCP_ENABLE_*` 可能关闭部分工具组。
 
-## raw request
+## xdebug 入口
 
-- `xverif_debug_raw_request` / `xverif_cov_raw_request` 是 one-shot CLI 路径。
-- raw request 不走 MCP-managed session manager，也不维护 stdio-loop/LSF job。
-- 需要长期 session 时使用 `xverif_debug_session_open` + `xverif_debug_query`。
-- raw request 默认返回 xout 文本；只有脚本读取字段、验证 JSON schema 或调试 envelope 时才显式请求 JSON/envelope。
-- xdebug 参数错误时，MCP 默认 xout 会显示 backend 的 `invalid_arg`、`did_you_mean`、`required_any_of` 和 `correct_example`。优先按这些字段修正请求；不要因为第一次参数写错就切换到 raw request 或其它 transport。
+- xdebug MCP 不暴露原生 envelope raw request。
+- 常规 xdebug 调试使用 `xverif_debug_session_open` + `xverif_debug_query`。
+- action 发现和 schema 查询使用 `xverif_debug_list_actions` / `xverif_debug_get_schema`。
+- 需要完整原生 `xdebug.v1` envelope、验证 CLI 行为或做一次性脚本时，改用 `xverif-cli`。
+- xdebug 参数错误时，MCP 默认 xout 会显示 backend 的 `invalid_arg`、`did_you_mean`、`required_any_of` 和 `correct_example`。优先按这些字段修正请求；不要因为第一次参数写错就切换到其它 transport。
 
 ## batch
 

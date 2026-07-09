@@ -23,4 +23,4 @@
 - `SESSION_LOST`：MCP 已清理失效 session；重新 open。
 - `SESSION_STALE`：同名 session 记录存在但进程不健康；显式 close/gc 后重开。
 - `TOOL_NOT_ENABLED`：对应工具组被 env policy 关闭。
-- `BAD_JSON` 或 envelope 异常：检查 raw request 格式和 `output_format`。
+- `BAD_JSON` 或 envelope 异常：检查 MCP tool 参数壳和 `output_format`；xdebug 原生 envelope 请改用 `xverif-cli`。

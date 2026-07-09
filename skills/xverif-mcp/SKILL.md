@@ -15,7 +15,7 @@ description: >
 
 | 任务 | 读取 |
 | --- | --- |
-| 使用 MCP xverif 工具、工具组、batch、raw request | [references/mcp/overview.md](references/mcp/overview.md) |
+| 使用 MCP xverif 工具、工具组、batch | [references/mcp/overview.md](references/mcp/overview.md) |
 | 使用 MCP 托管的 xdebug/xcov stateful session | [references/mcp/stateful-sessions.md](references/mcp/stateful-sessions.md) |
 | 使用 MCP LSF backend | [references/mcp/lsf.md](references/mcp/lsf.md) |
 | 定位 MCP server、tool、session 问题 | [references/mcp/troubleshooting.md](references/mcp/troubleshooting.md) |
@@ -25,7 +25,7 @@ description: >
 | 定位 SDK-free wrapper 问题 | [references/sdk-free-loop/troubleshooting.md](references/sdk-free-loop/troubleshooting.md) |
 | 查询 daidir、FSDB、波形值、driver、active driver、APB/AXI、verify、rc | [references/xdebug/overview.md](references/xdebug/overview.md) |
 | 查询 xdebug action 作用、适用场景、工作原理、参数合同 | [references/xdebug/action-reference.md](references/xdebug/action-reference.md) |
-| 构造 xdebug MCP query/raw request、查 action/schema | [references/xdebug/json-api.md](references/xdebug/json-api.md) |
+| 构造 xdebug MCP query、查 action/schema | [references/xdebug/json-api.md](references/xdebug/json-api.md) |
 | 按流程做 xdebug debug | [references/xdebug/recipes.md](references/xdebug/recipes.md) |
 | 参考 xdebug MCP 示例和证据链写法 | [references/xdebug/examples.md](references/xdebug/examples.md) |
 | 读取 xdebug compact/xout/JSON 字段 | [references/xdebug/response-fields.md](references/xdebug/response-fields.md) |
@@ -43,7 +43,7 @@ description: >
 - xdebug 常规 MCP workflow：先 `xverif_debug_session_open`，再 `xverif_debug_query(session_id, action, args, limits, output)`，最后 `xverif_debug_session_close`。
 - xcov 常规 MCP workflow：先 `xverif_cov_session_open`，再 `xverif_cov_query(session, action, args, limits, output)`，最后 `xverif_cov_session_close`。
 - MCP query 参数壳和原生 action 参数必须分清：xdebug 外层是 `session_id/action/args/limits/output/output_format`，xcov 外层是 `session/action/args/limits/output/output_format`；内层 `args` 才是 xdebug/xcov action 参数。
-- `xverif_debug_raw_request` / `xverif_cov_raw_request` 只用于需要完整原生 envelope 控制或验证 CLI 行为；完整 `xdebug.v1` / `xcov.v1` JSON 必须放进 MCP 参数 `request` 字段。
+- xdebug MCP 不暴露原生 envelope raw request。常规调试只使用 `xverif_debug_session_open` + `xverif_debug_query`；需要完整原生 `xdebug.v1` envelope 时改用 `xverif-cli`。
 - `xverif_batch` 每行是 MCP tool 调用壳：`tool` 指工具名，外层 `args` 指该 MCP tool 的参数；如果该 tool 自己也有 `args`，需要嵌套第二层。
 - SDK-free loop wrapper 是没有 MCP SDK 或需要脚本化 stdio-loop/LSF 时的旁路托管入口，仍按 MCP/session 托管语义维护；不要把它当原生 CLI raw JSON。
 - 默认优先使用 `output_format:"xout"` 或省略 `output_format`；只有脚本字段读取、JSON schema 验证或 envelope 调试时才请求 JSON/envelope。

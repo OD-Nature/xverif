@@ -28,7 +28,7 @@ MCP 场景下先用 `xverif_debug_session_open` 打开 session，再用 `xverif_
 }
 ```
 
-需要 SDK-free loop wrapper 时读 `references/sdk-free-loop/`。只有 `xverif_debug_raw_request` 才把完整原生 xdebug request envelope 放进 MCP 参数 `request` 字段；常规 query 不写 `api_version` / `target`。
+需要 SDK-free loop wrapper 时读 `references/sdk-free-loop/`。常规 MCP query 不写 `api_version` / `target`；完整原生 xdebug request envelope 属于 CLI/SDK-free 场景。
 
 ## Ready 卡低
 
