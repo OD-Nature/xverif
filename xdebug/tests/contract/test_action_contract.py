@@ -189,7 +189,7 @@ def test_bad_parameter_schema_errors_include_ai_repair_hints(
                 "args": {"name": "apb0", "direction": "read", "limit": 10},
             },
             "args.limit",
-            "args.query.limit",
+            "args.query.line_limit",
             None,
         ),
         (
@@ -338,7 +338,7 @@ def test_bad_parameter_xout_shows_correct_example(cli_runner: CliRunner) -> None
     assert "invalid_arg" in result.stdout_raw
     assert "args.limit" in result.stdout_raw
     assert "did_you_mean" in result.stdout_raw
-    assert "args.query.limit" in result.stdout_raw
+    assert "args.query.line_limit" in result.stdout_raw
     assert "correct_example" in result.stdout_raw
 
 
@@ -573,7 +573,7 @@ def test_ai_usability_high_risk_request_shapes_are_strict(
     apb.validate({
         "api_version": "xdebug.v1",
         "action": "apb.query",
-        "args": {"name": "apb0", "direction": "read", "query": {"index": 1}},
+        "args": {"name": "apb0", "direction": "read", "query": {"index": 1, "line_limit": 1}},
     })
     with pytest.raises(jsonschema.ValidationError):
         apb.validate({
@@ -591,6 +591,12 @@ def test_ai_usability_high_risk_request_shapes_are_strict(
         apb.validate({
             "api_version": "xdebug.v1",
             "action": "apb.query",
+            "args": {"name": "apb0", "direction": "read", "query": {"limit": 1}},
+        })
+    with pytest.raises(jsonschema.ValidationError):
+        apb.validate({
+            "api_version": "xdebug.v1",
+            "action": "apb.query",
             "args": {"name": "apb0", "direction": "all"},
         })
 
@@ -598,13 +604,19 @@ def test_ai_usability_high_risk_request_shapes_are_strict(
     axi.validate({
         "api_version": "xdebug.v1",
         "action": "axi.query",
-        "args": {"name": "axi0", "direction": "write", "query": {"index": 1}},
+        "args": {"name": "axi0", "direction": "write", "query": {"index": 1, "line_limit": 1}},
     })
     with pytest.raises(jsonschema.ValidationError):
         axi.validate({
             "api_version": "xdebug.v1",
             "action": "axi.query",
             "args": {"name": "axi0", "direction": "write", "num": 1},
+        })
+    with pytest.raises(jsonschema.ValidationError):
+        axi.validate({
+            "api_version": "xdebug.v1",
+            "action": "axi.query",
+            "args": {"name": "axi0", "direction": "write", "query": {"limit": 1}},
         })
     with pytest.raises(jsonschema.ValidationError):
         axi.validate({

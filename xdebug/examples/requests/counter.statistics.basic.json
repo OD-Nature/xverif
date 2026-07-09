@@ -19,6 +19,6 @@
       }
     },
     "cnt": "{top.cnt_hi,top.cnt_lo}",
-    "limit": 1000
+    "line_limit": 1000
   }
 }

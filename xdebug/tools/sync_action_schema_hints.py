@@ -35,7 +35,7 @@ PARAM_DESCRIPTIONS = {
     "index": "列表中要删除的信号序号。",
     "kind": "导出或查询的结果类型。",
     "line": "源码行号。",
-    "limit": "返回、扫描或导出的数量上限。",
+    "line_limit": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。",
     "name": "已保存配置、游标、列表或接口配置名称。",
     "op": "游标移动或协议浏览操作。",
     "output": "导出配置对象；路径统一使用 output.path。",

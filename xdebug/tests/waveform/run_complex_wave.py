@@ -568,7 +568,7 @@ def run_nonaxi(xdebug, fsdb):
         r.query("apb.query", args={"name": "apb0", "direction": "write"})
         r.query("apb.query", args={"name": "apb0", "direction": "read", "query": {"index": 1}})
         r.query("apb.cursor", args={"name": "apb0", "op": "begin", "direction": "all"})
-        apb_window = r.query("apb.transfer_window", args={"name": "apb0", "time_range": {"begin": "200ns", "end": "400ns"}, "limit": 2})
+        apb_window = r.query("apb.transfer_window", args={"name": "apb0", "time_range": {"begin": "200ns", "end": "400ns"}, "line_limit": 2})
         require(apb_window["summary"]["transaction_count"] >= 1, "APB window empty")
 
         apb_modes = [
@@ -691,7 +691,7 @@ def run_nonaxi(xdebug, fsdb):
                 "stream posedge before should not observe same-edge event_vld/event_race transfer")
         require(stream_after["summary"]["transfer_count"] == 1,
                 "stream posedge after should observe same-edge event_vld/event_race transfer")
-        exported = r.query("event.export", args={"name": "evt0", "expr": "vld && !rdy", "time_range": {"begin": "0ns", "end": "200ns"}, "limit": 1})
+        exported = r.query("event.export", args={"name": "evt0", "expr": "vld && !rdy", "time_range": {"begin": "0ns", "end": "200ns"}, "line_limit": 1})
         require(len(exported["data"]["events"]) == 1, "event.export limit failed")
         require_clock_summary(exported, "posedge")
         require("examples" not in exported["data"], "event.export generated redundant data.examples")
@@ -700,9 +700,9 @@ def run_nonaxi(xdebug, fsdb):
         agg = r.query("event.export", args={"name": "evt0", "expr": "vld && !rdy", "time_range": {"begin": "0ns", "end": "200ns"}, "aggregate": {"count": True, "group_by": ["payload_lo"], "events": False}})
         require("events" not in agg["data"] and agg["data"]["aggregate"]["count"] >= 1, "event aggregate count failed")
         require(agg["data"]["aggregate"]["group_count"] >= 1, "event aggregate group failed")
-        no_xz = r.query("event.export", args={"name": "evt0", "expr": "xz != 0", "time_range": {"begin": "0ns", "end": "200ns"}, "limit": 5})
+        no_xz = r.query("event.export", args={"name": "evt0", "expr": "xz != 0", "time_range": {"begin": "0ns", "end": "200ns"}, "line_limit": 5})
         require(len(no_xz["data"]["events"]) == 0, "x/z event comparison matched unexpectedly")
-        no_xz_order = r.query("event.export", args={"name": "evt0", "expr": "xz >= 1", "time_range": {"begin": "0ns", "end": "200ns"}, "limit": 5})
+        no_xz_order = r.query("event.export", args={"name": "evt0", "expr": "xz >= 1", "time_range": {"begin": "0ns", "end": "200ns"}, "line_limit": 5})
         require(len(no_xz_order["data"]["events"]) == 0, "x/z event ordering comparison matched unexpectedly")
         r.query("event.find", args={"name": "evt0", "expr": "bad_alias", "time_range": {"begin": "0ns", "end": "200ns"}}, expect_ok=False)
         bad_clock_field = r.query("event.find", args={
@@ -779,11 +779,11 @@ def run_nonaxi(xdebug, fsdb):
         require(bad_window_field["error"]["code"] == "INVALID_REQUEST", "legacy posedge should be INVALID_REQUEST")
         require(bad_window_field["data"]["invalid_arg"] == "args.posedge", "legacy posedge should identify args.posedge")
 
-        changes = r.query("signal.changes", args={"signal": "ai_complex_top.sig_a", "time_range": {"begin": "0ns", "end": "120ns"}, "limit": 2})
+        changes = r.query("signal.changes", args={"signal": "ai_complex_top.sig_a", "time_range": {"begin": "0ns", "end": "120ns"}, "line_limit": 2})
         require(changes["meta"]["truncated"] is True, "signal.changes did not truncate")
         stab = r.query("signal.stability", args={"signal": "ai_complex_top.stable_sig", "time_range": {"begin": "0ns", "end": "400ns"}})
         require(stab["data"]["stable"] is True, "stable_sig should be stable")
-        stats = r.query("signal.statistics", args={"signal": "ai_complex_top.hs_valid", "clock": "ai_complex_top.clk", "time_range": {"begin": "120ns", "end": "210ns"}, "limit": 1000})
+        stats = r.query("signal.statistics", args={"signal": "ai_complex_top.hs_valid", "clock": "ai_complex_top.clk", "time_range": {"begin": "120ns", "end": "210ns"}, "line_limit": 1000})
         require_clock_summary(stats, "negedge")
         require(stats["summary"]["sample_count"] > 0 and stats["summary"]["known_count"] > 0, "signal.statistics did not sample")
         require("high_cycles" in stats["data"] and "low_cycles" in stats["data"], "signal.statistics missing cycle counts")
@@ -793,7 +793,7 @@ def run_nonaxi(xdebug, fsdb):
             "edge": "posedge",
             "sample_point": "before",
             "time_range": {"begin": "140ns", "end": "175ns"},
-            "limit": 1000,
+            "line_limit": 1000,
         })
         require_clock_summary(offset_stats, "posedge", "before")
         require(offset_stats["summary"]["sample_count"] > 0, "signal.statistics negative offset did not sample")
@@ -801,7 +801,7 @@ def run_nonaxi(xdebug, fsdb):
             "signals": ["ai_complex_top.glitch_sig", "ai_complex_top.stuck_sig", "ai_complex_top.xz_bus"],
             "time_range": {"begin": "0ns", "end": "200ns"},
             "checks": [{"type": "glitch", "min_pulse_width": "1ns"}, {"type": "stuck", "min_duration": "100ns"}, {"type": "unknown_xz"}],
-            "limit": 10,
+            "line_limit": 10,
         })
         require(anomaly["summary"]["finding_count"] >= 3, "detect_abnormal missing findings")
         require(any(f.get("type") == "glitch" for f in anomaly["data"].get("findings", [])), "glitch not detected")
@@ -875,15 +875,15 @@ def run_axi(xdebug, fsdb):
         r.query("axi.analysis", args={"name": "axi0", "analysis": "osd", "direction": "all"})
 
         tr = {"begin": "0ns", "end": "200ms"}
-        pair_cold = r.query("axi.request_response_pair", args={"name": "axi0", "time_range": tr, "limit": 20})
+        pair_cold = r.query("axi.request_response_pair", args={"name": "axi0", "time_range": tr, "line_limit": 20})
         require(pair_cold["data"]["transaction_count"] > 0, "AXI request_response_pair empty")
-        pair_cache = r.query("axi.request_response_pair", args={"name": "axi0", "time_range": tr, "limit": 20})
+        pair_cache = r.query("axi.request_response_pair", args={"name": "axi0", "time_range": tr, "line_limit": 20})
         require(pair_cache["data"]["transaction_count"] > 0, "AXI cached request_response_pair empty")
-        lat = r.query("axi.latency_outlier", args={"name": "axi0", "time_range": tr, "limit": 5})
+        lat = r.query("axi.latency_outlier", args={"name": "axi0", "time_range": tr, "line_limit": 5})
         require(lat["data"]["outlier_count"] > 0, "AXI latency_outlier empty")
-        osd = r.query("axi.outstanding_timeline", args={"name": "axi0", "time_range": tr, "limit": 20})
+        osd = r.query("axi.outstanding_timeline", args={"name": "axi0", "time_range": tr, "line_limit": 20})
         require(osd["summary"]["sample_count"] > 0, "AXI outstanding_timeline empty")
-        stall = r.query("axi.channel_stall", args={"name": "axi0", "channel": "r", "time_range": tr, "rules": {"max_wait_cycles": 2}, "limit": 1000000})
+        stall = r.query("axi.channel_stall", args={"name": "axi0", "channel": "r", "time_range": tr, "rules": {"max_wait_cycles": 2}, "line_limit": 1000000})
         require(stall["summary"]["sample_count"] > 0, "AXI channel_stall did not sample")
 
         expected_log = parse_axi_expected_log(AXI_SIM_LOG)

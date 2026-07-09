@@ -34,9 +34,10 @@
           "type": "boolean",
           "description": "Return only counts, first/last/final values, and warnings; omit data.changes rows."
         },
-        "limit": {
+        "line_limit": {
           "type": "integer",
-          "description": "返回、扫描或导出的数量上限。"
+          "minimum": 1,
+          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
         },
         "mode": {
           "type": "string"
@@ -92,7 +93,7 @@
   "additionalProperties": false,
   "description": "signal.changes: 读取信号变化点。",
   "x-purpose": "读取信号变化点。",
-  "x-how_it_works": "扫描 FSDB value changes，支持窗口、limit 和聚合。",
+  "x-how_it_works": "扫描 FSDB value changes，支持窗口、line_limit 和聚合。",
   "x-when_to_use": "看信号何时跳变。",
   "x-arg_contract_notes": "required: signal"
 }

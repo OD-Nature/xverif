@@ -12,7 +12,7 @@
 - session 标识统一写 `session_id`；MCP `xverif_debug_query` 使用 `session_id` 参数，MCP 生命周期操作优先用 `xverif_debug_session_open/list/close`。只有 raw/native xdebug request 才使用 `target.session_id`。
 - 单点时间统一写 `time`。
 - 时间窗口统一写 `time_range.begin` / `time_range.end`。
-- 数量上限以 action-specific schema 为准。通用窗口/统计类常用 `args.limit`；APB/AXI 查询类使用 `args.query.limit` / `args.query.index`；active-driver 链深度使用 top-level `limits.max_depth`。
+- 数量上限以 action-specific schema 为准。通用窗口/统计类使用 `args.line_limit`；APB/AXI 查询类使用 `args.query.line_limit` / `args.query.index`；active-driver 链深度使用 top-level `limits.max_depth`。
 - stream action 统一写 `stream`，不写 `name`。
 - AXI/APB direction 以 action-specific schema 为准；query action 用 `read` / `write`，cursor/analysis 等 action 可按 schema 使用 `all`。
 - 导出路径统一写 `args.output.path`；不同 action 可把该 path 解释为文件、目录或文件前缀。
@@ -58,7 +58,7 @@
 | `apb.config.list` | stable | waveform | 列出 APB 配置。 | 读取 APB 配置存储。 | 查看可用 APB interface 名称。 | required: name |
 | `apb.config.load` | stable | waveform | 加载 APB 配置。 | 保存 APB interface 信号映射。 | 定义后续 APB 查询对象。 | required: name; also one of: config / config_path |
 | `apb.cursor` | stable | waveform | 在 APB transfer 间移动游标。 | 基于 APB 查询结果按 op/direction 定位 begin/next/prev 等。 | 交互式浏览 APB 事务。 | required: name, op |
-| `apb.query` | stable | waveform | 查询 APB transfer。 | 按 APB 配置扫描 PSEL/PENABLE/PREADY 等握手和地址数据；第 N 个 transfer 用 1-based `query.index`，多条用 `query.limit`。 | 抽取 APB 读写访问。 | required: name<br>use query.index / query.limit; do not use args.num or args.limit |
+| `apb.query` | stable | waveform | 查询 APB transfer。 | 按 APB 配置扫描 PSEL/PENABLE/PREADY 等握手和地址数据；第 N 个 transfer 用 1-based `query.index`，多条用 `query.line_limit`。 | 抽取 APB 读写访问。 | required: name<br>use query.index / query.line_limit; do not use args.num, args.limit, or query.limit |
 | `apb.transfer_window` | experimental | waveform | 实验性 APB 窗口分析。 | 围绕指定 APB transfer 返回相关信号窗口。 | 解释单笔 APB 访问现场。 | required: name |
 | `axi.analysis` | stable | waveform | 汇总 AXI 行为。 | 基于 AXI 解析结果统计 channel、latency、stall 等。 | 快速判断 AXI 接口健康度。 | required: name |
 | `axi.export` | stable | waveform | 导出 AXI 数据。 | 按 name 和 time_range 查询 AXI，再按 format/output.path 写出。 | 给外部表格或脚本分析。 | required: name<br>also one of: time_range |
@@ -68,7 +68,7 @@
 | `axi.cursor` | stable | waveform | 在 AXI transfer 间移动游标。 | 基于 AXI 查询结果按 op/direction 定位事务。 | 交互式浏览 AXI 事务。 | required: name, op |
 | `axi.latency_outlier` | experimental | waveform | 实验性 AXI latency 异常。 | 从配对结果中找超过阈值或分布异常的事务。 | 定位慢事务。 | required: name |
 | `axi.outstanding_timeline` | experimental | waveform | 实验性 AXI outstanding 时间线。 | 跟踪请求和响应，统计未完成事务数量随时间变化。 | 发现 outstanding 积压或乱序风险。 | required: name |
-| `axi.query` | stable | waveform | 查询 AXI channel/transaction。 | 按 AXI 配置扫描 valid/ready 和 channel 字段；第 N 个 transaction 用 1-based `query.index`，多条用 `query.limit`。 | 抽取 AXI beat/transaction。 | required: name<br>use query.index / query.limit; do not use args.num or args.limit |
+| `axi.query` | stable | waveform | 查询 AXI channel/transaction。 | 按 AXI 配置扫描 valid/ready 和 channel 字段；第 N 个 transaction 用 1-based `query.index`，多条用 `query.line_limit`。 | 抽取 AXI beat/transaction。 | required: name<br>use query.index / query.line_limit; do not use args.num, args.limit, or query.limit |
 | `axi.request_response_pair` | experimental | waveform | 实验性 AXI 请求响应配对。 | 用 ID/address/channel 信息把请求与响应关联。 | 分析 latency 和缺失响应。 | required: name |
 | `counter.statistics` | stable | waveform | 统计计数器行为。 | 按 clock/vld/cnt 采样，分析递增、回绕、停顿和异常。 | 判断计数器是否符合预期。 | required: clock, time_range, vld, cnt |
 | `cursor.delete` | stable | waveform | 删除游标。 | 按 name 从 CursorManager 删除记录。 | 清理不再需要的时间标记。 | required: name |
@@ -94,7 +94,7 @@
 | `sampled_pulse.inspect` | experimental | waveform | 检查未被 clock 采到的 valid 短脉冲。 | 按 clock 采样 valid，同时扫描 valid 原始变化；若 valid 在两个采样边沿间拉高但没有采样边沿看到高电平，则报 unsampled_valid_pulse。可选 payload/payloads 用于补风险现场。 | 解释仿真里“波形有脉冲但 DUT 没采到”的问题。 | required: clock, valid |
 | `scope.list` | stable | waveform | 列出 FSDB scope 或信号。 | 从 waveform 数据库遍历 scope，按 path/recursive/max_depth 遍历或截断；无 scope 时列根层级。 | 帮助定位真实层次和信号路径。 | none |
 | `scope.roots` | stable | any | 发现 waveform/design 根。 | 合并 FSDB 根和可用设计根信息。 | 判断 session 绑定的顶层和路径规范。 | none |
-| `signal.changes` | stable | waveform | 读取信号变化点。 | 扫描 FSDB value changes，支持窗口、limit 和聚合。 | 看信号何时跳变。 | required: signal |
+| `signal.changes` | stable | waveform | 读取信号变化点。 | 扫描 FSDB value changes，支持窗口、line_limit 和聚合。 | 看信号何时跳变。 | required: signal |
 | `signal.stability` | stable | waveform | 检查信号窗口内是否稳定。 | 基于 signal.changes 判断是否只有初始值或无变化。 | 确认控制/状态信号是否保持不变。 | required: signal |
 | `signal.statistics` | stable | waveform | 统计信号活动。 | 无 clock 时统计原始变化；有 clock 时按边沿采样，统计 known/high/low/unknown。 | 量化活跃度、占空和采样质量。 | required: signal |
 | `rc.generate` | stable | waveform | 根据分组生成波形 rc。 | 读取配置并写出 output.path，返回 group/signal 统计。 | 把调试信号集合导入波形工具。 | required: config_path, output |

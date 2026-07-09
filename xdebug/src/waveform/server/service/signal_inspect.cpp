@@ -130,7 +130,7 @@ Json ai_sampled_pulse_inspect(const Json& args, std::string& error) {
 
     int max_samples = args.value("max_samples", 1000000);
     int max_events = args.value("max_events", 100000);
-    int max_findings = args.value("max_findings", args.value("limit", 100));
+    int max_findings = args.value("line_limit", 100);
     npiFsdbValType fmt = json_value_format(args);
     char value_prefix = json_value_prefix(fmt);
 

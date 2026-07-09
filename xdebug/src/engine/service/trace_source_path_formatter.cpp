@@ -342,8 +342,8 @@ void emit_source_group_xout(std::string& text, const SourceRenderGroup& group, i
 
 int trace_result_limit_from_request(const Json& request) {
     Json args = request.value("args", Json::object());
-    if (args.is_object() && args.contains("limit") && args["limit"].is_number_integer()) {
-        int limit = args["limit"].get<int>();
+    if (args.is_object() && args.contains("line_limit") && args["line_limit"].is_number_integer()) {
+        int limit = args["line_limit"].get<int>();
         if (limit > 0) return limit;
     }
     Json limits = request.value("limits", Json::object());

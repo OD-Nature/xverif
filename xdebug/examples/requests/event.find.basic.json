@@ -12,6 +12,6 @@
       "wait_count": "top.u.dbg_wait_count"
     },
     "expr": "valid && !ready && wait_count >= 512",
-    "limit": 5
+    "line_limit": 5
   }
 }

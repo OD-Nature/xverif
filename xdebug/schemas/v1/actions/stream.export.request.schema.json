@@ -51,9 +51,10 @@
           ],
           "description": "导出或查询的结果类型。"
         },
-        "limit": {
+        "line_limit": {
           "type": "integer",
-          "description": "返回、扫描或导出的数量上限。"
+          "minimum": 1,
+          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
         },
         "output": {
           "type": "object",

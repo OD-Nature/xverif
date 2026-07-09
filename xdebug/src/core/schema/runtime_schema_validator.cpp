@@ -304,8 +304,10 @@ OrderedJson compact_correct_example(const OrderedJson& example) {
 std::string did_you_mean_for(const std::string& action,
                              const std::string& invalid_arg,
                              const std::string& extra_property) {
-    if (invalid_arg == "args.limit" && (action == "apb.query" || action == "axi.query"))
-        return "args.query.limit";
+    if (invalid_arg == "args.limit")
+        return (action == "apb.query" || action == "axi.query") ? "args.query.line_limit" : "args.line_limit";
+    if (invalid_arg == "args.query.limit" && (action == "apb.query" || action == "axi.query"))
+        return "args.query.line_limit";
     if (invalid_arg == "args.num" && (action == "apb.query" || action == "axi.query"))
         return "args.query.index";
     if (invalid_arg == "args.name" && action.compare(0, 7, "stream.") == 0)

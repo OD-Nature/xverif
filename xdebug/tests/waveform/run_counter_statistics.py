@@ -15,7 +15,7 @@ def run_counter_statistics(xdebug, fsdb):
             "signal": "ai_complex_top.counter_inc",
             "clock": "ai_complex_top.clk",
             "time_range": {"begin": "55ns", "end": "95ns"},
-            "limit": 1000,
+            "line_limit": 1000,
         })
         for key in ("first", "final", "min", "max"):
             value = stats["data"][key]

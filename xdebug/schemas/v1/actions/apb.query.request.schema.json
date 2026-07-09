@@ -53,7 +53,7 @@
         "query": {
           "type": "object",
           "properties": {
-            "limit": {
+            "line_limit": {
               "type": "integer",
               "minimum": 1
             },
@@ -63,7 +63,7 @@
             }
           },
           "additionalProperties": false,
-          "description": "Protocol query controls; use 1-based query.index instead of legacy args.num and query.limit instead of args.limit."
+          "description": "Protocol query controls; use 1-based query.index and query.line_limit; legacy args.num, args.limit, and query.limit are rejected."
         },
         "time_unit": {
           "type": "string",
@@ -108,7 +108,7 @@
   "additionalProperties": false,
   "description": "apb.query: 查询 APB transfer。",
   "x-purpose": "查询 APB transfer。",
-  "x-how_it_works": "按 APB 配置扫描 PSEL/PENABLE/PREADY 等握手和地址数据；第 N 个 transfer 用 1-based query.index，多条用 query.limit。",
+  "x-how_it_works": "按 APB 配置扫描 PSEL/PENABLE/PREADY 等握手和地址数据；第 N 个 transfer 用 1-based query.index，多条用 query.line_limit。",
   "x-when_to_use": "抽取 APB 读写访问。",
-  "x-arg_contract_notes": "required: name; use query.index / query.limit; do not use args.num or args.limit"
+  "x-arg_contract_notes": "required: name; use query.index / query.line_limit; do not use args.num, args.limit, or query.limit"
 }

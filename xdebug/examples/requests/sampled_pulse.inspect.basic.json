@@ -13,6 +13,6 @@
       "end": "200ns"
     },
     "edge": "posedge",
-    "limit": 5
+    "line_limit": 5
   }
 }

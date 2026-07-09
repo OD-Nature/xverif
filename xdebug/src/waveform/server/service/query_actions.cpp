@@ -50,7 +50,7 @@ Json ai_apb_transfer_window(const Json& args, std::string& error) {
     if (!ensure_apb_analyzed_for_ai(name, error)) return Json();
     std::vector<xdebug_waveform::ApbContextTransaction> txns;
     int filter = direction_filter(args);
-    int limit = args.value("max_rows", args.value("limit", 1000));
+    int limit = args.value("line_limit", 1000);
     int fetch_limit = (filter == 0 && limit >= 0) ? limit + 1 : -1;
     if (!g_apb_analyzer.get_transactions_in_range(name, begin, end, txns, fetch_limit)) {
         error = "APB config not analyzed: " + name;
@@ -92,7 +92,7 @@ Json ai_axi_transactions_window(const Json& args, std::string& error) {
     if (!ensure_axi_analyzed_for_ai(name, error)) return Json();
     std::vector<xdebug_waveform::AxiContextTransaction> txns;
     int filter = direction_filter(args);
-    int limit = args.value("max_rows", args.value("limit", 1000));
+    int limit = args.value("line_limit", 1000);
     int fetch_limit = (filter == 0 && limit >= 0) ? limit + 1 : -1;
     if (!g_axi_analyzer.get_transactions_in_range(name, begin, end, txns, fetch_limit)) {
         error = "AXI config not analyzed: " + name;
@@ -161,7 +161,7 @@ Json ai_axi_outstanding_timeline(const Json& args, std::string& error) {
     if (!normalize_clock_sample_spec(g_fsdb_file, clock_sample, error)) return Json();
     if (!ensure_axi_analyzed_for_ai(name, error)) return Json();
     std::vector<xdebug_waveform::AxiOutstandingSample> samples;
-    int limit = args.value("max_rows", args.value("limit", 1000));
+    int limit = args.value("line_limit", 1000);
     int fetch_limit = limit >= 0 ? limit + 1 : -1;
     if (!g_axi_analyzer.get_outstanding_samples_in_range(name, begin, end, samples, fetch_limit)) {
         error = "AXI config not analyzed: " + name;

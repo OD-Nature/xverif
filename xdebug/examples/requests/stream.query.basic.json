@@ -11,6 +11,6 @@
       "begin": "0ns",
       "end": "1us"
     },
-    "limit": 32
+    "line_limit": 32
   }
 }

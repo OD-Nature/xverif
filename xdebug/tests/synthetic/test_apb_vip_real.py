@@ -236,7 +236,7 @@ def test_apb_vip_real_wait_state_and_error_actions(
                 "args": {
                     "name": "apb0",
                     "time_range": {"begin": "0ns", "end": "1us"},
-                    "limit": 20,
+                    "line_limit": 20,
                 },
             },
             case_name="apb-vip-transfer-window",

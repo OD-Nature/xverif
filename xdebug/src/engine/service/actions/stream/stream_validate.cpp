@@ -59,7 +59,7 @@ bool range_from_args(const Json& args, const Json& limits, StreamQueryOptions& o
     else if (!parse_time_arg(start, false, options.begin, error)) return false;
     if (end.empty() || end == "max") options.end = max_t;
     else if (!parse_time_arg(end, true, options.end, error)) return false;
-    options.limit = args.value("limit", limits.value("max_rows", limits.value("max_items", 32)));
+    options.limit = args.value("line_limit", 32);
     if (options.limit <= 0) options.limit = 32;
     options.channel_filter = args.value("channel", std::string());
     return true;

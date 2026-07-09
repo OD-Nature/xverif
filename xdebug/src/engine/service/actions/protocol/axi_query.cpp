@@ -90,7 +90,7 @@ public:
         std::string id_str = a.value("id", "");
         Json query = a.value("query", Json::object());
         int num = query.value("index", -1);
-        int limit = query.value("limit", -1);
+        int limit = query.value("line_limit", -1);
         bool last = a.value("last", false);
 
         const AxiTransaction* txn = nullptr;

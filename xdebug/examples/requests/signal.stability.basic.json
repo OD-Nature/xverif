@@ -6,6 +6,6 @@
   },
   "args": {
     "signal": "top.u.ready",
-    "limit": 20
+    "line_limit": 20
   }
 }

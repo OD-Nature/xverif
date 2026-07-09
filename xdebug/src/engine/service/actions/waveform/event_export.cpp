@@ -122,7 +122,7 @@ public:
         }
 
         if (export_mode_) {
-            int limit = args.value("limit", limits.value("max_rows", 1000));
+            int limit = args.value("line_limit", 1000);
             query.limit = limit > 0 ? limit : 1000;
         } else if (mode == "first") {
             query.limit = 1;
@@ -131,10 +131,10 @@ public:
             // full clock-edge scan here so "first" is semantically exact.
             query.fast_find = false;
         } else if (mode == "last") {
-            int limit = args.value("limit", limits.value("max_rows", 10000));
+            int limit = args.value("line_limit", 10000);
             query.limit = limit > 0 ? limit : 10000;
         } else {
-            int limit = args.value("limit", limits.value("max_rows", 1000));
+            int limit = args.value("line_limit", 1000);
             query.limit = limit > 0 ? limit : 1000;
         }
 
