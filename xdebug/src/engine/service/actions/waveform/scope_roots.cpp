@@ -84,7 +84,17 @@ public:
         std::string source = args.value("source", std::string("auto"));
         if (source.empty()) source = "auto";
         if (source != "auto" && source != "wave" && source != "design")
-            return err("INVALID_REQUEST", "args.source must be auto, wave, or design");
+            return make_handler_error(
+                "INVALID_ENUM",
+                "args.source must be auto, wave, or design",
+                {{"invalid_arg", "args.source"},
+                 {"expected", "one of auto, wave, design"},
+                 {"allowed_values", Json::array({"auto", "wave", "design"})},
+                 {"correct_example", {{"api_version", "xdebug.v1"},
+                                      {"action", "scope.roots"},
+                                      {"target", {{"session_id", "case_a"}}},
+                                      {"args", {{"source", "auto"}}}}},
+                 {"example_note", "Example only; choose args.source from allowed_values."}});
 
         const bool want_wave = source == "auto" || source == "wave";
         const bool want_design = source == "auto" || source == "design";

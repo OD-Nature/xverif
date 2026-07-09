@@ -1,5 +1,7 @@
 #include "clock_point_query.h"
 
+#include "service/engine_action_handler.h"
+
 #include "core/npi/time_contract.h"
 #include "waveform/value/logic_value.h"
 
@@ -10,15 +12,19 @@ namespace {
 
 using xdebug_waveform::ClockEdgeKind;
 
-Json err(const char* code, const std::string& message) {
-    return Json{{"error", code}, {"message", message}};
-}
-
 Json invalid_arg(const std::string& arg, const std::string& expected) {
-    return Json{{"error", "INVALID_REQUEST"},
-                {"invalid_arg", arg},
-                {"expected", expected},
-                {"message", "invalid clock sampling argument: " + arg}};
+    return make_handler_error(
+        "INVALID_ARGUMENT",
+        "invalid clock sampling argument: " + arg,
+        {{"invalid_arg", arg},
+         {"expected", expected},
+         {"correct_example", {{"api_version", "xdebug.v1"},
+                              {"action", "value.at"},
+                              {"target", {{"session_id", "case_a"}}},
+                              {"args", {{"signal", "top.u.valid"},
+                                        {"time", "10ns"},
+                                        {"clock", "top.u.clk"}}}}},
+         {"example_note", "Example only; use the same clock fields on value/list/verify actions that sample waveform values."}});
 }
 
 Json value_object(const std::string& raw, char fmt) {
@@ -76,7 +82,17 @@ bool parse_point_clock_args(const Json& args,
     }
     spec = xdebug_waveform::ClockSampleSpec();
     if (!args.contains("clock") || !args["clock"].is_string() || args["clock"].get<std::string>().empty()) {
-        error = err("MISSING_FIELD", "args.clock is required");
+        error = make_handler_error(
+            "MISSING_FIELD",
+            "args.clock is required",
+            {{"invalid_arg", "args.clock"},
+             {"expected", "existing clock signal path"},
+             {"correct_example", {{"api_version", "xdebug.v1"},
+                                  {"action", "value.at"},
+                                  {"target", {{"session_id", "case_a"}}},
+                                  {"args", {{"signal", "top.u.valid"},
+                                            {"time", "10ns"},
+                                            {"clock", "top.u.clk"}}}}}});
         return false;
     }
     spec.clock = args["clock"].get<std::string>();
@@ -132,7 +148,7 @@ bool build_clock_point_query(npiFsdbFileHandle fsdb,
     xdebug_waveform::ClockPointSampler sampler(fsdb, spec);
     if (!sampler.sample(requested_time, point_signals, value_type, value_prefix,
                         point_result, sampler_error)) {
-        error = err("INVALID_REQUEST", sampler_error);
+        error = make_handler_error_from_message(sampler_error);
         return false;
     }
 
