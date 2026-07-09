@@ -87,9 +87,9 @@ int main() {
     assert(xdebug_design::trace_result_limit_from_request(
                Json{{"limits", Json{{"max_results", 6}}}}) == 6);
     assert(xdebug_design::trace_result_limit_from_request(
-               Json{{"args", Json{{"limit", 4}}}, {"limits", Json{{"max_results", 6}}}}) == 4);
+               Json{{"args", Json{{"line_limit", 4}}}, {"limits", Json{{"max_results", 6}}}}) == 4);
     assert(xdebug_design::trace_result_limit_from_request(
-               Json{{"args", Json{{"limit", 0}}}, {"limits", Json{{"max_results", 6}}}}) == 6);
+               Json{{"args", Json{{"line_limit", 0}}}, {"limits", Json{{"max_results", 6}}}}) == 6);
 
     Json chain_response = {
         {"summary", Json{{"signal", "top.out"}, {"hop_count", 2}}},

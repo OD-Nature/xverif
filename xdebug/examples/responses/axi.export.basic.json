@@ -24,15 +24,6 @@
     "begin": "0ns",
     "end": "1us",
     "scan_begin": "0ns",
-    "scan_end": "1us",
-    "output": {
-      "path": "/tmp/if0_axi",
-      "write_path": "/tmp/if0_axi.write.tsv",
-      "read_path": "/tmp/if0_axi.read.tsv",
-      "meta_path": "/tmp/if0_axi.meta.json",
-      "file_format": "tsv"
-    },
-    "row_count": 24,
-    "truncated": false
+    "scan_end": "1us"
   }
 }

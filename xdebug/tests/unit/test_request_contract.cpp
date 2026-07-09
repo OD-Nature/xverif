@@ -26,8 +26,7 @@ int main() {
         {"action", "value.at"},
         {"target", {{"fsdb", "waves.fsdb"}}},
         {"args", {{"signal", "top.clk"}, {"clock", "top.clk"}, {"time", "10ns"}}},
-        {"limits", {{"timeout_ms", 1000}}},
-        {"output", {{"format", "json"}}}
+        {"limits", {{"timeout_ms", 1000}}}
     };
     RequestEnvelope value = RequestEnvelope::from_json(value_json);
     assert(value.api_version == "xdebug.v1");
@@ -69,6 +68,14 @@ int main() {
     assert(!validation.ok);
     assert(validation.code == "INVALID_REQUEST");
     assert(validation.data["invalid_arg"] == "unexpected");
+
+    Json top_output_json = value_json;
+    top_output_json["output"] = {{"format", "json"}};
+    RequestEnvelope top_output = RequestEnvelope::from_json(top_output_json);
+    validation = validator.validate(top_output, *value_spec);
+    assert(!validation.ok);
+    assert(validation.code == "INVALID_REQUEST");
+    assert(validation.data["invalid_arg"] == "output");
 
     Json unknown_arg_json = value_json;
     unknown_arg_json["args"]["unexpected"] = true;

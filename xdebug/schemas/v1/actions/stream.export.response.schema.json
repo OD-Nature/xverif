@@ -46,7 +46,6 @@
         "kind": {"type": "string", "enum": ["transfer", "packet", "packet_beats"]},
         "row_count": {"type": "integer"}
       },
-      "required": ["kind", "row_count"],
       "additionalProperties": true
     },
     "error": {},

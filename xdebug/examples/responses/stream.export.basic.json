@@ -17,13 +17,5 @@
       "file_format": "tsv"
     }
   },
-  "data": {
-    "output": {
-      "path": "/tmp/req_stream.tsv",
-      "meta_path": "/tmp/req_stream.tsv.meta.json",
-      "file_format": "tsv"
-    },
-    "kind": "transfer",
-    "row_count": 128
-  }
+  "data": {}
 }

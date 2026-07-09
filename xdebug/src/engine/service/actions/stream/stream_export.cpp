@@ -131,10 +131,7 @@ public:
         summary["kind"] = kind;
         if (output.empty()) {
             return Json{{"summary", summary},
-                        {"preview", preview_for_kind(analysis, kind, summary["line_limit"].get<int>())},
-                        {"kind", kind},
-                        {"row_count", row_count},
-                        {"truncated", summary["truncated"]}};
+                        {"preview", preview_for_kind(analysis, kind, summary["line_limit"].get<int>())}};
         }
         std::string meta;
         StreamExporter exporter;
@@ -146,10 +143,7 @@ public:
         if (!ok) return err("EXPORT_FAILED", error);
         Json output_info = {{"path", output}, {"meta_path", meta}, {"file_format", format}};
         summary["output"] = output_info;
-        return Json{{"summary", summary},
-                    {"output", output_info}, {"kind", kind},
-                    {"row_count", row_count},
-                    {"truncated", summary["truncated"]}};
+        return Json{{"summary", summary}};
     }
 };
 

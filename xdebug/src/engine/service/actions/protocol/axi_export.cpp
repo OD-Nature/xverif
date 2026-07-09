@@ -122,8 +122,6 @@ public:
             out["write_count"] = result.writes.size();
             out["read_count"] = result.reads.size();
             out["total_count"] = result.writes.size() + result.reads.size();
-            out["row_count"] = result.writes.size() + result.reads.size();
-            out["truncated"] = false;
             return out;
         }
 
@@ -143,11 +141,6 @@ public:
         out["end"] = format_time(end);
         out["scan_begin"] = format_time(result.scan_begin);
         out["scan_end"] = format_time(result.scan_end);
-        out["output"] = {{"path", output_prefix},
-                         {"write_path", write_file},
-                         {"read_path", read_file},
-                         {"meta_path", meta_file},
-                         {"file_format", format}};
         out["write_count"] = result.writes.size();
         out["read_count"] = result.reads.size();
         out["total_count"] = result.writes.size() + result.reads.size();

@@ -91,7 +91,6 @@ public:
             out["signals"] = signal_preview;
             out["begin"] = range.first;
             out["end"] = range.second;
-            out["truncated"] = out["summary"]["truncated"];
             return out;
         }
         xdebug_waveform::ListExportOptions options;
@@ -117,7 +116,6 @@ public:
             {"truncated", false},
             {"output", {{"path", result.output_dir}, {"manifest_path", result.manifest_file}}}
         };
-        out["output"] = {{"path", result.output_dir}, {"manifest_path", result.manifest_file}};
         out["signals"] = result.signals;
         auto range = xdebug_core::format_time_range(xdebug_waveform::g_fsdb_file, begin, end);
         out["begin"] = range.first;

@@ -265,9 +265,9 @@ def require_completion_sorted(rows, label):
 
 
 def compare_axi_export_to_log(export_data, expected_log):
-    write_file = export_data["data"]["output"]["write_path"]
-    read_file = export_data["data"]["output"]["read_path"]
-    meta_file = export_data["data"]["output"]["meta_path"]
+    write_file = export_data["summary"]["output"]["write_path"]
+    read_file = export_data["summary"]["output"]["read_path"]
+    meta_file = export_data["summary"]["output"]["meta_path"]
     writes = read_axi_export_table(write_file)
     reads = read_axi_export_table(read_file)
 
@@ -534,7 +534,7 @@ def run_nonaxi(xdebug, fsdb):
             "output": {"path": list_export_dir, "file_format": "u64bin"},
         })
         require("summary" not in list_export["data"], "list.export generated nested data.summary")
-        manifest_file = list_export["data"]["output"]["manifest_path"]
+        manifest_file = list_export["summary"]["output"]["manifest_path"]
         require(os.path.exists(manifest_file), "missing list.export manifest")
         with open(manifest_file, "r", encoding="utf-8") as fh:
             manifest = json.load(fh)

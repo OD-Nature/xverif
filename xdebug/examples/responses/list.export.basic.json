@@ -16,10 +16,6 @@
     }
   },
   "data": {
-    "output": {
-      "path": "/tmp/if0_list_export",
-      "manifest_path": "/tmp/if0_list_export/manifest.json"
-    },
     "begin": "0ns",
     "end": "1000ns",
     "signals": [
