@@ -166,7 +166,6 @@ def test_active_trace_semantic_branches_and_gates(
                 "action": "trace.active_driver",
                 "target": {"session_id": session_id},
                 "args": args,
-                "output": {"verbosity": "compact"},
             },
             case_name="active-semantics-" + signal.rsplit(".", 1)[-1],
             artifact_root=artifact_root,
@@ -188,7 +187,6 @@ def test_active_trace_semantic_branches_and_gates(
                 "time": requested_time,
                 "clk_period": "10ns",
             },
-            "output": {"verbosity": "compact"},
         }
         if limits is not None:
             request["limits"] = limits
@@ -209,7 +207,6 @@ def test_active_trace_semantic_branches_and_gates(
                 "signal": signal,
                 "time": requested_time,
             },
-            "output": {"verbosity": "compact"},
         }
         return _xout(
             cli_runner,
@@ -229,7 +226,6 @@ def test_active_trace_semantic_branches_and_gates(
                 "time": requested_time,
                 "clk_period": "10ns",
             },
-            "output": {"verbosity": "compact"},
         }
         return _xout(
             cli_runner,

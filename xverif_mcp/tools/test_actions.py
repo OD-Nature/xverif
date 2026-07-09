@@ -45,7 +45,7 @@ FALLBACK_ACTIONS = [
     "trace.driver", "trace.load",
     "source.context", "expr.normalize",
     "signal.resolve", "signal.canonicalize",
-    "detect_anomaly",
+    "detect_abnormal",
     "handshake.inspect",
     "value.at", "value.batch_at",
     "scope.list",
@@ -76,22 +76,27 @@ def load_config(config_path: str) -> dict:
     """加载 JSON 配置文件。"""
     with open(config_path) as f:
         cfg = json.load(f)
+    for key in ("daidir", "fsdb"):
+        value = cfg.get(key)
+        if isinstance(value, str) and value:
+            cfg[key] = os.path.abspath(os.path.expandvars(os.path.expanduser(value)))
     cfg.setdefault("session_name", "action_test")
     return cfg
 
 
 def build_action_args(sig: str, clk: str, session_name: str) -> dict[str, dict]:
     """根据信号名构建 L2 测试用 action 参数表。"""
+    list_name = f"l2_test_list_{int(time.time())}"
     return {
     "scope.list": {"path": "", "recursive": True, "max_depth": 3},
     "signal.resolve": {"signal": sig},
     "expr.normalize": {"expr": "a && b"},
     "handshake.inspect": {"clock": clk, "valid": sig, "ready": sig},
-    "detect_anomaly": {"signals": [sig, clk]},
+    "detect_abnormal": {"signals": [sig, clk], "time_range": {"begin": "0ns", "end": "200ns"}},
     "event.config.list": {},
     "cursor.list": {},
-    "list.create": {"name": "l2_test_list"},
-    "event.export": {"expr": f"{clk} == 1", "clock": clk, "signals": {clk: clk}, "limit": 2},
+    "list.create": {"name": list_name, "signals": [sig]},
+    "event.export": {"expr": "clk == 1", "clock": clk, "signals": {"clk": clk}, "line_limit": 2},
     "trace.load": {"signal": sig},
 }
 
@@ -270,11 +275,11 @@ async def test_with_signal(session: ClientSession, cfg: dict, signal: str) -> tu
         "signal.canonicalize": {"signal": signal},
         "trace.driver": {"signal": signal},
         "trace.active_driver": {"signal": signal, "time": "1ns"},
-        "expr.eval_at": {"expr": signal, "time": "1ns", "signals": {signal: signal}, "clock": clk},
-        "event.find": {"expr": f"{clk} == 1", "clock": clk, "signals": {clk: clk}, "limit": 3},
+        "expr.eval_at": {"expr": "sig == 1", "time": "1ns", "signals": {"sig": signal}, "clock": clk},
+        "event.find": {"expr": "clk == 1", "clock": clk, "signals": {"clk": clk}, "line_limit": 3},
         "window.verify": {"conditions": [
-            {"expr": signal, "signals": {signal: signal}, "op": "==", "value": "1"}
-        ], "time_range": {"begin": "0ns", "end": "1us"}, "clock": clk},
+            {"expr": "sig == 1"}
+        ], "signals": {"sig": signal}, "time_range": {"begin": "0ns", "end": "1us"}, "clock": clk},
     }
 
     for action, args in l3_actions.items():

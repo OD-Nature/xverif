@@ -94,9 +94,18 @@ void log_stdout_write_failed(const std::string& session_id, const Json& context)
 }
 
 bool request_wants_json(const Json& req, bool default_json) {
-    (void)req;
+    if (req.contains("__xverif_loop_payload_format") &&
+        req["__xverif_loop_payload_format"].is_string()) {
+        const std::string format = req["__xverif_loop_payload_format"].get<std::string>();
+        if (format == "json") return true;
+        if (format == "xout") return false;
+    }
     if (default_json) return true;
     return false;
+}
+
+void strip_loop_internal_fields(Json& req) {
+    req.erase("__xverif_loop_payload_format");
 }
 
 Json make_envelope(const std::string& id, const Json& req, const Json& rsp, bool default_json) {
@@ -166,6 +175,8 @@ int run_stdio_loop(const std::string& executable_dir, bool default_json) {
         }
 
         const std::string id = request_id_or_seq(req, seq);
+        const bool wants_json = request_wants_json(req, default_json);
+        strip_loop_internal_fields(req);
         const std::string action = req.value("action", std::string());
         const std::string sid = log_session_id(req);
         Json base_ctx = stdio_context(req, id, seq);
@@ -192,7 +203,7 @@ int run_stdio_loop(const std::string& executable_dir, bool default_json) {
                     : "UNSUPPORTED_API_VERSION";
 
             Json rsp = make_error(req, req.value("action", std::string()), code, error, false);
-            Json envelope = make_envelope(id, req, rsp, default_json);
+            Json envelope = make_envelope(id, req, rsp, wants_json);
             bool written = write_jsonl(envelope);
             Json ctx = base_ctx;
             ctx["error"] = {{"code", code}, {"message", error}};
@@ -206,7 +217,7 @@ int run_stdio_loop(const std::string& executable_dir, bool default_json) {
 
         // Dispatch
         Json rsp = dispatcher.dispatch(req);
-        Json envelope = make_envelope(id, req, rsp, default_json);
+        Json envelope = make_envelope(id, req, rsp, wants_json);
         bool written = write_jsonl(envelope);
         xdebug_core::log_stdio_event(log_session_id(req), "request.end",
                                      written && rsp.value("ok", false),

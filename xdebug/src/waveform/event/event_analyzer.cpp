@@ -251,6 +251,26 @@ private:
             if (eq == TriValue::Unknown) return TriValue::Unknown;
             return eq == TriValue::True ? TriValue::False : TriValue::True;
         }
+        if (consume(">=")) {
+            std::string rhs = parse_atom(error);
+            if (!error.empty()) return TriValue::False;
+            return compare_order(lhs, rhs, ">=");
+        }
+        if (consume("<=")) {
+            std::string rhs = parse_atom(error);
+            if (!error.empty()) return TriValue::False;
+            return compare_order(lhs, rhs, "<=");
+        }
+        if (consume(">")) {
+            std::string rhs = parse_atom(error);
+            if (!error.empty()) return TriValue::False;
+            return compare_order(lhs, rhs, ">");
+        }
+        if (consume("<")) {
+            std::string rhs = parse_atom(error);
+            if (!error.empty()) return TriValue::False;
+            return compare_order(lhs, rhs, "<");
+        }
         return truth_value(lhs);
     }
 
@@ -260,6 +280,20 @@ private:
         std::string rhs_norm = normalize_for_compare(rhs, width);
         if (has_unknown_bit(lhs_norm) || has_unknown_bit(rhs_norm)) return TriValue::Unknown;
         return lhs_norm == rhs_norm ? TriValue::True : TriValue::False;
+    }
+
+    TriValue compare_order(const std::string& lhs, const std::string& rhs, const char* op) {
+        size_t width = std::max(bits_only(lhs).size(), bits_only(rhs).size());
+        std::string lhs_norm = normalize_for_compare(lhs, width);
+        std::string rhs_norm = normalize_for_compare(rhs, width);
+        if (has_unknown_bit(lhs_norm) || has_unknown_bit(rhs_norm)) return TriValue::Unknown;
+        int cmp = lhs_norm.compare(rhs_norm);
+        bool result = false;
+        if (std::strcmp(op, ">=") == 0) result = cmp >= 0;
+        else if (std::strcmp(op, "<=") == 0) result = cmp <= 0;
+        else if (std::strcmp(op, ">") == 0) result = cmp > 0;
+        else if (std::strcmp(op, "<") == 0) result = cmp < 0;
+        return result ? TriValue::True : TriValue::False;
     }
 
     std::string parse_atom(std::string& error) {

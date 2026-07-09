@@ -35,6 +35,13 @@ def _bkill_by_id(job_id: str) -> None:
         pass
 
 
+def _loop_cmd(cfg: LaunchConfig) -> list[str]:
+    cmd = [cfg.tool_bin or cfg.xdebug_bin, "--stdio-loop"]
+    if cfg.backend == "xdebug":
+        cmd.append("--json")
+    return cmd
+
+
 class Launcher:
     mode: str = "unknown"
 
@@ -49,7 +56,7 @@ class DirectLauncher(Launcher):
     mode = "direct"
 
     def start(self, cfg: LaunchConfig) -> JsonlProcess:
-        cmd = [cfg.tool_bin or cfg.xdebug_bin, "--stdio-loop"]
+        cmd = _loop_cmd(cfg)
         log_stdio_event(cfg.alias, "launcher.direct.start", True,
                         backend=cfg.backend, launcher=self.mode,
                         argv_hash=argv_hash(cmd))
@@ -73,7 +80,7 @@ class LsfLauncher(Launcher):
         self.bsub = bsub or BsubRunner(bsub_cmd)
 
     def start(self, cfg: LaunchConfig) -> JsonlProcess:
-        cmd = [cfg.tool_bin or cfg.xdebug_bin, "--stdio-loop"]
+        cmd = _loop_cmd(cfg)
         log_lsf_event(cfg.alias, "launcher.lsf.start", True,
                       backend=cfg.backend, launcher=self.mode,
                       queue=cfg.queue, resource=cfg.resource,

@@ -163,12 +163,13 @@ class XdebugLoopSession:
                 "api_version": self.api_version, "action": "session.open",
                 "target": {},
                 "args": {"name": self.alias},
-                "output": {"response_format": "json"} if self.backend == "xcov"
-                else {"format": "json"},
             }
+            if self.backend == "xcov":
+                open_req["output"] = {"response_format": "json"}
             open_req["trace_id"] = _trace_id(self.alias, open_req["request_id"])
             if self.backend == "xdebug":
                 open_req["args"]["transport"] = "uds"
+                open_req["__xverif_loop_payload_format"] = "json"
             if self.fsdb:
                 open_req["target"][self.target_key] = self.fsdb
             if self.daidir:
@@ -227,9 +228,11 @@ class XdebugLoopSession:
                     "trace_id": _trace_id(self.alias, f"close-{_safe_name(self.alias)}"),
                     "api_version": self.api_version, "action": "session.close",
                     "target": {"session_id": self.session_id},
-                    "output": {"response_format": "json"} if self.backend == "xcov"
-                    else {"format": "json"},
                 }
+                if self.backend == "xcov":
+                    req["output"] = {"response_format": "json"}
+                else:
+                    req["__xverif_loop_payload_format"] = "json"
                 self._call_raw(req, timeout=close_timeout())
                 cleanup["backend_close"] = "ok"
             except Exception as exc:
@@ -295,12 +298,14 @@ class XdebugLoopSession:
         req["target"] = {"session_id": self.session_id}
         if limits:
             req["limits"] = limits
-        req["output"] = dict(output or {})
-        if output_format in ("json", "envelope"):
-            if self.backend == "xcov":
+        if self.backend == "xcov":
+            req["output"] = dict(output or {})
+            if output_format in ("json", "envelope"):
                 req["output"]["response_format"] = "json"
-            else:
-                req["output"]["format"] = "json"
+        elif output_format in ("json", "envelope"):
+            req["__xverif_loop_payload_format"] = "json"
+        else:
+            req["__xverif_loop_payload_format"] = "xout"
         try:
             log_session_event(self.alias, "query.begin", True,
                               backend=self.backend, launcher=self.launcher.mode,

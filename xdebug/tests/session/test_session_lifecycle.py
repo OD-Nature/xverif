@@ -230,7 +230,7 @@ def test_session_close_rejects_args_session_id_aliases(
         closed = cli_runner.run(close_request(name))
         assert not closed.ok
         assert closed.response["error"]["code"] == "INVALID_REQUEST"
-        assert closed.response["data"]["invalid_arg"] == "target.session_id"
+        assert closed.response["error"]["invalid_arg"] == "target.session_id"
         assert any(
             item["session_id"] == name
             for item in _registry(isolated_home).get("sessions", [])
@@ -245,7 +245,7 @@ def test_session_close_without_session_id_still_fails(cli_runner: CliRunner) -> 
     assert not missing.ok
     assert missing.response["error"]["code"] == "INVALID_REQUEST"
     assert missing.response["error"]["message"] == "target.session_id is required"
-    assert missing.response["data"]["invalid_arg"] == "target.session_id"
+    assert missing.response["error"]["invalid_arg"] == "target.session_id"
 
 
 @pytest.mark.session

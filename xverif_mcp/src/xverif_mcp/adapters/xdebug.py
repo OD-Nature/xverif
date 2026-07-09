@@ -40,14 +40,9 @@ class XverifDebugAdapter:
         runner = StatelessCliRunner()
         req = dict(request)
         req.setdefault("api_version", "xdebug.v1")
-        req.setdefault("output", {})
         wants_json = output_format in ("json", "envelope")
-        if isinstance(req["output"], dict):
-            if wants_json:
-                req["output"].setdefault("format", "json")
-            else:
-                req["output"].pop("format", None)
-        raw = runner._run_raw("xdebug", ["-"], json.dumps(req))
+        argv = ["--json", "-"] if wants_json else ["--text", "-"]
+        raw = runner._run_raw("xdebug", argv, json.dumps(req))
         if output_format == "xout":
             if raw["exit_code"] != 0:
                 if raw["stdout"].lstrip().startswith("@xdebug."):
@@ -67,9 +62,6 @@ class XverifDebugAdapter:
     def _one_shot(self, req: Json) -> Json:
         from xverif_mcp.runner import StatelessCliRunner
         req = dict(req)
-        req.setdefault("output", {})
-        if isinstance(req["output"], dict):
-            req["output"]["format"] = "json"
         return StatelessCliRunner().run_json("xdebug", ["--json", "-"],
                                               json.dumps(req))
 

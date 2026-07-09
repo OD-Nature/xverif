@@ -126,7 +126,6 @@ def _query(
                 "action": action,
                 "target": {"session_id": session_id},
                 "args": args,
-                "output": {"verbosity": "compact"},
             },
             timeout_sec=120,
         ),

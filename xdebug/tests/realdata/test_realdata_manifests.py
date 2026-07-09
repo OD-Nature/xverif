@@ -108,7 +108,6 @@ def test_realdata_manifest_invariants(
             "action": "session.open",
             "target": target,
             "args": {"name": manifest.name},
-            "output": {"verbosity": "compact"},
         },
         manifest=manifest,
         case_name=manifest.name + "-session-open",
@@ -133,7 +132,6 @@ def test_realdata_manifest_invariants(
                 "action": query["action"],
                 "target": session_target,
                 "args": query.get("args", {}),
-                "output": {"verbosity": "compact"},
             }
             if "limits" in query:
                 request["limits"] = query["limits"]

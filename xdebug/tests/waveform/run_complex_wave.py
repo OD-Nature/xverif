@@ -167,10 +167,10 @@ def require(cond, msg):
         raise AssertionError(msg)
 
 
-def require_clock_summary(resp, edge, sample_point=None):
+def require_clock_summary(resp, edge, sample_point=None, expected_clock="ai_complex_top.clk"):
     summary = resp["summary"]
     require(summary["sampling_mode"] == "clock_edge", "missing clock_edge sampling mode")
-    require(summary["clock"] == "ai_complex_top.clk", "unexpected summary clock")
+    require(summary["clock"] == expected_clock, "unexpected summary clock")
     require(summary["edge"] == edge, "unexpected summary edge: {}".format(summary["edge"]))
     expected_sample_point = sample_point
     if expected_sample_point is None and edge in ("posedge", "dual"):
@@ -389,7 +389,6 @@ class AiRunner(object):
             "api_version": "xdebug.v1",
             "action": action,
             "args": args or {},
-            "output": {"verbosity": "full"},
         }
         if target is not None:
             req["target"] = target
@@ -655,23 +654,37 @@ def run_nonaxi(xdebug, fsdb):
         r.query("stream.config.load", args={"streams": [
             {
                 "name": "race_before_stream",
-                "clock": "ai_complex_top.clk",
+                "signals": {
+                    "clk": "ai_complex_top.clk",
+                    "rst_n": "ai_complex_top.rst_n",
+                    "vld": "ai_complex_top.event_vld",
+                    "rdy": "ai_complex_top.event_race",
+                    "payload": "ai_complex_top.event_payload",
+                },
+                "clock": "clk",
                 "edge": "posedge",
                 "sample_point": "before",
-                "reset": "!ai_complex_top.rst_n",
-                "vld": "ai_complex_top.event_vld",
-                "rdy": "ai_complex_top.event_race",
-                "data": "ai_complex_top.event_payload",
+                "reset": "!rst_n",
+                "vld": "vld",
+                "rdy": "rdy",
+                "data": "payload",
             },
             {
                 "name": "race_after_stream",
-                "clock": "ai_complex_top.clk",
+                "signals": {
+                    "clk": "ai_complex_top.clk",
+                    "rst_n": "ai_complex_top.rst_n",
+                    "vld": "ai_complex_top.event_vld",
+                    "rdy": "ai_complex_top.event_race",
+                    "payload": "ai_complex_top.event_payload",
+                },
+                "clock": "clk",
                 "edge": "posedge",
                 "sample_point": "after",
-                "reset": "!ai_complex_top.rst_n",
-                "vld": "ai_complex_top.event_vld",
-                "rdy": "ai_complex_top.event_race",
-                "data": "ai_complex_top.event_payload",
+                "reset": "!rst_n",
+                "vld": "vld",
+                "rdy": "rdy",
+                "data": "payload",
             },
         ]})
         stream_before = r.query("stream.query", args={
@@ -684,8 +697,8 @@ def run_nonaxi(xdebug, fsdb):
             "query": "summary",
             "time_range": {"begin": "100ns", "end": "110ns"},
         })
-        require_clock_summary(stream_before, "posedge", "before")
-        require_clock_summary(stream_after, "posedge", "after")
+        require_clock_summary(stream_before, "posedge", "before", expected_clock="clk")
+        require_clock_summary(stream_after, "posedge", "after", expected_clock="clk")
         require(stream_before["summary"]["transfer_count"] == 0,
                 "stream posedge before should not observe same-edge event_vld/event_race transfer")
         require(stream_after["summary"]["transfer_count"] == 1,
@@ -711,8 +724,8 @@ def run_nonaxi(xdebug, fsdb):
             "time_range": {"begin": "0ns", "end": "200ns"},
         }, expect_ok=False)
         require(bad_clock_field["error"]["code"] == "INVALID_REQUEST", "legacy clk should be INVALID_REQUEST")
-        require(bad_clock_field["data"]["invalid_arg"] == "args.clk", "legacy clk should identify args.clk")
-        require("clock" in bad_clock_field["data"]["expected"], "legacy clk expected guidance should mention clock")
+        require(bad_clock_field["error"]["invalid_arg"] == "args.clk", "legacy clk should identify args.clk")
+        require("clock" in bad_clock_field["error"]["expected"], "legacy clk expected guidance should mention clock")
 
         checks = r.query("verify.conditions", args={
             "clock": "ai_complex_top.clk",
@@ -785,7 +798,7 @@ def run_nonaxi(xdebug, fsdb):
             "conditions": [{"expr": "valid"}],
         }, expect_ok=False)
         require(bad_window_field["error"]["code"] == "INVALID_REQUEST", "legacy posedge should be INVALID_REQUEST")
-        require(bad_window_field["data"]["invalid_arg"] == "args.posedge", "legacy posedge should identify args.posedge")
+        require(bad_window_field["error"]["invalid_arg"] == "args.posedge", "legacy posedge should identify args.posedge")
 
         changes = r.query("signal.changes", args={"signal": "ai_complex_top.sig_a", "time_range": {"begin": "0ns", "end": "120ns"}, "line_limit": 2})
         require(changes["meta"]["truncated"] is True, "signal.changes did not truncate")
@@ -821,17 +834,17 @@ def run_nonaxi(xdebug, fsdb):
             "checks": ["unknown_xz", "glitch"],
         }, expect_ok=False)
         require(bad_checks["error"]["code"] == "INVALID_REQUEST", "string checks should return INVALID_REQUEST")
-        require(bad_checks["data"]["invalid_arg"] == "args.checks[0]", "bad checks should expose invalid_arg")
-        require(bad_checks["data"]["expected"] == "type \"object\"", "bad checks should explain expected object item")
-        require(bad_checks["data"]["received_type"] == "string", "bad checks should expose received_type")
-        require("example" in bad_checks["data"], "bad checks should expose example")
+        require(bad_checks["error"]["invalid_arg"] == "args.checks[0]", "bad checks should expose invalid_arg")
+        require(bad_checks["error"]["expected"] == "type \"object\"", "bad checks should explain expected object item")
+        require(bad_checks["error"]["received_type"] == "string", "bad checks should expose received_type")
+        require("correct_example" in bad_checks["error"], "bad checks should expose correct_example")
         bad_type = r.query("detect_abnormal", args={
             "signals": ["ai_complex_top.glitch_sig", "ai_complex_top.xz_bus"],
             "time_range": {"begin": "0ns", "end": "200ns"},
             "checks": [{"type": "unknown"}],
         }, expect_ok=False)
         require(bad_type["error"]["code"] == "INVALID_REQUEST", "unknown check type should return INVALID_REQUEST")
-        require(bad_type["data"]["invalid_arg"] == "args.checks[0].type",
+        require(bad_type["error"]["invalid_arg"] == "args.checks[0].type",
                 "unknown check type should expose invalid type path")
         health = r.query("value.at", args={"signal": "ai_complex_top.clk", "clock": "ai_complex_top.clk", "time": "10ns"})
         require(health["ok"] is True, "session should remain healthy after invalid detect_abnormal checks")
