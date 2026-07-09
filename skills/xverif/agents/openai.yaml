@@ -1,9 +1,0 @@
-interface:
-  display_name: xverif
-  short_description: 选择并使用 xverif 验证工具，含 xdebug、xcov、xbit、MCP 与 SDK-free LSF wrapper。
-  default_prompt: >
-    使用 xverif 选择正确的验证工具，按需阅读对应 reference，并运行或定位
-    xdebug、xcov、xbit、xloc、xentry、xsva、MCP、SDK-free loop
-    wrapper 或 xeda-runner 工作流。
-policy:
-  allow_implicit_invocation: true

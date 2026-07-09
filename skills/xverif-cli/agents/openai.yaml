@@ -1,0 +1,9 @@
+interface:
+  display_name: xverif-cli
+  short_description: 使用 xverif 原生命令行和 JSON envelope，含 xdebug、xcov、xbit、xentry、xloc、xsva 与 xeda-runner。
+  default_prompt: >
+    使用 xverif-cli 构造和执行原生 CLI/raw JSON 请求。xdebug/xcov 示例必须使用
+    api_version/action/target/args/limits/output envelope；stateless 工具使用 tools/*
+    命令行参数。MCP tool 参数请改用 xverif-mcp。
+policy:
+  allow_implicit_invocation: true

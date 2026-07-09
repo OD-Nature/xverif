@@ -1,4 +1,4 @@
-.PHONY: all xdebug xbit xentry xloc xcov xwaveform test full-test clean xcov-test install-all-skill install-xverif-skill install-xwiki-skill install-x-npi-skill _install-agent-skill
+.PHONY: all xdebug xbit xentry xloc xcov xwaveform test full-test clean xcov-test install-all-skill install-xverif-cli-skill install-xverif-mcp-skill install-xwiki-skill install-x-npi-skill _install-agent-skill
 
 PYTHON ?= python3
 
@@ -25,8 +25,11 @@ xwaveform:
 xcov-test:
 	$(MAKE) -C xcov PYTHON=$(PYTHON) test
 
-install-xverif-skill:
-	$(MAKE) _install-agent-skill SKILL_SRC=skills/xverif SKILL_NAME=xverif
+install-xverif-cli-skill:
+	$(MAKE) _install-agent-skill SKILL_SRC=skills/xverif-cli SKILL_NAME=xverif-cli
+
+install-xverif-mcp-skill:
+	$(MAKE) _install-agent-skill SKILL_SRC=skills/xverif-mcp SKILL_NAME=xverif-mcp
 
 install-xwiki-skill:
 	$(MAKE) _install-agent-skill SKILL_SRC=skills/xwiki SKILL_NAME=xwiki

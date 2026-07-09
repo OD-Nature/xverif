@@ -1,0 +1,128 @@
+# xcov coverage 查询
+
+xcov 查询 VCS/Verdi coverage database（`simv.vdb`、`merged.vdb`）。它负责 coverage evidence，不负责自动解释 hole 根因或生成补测策略。
+
+## 何时使用
+
+- 查询 line/toggle/branch/condition/fsm/assert/function coverage。
+- 用 `scope.*` 和 `code_coverage.*` 按 hierarchy scope 查看覆盖率概览。
+- 按源码 file/line/window 反查 coverage item。
+- 输出源码窗口和 coverage annotation。
+- 输出 assert/cover property/cover sequence 的结构化 report。
+- 通过 `export.code_coverage`、`export.function_coverage`、`export.assert` 导出
+  Markdown 查看详细未覆盖项。
+
+## CLI 入口
+
+```bash
+tools/xcov --json -
+tools/xcov --stdio-loop
+```
+
+本文件只讲原生 `xcov.v1` JSON envelope。MCP tool 参数、MCP session 和 SDK-free loop wrapper 请使用 `xverif-mcp`。
+
+真实 NPI coverage 查询需要 Synopsys license；受限沙箱内 license 可能不可达。
+
+## 常用请求
+
+open：
+
+```json
+{"api_version":"xcov.v1","action":"session.open","target":{"vdb":"merged.vdb"},"args":{"name":"cov0"}}
+```
+
+holes：
+
+```json
+{"api_version":"xcov.v1","action":"code_coverage.holes","target":{"session_id":"cov0"},"args":{"scope":"uart_tb","metrics":["line","toggle","branch","condition","fsm","assert"],"limits":{"max_items":100}}}
+```
+
+code holes glob filter：
+
+```json
+{"api_version":"xcov.v1","action":"code_coverage.holes","target":{"session_id":"cov0"},"args":{"scope":"uart_tb","query":{"include_patterns":["*u_uart*"],"exclude_patterns":["*uvm*"],"match_field":"full_name"}}}
+```
+
+function holes：
+
+```json
+{"api_version":"xcov.v1","action":"function_coverage.holes","target":{"session_id":"cov0"},"args":{"levels":["bin"],"query":{"include_patterns":["*APB_accesses_cg*"],"match_field":"full_name"}}}
+```
+
+source map：
+
+```json
+{"api_version":"xcov.v1","action":"source.map","target":{"session_id":"cov0"},"args":{"file":"rtl/ctrl.sv","line":123,"window":3}}
+```
+
+source annotate：
+
+```json
+{"api_version":"xcov.v1","action":"source.annotate","target":{"session_id":"cov0"},"args":{"file":"rtl/ctrl.sv","line":123,"window":3}}
+```
+
+assert summary：
+
+```json
+{"api_version":"xcov.v1","action":"assert.summary","target":{"session_id":"cov0"}}
+```
+
+code coverage export：
+
+```json
+{"api_version":"xcov.v1","action":"export.code_coverage","target":{"session_id":"cov0"},"args":{"scope":"uart_tb","threshold_pct":100.0,"output":{"path":"code_coverage.md"}}}
+```
+
+function coverage export：
+
+```json
+{"api_version":"xcov.v1","action":"export.function_coverage","target":{"session_id":"cov0"},"args":{"covergroup":"*uart*","threshold_pct":100.0,"output":{"path":"function_coverage.md"}}}
+```
+
+assert export：
+
+```json
+{"api_version":"xcov.v1","action":"export.assert","target":{"session_id":"cov0"},"args":{"scope":"uart_tb","threshold_pct":100.0,"output":{"path":"assert.md"}}}
+```
+
+## 读取规则
+
+- 先看 `ok`。
+- 看 `summary.matched_count/returned/truncated/output_path/note`。
+- coverage item 关注 action 当前返回的字段；不要假设所有 action 都输出
+  `metric/type/name/full_name/covered/coverable/missing/status/evidence.file/evidence.line`。
+- coverage pct 用 `covered/coverable`，不要用 hit count 代替覆盖率。
+- 保留 `excluded/unreachable/illegal` 状态，不要误判为普通 hole。
+- 交互查询优先用 `scope.summary`、`scope.children`、`scope.search`、
+  `code_coverage.summary`、`code_coverage.holes` 看层次覆盖率。
+- `scope.summary` 返回扁平覆盖率字段；不要期待 `metrics={...}`，也不要期待
+  parent/depth/type/def_name。
+- `scope.children` 和 `scope.search` 每项只返回 `name/full_name/coverage_pct`。
+- `code_coverage.summary` 不输出 `name/full_name/functional_pct`。
+- `code_coverage.holes` 只输出当前 hierarchy 与子模块覆盖率概览，只保留
+  `name/full_name/coverage_pct/*_pct`，不展开具体未覆盖 signal、branch、condition 或
+  bin，也不输出 parent/depth/type/def_name/covered/coverable/missing/file/line。
+- `code_coverage.holes` 和 `function_coverage.holes` 支持 `query.include_patterns` /
+  `query.exclude_patterns` 通配过滤；只支持 glob `*`、`?`，不要使用 regex。
+- `function_coverage.holes` 默认按 `full_name` 过滤，可用 `match_field` 切到
+  `covergroup`、`coverpoint`、`cross`、`bin` 或 `name`。
+- `function_coverage.summary` 和 `function_coverage.holes` 不输出
+  `metric/name/full_name/score_basis/score_item_count/raw_covered/raw_coverable/raw_missing`；
+  `function_coverage.summary` 也不输出 `raw_coverage_pct`。
+- xout 的 `items:` 是对齐纯文本表格，不是 Markdown 表格；JSON 响应结构不变。
+- 详细未覆盖项必须用 `export.code_coverage`、`export.function_coverage`、
+  `export.assert` 导出 Markdown 查看。
+- 三个 export action 只支持 Markdown；复杂二次统计、跨报告处理或自定义格式，转用
+  `x-npi` 编写 `pynpi` coverage 脚本。
+- `source.annotate` 的源码文本来自项目源文件，coverage annotation 来自 VDB/NPI，不解析 URG HTML。
+- `assert.summary` 输出基础覆盖率和 attempts/real successes/without attempts；不输出
+  kind/category/severity/failures/incomplete/first_match/file/line。需要完整 assertion
+  Markdown 时使用 `export.assert`。
+- 找不到 NPI API 支撑的 URG 字段时，不要做 fallback，不要要求 xcov 返回占位字段；应说明该字段做不到。
+
+## 排障
+
+- license/NPI 错误：在沙箱外确认 Verdi/NPI 和 license server。
+- action 参数不确定：先用原生 `actions` 和 `schema` action 查询。
+- 大结果：设置 limit，必要时 `overflow:"to_file"` 或 output path。
+- MCP/LSF/session 问题：改用 `xverif-mcp` 对应 troubleshooting。

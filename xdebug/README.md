@@ -2,7 +2,7 @@
 
 xdebug 是 xtrace 与 xwave 合并后的统一调试工具。公开入口使用 JSON request 描述动作，默认输出 `xout` 结构化文本；需要机器解析、schema 校验或回归兼容时显式加 `--json` 获取原 JSON response。旧的 xtrace/xwave 人类 CLI 不再作为主路径维护。
 
-仓库内 xverif skill source-of-truth 位于 [../skills/xverif/SKILL.md](../skills/xverif/SKILL.md)。更细的字段字典和 API 速查位于 [../skills/xverif/references](../skills/xverif/references)。
+仓库内 xverif skill source-of-truth 已按入口拆分为 [../skills/xverif-cli/SKILL.md](../skills/xverif-cli/SKILL.md) 和 [../skills/xverif-mcp/SKILL.md](../skills/xverif-mcp/SKILL.md)。原生命令行与 JSON envelope 看 CLI skill，MCP tool 参数壳、托管 session 和 SDK-free loop wrapper 看 MCP skill。
 
 Action 协议由 `ActionSpec` / `ActionRegistry` 约束。`actions` 输出来自 runtime registry，并带有 `category`、`status`、`requires`、action-specific schema 和 example 信息；`xdebug/specs/actions/actions.yaml`、`xdebug/schemas/v1/actions` 与 `xdebug/examples` 由 contract test 校验一致。所有 non-removed action 都必须有自己的 request/response schema，不能退回通用 envelope schema。
 
@@ -923,10 +923,15 @@ make -C xdebug log-test
 - [docs/JSON_API.md](docs/JSON_API.md)：JSON envelope、target、输出策略。
 - [docs/PAYLOAD_COMPACT.md](docs/PAYLOAD_COMPACT.md)：业务 payload 压缩契约。
 - [docs/AGENT_GUIDE.md](docs/AGENT_GUIDE.md)：面向 agent 的最短调试指南。
-- [../skills/xverif/SKILL.md](../skills/xverif/SKILL.md)：xverif agent skill source-of-truth。
-- [../skills/xverif/references/xdebug/json-api.md](../skills/xverif/references/xdebug/json-api.md)：skill 内 API 速查。
-- [../skills/xverif/references/xdebug/response-fields.md](../skills/xverif/references/xdebug/response-fields.md)：skill 内响应字段字典。
-- [../skills/xverif/references/xdebug/recipes.md](../skills/xverif/references/xdebug/recipes.md)：常见 debug workflow。
-- [../skills/xverif/references/mcp/lsf.md](../skills/xverif/references/mcp/lsf.md)：MCP LSF backend 说明。
-- [../skills/xverif/references/sdk-free-xdebug/uds-jsonl.md](../skills/xverif/references/sdk-free-xdebug/uds-jsonl.md)：SDK-free UDS/file transport 说明。
-- [../skills/xverif/references/xdebug/rc-generate.md](../skills/xverif/references/xdebug/rc-generate.md)：nWave `signal.rc` 生成说明。
+- [../skills/xverif-cli/SKILL.md](../skills/xverif-cli/SKILL.md)：xverif CLI skill source-of-truth。
+- [../skills/xverif-mcp/SKILL.md](../skills/xverif-mcp/SKILL.md)：xverif MCP skill source-of-truth。
+- [../skills/xverif-cli/references/xdebug/json-api.md](../skills/xverif-cli/references/xdebug/json-api.md)：CLI JSON envelope API 速查。
+- [../skills/xverif-mcp/references/xdebug/json-api.md](../skills/xverif-mcp/references/xdebug/json-api.md)：MCP tool 参数壳 API 速查。
+- [../skills/xverif-cli/references/xdebug/response-fields.md](../skills/xverif-cli/references/xdebug/response-fields.md)：CLI 响应字段字典。
+- [../skills/xverif-mcp/references/xdebug/response-fields.md](../skills/xverif-mcp/references/xdebug/response-fields.md)：MCP 响应字段字典。
+- [../skills/xverif-cli/references/xdebug/recipes.md](../skills/xverif-cli/references/xdebug/recipes.md)：CLI 常见 debug workflow。
+- [../skills/xverif-mcp/references/xdebug/recipes.md](../skills/xverif-mcp/references/xdebug/recipes.md)：MCP 常见 debug workflow。
+- [../skills/xverif-mcp/references/mcp/lsf.md](../skills/xverif-mcp/references/mcp/lsf.md)：MCP LSF backend 说明。
+- [../skills/xverif-mcp/references/sdk-free-loop/uds-jsonl.md](../skills/xverif-mcp/references/sdk-free-loop/uds-jsonl.md)：SDK-free UDS JSONL 说明。
+- [../skills/xverif-cli/references/xdebug/rc-generate.md](../skills/xverif-cli/references/xdebug/rc-generate.md)：CLI nWave `signal.rc` 生成说明。
+- [../skills/xverif-mcp/references/xdebug/rc-generate.md](../skills/xverif-mcp/references/xdebug/rc-generate.md)：MCP nWave `signal.rc` 生成说明。
