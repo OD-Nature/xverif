@@ -112,6 +112,13 @@ Json make_envelope(const std::string& id, const Json& req, const Json& rsp, bool
 
     if (!rsp.value("ok", false)) {
         out["error"] = rsp.value("error", Json::object());
+        out["json"] = rsp;
+        if (!request_wants_json(req, default_json)) {
+            out["payload_format"] = "xout";
+            out["xout"] = render_xout_response(rsp);
+        } else {
+            out["payload_format"] = "json";
+        }
         return out;
     }
 

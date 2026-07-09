@@ -50,6 +50,8 @@ class XverifDebugAdapter:
         raw = runner._run_raw("xdebug", ["-"], json.dumps(req))
         if output_format == "xout":
             if raw["exit_code"] != 0:
+                if raw["stdout"].lstrip().startswith("@xdebug."):
+                    return raw["stdout"]
                 from xverif_mcp.errors import cli_failed
                 return cli_failed("xdebug", raw["exit_code"], raw["stdout"],
                                   raw["stderr"])

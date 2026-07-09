@@ -26,6 +26,10 @@ from xverif_loop.logging import (
     log_uds_event,
 )
 from xverif_loop.sessions.session_manager import McpSessionManager
+from xverif_mcp.xdebug_errors import (
+    forbidden_native_session_error,
+    is_forbidden_native_session_action,
+)
 
 Json = Dict[str, Any]
 
@@ -123,9 +127,12 @@ class LoopWrapperService:
         if method == "debug.session.close":
             return self.debug.close_session(_session_key(params))
         if method == "debug.query":
+            action = _required_str(params, "action")
+            if is_forbidden_native_session_action(action):
+                return forbidden_native_session_error(action)
             return self.debug.query(
                 session=_required_str(params, "session"),
-                action=_required_str(params, "action"),
+                action=action,
                 args=params.get("args") or {},
                 limits=params.get("limits"),
                 output=params.get("output"),

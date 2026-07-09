@@ -20,6 +20,10 @@ from xverif_mcp.adapters.xloc import loc_resolve, loc_context, loc_stats, loc_an
 from xverif_mcp.adapters.xsva import sva_list, sva_scan, sva_parse, sva_explain
 from xverif_mcp.errors import error_payload
 from xverif_mcp.tool_policy import filtered_catalog, policy_summary, tool_enabled
+from xverif_mcp.xdebug_errors import (
+    forbidden_native_session_error,
+    is_forbidden_native_session_action,
+)
 
 # ---------------------------------------------------------------------------
 # FastMCP application
@@ -335,6 +339,8 @@ def xverif_debug_raw_request(request: dict, output_format: str = "xout") -> Any:
     """
     if not isinstance(request, dict):
         return _tool_error("INVALID_ARGUMENT", "request must be a JSON object")
+    if is_forbidden_native_session_action(request.get("action")):
+        return forbidden_native_session_error(request.get("action"))
     return debug.request(request, output_format)
 
 
@@ -402,6 +408,8 @@ def xverif_debug_query(
     if output_format not in ("xout", "json", "envelope"):
         return _tool_error("INVALID_ARGUMENT",
                            "output_format must be 'xout', 'json', or 'envelope'")
+    if is_forbidden_native_session_action(action):
+        return forbidden_native_session_error(action)
     return debug.query(
         action=action,
         args=args or {},

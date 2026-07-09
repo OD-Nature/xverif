@@ -14,6 +14,7 @@ from xverif_loop.logging import log_session_event
 from xverif_loop.config import default_xdebug_bin, startup_timeout, request_timeout, close_timeout
 from xverif_loop.sessions.launchers import LaunchConfig, Launcher
 from xverif_loop.sessions.session_errors import response_says_session_terminal
+from xverif_mcp.xdebug_errors import translate_native_example_for_query, xout_error
 
 Json = Dict[str, Any]
 
@@ -243,8 +244,11 @@ class XdebugLoopSession:
                 self._call_raw(req, timeout=close_timeout() / 2)
                 cleanup["stdio_quit"] = "ok"
             except Exception as exc:
-                cleanup["stdio_quit"] = "failed"
-                errors["stdio_quit"] = str(exc)
+                if not self.process_alive():
+                    cleanup["stdio_quit"] = "ok_process_exited"
+                else:
+                    cleanup["stdio_quit"] = "failed"
+                    errors["stdio_quit"] = str(exc)
         elif force:
             cleanup["backend_close"] = "force_skipped"
             cleanup["stdio_quit"] = "force_skipped"
@@ -356,6 +360,25 @@ class XdebugLoopSession:
                               session_id=self.session_id,
                               request_id=req["request_id"], action=action,
                               response=rsp)
+            if self.backend == "xdebug":
+                backend_response = rsp.get("json") if isinstance(rsp.get("json"), dict) else {
+                    "ok": False,
+                    "action": action,
+                    "error": rsp.get("error", {}),
+                }
+                shaped = translate_native_example_for_query(
+                    backend_response,
+                    session_id=self.alias,
+                )
+                if output_format == "xout":
+                    return xout_error(shaped)
+                if output_format == "json":
+                    return shaped
+                if output_format == "envelope":
+                    out = dict(rsp)
+                    out["json"] = shaped
+                    out["error"] = shaped.get("error", rsp.get("error", {}))
+                    return out
             return rsp
         log_session_event(self.alias, "query.end", True,
                           backend=self.backend, launcher=self.launcher.mode,

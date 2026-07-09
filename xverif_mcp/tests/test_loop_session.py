@@ -69,9 +69,38 @@ for line in sys.stdin:
             time.sleep(delay)
         result = {"ok": True, "action": "value.at",
                   "summary": {"signal": args.get("signal"), "value": "1"}}
+    elif action == "bad.args":
+        result = {
+            "ok": False,
+            "action": "bad.args",
+            "error": {
+                "code": "INVALID_REQUEST",
+                "message": "invalid parameter args.bad",
+                "recoverable": True,
+                "error_layer": "schema",
+                "invalid_arg": "args.bad",
+                "expected": "no additional properties allowed",
+                "correct_example": {
+                    "api_version": "xdebug.v1",
+                    "action": "bad.args",
+                    "target": {"session_id": "native_session"},
+                    "args": {}
+                }
+            }
+        }
     else:
         result = {"ok": True, "action": action,
                   "summary": {"echo_args": args, "echo_target": target, "echo_limits": limits}}
+
+    if not result.get("ok"):
+        if wants_json:
+            rsp = {"id": rid, "ok": False, "payload_format": "json", "error": result["error"], "json": result}
+        else:
+            xout = "@xdebug.error.v1\naction: " + action + "\ncode: " + result["error"]["code"] + "\n"
+            rsp = {"id": rid, "ok": False, "payload_format": "xout", "error": result["error"], "json": result, "xout": xout}
+        print(json.dumps(rsp))
+        sys.stdout.flush()
+        continue
 
     if wants_json:
         rsp = {"id": rid, "ok": True, "payload_format": "json", "json": result}
@@ -164,6 +193,26 @@ class TestLoopSessionQuery:
         r = session.query("value.at", {"signal": "clk"}, output_format="json")
         assert isinstance(r, dict)
         assert r.get("ok")
+
+    def test_xout_error_uses_mcp_correct_example(self, session):
+        session.open()
+        r = session.query("bad.args", {"bad": True}, output_format="xout")
+        assert isinstance(r, str)
+        assert r.startswith("@xdebug.error.v1")
+        assert "error_layer: schema" in r
+        assert "xverif_debug_query" in r
+        assert '"api_version"' not in r
+
+    def test_json_error_uses_mcp_correct_example(self, session):
+        session.open()
+        r = session.query("bad.args", {"bad": True}, output_format="json")
+        assert isinstance(r, dict)
+        assert r["ok"] is False
+        assert r["error"]["correct_example"]["tool"] == "xverif_debug_query"
+        example_args = r["error"]["correct_example"]["args"]
+        assert example_args["session_id"] == "test"
+        assert example_args["action"] == "bad.args"
+        assert "api_version" not in example_args
 
     def test_envelope_format(self, session):
         session.open()
