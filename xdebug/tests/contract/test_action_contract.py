@@ -268,8 +268,10 @@ def test_bad_parameter_schema_errors_include_ai_repair_hints(
         assert not result.ok, request
         error = result.response["error"]
         assert error["code"] == "INVALID_REQUEST"
+        assert error["error_layer"] == "schema"
         assert error["invalid_arg"] == invalid_arg
         assert "correct_example" in error
+        assert "data" not in result.response or result.response["data"] is None
         assert invalid_arg in error["message"]
         if did_you_mean is not None:
             assert error["did_you_mean"] == did_you_mean
@@ -295,8 +297,31 @@ def test_all_actions_unknown_args_report_correct_example(
         assert not result.ok, action
         error = result.response["error"]
         assert error["code"] == "INVALID_REQUEST", action
+        assert error["error_layer"] == "schema", action
         assert "invalid_arg" in error, action
         assert "correct_example" in error, action
+
+
+@pytest.mark.contract
+def test_schema_handler_enum_error_uses_diagnostic_error(cli_runner: CliRunner) -> None:
+    result = cli_runner.run(
+        {
+            "api_version": "xdebug.v1",
+            "action": "schema",
+            "args": {"action": "value.batch_at", "kind": "bad_kind"},
+        },
+        output_format="json",
+    )
+    assert not result.ok
+    error = result.response["error"]
+    assert error["code"] == "INVALID_ENUM"
+    assert error["error_layer"] == "handler"
+    assert error["invalid_arg"] == "args.kind"
+    assert error["allowed_values"] == ["request", "response"]
+    assert error["received"] == "bad_kind"
+    assert "example_note" in error
+    assert error["correct_example"]["args"]["kind"] == "request"
+    assert "data" not in result.response or result.response["data"] is None
 
 
 @pytest.mark.contract

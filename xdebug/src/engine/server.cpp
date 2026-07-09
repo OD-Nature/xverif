@@ -273,7 +273,7 @@ static Json ok_response(const Json& data = Json::object()) {
 
 static Json error_response(const std::string& code, const std::string& message) {
     return {{"api_version", INTERNAL_API_VERSION}, {"ok", false}, {"status", "server_error"},
-            {"data", nullptr}, {"error", {{"code", code}, {"message", message}}}};
+            {"data", nullptr}, {"error", {{"code", code}, {"message", message}, {"recoverable", true}, {"error_layer", "handler"}}}};
 }
 
 static Json compact_correct_example(const Json& request) {
@@ -377,6 +377,7 @@ static Json action_error_response(const Json& request, const Json& data) {
     Json mutable_data = data;
     if (error.is_object()) {
         if (error.contains("recoverable")) response["error"]["recoverable"] = error["recoverable"];
+        if (error.contains("error_layer")) response["error"]["error_layer"] = error["error_layer"];
         if (error.contains("suggested_actions")) response["error"]["suggested_actions"] = error["suggested_actions"];
     }
     enrich_runtime_parameter_error(request, response["error"], mutable_data);
@@ -396,12 +397,14 @@ static Json schema_validation_error_response(const Json& request,
                                              const xdebug_core::RuntimeSchemaValidationResult& validation) {
     Json response = error_response(validation.code.empty() ? "INVALID_REQUEST" : validation.code,
                                    validation.message);
+    response["error"]["error_layer"] = "schema";
     Json details = validation.data.is_object() ? validation.data : Json::object();
     details["message"] = validation.message;
     details["error"] = {
         {"code", validation.code.empty() ? "INVALID_REQUEST" : validation.code},
         {"message", validation.message},
-        {"recoverable", true}
+        {"recoverable", true},
+        {"error_layer", "schema"}
     };
     if (validation.summary.is_object() && !validation.summary.empty()) {
         details["summary"] = validation.summary;
@@ -409,7 +412,8 @@ static Json schema_validation_error_response(const Json& request,
     }
     static const char* detail_keys[] = {
         "invalid_arg", "expected", "allowed_values", "example", "received_type",
-        "schema_path", "required_any_of", "did_you_mean", "correct_example"
+        "schema_path", "required_any_of", "did_you_mean", "correct_example",
+        "example_note"
     };
     for (const char* key : detail_keys) {
         if (validation.data.is_object() && validation.data.contains(key)) {

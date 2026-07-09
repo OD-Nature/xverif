@@ -15,6 +15,9 @@ Json make_error(const Json& request,
                 const std::string& code,
                 const std::string& message,
                 bool recoverable = true);
+Json make_error(const Json& request,
+                const std::string& action,
+                const Json& error);
 Json normalize_engine_response(const Json& response);
 
 } // namespace xdebug

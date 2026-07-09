@@ -1,6 +1,7 @@
 #include "api/dispatcher.h"
 #include "api/action_catalog.h"
 #include "api/action_registry_init.h"
+#include "api/diagnostic_error.h"
 #include "api/request_envelope.h"
 #include "api/request_validator.h"
 #include "api/resource_resolver.h"
@@ -89,7 +90,8 @@ std::string requested_name(const Json& request) {
 }
 
 Json engine_error(const Json& request, const std::string& action, const std::string& message) {
-    return make_error(request, action, "INTERNAL_ENGINE_FAILED", message);
+    return make_error(request, action,
+                      ErrorBuilder::transport("INTERNAL_ENGINE_FAILED", message).to_json());
 }
 
 int request_timeout_ms(const Json& request) {
@@ -157,10 +159,10 @@ Json direct_socket_timeout_error(const Json& request,
     Json response = make_error(
         request,
         action,
-        "SESSION_TRANSPORT_FAILED",
-        "direct session socket timed out after " + std::to_string(timeout_ms) +
-            "ms: " + socket_path,
-        true);
+        ErrorBuilder::transport("SESSION_TRANSPORT_FAILED",
+                                "direct session socket timed out after " +
+                                    std::to_string(timeout_ms) + "ms: " + socket_path)
+            .to_json());
     response["summary"] = {
         {"transport", "uds"},
         {"socket_path", socket_path},
@@ -175,9 +177,9 @@ Json direct_socket_failed_error(const Json& request,
     Json response = make_error(
         request,
         action,
-        "SESSION_TRANSPORT_FAILED",
-        "direct session transport failed for session: " + record.id,
-        true);
+        ErrorBuilder::transport("SESSION_TRANSPORT_FAILED",
+                                "direct session transport failed for session: " + record.id)
+            .to_json());
     response["summary"] = {
         {"session_id", record.id},
         {"mode", record.mode},
@@ -646,18 +648,20 @@ Json Dispatcher::dispatch_impl(const Json& request) {
     RequestValidator validator;
     ValidationResult validation = validator.validate(envelope, *spec);
     if (!validation.ok) {
-        Json response = make_error(request, action, validation.code, validation.message);
-        if (validation.summary.is_object() && !validation.summary.empty()) response["summary"] = validation.summary;
-        if (validation.data.is_object() && !validation.data.empty()) response["data"] = validation.data;
-        if (response["error"].is_object() && validation.data.is_object()) {
+        Json error = ErrorBuilder::schema(validation.code.empty() ? "INVALID_REQUEST" : validation.code,
+                                          validation.message).to_json();
+        if (validation.data.is_object()) {
             static const char* keys[] = {
-                "invalid_arg", "expected", "received_type", "allowed_values", "schema_path",
-                "required_any_of", "did_you_mean", "correct_example"
+                "invalid_arg", "expected", "received_type", "received", "allowed_values",
+                "schema_path", "required_any_of", "did_you_mean", "correct_example",
+                "example_note"
             };
             for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); ++i) {
-                if (validation.data.contains(keys[i])) response["error"][keys[i]] = validation.data[keys[i]];
+                if (validation.data.contains(keys[i])) error[keys[i]] = validation.data[keys[i]];
             }
         }
+        Json response = make_error(request, action, error);
+        if (validation.summary.is_object() && !validation.summary.empty()) response["summary"] = validation.summary;
         return response;
     }
 
@@ -812,8 +816,10 @@ bool Dispatcher::send_to_socket(const std::string& session_id,
             err.value("code", "INTERNAL_ENGINE_FAILED"),
             err.value("message", "engine server error"), true);
         static const char* public_error_keys[] = {
-            "invalid_arg", "expected", "received_type", "allowed_values", "schema_path",
-            "required_any_of", "did_you_mean", "correct_example"
+            "error_layer", "invalid_arg", "expected", "received", "received_type",
+            "allowed_values", "available_values", "missing_name", "missing_resource",
+            "schema_path", "required_any_of", "did_you_mean", "example_note",
+            "correct_example", "next_actions", "cause_code"
         };
         for (const char* key : public_error_keys) {
             if (err.is_object() && err.contains(key)) response["error"][key] = err[key];

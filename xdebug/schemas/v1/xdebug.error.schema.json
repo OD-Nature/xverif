@@ -8,7 +8,35 @@
     "api_version": {"type": "string", "enum": ["xdebug.v1"]},
     "ok": {"type": "boolean"},
     "action": {"type": "string"},
-    "error": {"type": "object"},
+    "error": {
+      "type": "object",
+      "required": ["code", "message", "recoverable", "error_layer"],
+      "properties": {
+        "code": {"type": "string"},
+        "message": {"type": "string"},
+        "recoverable": {"type": "boolean"},
+        "error_layer": {
+          "type": "string",
+          "enum": ["schema", "handler", "wrapper", "transport", "internal"]
+        },
+        "invalid_arg": {"type": "string"},
+        "expected": {"type": "string"},
+        "received": {},
+        "received_type": {"type": "string"},
+        "allowed_values": {"type": "array"},
+        "available_values": {"type": "array"},
+        "missing_name": {"type": "string"},
+        "missing_resource": {"type": "string"},
+        "schema_path": {"type": "string"},
+        "required_any_of": {"type": "array"},
+        "did_you_mean": {"type": "string"},
+        "example_note": {"type": "string"},
+        "correct_example": {"type": "object"},
+        "next_actions": {"type": "array"},
+        "cause_code": {"type": "string"}
+      },
+      "additionalProperties": true
+    },
     "summary": {"type": "object"},
     "data": {},
     "warnings": {"type": "array"},

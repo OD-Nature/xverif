@@ -8,6 +8,7 @@
     "code": "RESOURCE_REQUIRED",
     "message": "waveform action requires target.fsdb or a waveform session",
     "recoverable": true,
+    "error_layer": "handler",
     "candidates": [],
     "suggested_actions": []
   },

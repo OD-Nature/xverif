@@ -444,6 +444,7 @@ RuntimeSchemaValidationResult make_validation_error(const CachedValidator& cache
         expected = "use clock, edge, and sample_point";
     }
     result.data = {
+        {"error_layer", "schema"},
         {"invalid_arg", invalid_arg},
         {"expected", expected},
         {"schema_path", cached.schema_path}
@@ -495,7 +496,7 @@ RuntimeSchemaValidationResult RuntimeSchemaValidator::validate_request(const std
         result.ok = false;
         result.code = "INVALID_REQUEST";
         result.message = std::string("request must be a JSON object: ") + e.what();
-        result.data = {{"invalid_arg", "$"}, {"schema_path", cached->schema_path}};
+        result.data = {{"error_layer", "schema"}, {"invalid_arg", "$"}, {"schema_path", cached->schema_path}};
         result.summary = {{"invalid_arg", "$"}, {"message", result.message}};
         return result;
     }
@@ -507,7 +508,7 @@ RuntimeSchemaValidationResult RuntimeSchemaValidator::validate_request(const std
         result.ok = false;
         result.code = "INVALID_REQUEST";
         result.message = e.what();
-        result.data = {{"invalid_arg", "$"}, {"schema_path", cached->schema_path}};
+        result.data = {{"error_layer", "schema"}, {"invalid_arg", "$"}, {"schema_path", cached->schema_path}};
         if (!cached->example.is_null()) result.data["example"] = cached->example;
         result.summary = {{"invalid_arg", "$"}, {"message", result.message}};
         return result;

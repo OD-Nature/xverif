@@ -30,6 +30,7 @@ void normalize_session_selector_error(const RequestEnvelope& request, Validation
     const std::string expected = "target.session_id";
     result.message = expected + " is required";
     result.data = {
+        {"error_layer", "schema"},
         {"invalid_arg", expected},
         {"expected", "non-empty string session id"},
         {"correct_example", session_target_example(request.action)}
@@ -50,6 +51,7 @@ bool reject_invalid_session_selector(const RequestEnvelope& request, ValidationR
     result.code = "INVALID_REQUEST";
     result.message = "invalid parameter target.session_id: expected non-empty string session id";
     result.data = {
+        {"error_layer", "schema"},
         {"invalid_arg", "target.session_id"},
         {"expected", "non-empty string session id"},
         {"received_type", request.target["session_id"].type_name()},

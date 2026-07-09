@@ -1,4 +1,5 @@
 #include "api/response.h"
+#include "api/diagnostic_error.h"
 
 namespace xdebug {
 
@@ -25,8 +26,20 @@ Json make_error(const Json& request,
     response["error"] = {
         {"code", code},
         {"message", message},
-        {"recoverable", recoverable}
+        {"recoverable", recoverable},
+        {"error_layer", recoverable ? "handler" : "internal"}
     };
+    return response;
+}
+
+Json make_error(const Json& request,
+                const std::string& action,
+                const Json& error) {
+    Json response = make_response(request, action, false);
+    Json normalized = ensure_error_layer(error, "handler");
+    if (!normalized.contains("code")) normalized["code"] = "ACTION_FAILED";
+    if (!normalized.contains("message")) normalized["message"] = "action failed";
+    response["error"] = normalized;
     return response;
 }
 

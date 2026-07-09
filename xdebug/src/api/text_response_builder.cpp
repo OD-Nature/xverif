@@ -403,15 +403,26 @@ void TextResponseBuilder::emit_error(const Json& error) {
     if (error.contains("code")) emit_kv("code", error["code"]);
     if (error.contains("message")) emit_kv("message", error["message"]);
     if (error.contains("recoverable")) emit_kv("recoverable", error["recoverable"]);
+    if (error.contains("error_layer")) emit_kv("error_layer", error["error_layer"]);
     if (error.contains("invalid_arg")) emit_kv("invalid_arg", error["invalid_arg"]);
     if (error.contains("expected")) emit_kv("expected", error["expected"]);
+    if (error.contains("received")) emit_kv("received", error["received"]);
     if (error.contains("received_type")) emit_kv("received_type", error["received_type"]);
     if (error.contains("allowed_values")) emit_kv("allowed_values", error["allowed_values"]);
+    if (error.contains("available_values")) emit_kv("available_values", error["available_values"]);
+    if (error.contains("missing_name")) emit_kv("missing_name", error["missing_name"]);
+    if (error.contains("missing_resource")) emit_kv("missing_resource", error["missing_resource"]);
     if (error.contains("required_any_of")) emit_kv("required_any_of", error["required_any_of"]);
     if (error.contains("did_you_mean")) emit_kv("did_you_mean", error["did_you_mean"]);
+    if (error.contains("cause_code")) emit_kv("cause_code", error["cause_code"]);
+    if (error.contains("example_note")) emit_kv("example_note", error["example_note"]);
     if (error.contains("correct_example")) {
         emit_section("correct_example");
         emit_kv("json", error["correct_example"]);
+    }
+    if (error.contains("next_actions") && error["next_actions"].is_array()) {
+        emit_section("next_actions");
+        for (const auto& action : error["next_actions"]) emit_row({json_to_xout_value(action)});
     }
 }
 

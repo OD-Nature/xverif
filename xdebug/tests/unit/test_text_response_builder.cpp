@@ -164,7 +164,10 @@ int main() {
         {"error", {
             {"code", "SIGNAL_NOT_FOUND"},
             {"message", "missing\nsignal"},
-            {"recoverable", true}
+            {"recoverable", true},
+            {"error_layer", "handler"},
+            {"example_note", "示例仅说明当前入口参数形态。"},
+            {"next_actions", Json::array({"scope.roots", "scope.list"})}
         }}
     };
     text = render_xout_response(error);
@@ -172,5 +175,8 @@ int main() {
     assert(text.find("action: trace.driver") != std::string::npos);
     assert(text.find("code: SIGNAL_NOT_FOUND") != std::string::npos);
     assert(text.find("message: missing\\nsignal") != std::string::npos);
+    assert(text.find("error_layer: handler") != std::string::npos);
+    assert(text.find("example_note:") != std::string::npos);
+    assert(text.find("next_actions:") != std::string::npos);
     return 0;
 }

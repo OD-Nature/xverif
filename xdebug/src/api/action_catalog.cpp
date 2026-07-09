@@ -1,5 +1,6 @@
 #include "api/action_catalog.h"
 #include "api/action_registry_init.h"
+#include "api/diagnostic_error.h"
 #include "api/response.h"
 #include "common/env_config.h"
 
@@ -79,7 +80,23 @@ Json catalog_schema_response(const Json& request) {
         std::string rel;
         if (kind == "request") rel = spec->request_schema;
         else if (kind == "response") rel = spec->response_schema;
-        else return make_error(request, "schema", "INVALID_REQUEST", "schema args.kind must be request or response");
+        else {
+            Json example = {
+                {"api_version", "xdebug.v1"},
+                {"action", "schema"},
+                {"args", {{"action", action}, {"kind", "request"}}}
+            };
+            Json error = ErrorBuilder::handler("INVALID_ENUM",
+                                               "schema args.kind must be request or response")
+                             .invalid_arg("args.kind")
+                             .expected("one of request, response")
+                             .received(kind)
+                             .allowed_values(Json::array({"request", "response"}))
+                             .example_note("示例仅说明 schema action 的 native JSON 形态；kind 必须是 request 或 response。")
+                             .correct_example(example)
+                             .to_json();
+            return make_error(request, "schema", error);
+        }
         const std::string prefix = "schemas/v1/actions/";
         std::string path = rel;
         if (path.compare(0, prefix.size(), prefix) == 0) path = schema_root() + path.substr(prefix.size());

@@ -15,9 +15,11 @@ from typing import Any
 XDEBUG_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = XDEBUG_ROOT.parent
 SPEC_PATH = XDEBUG_ROOT / "specs" / "actions" / "actions.yaml"
-REFERENCE_PATH = (
-    REPO_ROOT / "skills" / "xverif" / "references" / "xdebug" / "action-reference.md"
-)
+REFERENCE_PATH_CANDIDATES = [
+    REPO_ROOT / "skills" / "xverif-cli" / "references" / "xdebug" / "action-reference.md",
+    REPO_ROOT / "skills" / "xverif-mcp" / "references" / "xdebug" / "action-reference.md",
+    REPO_ROOT / "skills" / "xverif" / "references" / "xdebug" / "action-reference.md",
+]
 
 
 PARAM_DESCRIPTIONS = {
@@ -89,6 +91,14 @@ def parse_action_reference(path: Path) -> dict[str, dict[str, str]]:
     return hints
 
 
+def action_reference_path() -> Path:
+    for path in REFERENCE_PATH_CANDIDATES:
+        if path.is_file():
+            return path
+    searched = ", ".join(str(path) for path in REFERENCE_PATH_CANDIDATES)
+    raise FileNotFoundError(f"action-reference.md not found; searched: {searched}")
+
+
 def required_related_args(spec: dict[str, Any]) -> set[str]:
     keys = set(spec.get("required_args", []))
     for group in spec.get("required_arg_groups", []):
@@ -154,7 +164,7 @@ def update_response_schema(schema: dict[str, Any], spec: dict[str, Any], hint: d
 
 def sync(check: bool) -> list[str]:
     specs = load_json(SPEC_PATH)["actions"]
-    hints = parse_action_reference(REFERENCE_PATH)
+    hints = parse_action_reference(action_reference_path())
     errors: list[str] = []
 
     for spec in specs:

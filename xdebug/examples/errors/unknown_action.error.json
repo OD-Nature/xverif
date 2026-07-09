@@ -8,6 +8,7 @@
     "code": "UNKNOWN_ACTION",
     "message": "unknown action: no.such.action",
     "recoverable": true,
+    "error_layer": "schema",
     "candidates": [],
     "suggested_actions": []
   },
