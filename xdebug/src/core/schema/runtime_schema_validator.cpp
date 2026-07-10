@@ -1,6 +1,7 @@
 #include "core/schema/runtime_schema_validator.h"
 
 #include "common/env_config.h"
+#include "core/diagnostic_error.h"
 
 #include "nlohmann/json-schema.hpp"
 
@@ -121,8 +122,8 @@ const CachedValidator* get_cached_validator(const std::string& action,
         result.ok = false;
         result.code = "SCHEMA_VALIDATION_CONFIG_ERROR";
         result.message = error;
-        result.data = {{"schema_path", rel}};
-        result.summary = {{"message", error}};
+        result.error = DiagnosticErrorBuilder::internal(result.code, result.message)
+            .schema_path(rel).to_json();
         return nullptr;
     }
 
@@ -137,8 +138,8 @@ const CachedValidator* get_cached_validator(const std::string& action,
         result.ok = false;
         result.code = "SCHEMA_VALIDATION_CONFIG_ERROR";
         result.message = "failed to compile runtime request schema " + rel + ": " + e.what();
-        result.data = {{"schema_path", rel}};
-        result.summary = {{"message", result.message}};
+        result.error = DiagnosticErrorBuilder::internal(result.code, result.message)
+            .schema_path(rel).to_json();
         return nullptr;
     }
 
@@ -312,8 +313,6 @@ std::string did_you_mean_for(const std::string& action,
         return "args.query.index";
     if (invalid_arg == "args.name" && action.compare(0, 7, "stream.") == 0)
         return "args.stream";
-    if (invalid_arg == "args.stream" && action.compare(0, 7, "stream.") == 0)
-        return "args.stream";
     if (invalid_arg == "args.depth" && action == "trace.active_driver_chain")
         return "limits.max_depth";
     if (invalid_arg == "args.at") return "args.time";
@@ -447,32 +446,28 @@ RuntimeSchemaValidationResult make_validation_error(const CachedValidator& cache
     if (additional_property && is_legacy_clock_sampling_field(extra_property)) {
         expected = "use clock, edge, and sample_point";
     }
-    result.data = {
-        {"error_layer", "schema"},
-        {"invalid_arg", invalid_arg},
-        {"expected", expected},
-        {"schema_path", cached.schema_path}
-    };
+    DiagnosticErrorBuilder builder =
+        DiagnosticErrorBuilder::schema(result.code, result.message)
+            .invalid_arg(invalid_arg)
+            .expected(expected)
+            .schema_path(cached.schema_path);
     if (has_received) {
-        result.data["received_type"] = plain_type_name(received);
+        builder.received_type(plain_type_name(received));
     } else if (!missing_property.empty()) {
-        result.data["received_type"] = "missing";
+        builder.received_type("missing");
     }
     OrderedJson allowed = enum_values_from_schema(schema_node);
-    if (!allowed.is_null()) result.data["allowed_values"] = allowed;
-    if (!cached.example.is_null()) result.data["example"] = cached.example;
+    if (!allowed.is_null()) builder.allowed_values(allowed);
     OrderedJson correct_example = compact_correct_example(cached.example);
-    if (!correct_example.is_null()) result.data["correct_example"] = correct_example;
+    if (!correct_example.is_null()) builder.correct_example(correct_example);
     std::string did_you_mean = did_you_mean_for(action, invalid_arg, extra_property);
-    if (!did_you_mean.empty()) result.data["did_you_mean"] = did_you_mean;
+    builder.did_you_mean(did_you_mean);
     OrderedJson required_any_of = required_any_of_for(action, invalid_arg);
-    if (!required_any_of.is_null()) result.data["required_any_of"] = required_any_of;
+    if (!required_any_of.is_null()) builder.required_any_of(required_any_of);
     result.message = friendly_validation_message(issue.message, invalid_arg, expected, allowed,
                                                  required_any_of, did_you_mean);
-    result.summary = {
-        {"invalid_arg", invalid_arg},
-        {"message", result.message}
-    };
+    result.error = builder.to_json();
+    result.error["message"] = result.message;
     return result;
 }
 
@@ -500,8 +495,8 @@ RuntimeSchemaValidationResult RuntimeSchemaValidator::validate_request(const std
         result.ok = false;
         result.code = "INVALID_REQUEST";
         result.message = std::string("request must be a JSON object: ") + e.what();
-        result.data = {{"error_layer", "schema"}, {"invalid_arg", "$"}, {"schema_path", cached->schema_path}};
-        result.summary = {{"invalid_arg", "$"}, {"message", result.message}};
+        result.error = DiagnosticErrorBuilder::schema(result.code, result.message)
+            .invalid_arg("$").schema_path(cached->schema_path).to_json();
         return result;
     }
 
@@ -512,15 +507,33 @@ RuntimeSchemaValidationResult RuntimeSchemaValidator::validate_request(const std
         result.ok = false;
         result.code = "INVALID_REQUEST";
         result.message = e.what();
-        result.data = {{"error_layer", "schema"}, {"invalid_arg", "$"}, {"schema_path", cached->schema_path}};
-        if (!cached->example.is_null()) result.data["example"] = cached->example;
-        result.summary = {{"invalid_arg", "$"}, {"message", result.message}};
+        DiagnosticErrorBuilder builder =
+            DiagnosticErrorBuilder::schema(result.code, result.message)
+                .invalid_arg("$").schema_path(cached->schema_path);
+        OrderedJson example = compact_correct_example(cached->example);
+        if (!example.is_null()) builder.correct_example(example);
+        result.error = builder.to_json();
         return result;
     }
     if (!handler.issues.empty()) {
-        return make_validation_error(*cached, instance, action, handler.issues.front());
+        RuntimeSchemaValidationResult failure =
+            make_validation_error(*cached, instance, action, handler.issues.front());
+        OrderedJson issues = OrderedJson::array();
+        for (const ValidationIssue& issue : handler.issues) {
+            issues.push_back({
+                {"path", pointer_to_arg_path(issue.pointer)},
+                {"message", issue.message}
+            });
+        }
+        if (issues.size() > 1) failure.error["validation_issues"] = issues;
+        return failure;
     }
     return result;
+}
+
+OrderedJson valid_request_example(const std::string& action) {
+    return compact_correct_example(
+        read_ordered_json_or_null(example_path_for_action(action)));
 }
 
 }  // namespace xdebug_core

@@ -12,8 +12,9 @@ struct RuntimeSchemaValidationResult {
     bool ok = true;
     std::string code;
     std::string message;
-    OrderedJson data = OrderedJson::object();
-    OrderedJson summary = OrderedJson::object();
+    // Single canonical diagnostic object. Callers only wrap it in their
+    // transport envelope; they must not copy fields into summary or data.
+    OrderedJson error = OrderedJson::object();
 };
 
 class RuntimeSchemaValidator {
@@ -22,5 +23,9 @@ public:
                                                    const OrderedJson& request,
                                                    const std::string& schema_ref = std::string()) const;
 };
+
+// Return the checked-in, schema-valid basic request example for an action.
+// Handler error enrichment uses this instead of copying a failing request.
+OrderedJson valid_request_example(const std::string& action);
 
 }  // namespace xdebug_core

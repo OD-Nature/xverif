@@ -1,7 +1,7 @@
 #include "api/dispatcher.h"
 #include "api/action_catalog.h"
 #include "api/action_registry_init.h"
-#include "api/diagnostic_error.h"
+#include "core/diagnostic_error.h"
 #include "api/request_envelope.h"
 #include "api/request_validator.h"
 #include "api/resource_resolver.h"
@@ -24,6 +24,8 @@
 #include <sys/un.h>
 
 namespace xdebug {
+
+using xdebug_core::DiagnosticErrorBuilder;
 
 namespace {
 
@@ -91,7 +93,7 @@ std::string requested_name(const Json& request) {
 
 Json engine_error(const Json& request, const std::string& action, const std::string& message) {
     return make_error(request, action,
-                      ErrorBuilder::transport("INTERNAL_ENGINE_FAILED", message).to_json());
+                      DiagnosticErrorBuilder::transport("INTERNAL_ENGINE_FAILED", message).to_json());
 }
 
 int request_timeout_ms(const Json& request) {
@@ -159,7 +161,7 @@ Json direct_socket_timeout_error(const Json& request,
     Json response = make_error(
         request,
         action,
-        ErrorBuilder::transport("SESSION_TRANSPORT_FAILED",
+        DiagnosticErrorBuilder::transport("SESSION_TRANSPORT_FAILED",
                                 "direct session socket timed out after " +
                                     std::to_string(timeout_ms) + "ms: " + socket_path)
             .to_json());
@@ -177,7 +179,7 @@ Json direct_socket_failed_error(const Json& request,
     Json response = make_error(
         request,
         action,
-        ErrorBuilder::transport("SESSION_TRANSPORT_FAILED",
+        DiagnosticErrorBuilder::transport("SESSION_TRANSPORT_FAILED",
                                 "direct session transport failed for session: " + record.id)
             .to_json());
     response["summary"] = {
@@ -648,20 +650,13 @@ Json Dispatcher::dispatch_impl(const Json& request) {
     RequestValidator validator;
     ValidationResult validation = validator.validate(envelope, *spec);
     if (!validation.ok) {
-        Json error = ErrorBuilder::schema(validation.code.empty() ? "INVALID_REQUEST" : validation.code,
-                                          validation.message).to_json();
-        if (validation.data.is_object()) {
-            static const char* keys[] = {
-                "invalid_arg", "expected", "received_type", "received", "allowed_values",
-                "schema_path", "required_any_of", "did_you_mean", "correct_example",
-                "example_note"
-            };
-            for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); ++i) {
-                if (validation.data.contains(keys[i])) error[keys[i]] = validation.data[keys[i]];
-            }
+        Json error = validation.error;
+        if (!error.is_object()) {
+            error = DiagnosticErrorBuilder::schema(
+                validation.code.empty() ? "INVALID_REQUEST" : validation.code,
+                validation.message).to_json();
         }
         Json response = make_error(request, action, error);
-        if (validation.summary.is_object() && !validation.summary.empty()) response["summary"] = validation.summary;
         return response;
     }
 
@@ -812,57 +807,7 @@ bool Dispatcher::send_to_socket(const std::string& session_id,
 
     if (!engine_resp.value("ok", false)) {
         Json err = engine_resp.value("error", Json::object());
-        response = make_error(request, action,
-            err.value("code", "INTERNAL_ENGINE_FAILED"),
-            err.value("message", "engine server error"), true);
-        static const char* public_error_keys[] = {
-            "error_layer", "invalid_arg", "expected", "received", "received_type",
-            "allowed_values", "available_values", "missing_name", "missing_resource",
-            "schema_path", "required_any_of", "did_you_mean", "example_note",
-            "correct_example", "next_actions", "cause_code"
-        };
-        for (const char* key : public_error_keys) {
-            if (err.is_object() && err.contains(key)) response["error"][key] = err[key];
-        }
-        Json details = engine_resp.value("details", Json::object());
-        if (details.is_object() && !details.empty()) {
-            if (details.contains("summary") && details["summary"].is_object()) {
-                response["summary"] = details["summary"];
-            } else {
-                Json detail_summary = Json::object();
-                for (auto it = details.begin(); it != details.end(); ++it) {
-                    if (it->is_string() || it->is_number() || it->is_boolean())
-                        detail_summary[it.key()] = it.value();
-                }
-                response["summary"] = detail_summary;
-            }
-            Json detail_error = details.value("error", Json());
-            if (detail_error.is_object()) {
-                for (const char* key : {"recoverable", "candidates", "suggested_actions"}) {
-                    if (detail_error.contains(key)) response["error"][key] = detail_error[key];
-                }
-            }
-            for (const char* key : public_error_keys) {
-                if (details.contains(key)) response["error"][key] = details[key];
-            }
-            if (details.contains("warnings") && details["warnings"].is_array())
-                response["warnings"] = details["warnings"];
-            if (details.contains("suggested_next_actions") &&
-                details["suggested_next_actions"].is_array())
-                response["suggested_next_actions"] = details["suggested_next_actions"];
-            Json public_data = Json::object();
-            for (auto it = details.begin(); it != details.end(); ++it) {
-                const std::string key = it.key();
-                if (key == "error" || key == "message" || key == "summary" ||
-                    key == "truncated" || key == "warnings" ||
-                    key == "suggested_next_actions" || key == "ok" || key == "status")
-                    continue;
-                public_data[key] = it.value();
-            }
-            if (!public_data.empty()) response["data"] = public_data;
-            if (details.contains("truncated") && details["truncated"].is_boolean())
-                response["meta"] = {{"truncated", details["truncated"].get<bool>()}};
-        }
+        response = make_error(request, action, err);
         Json ctx = transport_context(request, "socket.request.end", session_id, socket_path, timeout_ms);
         ctx["elapsed_ms"] = elapsed_ms_since(begin);
         ctx["engine_response"] = xdebug_core::sanitize_for_log(engine_resp);

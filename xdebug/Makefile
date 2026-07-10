@@ -212,7 +212,7 @@ DEPS = $(sort $(CORE_OBJS:.o=.d) \
        $(DESIGN_OBJS:.o=.d) \
        $(WAVEFORM_OBJS:.o=.d))
 
-.PHONY: all internal-engines unit-test log-test test-infra pytest-contract pytest-synthetic-existing pytest-counter-statistics pytest-axi-vip pytest-apb-vip pytest-active-semantics pytest-realdata pytest-session pytest-mcp test-fast test-contract test-synthetic test-vip test-active-trace test-session test-mcp-direct test-mcp-fake-lsf test-realdata-smoke test-regression test-nightly test-mcp-real-lsf mcp-test schema-test clock-sampling-static-test contract-test combined-test clean
+.PHONY: all internal-engines unit-test log-test test-infra pytest-contract pytest-synthetic-existing pytest-counter-statistics pytest-axi-vip pytest-apb-vip pytest-active-semantics pytest-realdata pytest-session pytest-mcp test-fast test-contract test-synthetic test-vip test-active-trace test-session test-mcp-direct test-mcp-fake-lsf test-realdata-smoke test-regression test-nightly test-mcp-real-lsf mcp-test schema-test clock-sampling-static-test error-contract-static-test contract-test combined-test clean
 
 all: $(EXE) internal-engines
 
@@ -351,6 +351,9 @@ schema-test:
 clock-sampling-static-test:
 	$(PYTHON) tools/check_clock_sampling_consolidation.py
 
+error-contract-static-test:
+	$(PYTHON) tools/check_error_contract_consolidation.py
+
 mcp-test:
 	PYTHONPATH=$(CURDIR)/../xverif_mcp/src:$(CURDIR)/.. $(PYTHON) $(CURDIR)/../xverif_mcp/tools/test_actions.py
 
@@ -372,7 +375,7 @@ mcp-inspect:
 mcp-run:
 	cd $(CURDIR)/.. && PYTHONPATH=xverif_mcp/src$(PYTHON) -m mcp run xverif_mcp/src/xverif_mcp/server.py
 
-contract-test: $(EXE) schema-test clock-sampling-static-test
+contract-test: $(EXE) schema-test clock-sampling-static-test error-contract-static-test
 	$(PYTHON) tools/audit_action_schema_coverage.py $(CURDIR)
 	$(PYTHON) tools/check_action_contract.py specs/actions $(CURDIR)/$(EXE)
 

@@ -1,6 +1,6 @@
 #include "api/action_catalog.h"
 #include "api/action_registry_init.h"
-#include "api/diagnostic_error.h"
+#include "core/diagnostic_error.h"
 #include "api/response.h"
 #include "common/env_config.h"
 
@@ -8,6 +8,8 @@
 #include <sstream>
 
 namespace xdebug {
+
+using xdebug_core::DiagnosticErrorBuilder;
 
 namespace {
 
@@ -86,7 +88,7 @@ Json catalog_schema_response(const Json& request) {
                 {"action", "schema"},
                 {"args", {{"action", action}, {"kind", "request"}}}
             };
-            Json error = ErrorBuilder::handler("INVALID_ENUM",
+            Json error = DiagnosticErrorBuilder::handler("INVALID_ENUM",
                                                "schema args.kind must be request or response")
                              .invalid_arg("args.kind")
                              .expected("one of request, response")

@@ -381,6 +381,31 @@ def test_all_actions_unknown_args_report_correct_example(
 
 
 @pytest.mark.contract
+def test_schema_error_has_canonical_shape_and_all_validation_issues(
+    cli_runner: CliRunner,
+) -> None:
+    result = cli_runner.run(
+        {
+            "api_version": "xdebug.v1",
+            "action": "stream.show",
+            "args": {"__bad_param__": True},
+        },
+        output_format="json",
+    )
+    assert not result.ok
+    response = result.response
+    assert response["summary"] == {
+        "status": "error",
+        "error_code": "INVALID_REQUEST",
+    }
+    assert response.get("data") is None
+    error = response["error"]
+    assert error["error_layer"] == "schema"
+    assert len(error["validation_issues"]) >= 2
+    assert error.get("did_you_mean") != error["invalid_arg"]
+
+
+@pytest.mark.contract
 def test_schema_handler_enum_error_uses_diagnostic_error(cli_runner: CliRunner) -> None:
     result = cli_runner.run(
         {

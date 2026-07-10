@@ -60,7 +60,7 @@
             },
             "additionalProperties": false
           },
-          "description": "Conditions to evaluate. Each item must include expr."
+          "description": "需要验证的条件列表。"
         },
         "edge": {
           "type": "string",

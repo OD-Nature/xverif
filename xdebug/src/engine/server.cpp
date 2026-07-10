@@ -4,6 +4,7 @@
 #include "session/session_registry.h"
 #include "session/session_transport.h"
 #include "core/common/env_config.h"
+#include "core/diagnostic_error.h"
 #include "core/logging/action_log.h"
 #include "core/npi/time_contract.h"
 #include "core/session/session_timeout.h"
@@ -271,20 +272,15 @@ static Json ok_response(const Json& data = Json::object()) {
     return {{"api_version", INTERNAL_API_VERSION}, {"ok", true}, {"data", data}, {"error", nullptr}};
 }
 
-static Json error_response(const std::string& code, const std::string& message) {
-    return {{"api_version", INTERNAL_API_VERSION}, {"ok", false}, {"status", "server_error"},
-            {"data", nullptr}, {"error", {{"code", code}, {"message", message}, {"recoverable", true}, {"error_layer", "handler"}}}};
+static Json error_response(Json error) {
+    error = xdebug_core::normalize_diagnostic_error(error, "handler");
+    return {{"api_version", INTERNAL_API_VERSION}, {"ok", false},
+            {"status", "server_error"}, {"data", nullptr}, {"error", error}};
 }
 
-static Json compact_correct_example(const Json& request) {
-    Json out = Json::object();
-    out["api_version"] = "xdebug.v1";
-    out["action"] = request.value("action", std::string());
-    if (request.contains("target")) out["target"] = request["target"];
-    if (request.contains("args")) out["args"] = request["args"];
-    if (request.contains("limits")) out["limits"] = request["limits"];
-    if (request.contains("output")) out["output"] = request["output"];
-    return out;
+static Json error_response(const std::string& code, const std::string& message) {
+    return error_response(
+        xdebug_core::DiagnosticErrorBuilder::handler(code, message).to_json());
 }
 
 static void patch_example_path(Json& example, const std::string& invalid_arg, const Json& value) {
@@ -298,13 +294,13 @@ static void patch_example_path(Json& example, const std::string& invalid_arg, co
     }
 }
 
-static void enrich_runtime_parameter_error(const Json& request, Json& error, Json& data) {
+static void enrich_runtime_parameter_error(const Json& request, Json& error) {
     std::string action = request.value("action", std::string());
-    std::string message = error.value("message", data.value("message", std::string()));
+    std::string message = error.value("message", std::string());
     if (message.find("INVALID_REQUEST:") == 0) error["code"] = "INVALID_REQUEST";
     if (message.find("TIME_RANGE_INVALID:") == 0) error["code"] = "TIME_RANGE_INVALID";
     if (message.find("TIME_SPEC_INVALID:") == 0) error["code"] = "TIME_SPEC_INVALID";
-    Json example = compact_correct_example(request);
+    Json example = xdebug_core::valid_request_example(action);
     if (message.find("end time is before begin time") != std::string::npos ||
         message.find("args.time_range.end is before args.time_range.begin") != std::string::npos) {
         error["invalid_arg"] = "args.time_range.end";
@@ -349,13 +345,6 @@ static void enrich_runtime_parameter_error(const Json& request, Json& error, Jso
     }
     if (error.contains("invalid_arg")) {
         if (!error.contains("correct_example")) error["correct_example"] = example;
-        static const char* keys[] = {
-            "invalid_arg", "expected", "received_type", "allowed_values",
-            "required_any_of", "did_you_mean", "correct_example"
-        };
-        for (const char* key : keys) {
-            if (error.contains(key)) data[key] = error[key];
-        }
     }
 }
 
@@ -373,67 +362,28 @@ static Json action_error_response(const Json& request, const Json& data) {
             code = "SIGNAL_NOT_FOUND";
         }
     }
-    Json response = error_response(code, message);
-    response["error"]["error_layer"] = "handler";
-    Json mutable_data = data;
-    if (error.is_object()) {
-        if (error.contains("recoverable")) response["error"]["recoverable"] = error["recoverable"];
-        if (error.contains("error_layer")) response["error"]["error_layer"] = error["error_layer"];
-        if (error.contains("suggested_actions")) response["error"]["suggested_actions"] = error["suggested_actions"];
-        static const char* error_detail_keys[] = {
-            "invalid_arg", "expected", "allowed_types", "allowed_values", "example",
-            "received", "received_type", "required_any_of", "did_you_mean",
-            "correct_example", "example_note", "next_actions", "missing_name",
-            "missing_resource", "available_values", "cause_code"
-        };
-        for (const char* key : error_detail_keys) {
-            if (error.contains(key)) response["error"][key] = error[key];
-        }
-    }
-    enrich_runtime_parameter_error(request, response["error"], mutable_data);
-    static const char* detail_keys[] = {
-        "invalid_arg", "expected", "allowed_types", "allowed_values", "example",
-        "received_type", "required_any_of", "did_you_mean", "correct_example"
-    };
-    for (const char* key : detail_keys) {
-        if (mutable_data.contains(key)) response["error"][key] = mutable_data[key];
-    }
-    response["details"] = mutable_data;
-    return response;
+    Json canonical_error = error.is_object()
+        ? error
+        : Json{{"code", code}, {"message", message}, {"recoverable", true},
+               {"error_layer", "handler"}};
+    if (!canonical_error.contains("code")) canonical_error["code"] = code;
+    if (!canonical_error.contains("message")) canonical_error["message"] = message;
+    if (!canonical_error.contains("error_layer")) canonical_error["error_layer"] = "handler";
+    enrich_runtime_parameter_error(request, canonical_error);
+    return error_response(canonical_error);
 }
 
 static Json schema_validation_error_response(const Json& request,
                                              const std::string& action,
                                              const xdebug_core::RuntimeSchemaValidationResult& validation) {
-    Json response = error_response(validation.code.empty() ? "INVALID_REQUEST" : validation.code,
-                                   validation.message);
-    response["error"]["error_layer"] = "schema";
-    Json details = validation.data.is_object() ? validation.data : Json::object();
-    details["message"] = validation.message;
-    details["error"] = {
-        {"code", validation.code.empty() ? "INVALID_REQUEST" : validation.code},
-        {"message", validation.message},
-        {"recoverable", true},
-        {"error_layer", "schema"}
-    };
-    if (validation.summary.is_object() && !validation.summary.empty()) {
-        details["summary"] = validation.summary;
-        response["summary"] = validation.summary;
-    }
-    static const char* detail_keys[] = {
-        "invalid_arg", "expected", "allowed_values", "example", "received_type",
-        "schema_path", "required_any_of", "did_you_mean", "correct_example",
-        "example_note"
-    };
-    for (const char* key : detail_keys) {
-        if (validation.data.is_object() && validation.data.contains(key)) {
-            response["error"][key] = validation.data[key];
-        }
-    }
-    response["details"] = details;
+    Json canonical_error = validation.error;
+    if (!canonical_error.is_object()) canonical_error = Json::object();
+    canonical_error["code"] = validation.code.empty() ? "INVALID_REQUEST" : validation.code;
+    canonical_error["message"] = validation.message;
+    canonical_error["error_layer"] = "schema";
     (void)request;
     (void)action;
-    return response;
+    return error_response(canonical_error);
 }
 
 static bool send_response(int fd, const Json& response) {

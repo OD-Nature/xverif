@@ -1,7 +1,10 @@
 #include "api/request_validator.h"
+#include "core/diagnostic_error.h"
 #include "api/response.h"
 
 namespace xdebug {
+
+using xdebug_core::DiagnosticErrorBuilder;
 
 namespace {
 
@@ -29,16 +32,11 @@ void normalize_session_selector_error(const RequestEnvelope& request, Validation
     if (!is_missing_session_selector(request)) return;
     const std::string expected = "target.session_id";
     result.message = expected + " is required";
-    result.data = {
-        {"error_layer", "schema"},
-        {"invalid_arg", expected},
-        {"expected", "non-empty string session id"},
-        {"correct_example", session_target_example(request.action)}
-    };
-    result.summary = {
-        {"invalid_arg", expected},
-        {"message", result.message}
-    };
+    result.error = DiagnosticErrorBuilder::schema("INVALID_REQUEST", result.message)
+        .invalid_arg(expected)
+        .expected("non-empty string session id")
+        .correct_example(session_target_example(request.action))
+        .to_json();
 }
 
 bool reject_invalid_session_selector(const RequestEnvelope& request, ValidationResult& result) {
@@ -50,14 +48,12 @@ bool reject_invalid_session_selector(const RequestEnvelope& request, ValidationR
     result.ok = false;
     result.code = "INVALID_REQUEST";
     result.message = "invalid parameter target.session_id: expected non-empty string session id";
-    result.data = {
-        {"error_layer", "schema"},
-        {"invalid_arg", "target.session_id"},
-        {"expected", "non-empty string session id"},
-        {"received_type", request.target["session_id"].type_name()},
-        {"correct_example", session_target_example(request.action)}
-    };
-    result.summary = {{"invalid_arg", "target.session_id"}, {"message", result.message}};
+    result.error = DiagnosticErrorBuilder::schema("INVALID_REQUEST", result.message)
+        .invalid_arg("target.session_id")
+        .expected("non-empty string session id")
+        .received_type(request.target["session_id"].type_name())
+        .correct_example(session_target_example(request.action))
+        .to_json();
     return true;
 }
 
@@ -69,12 +65,20 @@ ValidationResult RequestValidator::validate(const RequestEnvelope& request, cons
         result.ok = false;
         result.code = "UNSUPPORTED_API_VERSION";
         result.message = "expected xdebug.v1";
+        result.error = DiagnosticErrorBuilder::schema(result.code, result.message)
+            .invalid_arg("api_version")
+            .expected("xdebug.v1")
+            .to_json();
         return result;
     }
     if (request.action != spec.name) {
         result.ok = false;
         result.code = "UNKNOWN_ACTION";
         result.message = "request action does not match ActionSpec";
+        result.error = DiagnosticErrorBuilder::schema(result.code, result.message)
+            .invalid_arg("action")
+            .expected(spec.name)
+            .to_json();
         return result;
     }
 
@@ -87,8 +91,7 @@ ValidationResult RequestValidator::validate(const RequestEnvelope& request, cons
         result.ok = false;
         result.code = schema_result.code.empty() ? "INVALID_REQUEST" : schema_result.code;
         result.message = schema_result.message;
-        result.data = schema_result.data;
-        result.summary = schema_result.summary;
+        result.error = schema_result.error;
         normalize_session_selector_error(request, result);
         return result;
     }

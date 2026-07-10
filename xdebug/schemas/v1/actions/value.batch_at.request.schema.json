@@ -69,7 +69,7 @@
           "items": {
             "type": "string"
           },
-          "description": "Signal paths to sample at the same clock/time point."
+          "description": "信号列表，或 alias 到信号路径的映射。"
         },
         "slice_hint": {
           "type": "object"

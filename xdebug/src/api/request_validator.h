@@ -12,8 +12,8 @@ struct ValidationResult {
     bool ok = true;
     std::string code;
     std::string message;
-    Json data = Json::object();
-    Json summary = Json::object();
+    // Single canonical diagnostic object consumed by the dispatcher.
+    Json error = Json::object();
 };
 
 class RequestValidator {

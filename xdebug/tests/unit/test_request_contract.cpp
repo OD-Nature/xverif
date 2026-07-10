@@ -1,7 +1,10 @@
 #include "api/action_registry_init.h"
+#include "core/diagnostic_error.h"
 #include "api/request_envelope.h"
 #include "api/request_validator.h"
 #include "api/resource_resolver.h"
+#include "api/response.h"
+#include "core/schema/runtime_schema_validator.h"
 
 #include <cassert>
 
@@ -14,7 +17,9 @@ int main() {
     const ActionSpec* active_spec = registry.find_spec("trace.active_driver");
     const ActionSpec* actions_spec = registry.find_spec("actions");
     const ActionSpec* abnormal_spec = registry.find_spec("detect_abnormal");
-    assert(value_spec && trace_spec && active_spec && actions_spec && abnormal_spec);
+    const ActionSpec* stream_show_spec = registry.find_spec("stream.show");
+    assert(value_spec && trace_spec && active_spec && actions_spec && abnormal_spec &&
+           stream_show_spec);
     Json value_descriptor = action_spec_descriptor(*value_spec);
     assert(value_descriptor["required_args"].size() == 3);
     assert(value_descriptor["required_args"][2] == "clock");
@@ -44,7 +49,7 @@ int main() {
     validation = validator.validate(missing_time, *value_spec);
     assert(!validation.ok);
     assert(validation.code == "INVALID_REQUEST");
-    assert(validation.data["invalid_arg"] == "args.time");
+    assert(validation.error["invalid_arg"] == "args.time");
 
     Json wrong_version_json = value_json;
     wrong_version_json["api_version"] = "xdebug.v0";
@@ -59,7 +64,7 @@ int main() {
     validation = validator.validate(bad_format, *value_spec);
     assert(!validation.ok);
     assert(validation.code == "INVALID_REQUEST");
-    assert(validation.data["invalid_arg"] == "args.format");
+    assert(validation.error["invalid_arg"] == "args.format");
 
     Json unknown_top_json = value_json;
     unknown_top_json["unexpected"] = true;
@@ -67,7 +72,7 @@ int main() {
     validation = validator.validate(unknown_top, *value_spec);
     assert(!validation.ok);
     assert(validation.code == "INVALID_REQUEST");
-    assert(validation.data["invalid_arg"] == "unexpected");
+    assert(validation.error["invalid_arg"] == "unexpected");
 
     Json top_output_json = value_json;
     top_output_json["output"] = {{"format", "json"}};
@@ -75,7 +80,7 @@ int main() {
     validation = validator.validate(top_output, *value_spec);
     assert(!validation.ok);
     assert(validation.code == "INVALID_REQUEST");
-    assert(validation.data["invalid_arg"] == "output");
+    assert(validation.error["invalid_arg"] == "output");
 
     Json unknown_arg_json = value_json;
     unknown_arg_json["args"]["unexpected"] = true;
@@ -83,7 +88,7 @@ int main() {
     validation = validator.validate(unknown_arg, *value_spec);
     assert(!validation.ok);
     assert(validation.code == "INVALID_REQUEST");
-    assert(validation.data["invalid_arg"] == "args.unexpected");
+    assert(validation.error["invalid_arg"] == "args.unexpected");
 
     Json bad_abnormal_checks_json = {
         {"api_version", "xdebug.v1"},
@@ -99,8 +104,8 @@ int main() {
     validation = validator.validate(bad_abnormal_checks, *abnormal_spec);
     assert(!validation.ok);
     assert(validation.code == "INVALID_REQUEST");
-    assert(validation.data["invalid_arg"] == "args.checks[0]");
-    assert(validation.data["expected"].get<std::string>().find("object") != std::string::npos);
+    assert(validation.error["invalid_arg"] == "args.checks[0]");
+    assert(validation.error["expected"].get<std::string>().find("object") != std::string::npos);
 
     Json missing_abnormal_check_type_json = bad_abnormal_checks_json;
     missing_abnormal_check_type_json["args"]["checks"] = Json::array({Json::object()});
@@ -109,8 +114,39 @@ int main() {
     validation = validator.validate(missing_abnormal_check_type, *abnormal_spec);
     assert(!validation.ok);
     assert(validation.code == "INVALID_REQUEST");
-    assert(validation.data["invalid_arg"] == "args.checks[0].type");
-    assert(validation.data["received_type"] == "missing");
+    assert(validation.error["invalid_arg"] == "args.checks[0].type");
+    assert(validation.error["received_type"] == "missing");
+
+    Json bad_stream_show_json = {
+        {"api_version", "xdebug.v1"},
+        {"action", "stream.show"},
+        {"args", {{"__bad_param__", true}}}
+    };
+    RequestEnvelope bad_stream_show = RequestEnvelope::from_json(bad_stream_show_json);
+    validation = validator.validate(bad_stream_show, *stream_show_spec);
+    assert(!validation.ok);
+    assert(validation.code == "INVALID_REQUEST");
+    assert(validation.error.contains("validation_issues"));
+    assert(validation.error["validation_issues"].is_array());
+    assert(validation.error["validation_issues"].size() >= 2);
+    assert(!validation.error.contains("did_you_mean") ||
+           validation.error["did_you_mean"] != validation.error["invalid_arg"]);
+
+    Json checked_example = xdebug_core::valid_request_example("cursor.set");
+    assert(checked_example["api_version"] == "xdebug.v1");
+    assert(checked_example["action"] == "cursor.set");
+    assert(checked_example["args"]["time"].is_string());
+
+    Json built_error = xdebug_core::DiagnosticErrorBuilder::schema("INVALID_REQUEST", "bad stream")
+        .invalid_arg("args.stream")
+        .did_you_mean("args.stream")
+        .to_json();
+    assert(!built_error.contains("did_you_mean"));
+
+    Json public_error = make_error(bad_stream_show_json, "stream.show", built_error);
+    assert(public_error["summary"]["status"] == "error");
+    assert(public_error["summary"]["error_code"] == "INVALID_REQUEST");
+    assert(public_error["data"].is_null());
 
     Json wrong_action_json = value_json;
     wrong_action_json["action"] = "trace.driver";

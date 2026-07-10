@@ -1,6 +1,6 @@
 #include "engine_action_handler.h"
 
-#include "../../api/diagnostic_error.h"
+#include "core/diagnostic_error.h"
 #include "../../api/text_response_builder.h"
 
 #include <algorithm>
@@ -70,13 +70,13 @@ Json make_handler_error(const std::string& code, const std::string& message) {
 
 Json make_handler_error(const std::string& code, const std::string& message,
                         const Json& details) {
-    Json error = xdebug::ErrorBuilder::handler(code, message).to_json();
+    Json error = xdebug_core::DiagnosticErrorBuilder::handler(code, message).to_json();
     if (details.is_object()) {
         for (auto it = details.begin(); it != details.end(); ++it) {
             error[it.key()] = it.value();
         }
     }
-    return Json{{"error", error}, {"message", message}};
+    return Json{{"error", error}};
 }
 
 Json make_handler_error_from_message(const std::string& message) {

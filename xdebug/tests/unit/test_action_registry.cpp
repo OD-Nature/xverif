@@ -109,7 +109,7 @@ int main() {
     validation = validator.validate(RequestEnvelope::from_json(missing_arg), spec);
     assert(!validation.ok);
     assert(validation.code == "INVALID_REQUEST");
-    assert(validation.data["invalid_arg"] == "args.message");
+    assert(validation.error["invalid_arg"] == "args.message");
 
     ActionSpec waveform = spec;
     waveform.name = "demo.wave";

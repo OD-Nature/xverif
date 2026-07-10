@@ -420,7 +420,7 @@ def sync_schema(schema: dict[str, Any], spec: dict[str, Any], arg_schemas: dict[
         selected_props["signals"] = {
             "type": "array",
             "items": {"type": "string"},
-            "description": "Signal paths to sample at the same clock/time point.",
+            "description": PARAM_DESCRIPTIONS["signals"],
         }
     if action in {"verify.conditions", "window.verify"} and "conditions" in selected_props:
         selected_props["conditions"] = {
@@ -441,7 +441,7 @@ def sync_schema(schema: dict[str, Any], spec: dict[str, Any], arg_schemas: dict[
                 },
                 "additionalProperties": False,
             },
-            "description": "Conditions to evaluate. Each item must include expr.",
+            "description": PARAM_DESCRIPTIONS["conditions"],
         }
     if action == "axi.channel_stall" and "channel" in selected_props:
         selected_props["channel"] = {
