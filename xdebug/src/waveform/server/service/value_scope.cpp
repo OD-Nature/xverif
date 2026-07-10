@@ -517,7 +517,7 @@ std::string format_axi_txn(const xdebug_waveform::AxiTransaction* txn) {
     return out;
 }
 
-Json axi_txn_to_json(const xdebug_waveform::AxiTransaction* txn) {
+Json axi_txn_to_json(const xdebug_waveform::AxiTransaction* txn, bool verbose) {
     Json j;
     if (!txn) return j;
     j["addr_time"] = format_time(txn->addr_time);
@@ -532,14 +532,16 @@ Json axi_txn_to_json(const xdebug_waveform::AxiTransaction* txn) {
     j["last_data_time"] = format_time(txn->last_data_time);
     j["resp_time"] = format_time(txn->resp_time);
     j["resp"] = "'h" + txn->resp;
-    j["data"] = json_array_hex(txn->data);
-    j["wstrb"] = json_array_hex(txn->wstrb);
+    if (verbose) {
+        j["data"] = json_array_hex(txn->data);
+        j["wstrb"] = json_array_hex(txn->wstrb);
+    }
     return j;
 }
 
 std::string format_axi_txn_json(const xdebug_waveform::AxiTransaction* txn) {
     if (!txn) return std::string(END_MARKER);
-    Json j = axi_txn_to_json(txn);
+    Json j = axi_txn_to_json(txn, true);
     return json_response(j);
 }
 

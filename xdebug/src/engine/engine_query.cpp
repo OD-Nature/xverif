@@ -251,8 +251,21 @@ OrderedJson handle_local_zero_resource_action(const OrderedJson& request,
         std::string signal = args.value("signal", std::string());
         std::string expr = args.value("expr", std::string());
         if (!signal.empty() || expr.empty()) return make_response(request, action, false);
-
         handled = true;
+
+        ExprSyntaxValidation syntax = validate_expr_syntax(expr);
+        if (!syntax.ok) {
+            return make_error(
+                request, action, "EXPR_SYNTAX_INVALID", syntax.message, true,
+                {{"invalid_arg", "args.expr"},
+                 {"received", expr},
+                 {"expected", "balanced expression with complete operands and operators"},
+                 {"correct_example", {{"api_version", "xdebug.v1"},
+                                      {"action", "expr.normalize"},
+                                      {"args", {{"expr", "valid && ready"}}}}},
+                 {"next_actions", OrderedJson::array({"Fix the expression syntax before using it for debug queries."})}});
+        }
+
         OrderedJson summary = {{"expr", expr}, {"source", "string_fallback"}, {"confidence", "low"}};
         OrderedJson data;
         data["expr"] = OrderedJson::parse(parse_expr_ast(expr).dump());
@@ -355,14 +368,6 @@ OrderedJson handle_engine_forward(const OrderedJson& request, const std::string&
     if (have_session_info) response["session"] = session_to_json(session_info);
     response["summary"] = scalar_summary(ordered_data);
     if (ordered_data.is_object() && ordered_data.contains("summary")) ordered_data.erase("summary");
-    if (response["summary"].is_object() && ordered_data.is_object()) {
-        for (auto it = response["summary"].begin(); it != response["summary"].end(); ++it) {
-            auto data_it = ordered_data.find(it.key());
-            if (data_it != ordered_data.end() && *data_it == it.value()) {
-                ordered_data.erase(data_it);
-            }
-        }
-    }
     if (ordered_data.is_object() && ordered_data.contains("truncated") &&
         ordered_data["truncated"].is_boolean()) {
         response["meta"] = {{"truncated", ordered_data["truncated"].get<bool>()}};

@@ -2,16 +2,6 @@
   "api_version": "xdebug.v1",
   "ok": true,
   "action": "session.gc",
-  "summary": {
-    "session_id": "case_a",
-    "mode": "combined"
-  },
-  "data": {
-    "session": {
-      "id": "case_a",
-      "mode": "combined",
-      "daidir": "simv.daidir",
-      "fsdb": "waves.fsdb"
-    }
-  }
+  "summary": {"status": "completed", "before_count": 2, "kept_count": 1, "removed_count": 1},
+  "data": {"before": [{"id": "case_a", "mode": "combined"}, {"id": "stale_a", "mode": "waveform"}], "kept": [{"session_id": "case_a", "mode": "combined"}], "removed": [{"session_id": "stale_a", "reason": "unhealthy"}]}
 }

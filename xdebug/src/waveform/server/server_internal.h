@@ -115,7 +115,7 @@ std::string format_apb_txn_with_type(const ApbTransaction* txn);
 Json apb_txn_to_json(const ApbTransaction* txn, bool include_type);
 bool ensure_axi_analyzed(int client_fd, const char* name);
 std::string format_axi_txn(const AxiTransaction* txn);
-Json axi_txn_to_json(const AxiTransaction* txn);
+Json axi_txn_to_json(const AxiTransaction* txn, bool verbose = false);
 std::string format_axi_txn_json(const AxiTransaction* txn);
 
 bool read_signal_changes(const std::string& signal, npiFsdbTime begin, npiFsdbTime end,

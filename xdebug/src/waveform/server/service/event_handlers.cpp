@@ -161,7 +161,7 @@ Json axi_context_to_json(const char* axi_name,
     ctx["window"] = format_duration(window_ps);
     ctx["transactions"] = Json::array();
     for (const auto& item : txns) {
-        Json txn = axi_txn_to_json(item.txn);
+        Json txn = axi_txn_to_json(item.txn, true);
         txn["match_time"] = format_time(item.match_time);
         txn["relation"] = relation_to_event(item.match_time, event_time);
         npiFsdbTime delta = item.match_time >= event_time

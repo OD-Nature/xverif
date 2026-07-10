@@ -92,6 +92,7 @@ Json ai_axi_transactions_window(const Json& args, std::string& error) {
     if (!ensure_axi_analyzed_for_ai(name, error)) return Json();
     std::vector<xdebug_waveform::AxiContextTransaction> txns;
     int filter = direction_filter(args);
+    const bool verbose = args.value("output", Json::object()).value("verbose", false);
     int limit = args.value("line_limit", 1000);
     int fetch_limit = (filter == 0 && limit >= 0) ? limit + 1 : -1;
     if (!g_axi_analyzer.get_transactions_in_range(name, begin, end, txns, fetch_limit)) {
@@ -108,7 +109,7 @@ Json ai_axi_transactions_window(const Json& args, std::string& error) {
             truncated = true;
             break;
         }
-        Json txn = axi_txn_to_json(item.txn);
+        Json txn = axi_txn_to_json(item.txn, verbose);
         txn["match_time"] = format_time(item.match_time);
         txn["latency"] = format_duration(
             item.txn->resp_time >= item.txn->addr_time ? item.txn->resp_time - item.txn->addr_time : 0);

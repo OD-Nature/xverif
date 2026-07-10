@@ -2,16 +2,6 @@
   "api_version": "xdebug.v1",
   "ok": true,
   "action": "session.close",
-  "summary": {
-    "session_id": "case_a",
-    "mode": "combined"
-  },
-  "data": {
-    "session": {
-      "id": "case_a",
-      "mode": "combined",
-      "daidir": "simv.daidir",
-      "fsdb": "waves.fsdb"
-    }
-  }
+  "summary": {"session_id": "case_a", "mode": "combined", "removed": true},
+  "data": {"session": {"id": "case_a", "mode": "combined", "transport": "uds"}, "backends": {"ok": true, "action": "session.kill"}}
 }

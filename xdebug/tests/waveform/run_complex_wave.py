@@ -3,6 +3,7 @@ import argparse
 import csv
 import json
 import os
+import re
 import selectors
 import shutil
 import subprocess
@@ -165,6 +166,14 @@ def apply_axi_env_defaults(env):
 def require(cond, msg):
     if not cond:
         raise AssertionError(msg)
+
+
+def duration_fs(value):
+    match = re.fullmatch(r"([0-9]+(?:\.[0-9]+)?)(fs|ps|ns|us|ms|s)", value)
+    require(match is not None, "invalid duration string: {}".format(value))
+    scales = {"fs": 1, "ps": 10**3, "ns": 10**6, "us": 10**9,
+              "ms": 10**12, "s": 10**15}
+    return float(match.group(1)) * scales[match.group(2)]
 
 
 def require_clock_summary(resp, edge, sample_point=None, expected_clock="ai_complex_top.clk"):
@@ -952,18 +961,46 @@ def run_axi(xdebug, fsdb):
         r.query("axi.cursor", args={"name": "axi0", "op": "begin", "direction": "all"})
         r.query("axi.cursor", args={"name": "axi0", "op": "next", "direction": "all"})
         latency = r.query("axi.analysis", args={"name": "axi0", "analysis": "latency", "direction": "all"})
+        percentile_values = []
         for percentile in ("p50", "p95", "p99"):
             require(percentile in latency["summary"],
                     "AXI latency analysis missing {}".format(percentile))
+            percentile_values.append(duration_fs(latency["summary"][percentile]))
+        require(percentile_values == sorted(percentile_values),
+                "AXI latency percentiles must be monotonic")
+        require(latency["summary"]["samples"] > 0,
+                "AXI latency analysis must report samples")
+        require({"time", "response_time", "addr", "id", "is_write"} <= set(latency["data"]["slowest"]),
+                "AXI latency analysis missing slowest transaction anchor")
         r.query("axi.analysis", args={"name": "axi0", "analysis": "osd", "direction": "all"})
 
         tr = {"begin": "0ns", "end": "200ms"}
         pair_cold = r.query("axi.request_response_pair", args={"name": "axi0", "time_range": tr, "line_limit": 20})
         require(pair_cold["data"]["transaction_count"] > 0, "AXI request_response_pair empty")
+        require(all("data" not in txn and "wstrb" not in txn
+                    for txn in pair_cold["data"]["transactions"]),
+                "AXI compact request_response_pair must omit beat payload")
+        pair_verbose = r.query(
+            "axi.request_response_pair",
+            args={"name": "axi0", "time_range": tr, "line_limit": 20,
+                  "output": {"verbose": True}},
+        )
+        require(any("data" in txn for txn in pair_verbose["data"]["transactions"]),
+                "AXI verbose request_response_pair must include beat payload")
         pair_cache = r.query("axi.request_response_pair", args={"name": "axi0", "time_range": tr, "line_limit": 20})
         require(pair_cache["data"]["transaction_count"] > 0, "AXI cached request_response_pair empty")
         lat = r.query("axi.latency_outlier", args={"name": "axi0", "time_range": tr, "line_limit": 5})
         require(lat["data"]["outlier_count"] > 0, "AXI latency_outlier empty")
+        require(all("data" not in txn and "wstrb" not in txn
+                    for txn in lat["data"]["outliers"]),
+                "AXI compact latency_outlier must omit beat payload")
+        lat_verbose = r.query(
+            "axi.latency_outlier",
+            args={"name": "axi0", "time_range": tr, "line_limit": 5,
+                  "output": {"verbose": True}},
+        )
+        require(any("data" in txn for txn in lat_verbose["data"]["outliers"]),
+                "AXI verbose latency_outlier must include beat payload")
         osd = r.query("axi.outstanding_timeline", args={"name": "axi0", "time_range": tr, "line_limit": 20})
         require(osd["summary"]["sample_count"] > 0, "AXI outstanding_timeline empty")
         stall = r.query("axi.channel_stall", args={"name": "axi0", "channel": "r", "time_range": tr, "rules": {"max_wait_cycles": 2}, "line_limit": 1000000})

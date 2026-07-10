@@ -102,6 +102,9 @@ query '{"api_version":"xdebug.v1","action":"source.context","args":{"file":"'"$R
 query '{"api_version":"xdebug.v1","action":"expr.normalize","args":{"expr":"valid && !ready"}}' \
   | check_json 'd["ok"] and d["summary"]["source"] == "string_fallback" and d["summary"]["confidence"] == "low"'
 
+query_any '{"api_version":"xdebug.v1","action":"expr.normalize","args":{"expr":"valid &&"}}' \
+  | check_json 'not d["ok"] and d["error"]["code"] == "EXPR_SYNTAX_INVALID" and d["error"]["error_layer"] == "handler" and d["error"]["invalid_arg"] == "args.expr"'
+
 query "{\"api_version\":\"xdebug.v1\",\"action\":\"session.open\",\"target\":{\"daidir\":\"$P3_DB\"},\"args\":{\"name\":\"p3_ai\"}}" \
   | check_json 'd["ok"] and d["summary"]["session_id"] == "p3_ai"'
 
