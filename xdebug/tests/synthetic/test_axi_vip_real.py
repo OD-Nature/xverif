@@ -1,20 +1,13 @@
 from __future__ import annotations
 
 import json
-import os
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from runner import ArtifactWriter, CommandRunner, RunResult
-
-
-DEFAULT_AXI_ENV = {
-    "AXI_REFERENCE_ROOT": "~/axi_test/test",
-    "SVT_VIP_INCDIR": "~/axi_test/test/include/sverilog",
-    "SVT_VIP_SRCDIR": "~/axi_test/test/src/sverilog/vcs",
-}
 
 
 def _require_success(
@@ -68,22 +61,13 @@ def test_axi_vip_real_waveform_actions(
     xdebug_root: Path,
     xdebug_bin: Path,
     artifact_root: Path,
+    xverif_fixture: Any,
 ) -> None:
     fixture_dir = xdebug_root / "testdata" / "waveform" / "axi_vip_real"
+    resources_root = xverif_fixture("xdebug.axi_vip")
     manifest = json.loads(
         (fixture_dir / "manifest.json").read_text(encoding="utf-8")
     )
-    have_resources = _resources_ready(fixture_dir, manifest)
-    if not have_resources:
-        required_env = manifest["required_env"]
-        for name in required_env:
-            os.environ.setdefault(name, DEFAULT_AXI_ENV.get(name, ""))
-        missing = [name for name in required_env if not os.environ.get(name)]
-        assert not missing, (
-            "AXI VIP fixture requires environment variables: %s"
-            % ", ".join(missing)
-        )
-
     command = [
         sys.executable,
         str(xdebug_root / "tests" / "waveform" / "run_complex_wave.py"),
@@ -91,13 +75,13 @@ def test_axi_vip_real_waveform_actions(
         "axi",
         "--xdebug",
         str(xdebug_bin),
+        "--skip-build",
     ]
-    if have_resources:
-        command.append("--skip-build")
 
     result = command_runner.run(
         command,
         cwd=repo_root,
+        env={"XDEBUG_AXI_FIXTURE_DIR": str(resources_root)},
         timeout_sec=2400,
         metadata={
             "suite": "axi-vip-real",
@@ -112,9 +96,9 @@ def test_axi_vip_real_waveform_actions(
     )
 
     resources = manifest["resources"]
-    fsdb = fixture_dir / resources["fsdb"]
-    daidir = fixture_dir / resources["daidir"]
-    sim_log = fixture_dir / resources["simulation_log"]
+    fsdb = resources_root / resources["fsdb"]
+    daidir = resources_root / resources["daidir"]
+    sim_log = resources_root / resources["simulation_log"]
     assert fsdb.is_file() and fsdb.stat().st_size > 0
     assert daidir.is_dir()
     assert sim_log.is_file()

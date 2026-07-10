@@ -1,0 +1,107 @@
+version: xverif-fixture-registry.v1
+fixtures:
+  - id: xdebug.active_driver
+    source_dir: xdebug/testdata/combined/active_driver
+    inputs: [Makefile, "*.sv", "*.tcl"]
+    builder:
+      argv: [make, fixture, "RUN_DIR={resources}/out"]
+      cwd: "{source}"
+      timeout_sec: 600
+    outputs:
+      - {name: fsdb, path: out/waves.fsdb, kind: file, min_bytes: 1024}
+      - {name: daidir, path: out/simv.daidir, kind: dir}
+    tool_env: [VERDI_HOME]
+
+  - id: xdebug.active_semantics
+    source_dir: xdebug/testdata/combined/active_semantics
+    inputs: [Makefile, "*.sv", "*.tcl"]
+    builder:
+      argv: [make, fixture, "RUN_DIR={resources}/out"]
+      cwd: "{source}"
+      timeout_sec: 600
+    outputs:
+      - {name: fsdb, path: out/waves.fsdb, kind: file, min_bytes: 1024}
+      - {name: daidir, path: out/simv.daidir, kind: dir}
+    tool_env: [VERDI_HOME]
+
+  - id: xdebug.active_zero_evidence
+    source_dir: xdebug/testdata/combined/active_zero_evidence
+    inputs: [Makefile, "*.v", "*.sv", "*.tcl"]
+    builder:
+      argv: [make, fixture, "RUN_DIR={resources}/out"]
+      cwd: "{source}"
+      timeout_sec: 600
+    outputs:
+      - {name: fsdb, path: out/waves.fsdb, kind: file, min_bytes: 1024}
+      - {name: daidir, path: out/simv.daidir, kind: dir}
+    tool_env: [VERDI_HOME]
+
+  - id: xdebug.interface_port_root
+    source_dir: xdebug/testdata/combined/interface_port_root
+    inputs: [Makefile, "*.sv", "*.tcl"]
+    builder:
+      argv: [make, fixture, "RUN_DIR={resources}/out"]
+      cwd: "{source}"
+      timeout_sec: 600
+    outputs:
+      - {name: fsdb, path: out/waves.fsdb, kind: file, min_bytes: 1024}
+      - {name: daidir, path: out/simv.daidir, kind: dir}
+    tool_env: [VERDI_HOME]
+
+  - id: xdebug.ai_complex_wave
+    source_dir: xdebug/testdata/waveform/ai_complex_wave
+    inputs: [Makefile, "tb/**/*.sv", "*.tcl"]
+    builder:
+      argv: [make, run, "RUN_DIR={resources}/out"]
+      cwd: "{source}"
+      timeout_sec: 600
+    outputs:
+      - {name: fsdb, path: out/waves.fsdb, kind: file, min_bytes: 1024}
+      - {name: daidir, path: out/simv.daidir, kind: dir}
+    tool_env: [VERDI_HOME]
+
+  - id: xdebug.stream_v1
+    source_dir: xdebug/testdata/waveform/stream_v1
+    inputs: [Makefile, "tb/**/*.sv", "*.tcl"]
+    builder:
+      argv: [make, run, "RUN_DIR={resources}/out"]
+      cwd: "{source}"
+      timeout_sec: 600
+    outputs:
+      - {name: fsdb, path: out/waves.fsdb, kind: file, min_bytes: 1024}
+      - {name: daidir, path: out/simv.daidir, kind: dir}
+      - {name: expected, path: out/stream_expected.json, kind: file, min_bytes: 1}
+    tool_env: [VERDI_HOME]
+
+  - id: xdebug.apb_vip
+    source_dir: xdebug/testdata/waveform/apb_vip_real
+    inputs: [Makefile, manifest.json, "**/*.sv", "**/*.svi"]
+    builder:
+      argv: [make, run, "OUTPUT_ROOT={resources}/out"]
+      cwd: "{source}"
+      default_env:
+        SVT_VIP_INCDIR: "{home}/axi_test/test/include/sverilog"
+        SVT_VIP_SRCDIR: "{home}/axi_test/test/src/sverilog/vcs"
+      timeout_sec: 1800
+    outputs:
+      - {name: fsdb, path: out/regression/test/apb_vip_test/waves.fsdb, kind: file, min_bytes: 1024}
+      - {name: daidir, path: out/regression/build/simv.daidir, kind: dir}
+      - {name: simulation_log, path: out/regression/test/apb_vip_test/sim.log, kind: file, min_bytes: 1}
+    tool_env: [VERDI_HOME]
+
+  - id: xdebug.axi_vip
+    source_dir: xdebug/testdata/waveform/axi_vip_real
+    inputs: [Makefile, manifest.json, "**/*.sv", "**/*.svi"]
+    builder:
+      argv: [make, run, "OUTPUT_ROOT={resources}/out"]
+      cwd: "{source}"
+      default_env:
+        AXI_REFERENCE_ROOT: "{home}/axi_test/test"
+        SVT_VIP_INCDIR: "{home}/axi_test/test/include/sverilog"
+        SVT_VIP_SRCDIR: "{home}/axi_test/test/src/sverilog/vcs"
+      timeout_sec: 2400
+    outputs:
+      - {name: fsdb, path: out/regression/test/axi_multi_id_test/waves.fsdb, kind: file, min_bytes: 1024}
+      - {name: daidir, path: out/regression/build/simv.daidir, kind: dir}
+      - {name: simulation_log, path: out/regression/test/axi_multi_id_test/sim.log, kind: file, min_bytes: 1}
+    tool_env: [VERDI_HOME]

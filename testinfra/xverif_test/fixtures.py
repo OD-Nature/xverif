@@ -1,0 +1,262 @@
+from __future__ import annotations
+
+import fcntl
+import hashlib
+import json
+import os
+import re
+import shutil
+import subprocess
+import tempfile
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Iterable
+
+import jsonschema
+import yaml
+
+
+class FixtureError(RuntimeError):
+    pass
+
+
+@dataclass(frozen=True)
+class FixtureOutput:
+    name: str
+    path: str
+    kind: str
+    min_bytes: int
+
+
+@dataclass(frozen=True)
+class FixtureSpec:
+    id: str
+    source_dir: str
+    inputs: tuple[str, ...]
+    builder: dict[str, Any]
+    outputs: tuple[FixtureOutput, ...]
+    tool_env: tuple[str, ...]
+
+    @classmethod
+    def from_json(cls, data: dict[str, Any]) -> "FixtureSpec":
+        return cls(
+            id=data["id"],
+            source_dir=data["source_dir"],
+            inputs=tuple(data["inputs"]),
+            builder=dict(data["builder"]),
+            outputs=tuple(
+                FixtureOutput(
+                    name=item["name"],
+                    path=item["path"],
+                    kind=item["kind"],
+                    min_bytes=int(item.get("min_bytes", 1)),
+                )
+                for item in data["outputs"]
+            ),
+            tool_env=tuple(data.get("tool_env", [])),
+        )
+
+
+@dataclass(frozen=True)
+class FixtureRegistry:
+    version: str
+    fixtures: tuple[FixtureSpec, ...]
+
+    @classmethod
+    def load(cls, path: Path, schema_path: Path) -> "FixtureRegistry":
+        try:
+            raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+            schema = json.loads(schema_path.read_text(encoding="utf-8"))
+            jsonschema.Draft202012Validator(schema).validate(raw)
+        except (OSError, yaml.YAMLError, json.JSONDecodeError, jsonschema.ValidationError) as exc:
+            raise FixtureError(f"fixture registry validation failed: {exc}") from exc
+        specs = tuple(FixtureSpec.from_json(item) for item in raw["fixtures"])
+        ids = [spec.id for spec in specs]
+        if len(ids) != len(set(ids)):
+            raise FixtureError("fixture registry contains duplicate ids")
+        return cls(version=raw["version"], fixtures=specs)
+
+    def by_id(self, fixture_id: str) -> FixtureSpec:
+        for spec in self.fixtures:
+            if spec.id == fixture_id:
+                return spec
+        raise FixtureError(f"unknown fixture id: {fixture_id}")
+
+
+class FixtureStore:
+    def __init__(self, repo_root: Path, registry: FixtureRegistry) -> None:
+        self.repo_root = repo_root.resolve()
+        self.registry = registry
+        self.root = self.repo_root / ".xverif-test-cache" / "fixtures"
+
+    def fingerprint(self, spec: FixtureSpec) -> tuple[str, dict[str, str]]:
+        digest = hashlib.sha256()
+        digest.update(b"xverif-fixture-fingerprint.v1\0")
+        source_files = self._source_files(spec)
+        if not source_files:
+            raise FixtureError(f"fixture {spec.id} has no fingerprint input files")
+        for path in source_files:
+            relative = path.relative_to(self.repo_root).as_posix()
+            digest.update(relative.encode("utf-8") + b"\0")
+            digest.update(hashlib.sha256(path.read_bytes()).digest())
+        digest.update(
+            json.dumps(spec.builder, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        )
+        tool_identity = {
+            name: _compatibility_identity(os.environ.get(name, ""))
+            for name in spec.tool_env
+        }
+        digest.update(
+            json.dumps(tool_identity, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        )
+        return digest.hexdigest(), tool_identity
+
+    def resolve(self, fixture_id: str) -> Path:
+        spec = self.registry.by_id(fixture_id)
+        fingerprint, _ = self.fingerprint(spec)
+        target = self._target(spec, fingerprint)
+        self._validate_published(spec, target, fingerprint)
+        return target / "resources"
+
+    def prepare(self, fixture_id: str, *, rebuild: bool = False) -> Path:
+        spec = self.registry.by_id(fixture_id)
+        fingerprint, tool_identity = self.fingerprint(spec)
+        fixture_root = self.root / spec.id
+        fixture_root.mkdir(parents=True, exist_ok=True)
+        lock_path = fixture_root / ".prepare.lock"
+        with lock_path.open("a+", encoding="utf-8") as lock_stream:
+            fcntl.flock(lock_stream.fileno(), fcntl.LOCK_EX)
+            target = self._target(spec, fingerprint)
+            if target.exists() and not rebuild:
+                self._validate_published(spec, target, fingerprint)
+                self._write_current(fixture_root, fingerprint)
+                return target / "resources"
+            staging_root = fixture_root / ".staging"
+            staging_root.mkdir(parents=True, exist_ok=True)
+            staging = Path(tempfile.mkdtemp(prefix="prepare-", dir=staging_root))
+            (staging / "resources").mkdir(parents=True, exist_ok=True)
+            try:
+                self._run_builder(spec, staging)
+                self._validate_outputs(spec, staging / "resources")
+                manifest = {
+                    "schema_version": "xverif-fixture-manifest.v1",
+                    "fixture_id": spec.id,
+                    "fingerprint": fingerprint,
+                    "tool_identity": tool_identity,
+                    "tool_provenance": {
+                        name: os.environ.get(name, "") for name in spec.tool_env
+                    },
+                    "outputs": [output.__dict__ for output in spec.outputs],
+                }
+                (staging / "manifest.json").write_text(
+                    json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+                    encoding="utf-8",
+                )
+                if target.exists():
+                    shutil.rmtree(target)
+                os.replace(staging, target)
+                self._write_current(fixture_root, fingerprint)
+                return target / "resources"
+            except Exception:
+                shutil.rmtree(staging, ignore_errors=True)
+                raise
+
+    def clean(self) -> None:
+        if self.root.exists():
+            shutil.rmtree(self.root)
+
+    def _source_files(self, spec: FixtureSpec) -> tuple[Path, ...]:
+        files: set[Path] = set()
+        source = self.repo_root / spec.source_dir
+        for pattern in spec.inputs:
+            for path in source.glob(pattern):
+                if path.is_file():
+                    files.add(path.resolve())
+        return tuple(sorted(files))
+
+    def _run_builder(self, spec: FixtureSpec, staging: Path) -> None:
+        values = {
+            "repo": str(self.repo_root),
+            "source": str((self.repo_root / spec.source_dir).resolve()),
+            "staging": str(staging),
+            "resources": str(staging / "resources"),
+            "home": str(Path.home()),
+        }
+        argv = [str(value).format(**values) for value in spec.builder["argv"]]
+        cwd = Path(str(spec.builder.get("cwd", "{repo}")).format(**values))
+        env = os.environ.copy()
+        for key, value in spec.builder.get("env", {}).items():
+            env[str(key)] = str(value).format(**values)
+        for key, value in spec.builder.get("default_env", {}).items():
+            env.setdefault(str(key), str(value).format(**values))
+        log_path = staging / "builder.log"
+        with log_path.open("w", encoding="utf-8") as log:
+            result = subprocess.run(
+                argv,
+                cwd=cwd,
+                env=env,
+                text=True,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                timeout=int(spec.builder.get("timeout_sec", 1200)),
+                check=False,
+            )
+        if result.returncode != 0:
+            tail = log_path.read_text(encoding="utf-8", errors="replace")[-4000:]
+            raise FixtureError(
+                f"fixture builder failed for {spec.id}: rc={result.returncode}\n{tail}"
+            )
+
+    def _validate_published(self, spec: FixtureSpec, target: Path, fingerprint: str) -> None:
+        manifest_path = target / "manifest.json"
+        if not manifest_path.is_file():
+            raise FixtureError(
+                f"fixture cache miss for {spec.id}; run: pytest --xverif-prepare {spec.id}"
+            )
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise FixtureError(f"invalid fixture manifest for {spec.id}: {exc}") from exc
+        if manifest.get("fingerprint") != fingerprint:
+            raise FixtureError(f"fixture fingerprint mismatch for {spec.id}")
+        self._validate_outputs(spec, target / "resources")
+
+    def _validate_outputs(self, spec: FixtureSpec, resources: Path) -> None:
+        for output in spec.outputs:
+            path = resources / output.path
+            if output.kind == "file":
+                if not path.is_file() or path.stat().st_size < output.min_bytes:
+                    raise FixtureError(f"fixture {spec.id} missing file output {output.name}")
+            elif output.kind == "dir":
+                if not path.is_dir() or not any(path.iterdir()):
+                    raise FixtureError(f"fixture {spec.id} missing directory output {output.name}")
+            else:
+                raise FixtureError(f"fixture {spec.id} has unknown output kind {output.kind}")
+
+    def _target(self, spec: FixtureSpec, fingerprint: str) -> Path:
+        return self.root / spec.id / fingerprint
+
+    @staticmethod
+    def _write_current(fixture_root: Path, fingerprint: str) -> None:
+        temporary = fixture_root / ".current.tmp"
+        temporary.write_text(
+            json.dumps({"fingerprint": fingerprint}, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        os.replace(temporary, fixture_root / "current.json")
+
+
+def _compatibility_identity(value: str) -> str:
+    match = re.search(r"([A-Z]?[-_]?\d{4}\.\d{2})", value)
+    if match:
+        return match.group(1).lstrip("-_")
+    if not value:
+        return "unset"
+    return Path(value).name
+
+
+def load_default_registry(repo_root: Path) -> FixtureRegistry:
+    return FixtureRegistry.load(
+        repo_root / "testinfra/fixtures.v1.yaml",
+        repo_root / "testinfra/schemas/fixtures.v1.schema.json",
+    )

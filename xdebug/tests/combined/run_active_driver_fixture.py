@@ -27,8 +27,28 @@ _XDEBUG_CANDIDATES = [
 XDEBUG = next((c for c in _XDEBUG_CANDIDATES if c and Path(c).is_file()), "xdebug")
 REQUIRE_NPI = os.environ.get("XDEBUG_REQUIRE_NPI", "") == "1"
 
-ACTIVE_DRIVER_DIR = Path(__file__).resolve().parent.parent.parent / "testdata" / "combined" / "active_driver"
-IF_PORT_ROOT_DIR = Path(__file__).resolve().parent.parent.parent / "testdata" / "combined" / "interface_port_root"
+ACTIVE_DRIVER_DIR = Path(
+    os.environ.get(
+        "XDEBUG_ACTIVE_DRIVER_FIXTURE_DIR",
+        str(
+            Path(__file__).resolve().parent.parent.parent
+            / "testdata"
+            / "combined"
+            / "active_driver"
+        ),
+    )
+)
+IF_PORT_ROOT_DIR = Path(
+    os.environ.get(
+        "XDEBUG_INTERFACE_PORT_ROOT_FIXTURE_DIR",
+        str(
+            Path(__file__).resolve().parent.parent.parent
+            / "testdata"
+            / "combined"
+            / "interface_port_root"
+        ),
+    )
+)
 
 ACTIVE_DRIVER_DAIDIR = str(ACTIVE_DRIVER_DIR / "out" / "simv.daidir")
 ACTIVE_DRIVER_FSDB = str(ACTIVE_DRIVER_DIR / "out" / "waves.fsdb")

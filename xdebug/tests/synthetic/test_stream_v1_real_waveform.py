@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from runner import ArtifactWriter, CliRunner, CommandRunner, RunResult
+from runner import ArtifactWriter, CliRunner, RunResult
 
 
 def _require_success(
@@ -91,30 +91,18 @@ def _query_xout(
 @pytest.mark.regression
 @pytest.mark.slow
 def test_stream_v1_real_waveform_actions(
-    command_runner: CommandRunner,
     cli_runner: CliRunner,
     xdebug_root: Path,
     artifact_root: Path,
     tmp_path: Path,
+    xverif_fixture: Any,
 ) -> None:
     fixture_dir = xdebug_root / "testdata" / "waveform" / "stream_v1"
     config_path = fixture_dir / "config" / "streams.json"
 
-    build = command_runner.run(
-        ["make", "clean", "run"],
-        cwd=fixture_dir,
-        timeout_sec=1200,
-        metadata={"suite": "stream_v1_real", "fixture": str(fixture_dir)},
-    )
-    if build.returncode != 0 or build.timed_out:
-        _require_success(
-            build,
-            case_name="stream-v1-real-build",
-            artifact_root=artifact_root,
-        )
-
-    fsdb = fixture_dir / "out" / "waves.fsdb"
-    expected_path = fixture_dir / "out" / "stream_expected.json"
+    resources = xverif_fixture("xdebug.stream_v1")
+    fsdb = resources / "out" / "waves.fsdb"
+    expected_path = resources / "out" / "stream_expected.json"
     assert fsdb.is_file() and fsdb.stat().st_size > 0
     assert expected_path.is_file()
     expected = json.loads(expected_path.read_text(encoding="utf-8"))["streams"]
@@ -172,17 +160,26 @@ def test_stream_v1_real_waveform_actions(
                 "args": {
                     "mode": "append",
                     "streams": [
-                        {
-                            "name": "bad_interleave_channel_valid",
-                            "clock": "stream_v1_top.clk",
-                            "vld": "stream_v1_top.ipkt_vld",
-                            "rdy": "stream_v1_top.ipkt_rdy",
-                            "sop": "stream_v1_top.ipkt_sop",
-                            "eop": "stream_v1_top.ipkt_eop",
-                            "channel_id": "stream_v1_top.ipkt_chid",
-                            "channel_id_valid": "sop",
-                            "allow_interleaving": True,
-                            "beat_fields": {"data": "stream_v1_top.ipkt_data"},
+                            {
+                                "name": "bad_interleave_channel_valid",
+                                "signals": {
+                                    "clk": "stream_v1_top.clk",
+                                    "vld": "stream_v1_top.ipkt_vld",
+                                    "rdy": "stream_v1_top.ipkt_rdy",
+                                    "sop": "stream_v1_top.ipkt_sop",
+                                    "eop": "stream_v1_top.ipkt_eop",
+                                    "chid": "stream_v1_top.ipkt_chid",
+                                    "data": "stream_v1_top.ipkt_data",
+                                },
+                                "clock": "clk",
+                                "vld": "vld",
+                                "rdy": "rdy",
+                                "sop": "sop",
+                                "eop": "eop",
+                                "channel_id": "chid",
+                                "channel_id_valid": "sop",
+                                "allow_interleaving": True,
+                                "beat_fields": {"data": "data"},
                         }
                     ],
                 },
@@ -191,7 +188,11 @@ def test_stream_v1_real_waveform_actions(
         )
         assert invalid_interleaving.response is not None
         assert invalid_interleaving.response["ok"] is False
-        assert "allow_interleaving requires channel_id_valid=every_beat" in invalid_interleaving.stdout_raw
+        invalid_error = invalid_interleaving.response["error"]
+        assert invalid_error["code"] == "INVALID_ARGUMENT"
+        assert invalid_error["error_layer"] == "handler"
+        assert invalid_error["invalid_arg"] == "args.streams"
+        assert "allow_interleaving requires channel_id_valid=every_beat" in invalid_error["message"]
 
         for stream_name, counts in expected.items():
             shown = _query(
@@ -305,7 +306,7 @@ def test_stream_v1_real_waveform_actions(
                 artifact_root=artifact_root,
             )
             assert len(window["data"]["rows"]) == 8
-            assert window["summary"]["truncated"] is True
+            assert window["meta"]["truncated"] is True
 
         first_packet = _query(
             cli_runner,

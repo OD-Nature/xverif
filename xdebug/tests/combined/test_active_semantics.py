@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from runner import ArtifactWriter, CliRunner, CommandRunner, RunResult
+from runner import ArtifactWriter, CliRunner, RunResult
 
 
 def _require_success(
@@ -105,31 +105,18 @@ def _marker_lines(source: Path) -> dict[str, int]:
 @pytest.mark.regression
 @pytest.mark.slow
 def test_active_trace_semantic_branches_and_gates(
-    command_runner: CommandRunner,
     cli_runner: CliRunner,
     xdebug_root: Path,
     artifact_root: Path,
+    xverif_fixture: Any,
 ) -> None:
     fixture_dir = xdebug_root / "testdata" / "combined" / "active_semantics"
     source = fixture_dir / "active_semantics_tb.sv"
     marker_lines = _marker_lines(source)
 
-    build = command_runner.run(
-        ["make", "clean", "fixture"],
-        cwd=fixture_dir,
-        timeout_sec=600,
-        metadata={"suite": "active-semantics"},
-    )
-    if build.returncode != 0 or build.timed_out:
-        _require_success(
-            build,
-            case_name="active-semantics-build",
-            artifact_root=artifact_root,
-            extra={"source": source.read_text(encoding="utf-8")},
-        )
-
-    daidir = fixture_dir / "out" / "simv.daidir"
-    fsdb = fixture_dir / "out" / "waves.fsdb"
+    resources = xverif_fixture("xdebug.active_semantics")
+    daidir = resources / "out" / "simv.daidir"
+    fsdb = resources / "out" / "waves.fsdb"
     assert daidir.is_dir()
     assert fsdb.is_file() and fsdb.stat().st_size > 0
 

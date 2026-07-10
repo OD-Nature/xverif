@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -62,13 +63,18 @@ def test_existing_nonaxi_waveform_regression(
     xdebug_root: Path,
     xdebug_bin: Path,
     artifact_root: Path,
+    xverif_fixture: Any,
 ) -> None:
+    resources = xverif_fixture("xdebug.ai_complex_wave")
     result = command_runner.run(
         [
             sys.executable,
             str(xdebug_root / "tests" / "waveform" / "run_complex_wave.py"),
             "--mode",
             "nonaxi",
+            "--skip-build",
+            "--fsdb",
+            str(resources / "out" / "waves.fsdb"),
             "--xdebug",
             str(xdebug_bin),
         ],
@@ -94,7 +100,10 @@ def test_existing_combined_active_driver_regression(
     xdebug_root: Path,
     xdebug_bin: Path,
     artifact_root: Path,
+    xverif_fixture: Any,
 ) -> None:
+    active_driver = xverif_fixture("xdebug.active_driver")
+    interface_root = xverif_fixture("xdebug.interface_port_root")
     result = command_runner.run(
         [
             sys.executable,
@@ -107,7 +116,12 @@ def test_existing_combined_active_driver_regression(
         ],
         cwd=repo_root,
         timeout_sec=1200,
-        env={"XDEBUG": str(xdebug_bin), "XDEBUG_REQUIRE_NPI": "1"},
+        env={
+            "XDEBUG": str(xdebug_bin),
+            "XDEBUG_REQUIRE_NPI": "1",
+            "XDEBUG_ACTIVE_DRIVER_FIXTURE_DIR": str(active_driver),
+            "XDEBUG_INTERFACE_PORT_ROOT_FIXTURE_DIR": str(interface_root),
+        },
         metadata={"suite": "combined-active-driver"},
     )
     _require_success(

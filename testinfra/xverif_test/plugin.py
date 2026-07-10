@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import shutil
 from typing import Any
 
 import pytest
@@ -8,6 +9,7 @@ import pytest
 from .catalog import Catalog, CatalogError
 from .gates import ExecutionPlan, build_plan, filter_plan
 from .items import ExternalSuiteItem
+from .fixtures import FixtureError, FixtureStore, load_default_registry
 from .reports import ResultManager
 from .resources import apply_xdist_resource_group
 
@@ -133,10 +135,54 @@ def pytest_cmdline_main(config: pytest.Config) -> int | None:
     if operation is None:
         return None
     if operation != "gate":
-        raise pytest.UsageError(
-            f"xverif operation {operation!r} is declared but not implemented in this stage"
-        )
+        root = _repo_root(config)
+        try:
+            store = FixtureStore(root, load_default_registry(root))
+            if operation == "prepare":
+                requested = list(config.getoption("--xverif-prepare"))
+                fixture_ids = (
+                    [spec.id for spec in store.registry.fixtures]
+                    if requested == ["all-generated"]
+                    else requested
+                )
+                for fixture_id in fixture_ids:
+                    path = store.prepare(fixture_id)
+                    print(f"prepared {fixture_id}: {path.relative_to(root)}")
+                return pytest.ExitCode.OK
+            if operation == "fixture-validation":
+                if not config.getoption("--xverif-all-fixtures"):
+                    raise pytest.UsageError(
+                        "fixture-validation currently requires --xverif-all-fixtures"
+                    )
+                for spec in store.registry.fixtures:
+                    path = store.prepare(spec.id, rebuild=True)
+                    print(f"validated {spec.id}: {path.relative_to(root)}")
+                return pytest.ExitCode.OK
+            if operation == "fixture-clean":
+                store.clean()
+                print("xverif fixture cache removed")
+                return pytest.ExitCode.OK
+            if operation == "results-clean":
+                results = root / ".xverif-test-results"
+                if results.exists():
+                    shutil.rmtree(results)
+                print("xverif test results removed")
+                return pytest.ExitCode.OK
+        except FixtureError as exc:
+            raise pytest.UsageError(str(exc)) from exc
+        raise pytest.UsageError(f"xverif operation {operation!r} is not implemented")
     return None
+
+
+@pytest.fixture
+def xverif_fixture_store(request: pytest.FixtureRequest) -> FixtureStore:
+    root = _repo_root(request.config)
+    return FixtureStore(root, load_default_registry(root))
+
+
+@pytest.fixture
+def xverif_fixture(xverif_fixture_store: FixtureStore) -> Any:
+    return xverif_fixture_store.resolve
 
 
 def pytest_collection_modifyitems(

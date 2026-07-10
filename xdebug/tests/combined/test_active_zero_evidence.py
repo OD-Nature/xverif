@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from runner import ArtifactWriter, CliRunner, CommandRunner, RunResult
+from runner import ArtifactWriter, CliRunner, RunResult
 
 
 def _require_success(
@@ -39,31 +39,11 @@ def _require_success(
 
 @pytest.fixture
 def active_zero_evidence_fixture(
-    command_runner: CommandRunner,
-    xdebug_root: Path,
-    artifact_root: Path,
+    xverif_fixture: Any,
 ) -> tuple[Path, Path]:
-    fixture_dir = xdebug_root / "testdata" / "combined" / "active_zero_evidence"
-    build = command_runner.run(
-        ["make", "clean", "fixture"],
-        cwd=fixture_dir,
-        timeout_sec=600,
-        metadata={"suite": "active-zero-evidence"},
-    )
-    if build.returncode != 0 or build.timed_out:
-        _require_success(
-            build,
-            case_name="active-zero-evidence-build",
-            artifact_root=artifact_root,
-            extra={
-                "source": (fixture_dir / "active_zero_evidence_tb.v").read_text(
-                    encoding="utf-8"
-                )
-            },
-        )
-
-    daidir = fixture_dir / "out" / "simv.daidir"
-    fsdb = fixture_dir / "out" / "waves.fsdb"
+    resources = xverif_fixture("xdebug.active_zero_evidence")
+    daidir = resources / "out" / "simv.daidir"
+    fsdb = resources / "out" / "waves.fsdb"
     assert daidir.is_dir()
     assert fsdb.is_file() and fsdb.stat().st_size > 0
     return daidir, fsdb
@@ -117,7 +97,6 @@ def _query(
     args: dict[str, Any] = {
         "signal": signal,
         "time": requested_time,
-        "clk_period": "10ns",
     }
     return _require_success(
         cli_runner.run(
