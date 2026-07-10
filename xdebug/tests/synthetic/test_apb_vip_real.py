@@ -189,10 +189,11 @@ def test_apb_vip_real_wait_state_and_error_actions(
             artifact_root=artifact_root,
             manifest=manifest,
         )
-        assert listed["data"]["pready"] == config["pready"]
-        assert listed["data"]["pslverr"] == config["pslverr"]
+        assert listed["summary"]["status"] == "found"
+        assert listed["data"]["config"]["pready"] == config["pready"]
+        assert listed["data"]["config"]["pslverr"] == config["pslverr"]
 
-        for direction, expected_count in (("wr", 5), ("rd", 5)):
+        for direction, expected_count in (("write", 5), ("read", 5)):
             queried = _query(
                 cli_runner,
                 {
