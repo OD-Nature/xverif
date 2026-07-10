@@ -2,14 +2,6 @@
   "api_version": "xdebug.v1",
   "ok": true,
   "action": "expr.eval_at",
-  "summary": {
-    "truncated": false
-  },
-  "data": {
-    "examples": [
-      {
-        "time": "100ns"
-      }
-    ]
-  }
+  "summary": {"expr": "valid&&!ready", "time": "145ns", "status": "true", "known": true, "clock_edge_hit": true, "target_edge_hit": false, "bracket_complete": true},
+  "data": {"expr_value": true, "operands": [{"alias": "valid", "signal": "top.valid", "value": {"value": "1'h1", "known": true}}, {"alias": "ready", "signal": "top.ready", "value": {"value": "1'h0", "known": true}}]}
 }

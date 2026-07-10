@@ -2,14 +2,6 @@
   "api_version": "xdebug.v1",
   "ok": true,
   "action": "signal.stability",
-  "summary": {
-    "truncated": false
-  },
-  "data": {
-    "examples": [
-      {
-        "time": "100ns"
-      }
-    ]
-  }
+  "summary": {"signal": "top.stable_sig", "stable": true, "transition_count": 1, "begin": "0ns", "end": "200ns"},
+  "data": {"initial_value": {"value": "1'h1", "known": true}, "final_value": {"value": "1'h1", "known": true}, "first_change": "0ns", "last_change": "0ns", "changes": [{"time": "0ns", "value": {"value": "1'h1", "known": true}}]}
 }

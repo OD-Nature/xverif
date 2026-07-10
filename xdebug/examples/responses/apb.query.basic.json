@@ -2,14 +2,6 @@
   "api_version": "xdebug.v1",
   "ok": true,
   "action": "apb.query",
-  "summary": {
-    "truncated": false
-  },
-  "data": {
-    "examples": [
-      {
-        "time": "100ns"
-      }
-    ]
-  }
+  "summary": {"name": "if0", "direction": "read", "found": true, "addr": "0xf0"},
+  "data": {"transaction": {"time": "105ns", "type": "read", "addr": "0xf0", "data": "0x12"}}
 }

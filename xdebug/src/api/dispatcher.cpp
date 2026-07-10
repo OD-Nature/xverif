@@ -442,6 +442,9 @@ Json Dispatcher::handle_batch(const Json& request) {
     }
     Json response = make_response(request, "batch");
     Json results = Json::array();
+    Json failed_indexes = Json::array();
+    Json failed_codes = Json::array();
+    Json failed_layers = Json::array();
     bool all_ok = true;
     std::string mode = args.value("mode", std::string("continue_on_error"));
     for (auto child : requests) {
@@ -450,13 +453,24 @@ Json Dispatcher::handle_batch(const Json& request) {
         results.push_back(result);
         if (!result.value("ok", false)) {
             all_ok = false;
+            failed_indexes.push_back(results.size() - 1);
+            Json error = result.value("error", Json::object());
+            failed_codes.push_back(error.value("code", std::string("ACTION_FAILED")));
+            failed_layers.push_back(error.value("error_layer", std::string("handler")));
             if (mode == "stop_on_error") break;
         }
     }
     response["ok"] = all_ok;
-    response["summary"] = {{"count", results.size()}, {"all_ok", all_ok}};
+    response["summary"] = {{"count", results.size()}, {"all_ok", all_ok},
+                           {"failed_count", failed_indexes.size()},
+                           {"failed_indexes", failed_indexes},
+                           {"failed_codes", failed_codes},
+                           {"failed_layers", failed_layers}};
     response["data"] = {{"results", results}};
-    if (!all_ok) response["error"] = {{"code", "BATCH_PARTIAL_FAILURE"}, {"message", "one or more child requests failed"}, {"recoverable", true}};
+    if (!all_ok) response["error"] = {{"code", "BATCH_PARTIAL_FAILURE"},
+                                      {"message", "one or more child requests failed"},
+                                      {"recoverable", true},
+                                      {"error_layer", "handler"}};
     return response;
 }
 
@@ -643,7 +657,16 @@ Json Dispatcher::dispatch_impl(const Json& request) {
     const std::string action = request.value("action", std::string());
     const ActionSpec* spec = default_action_registry().find_spec(action);
     if (!spec || spec->status == ActionStatus::Removed) {
-        return make_error(request, action, "UNKNOWN_ACTION", "unknown action: " + action);
+        Json suggestions = suggested_action_names(action);
+        Json error = DiagnosticErrorBuilder::handler(
+                         "UNKNOWN_ACTION", "unknown action: " + action)
+                         .invalid_arg("action")
+                         .received(action)
+                         .available_values(suggestions)
+                         .did_you_mean(suggestions.empty() ? "" : suggestions[0].get<std::string>())
+                         .to_json();
+        error["suggested_actions"] = suggestions;
+        return make_error(request, action, error);
     }
 
     RequestEnvelope envelope = RequestEnvelope::from_json(request);

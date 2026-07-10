@@ -42,13 +42,18 @@ Typical workflow:
 3. For coverage queries: xverif_cov_session_open → xverif_cov_query.
 4. For stateless queries: call the tool directly (e.g., xverif_bit_eval).
 
+Managed lifecycle is symmetric for debug and coverage:
+  session_open → session_list/session_doctor → session_close/session_kill → session_gc.
+Doctor is read-only; kill requires one exact name/session_id and never accepts all.
+Query tools reject native session.* actions (including coverage session.status).
+
 If xverif_debug_query returns error.code=SESSION_LOST:
   - check error.terminal_source: "transport" means subprocess/LSF crash or timeout
   - if timeout: inform user of possible causes (large data, LSF queue delay)
     and let user decide — narrow query scope or increase timeout env vars
-  - the MCP server has already cleaned up the subprocess/LSF job
-  - the session mapping has been evicted
-  - the agent must explicitly call xverif_debug_session_open before retrying
+  - inspect the managed tombstone with session_list(include_tombstones=true)
+  - call session_doctor; xdebug may still have a detached backend
+  - use exact session_kill and then session_gc before opening the same alias
 No automatic retry or reopen is performed by the server.
 
 Batch execution (xverif_batch):
@@ -304,13 +309,14 @@ async def xverif_batch(batch_file: str, output_file: str) -> dict:
 
 
 @xverif_tool("debug")
-def xverif_debug_list_actions() -> dict:
+def xverif_debug_list_actions(verbose: bool = False) -> dict:
     """Return the xdebug action catalog.
 
     Call this before xverif_debug_query when you are unsure which action to use.
-    Returns the list of all available xdebug actions with brief descriptions.
+    Default returns compact action names. Set verbose=true for descriptors,
+    schemas, examples, required args, and usage guidance.
     """
-    return debug.actions()
+    return debug.actions(verbose=verbose)
 
 
 @xverif_tool("debug")

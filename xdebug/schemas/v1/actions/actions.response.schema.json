@@ -31,10 +31,31 @@
     },
     "summary": {
       "type": "object",
+      "required": ["action_count", "removed_count", "verbose"],
+      "properties": {
+        "action_count": {"type": "integer", "minimum": 0},
+        "removed_count": {"type": "integer", "minimum": 0},
+        "verbose": {"type": "boolean"}
+      },
       "additionalProperties": true
     },
     "data": {
-      "type": "object"
+      "type": "object",
+      "required": ["actions", "removed", "modes"],
+      "properties": {
+        "actions": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {"type": "string"},
+              {"type": "object", "required": ["name", "category", "status", "requires"]}
+            ]
+          }
+        },
+        "removed": {"type": "array", "items": {"type": "string"}},
+        "modes": {"type": "object"}
+      },
+      "additionalProperties": false
     },
     "findings": {
       "type": "array"

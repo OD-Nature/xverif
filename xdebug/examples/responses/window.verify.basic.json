@@ -2,14 +2,6 @@
   "api_version": "xdebug.v1",
   "ok": true,
   "action": "window.verify",
-  "summary": {
-    "truncated": false
-  },
-  "data": {
-    "examples": [
-      {
-        "time": "100ns"
-      }
-    ]
-  }
+  "summary": {"all_passed": true, "sample_count": 4, "failed_samples": 0, "unknown_samples": 0, "truncated": false, "sampling_mode": "clock_edge", "clock": "top.clk", "edge": "posedge", "sample_point": "after"},
+  "data": {"conditions": [{"expr": "valid&&!ready", "mode": "always", "passed": true, "pass_samples": 4, "failed_samples": 0, "unknown_samples": 0}]}
 }

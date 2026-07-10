@@ -50,6 +50,22 @@
           "type": "string",
           "description": "已保存配置、游标、列表或接口配置名称。"
         },
+        "output": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "file_format": {
+              "type": "string"
+            },
+            "verbose": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false,
+          "description": "导出配置对象；路径统一使用 output.path。"
+        },
         "query": {
           "type": "object",
           "properties": {

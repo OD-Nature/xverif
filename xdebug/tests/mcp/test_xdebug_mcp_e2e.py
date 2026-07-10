@@ -170,7 +170,7 @@ def test_mcp_direct_tools_discovery_schema_and_one_shot_actions(
 
         actions = _json(_call(server, "xverif_debug_list_actions"))
         assert actions["ok"] is True
-        assert "value.at" in actions["data"]["implemented"]
+        assert "value.at" in actions["data"]["actions"]
 
         schema = _json(
             _call(

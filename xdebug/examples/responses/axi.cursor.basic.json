@@ -2,14 +2,6 @@
   "api_version": "xdebug.v1",
   "ok": true,
   "action": "axi.cursor",
-  "summary": {
-    "truncated": false
-  },
-  "data": {
-    "examples": [
-      {
-        "time": "100ns"
-      }
-    ]
-  }
+  "summary": {"name": "if0", "op": "begin", "direction": "all", "found": true, "index": 1, "index_base": 1, "total_count": 4, "at_begin": true, "at_end": false},
+  "data": {"transaction": {"time": "100ns", "response_time": "140ns", "latency": "40ns", "addr": 240, "id": 1, "len": 0, "is_write": true}}
 }

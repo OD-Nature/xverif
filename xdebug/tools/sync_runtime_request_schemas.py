@@ -110,6 +110,7 @@ ADDITIONAL_ARG_SCHEMAS: dict[str, dict[str, Any]] = {
 
 
 EXTRA_ARGS_BY_ACTION: dict[str, set[str]] = {
+    "actions": {"output"},
     "apb.cursor": {"direction"},
     "apb.config.list": {"name"},
     "apb.config.load": {"config", "config_path"},
@@ -123,7 +124,7 @@ EXTRA_ARGS_BY_ACTION: dict[str, set[str]] = {
     "axi.export": {"output", "time_range"},
     "axi.latency_outlier": {"line_limit", "time_range"},
     "axi.outstanding_timeline": {"line_limit", "time_range"},
-    "axi.query": {"direction", "address", "addr", "query", "last"},
+    "axi.query": {"direction", "address", "addr", "query", "last", "output"},
     "axi.request_response_pair": {"line_limit", "time_range"},
     "batch": {"mode"},
     "counter.statistics": {"edge", "line_limit", "sample_point"},
@@ -178,7 +179,7 @@ EXTRA_ARGS_BY_ACTION: dict[str, set[str]] = {
     "signal.changes": {"aggregate_only", "line_limit", "mode", "time_range"},
     "signal.stability": {"conditions", "line_limit", "mode", "signals", "time_range"},
     "signal.statistics": {"clock", "conditions", "edge", "line_limit", "mode", "sample_point", "signals", "time_range"},
-    "source.context": {"context_lines", "symbol"},
+    "source.context": {"context_lines", "symbol", "output"},
     "stream.config.load": {"config", "config_path", "file", "mode"},
     "stream.config.list": {"name", "output"},
     "stream.export": {"channel", "line_limit", "output", "time_range"},

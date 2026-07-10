@@ -28,8 +28,9 @@ class XverifDebugAdapter:
     def ping(self) -> str:
         return "pong"
 
-    def actions(self) -> Json:
-        return self._one_shot({"api_version": "xdebug.v1", "action": "actions"})
+    def actions(self, verbose: bool = False) -> Json:
+        args: Json = {"output": {"verbose": True}} if verbose else {}
+        return self._one_shot({"api_version": "xdebug.v1", "action": "actions", "args": args})
 
     def schema(self, action: str, kind: str = "request") -> Json:
         return self._one_shot({"api_version": "xdebug.v1", "action": "schema",

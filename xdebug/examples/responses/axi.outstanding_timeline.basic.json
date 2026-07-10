@@ -2,14 +2,6 @@
   "api_version": "xdebug.v1",
   "ok": true,
   "action": "axi.outstanding_timeline",
-  "summary": {
-    "truncated": false
-  },
-  "data": {
-    "examples": [
-      {
-        "time": "100ns"
-      }
-    ]
-  }
+  "summary": {"name": "if0", "sample_count": 20, "change_point_count": 3, "returned_change_point_count": 3, "peak_read": 2, "peak_write": 1, "peak_read_time": "120ns", "peak_write_time": "100ns", "analysis_complete": true, "truncated": false},
+  "data": {"change_points": [{"time": "100ns", "read": 0, "write": 1}, {"time": "120ns", "read": 2, "write": 1}]}
 }

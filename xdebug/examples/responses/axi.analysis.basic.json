@@ -2,14 +2,6 @@
   "api_version": "xdebug.v1",
   "ok": true,
   "action": "axi.analysis",
-  "summary": {
-    "truncated": false
-  },
-  "data": {
-    "examples": [
-      {
-        "time": "100ns"
-      }
-    ]
-  }
+  "summary": {"name": "if0", "analysis": "latency", "min": "10ns", "avg": "20ns", "max": "40ns", "p50": "20ns", "p95": "40ns", "p99": "40ns", "samples": 4},
+  "data": {"slowest": {"time": "100ns", "response_time": "140ns", "addr": 240, "id": 1, "is_write": true}}
 }

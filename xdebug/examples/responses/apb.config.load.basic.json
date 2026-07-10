@@ -2,14 +2,6 @@
   "api_version": "xdebug.v1",
   "ok": true,
   "action": "apb.config.load",
-  "summary": {
-    "truncated": false
-  },
-  "data": {
-    "examples": [
-      {
-        "time": "100ns"
-      }
-    ]
-  }
+  "summary": {"name": "if0", "status": "loaded"},
+  "data": {"config": {"name": "if0", "clock": "top.clk", "edge": "negedge"}}
 }

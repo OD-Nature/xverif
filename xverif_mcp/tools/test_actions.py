@@ -38,36 +38,6 @@ from mcp.client.stdio import stdio_client
 # Config
 # ---------------------------------------------------------------------------
 
-FALLBACK_ACTIONS = [
-    "actions", "batch", "schema",
-    "session.open", "session.list", "session.doctor",
-    "session.gc", "session.kill", "session.close",
-    "trace.driver", "trace.load",
-    "source.context", "expr.normalize",
-    "signal.resolve", "signal.canonicalize",
-    "detect_abnormal",
-    "handshake.inspect",
-    "value.at", "value.batch_at",
-    "scope.list",
-    "signal.changes", "signal.stability", "signal.statistics", "counter.statistics",
-    "event.find", "event.export", "event.config.list", "event.config.load",
-    "window.verify",
-    "cursor.set", "cursor.get", "cursor.list", "cursor.delete", "cursor.use",
-    "list.create", "list.add", "list.show", "list.delete",
-    "list.diff", "list.validate", "list.value_at",
-    "apb.config.list", "apb.config.load", "apb.cursor",
-    "apb.query", "apb.transfer_window",
-    "axi.analysis", "axi.channel_stall",
-    "axi.config.list", "axi.config.load", "axi.cursor",
-    "axi.latency_outlier", "axi.outstanding_timeline",
-    "axi.query", "axi.request_response_pair",
-    "trace.active_driver",
-    "trace.active_driver_chain",
-    "expr.eval_at",
-    "verify.conditions", "rc.generate",
-    "sampled_pulse.inspect",
-]
-
 # ---------------------------------------------------------------------------
 # Config loading
 # ---------------------------------------------------------------------------
@@ -162,11 +132,11 @@ async def _call_json(session, tool: str, args: dict | None = None) -> dict:
 
 async def discover_actions(session) -> list[str]:
     data = await _call_json(session, "xverif_debug_list_actions", {})
-    actions = data.get("data", {}) if isinstance(data, dict) else {}
-    implemented = actions.get("implemented")
-    if isinstance(implemented, list) and implemented:
-        return sorted(str(a) for a in implemented)
-    return FALLBACK_ACTIONS
+    payload = data.get("data", {}) if isinstance(data, dict) else {}
+    actions = payload.get("actions")
+    if not isinstance(actions, list) or not actions or not all(isinstance(a, str) for a in actions):
+        raise RuntimeError("runtime action catalog did not return compact data.actions names")
+    return sorted(actions)
 
 
 # ---------------------------------------------------------------------------
@@ -188,8 +158,12 @@ async def _open_session(session, cfg):
     if not d.get("ok"):
         print(f"  {Colors.RED}FAIL session.open: {d.get('error')}{Colors.RESET}", flush=True)
         return False
-    mode = d.get("summary", {}).get("mode", "?")
-    print(f"  Session '{sn}' opened (mode={mode})", flush=True)
+    record = d.get("session", {})
+    print(
+        f"  Session '{sn}' opened (backend={record.get('backend', '?')}, "
+        f"launcher={record.get('launcher', '?')})",
+        flush=True,
+    )
     return True
 
 

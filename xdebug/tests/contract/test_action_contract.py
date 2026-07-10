@@ -20,7 +20,11 @@ def _load_json(path: Path) -> Any:
 
 def _runtime_catalog(cli_runner: CliRunner) -> Dict[str, Any]:
     result = cli_runner.run(
-        {"api_version": "xdebug.v1", "action": "actions"},
+        {
+            "api_version": "xdebug.v1",
+            "action": "actions",
+            "args": {"output": {"verbose": True}},
+        },
         output_format="json",
     )
     assert result.ok, result.stderr_raw
@@ -66,7 +70,6 @@ def test_runtime_catalog_matches_specs_and_referenced_files(
     expected_removed = {
         name for name, spec in specs_by_name.items() if spec["status"] == "removed"
     }
-    assert set(catalog["data"]["implemented"]) == expected_implemented
     assert set(catalog["data"]["removed"]) == expected_removed
     assert set(descriptors) == expected_implemented
 
@@ -90,6 +93,56 @@ def test_runtime_catalog_matches_specs_and_referenced_files(
         ):
             assert (xdebug_root / reference).is_file(), reference
 
+
+@pytest.mark.contract
+def test_runtime_catalog_default_is_compact_without_duplicate_names(
+    cli_runner: CliRunner,
+) -> None:
+    result = cli_runner.run(
+        {"api_version": "xdebug.v1", "action": "actions", "args": {}},
+        output_format="json",
+    )
+    assert result.ok, result.response
+    assert result.response["summary"]["verbose"] is False
+    assert "implemented" not in result.response["data"]
+    assert result.response["data"]["actions"]
+    assert all(isinstance(name, str) for name in result.response["data"]["actions"])
+
+
+@pytest.mark.contract
+def test_runtime_schema_unknown_action_suggests_nearby_names(
+    cli_runner: CliRunner,
+) -> None:
+    result = cli_runner.run(
+        {
+            "api_version": "xdebug.v1",
+            "action": "schema",
+            "args": {"action": "value.batc_at", "kind": "request"},
+        },
+        output_format="json",
+    )
+    assert result.returncode == 1
+    error = result.response["error"]
+    assert error["code"] == "UNKNOWN_ACTION"
+    assert error["error_layer"] == "handler"
+    assert error["did_you_mean"] == "value.batch_at"
+    assert "value.batch_at" in error["suggested_actions"]
+
+
+@pytest.mark.contract
+def test_runtime_unknown_action_suggests_nearby_names(
+    cli_runner: CliRunner,
+) -> None:
+    result = cli_runner.run(
+        {"api_version": "xdebug.v1", "action": "signal.statistcs", "args": {}},
+        output_format="json",
+    )
+    assert result.returncode == 1
+    error = result.response["error"]
+    assert error["code"] == "UNKNOWN_ACTION"
+    assert error["error_layer"] == "handler"
+    assert error["did_you_mean"] == "signal.statistics"
+    assert "signal.statistics" in error["suggested_actions"]
 
 @pytest.mark.contract
 def test_action_required_args_match_runtime_schema_and_examples(
@@ -365,7 +418,8 @@ def test_all_actions_unknown_args_report_correct_example(
     cli_runner: CliRunner,
 ) -> None:
     catalog = _runtime_catalog(cli_runner)
-    for action in catalog["data"]["implemented"]:
+    for descriptor in catalog["data"]["actions"]:
+        action = descriptor["name"]
         request = {
             "api_version": "xdebug.v1",
             "action": action,

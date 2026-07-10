@@ -4,7 +4,11 @@
   "action": "batch",
   "summary": {
     "count": 1,
-    "all_ok": true
+    "all_ok": true,
+    "failed_count": 0,
+    "failed_indexes": [],
+    "failed_codes": [],
+    "failed_layers": []
   },
   "data": {
     "results": [

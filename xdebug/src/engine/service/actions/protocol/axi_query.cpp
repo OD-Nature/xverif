@@ -54,7 +54,7 @@ static bool parse_user_uint64_literal(const std::string& text,
     }
     return true;
 }
-static Json axi_transaction_json(const xdebug_waveform::AxiTransaction& txn) {
+static Json axi_transaction_json(const xdebug_waveform::AxiTransaction& txn, bool verbose) {
     Json tj;
     tj["time"] = xdebug_core::format_time(xdebug_waveform::g_fsdb_file, txn.addr_time);
     tj["response_time"] = xdebug_core::format_time(xdebug_waveform::g_fsdb_file, txn.resp_time);
@@ -67,7 +67,7 @@ static Json axi_transaction_json(const xdebug_waveform::AxiTransaction& txn) {
     tj["size"] = txn.size;
     tj["burst"] = txn.burst;
     tj["is_write"] = txn.is_write;
-    if (!txn.data.empty()) {
+    if (verbose && !txn.data.empty()) {
         Json da = Json::array();
         for (const auto& d : txn.data) da.push_back(d);
         tj["data"] = da;
@@ -83,6 +83,7 @@ public:
     Json run(const Json& r, EngineActionContext& ctx) const override {
         using namespace xdebug_waveform;
         Json a = r.value("args", Json::object());
+        const bool verbose = a.value("output", Json::object()).value("verbose", false);
         std::string name = a.value("name", "");
         if (name.empty()) return protocol_missing_name_error(action_name(), "axi");
 
@@ -129,7 +130,7 @@ public:
                         bool ok = is_write ? g_axi_analyzer.get_write_by_addr_num(name, addr, id_str.c_str(), (size_t)i, item)
                                            : g_axi_analyzer.get_read_by_addr_num(name, addr, id_str.c_str(), (size_t)i, item);
                         if (!ok || !item) break;
-                        transactions.push_back(axi_transaction_json(*item));
+                        transactions.push_back(axi_transaction_json(*item, verbose));
                     }
                     Json out;
                     out["summary"] = {{"name",name},{"direction",dir},{"count",(int)transactions.size()}};
@@ -153,7 +154,7 @@ public:
                         bool ok = is_write ? g_axi_analyzer.get_write_by_addr_num(name, addr, (size_t)i, item)
                                            : g_axi_analyzer.get_read_by_addr_num(name, addr, (size_t)i, item);
                         if (!ok || !item) break;
-                        transactions.push_back(axi_transaction_json(*item));
+                        transactions.push_back(axi_transaction_json(*item, verbose));
                     }
                     Json out;
                     out["summary"] = {{"name",name},{"direction",dir},{"count",(int)transactions.size()}};
@@ -178,7 +179,7 @@ public:
                     bool ok = is_write ? g_axi_analyzer.get_write_by_num(name, id_str.c_str(), (size_t)i, item)
                                        : g_axi_analyzer.get_read_by_num(name, id_str.c_str(), (size_t)i, item);
                     if (!ok || !item) break;
-                    transactions.push_back(axi_transaction_json(*item));
+                    transactions.push_back(axi_transaction_json(*item, verbose));
                 }
                 Json out;
                 out["summary"] = {{"name",name},{"direction",dir},{"count",(int)transactions.size()}};
@@ -198,7 +199,7 @@ public:
                 bool ok = is_write ? g_axi_analyzer.get_write_by_num(name, (size_t)i, item)
                                    : g_axi_analyzer.get_read_by_num(name, (size_t)i, item);
                 if (!ok || !item) break;
-                transactions.push_back(axi_transaction_json(*item));
+                transactions.push_back(axi_transaction_json(*item, verbose));
             }
             Json out;
             out["summary"] = {{"name",name},{"direction",dir},{"count",(int)transactions.size()}};
@@ -218,7 +219,7 @@ public:
         Json out;
         out["summary"] = {{"name",name},{"direction",dir},{"found",found}};
         if (found && txn) {
-            out["transaction"] = axi_transaction_json(*txn);
+            out["transaction"] = axi_transaction_json(*txn, verbose);
         }
         return out;
     }

@@ -367,10 +367,18 @@ mcp-test-lsf:
 	PYTHONPATH=$(CURDIR)/../xverif_mcp/src:$(CURDIR)/.. XVERIF_MCP_BACKEND=lsf XVERIF_MCP_FAKE_LSF=1 $(PYTHON) $(CURDIR)/../xverif_mcp/tools/test_actions.py
 
 mcp-session-test:
-	PYTHONPATH=$(CURDIR)/../xverif_mcp/src:$(CURDIR)/.. $(PYTHON) -m pytest -q $(CURDIR)/../xverif_mcp/tests/test_stdio_loop_session_lifecycle.py $(CURDIR)/../xverif_mcp/tests/test_backend_wiring.py $(CURDIR)/../xverif_mcp/tests/test_session_errors.py -v
+	PYTHONPATH=$(CURDIR)/../xverif_mcp/src:$(CURDIR)/.. $(PYTHON) -m pytest -q \
+		$(CURDIR)/../xverif_mcp/tests/test_loop_session.py \
+		$(CURDIR)/../xverif_mcp/tests/test_stdio_loop_session_lifecycle.py \
+		$(CURDIR)/../xverif_mcp/tests/test_loop_wrapper_uds.py \
+		$(CURDIR)/../xverif_mcp/tests/test_session_capabilities.py \
+		$(CURDIR)/../xverif_mcp/tests/test_backend_wiring.py \
+		$(CURDIR)/../xverif_mcp/tests/test_session_errors.py -v
 
 mcp-sdk-test:
-	PYTHONPATH=$(CURDIR)/../xverif_mcp/src:$(CURDIR)/.. $(PYTHON) -m pytest -q $(CURDIR)/../xverif_mcp/tests/test_mcp_sdk_smoke.py -v
+	PYTHONPATH=$(CURDIR)/../xverif_mcp/src:$(CURDIR)/.. $(PYTHON) -m pytest -q \
+		$(CURDIR)/../xverif_mcp/tests/test_mcp_sdk_smoke.py \
+		$(CURDIR)/../xverif_mcp/tests/test_xdebug_session_action_guard.py -v
 
 mcp-inspect:
 	cd $(CURDIR)/.. && PYTHONPATH=xverif_mcp/src$(PYTHON) -m mcp dev xverif_mcp/src/xverif_mcp/server.py

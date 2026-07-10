@@ -2,14 +2,6 @@
   "api_version": "xdebug.v1",
   "ok": true,
   "action": "axi.channel_stall",
-  "summary": {
-    "truncated": false
-  },
-  "data": {
-    "examples": [
-      {
-        "time": "100ns"
-      }
-    ]
-  }
+  "summary": {"name": "if0", "channel": "ar", "sample_count": 20, "transfer_count": 3, "max_stall_cycles": 4, "finding_count": 1, "truncated": false},
+  "data": {"findings": [{"type": "stall", "begin": "100ns", "end": "140ns", "cycles": 4}]}
 }

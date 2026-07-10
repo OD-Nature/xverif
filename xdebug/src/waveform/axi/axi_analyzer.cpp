@@ -796,6 +796,7 @@ bool AxiAnalyzer::get_latency_stats(const std::string& name, int filter, const c
     bool include_wr = (filter == 0 || filter == 1);
     bool include_rd = (filter == 0 || filter == 2);
     double total = 0.0;
+    std::vector<double> latencies;
     bool seen = false;
 
     auto visit = [&](const AxiTransaction& txn) {
@@ -818,6 +819,7 @@ bool AxiAnalyzer::get_latency_stats(const std::string& name, int filter, const c
             }
         }
         total += lat;
+        latencies.push_back(lat);
         ++out.samples;
     };
 
@@ -830,6 +832,15 @@ bool AxiAnalyzer::get_latency_stats(const std::string& name, int filter, const c
 
     if (!seen || out.samples == 0) return false;
     out.avg = total / static_cast<double>(out.samples);
+    std::sort(latencies.begin(), latencies.end());
+    auto percentile = [&](size_t percent) {
+        size_t rank = (percent * latencies.size() + 99) / 100;
+        if (rank == 0) rank = 1;
+        return latencies[rank - 1];
+    };
+    out.p50 = percentile(50);
+    out.p95 = percentile(95);
+    out.p99 = percentile(99);
     return true;
 }
 

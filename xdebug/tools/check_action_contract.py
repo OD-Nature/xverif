@@ -78,8 +78,11 @@ def check_spec_shape(specs, xdebug_root):
                     require_file(example, xdebug_root)
 
 
-def load_runtime_actions(exe):
-    request = b'{"api_version":"xdebug.v1","action":"actions"}\n'
+def load_runtime_actions(exe, verbose=False):
+    request_doc = {"api_version": "xdebug.v1", "action": "actions", "args": {}}
+    if verbose:
+        request_doc["args"]["output"] = {"verbose": True}
+    request = (json.dumps(request_doc) + "\n").encode("utf-8")
     try:
         raw = subprocess.check_output([str(exe), "--json"], input=request)
     except Exception as exc:
@@ -93,8 +96,11 @@ def load_runtime_actions(exe):
     return doc
 
 
-def check_runtime(specs, runtime):
-    implemented = set(runtime["data"].get("implemented", []))
+def check_runtime(specs, runtime, exe):
+    actions = runtime["data"].get("actions", [])
+    if not isinstance(actions, list) or not all(isinstance(name, str) for name in actions):
+        fail("compact runtime data.actions must contain action name strings")
+    implemented = set(actions)
     removed = set(runtime["data"].get("removed", []))
     spec_implemented = {name for name, spec in specs.items() if spec["status"] != "removed"}
     spec_removed = {name for name, spec in specs.items() if spec["status"] == "removed"}
@@ -104,7 +110,8 @@ def check_runtime(specs, runtime):
     if removed != spec_removed:
         fail("removed mismatch: missing=%s extra=%s" %
              (sorted(spec_removed - removed), sorted(removed - spec_removed)))
-    descriptors = {item["name"]: item for item in runtime["data"].get("actions", [])}
+    verbose_runtime = load_runtime_actions(exe, verbose=True)
+    descriptors = {item["name"]: item for item in verbose_runtime["data"].get("actions", [])}
     for name in sorted(spec_implemented):
         if name not in descriptors:
             fail("%s: missing runtime descriptor" % name)
@@ -139,7 +146,7 @@ def main(argv):
     specs = load_specs(specs_root)
     check_spec_shape(specs, xdebug_root)
     runtime = load_runtime_actions(exe)
-    check_runtime(specs, runtime)
+    check_runtime(specs, runtime, exe)
     print("validated %d action specs against runtime actions" % len(specs))
     return 0
 

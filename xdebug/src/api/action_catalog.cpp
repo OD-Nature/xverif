@@ -5,7 +5,10 @@
 #include "common/env_config.h"
 
 #include <fstream>
+#include <algorithm>
+#include <limits>
 #include <sstream>
+#include <vector>
 
 namespace xdebug {
 
@@ -56,6 +59,21 @@ bool read_json_file(const std::string& path, Json& out) {
     return true;
 }
 
+size_t edit_distance(const std::string& lhs, const std::string& rhs) {
+    std::vector<size_t> previous(rhs.size() + 1);
+    std::vector<size_t> current(rhs.size() + 1);
+    for (size_t j = 0; j <= rhs.size(); ++j) previous[j] = j;
+    for (size_t i = 1; i <= lhs.size(); ++i) {
+        current[0] = i;
+        for (size_t j = 1; j <= rhs.size(); ++j) {
+            const size_t substitution = previous[j - 1] + (lhs[i - 1] == rhs[j - 1] ? 0 : 1);
+            current[j] = std::min(std::min(previous[j] + 1, current[j - 1] + 1), substitution);
+        }
+        previous.swap(current);
+    }
+    return previous[rhs.size()];
+}
+
 } // namespace
 
 const std::set<std::string>& design_actions() {
@@ -68,6 +86,22 @@ const std::set<std::string>& waveform_actions() {
     return actions;
 }
 
+Json suggested_action_names(const std::string& action, size_t limit) {
+    std::vector<std::pair<size_t, std::string> > ranked;
+    for (const auto& spec : default_action_registry().list_specs(false)) {
+        size_t score = edit_distance(action, spec.name);
+        const size_t dot = action.find('.');
+        if (dot != std::string::npos && spec.name.compare(0, dot + 1, action, 0, dot + 1) == 0) {
+            score = score > 2 ? score - 2 : 0;
+        }
+        ranked.push_back(std::make_pair(score, spec.name));
+    }
+    std::sort(ranked.begin(), ranked.end());
+    Json out = Json::array();
+    for (size_t i = 0; i < ranked.size() && i < limit; ++i) out.push_back(ranked[i].second);
+    return out;
+}
+
 Json catalog_schema_response(const Json& request) {
     Json response = make_response(request, "schema");
     Json args = request.value("args", Json::object());
@@ -77,7 +111,16 @@ Json catalog_schema_response(const Json& request) {
         if (kind.empty()) kind = "request";
         const ActionSpec* spec = default_action_registry().find_spec(action);
         if (!spec) {
-            return make_error(request, "schema", "UNKNOWN_ACTION", "unknown action: " + action);
+            Json suggestions = suggested_action_names(action);
+            Json error = DiagnosticErrorBuilder::handler(
+                             "UNKNOWN_ACTION", "unknown action: " + action)
+                             .invalid_arg("args.action")
+                             .received(action)
+                             .available_values(suggestions)
+                             .did_you_mean(suggestions.empty() ? "" : suggestions[0].get<std::string>())
+                             .to_json();
+            error["suggested_actions"] = suggestions;
+            return make_error(request, "schema", error);
         }
         std::string rel;
         if (kind == "request") rel = spec->request_schema;
@@ -134,16 +177,19 @@ Json catalog_schema_response(const Json& request) {
 
 Json catalog_actions_response(const Json& request) {
     Json response = make_response(request, "actions");
-    Json descriptors = default_action_registry().list_descriptors(false);
-    Json implemented = action_name_array(false);
+    Json args = request.value("args", Json::object());
+    Json output = args.value("output", Json::object());
+    const bool verbose = output.value("verbose", false);
+    Json actions = verbose ? default_action_registry().list_descriptors(false)
+                           : action_name_array(false);
     Json removed = action_name_array(true);
     response["summary"] = {
-        {"action_count", implemented.size()},
-        {"removed_count", removed.size()}
+        {"action_count", actions.size()},
+        {"removed_count", removed.size()},
+        {"verbose", verbose}
     };
     response["data"] = {
-        {"implemented", implemented},
-        {"actions", descriptors},
+        {"actions", actions},
         {"removed", removed},
         {"modes", {
             {"design", string_array(actions_for_category("design"))},

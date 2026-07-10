@@ -916,7 +916,23 @@ def run_axi(xdebug, fsdb):
         wr = r.query("axi.query", args={"name": "axi0", "direction": "write"})
         rd = r.query("axi.query", args={"name": "axi0", "direction": "read"})
         require(wr["summary"].get("count", 0) > 0 and rd["summary"].get("count", 0) > 0, "AXI query count is empty")
-        r.query("axi.query", args={"name": "axi0", "direction": "write", "query": {"index": 1}})
+        compact_txn = r.query(
+            "axi.query",
+            args={"name": "axi0", "direction": "write", "query": {"index": 1}},
+        )
+        require("data" not in compact_txn["data"]["transaction"],
+                "AXI compact transaction must omit beat data")
+        verbose_txn = r.query(
+            "axi.query",
+            args={
+                "name": "axi0",
+                "direction": "write",
+                "query": {"index": 1},
+                "output": {"verbose": True},
+            },
+        )
+        require("data" in verbose_txn["data"]["transaction"],
+                "AXI verbose transaction must include beat data")
 
         axi_modes = [
             ("axi_default_negedge", make_axi_config(prefix, edge=None), "negedge", None),
@@ -935,7 +951,10 @@ def run_axi(xdebug, fsdb):
 
         r.query("axi.cursor", args={"name": "axi0", "op": "begin", "direction": "all"})
         r.query("axi.cursor", args={"name": "axi0", "op": "next", "direction": "all"})
-        r.query("axi.analysis", args={"name": "axi0", "analysis": "latency", "direction": "all"})
+        latency = r.query("axi.analysis", args={"name": "axi0", "analysis": "latency", "direction": "all"})
+        for percentile in ("p50", "p95", "p99"):
+            require(percentile in latency["summary"],
+                    "AXI latency analysis missing {}".format(percentile))
         r.query("axi.analysis", args={"name": "axi0", "analysis": "osd", "direction": "all"})
 
         tr = {"begin": "0ns", "end": "200ms"}

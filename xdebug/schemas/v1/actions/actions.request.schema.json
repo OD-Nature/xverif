@@ -28,7 +28,24 @@
     },
     "args": {
       "type": "object",
-      "properties": {},
+      "properties": {
+        "output": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "file_format": {
+              "type": "string"
+            },
+            "verbose": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false,
+          "description": "导出配置对象；路径统一使用 output.path。"
+        }
+      },
       "additionalProperties": false,
       "required": []
     },
@@ -54,7 +71,7 @@
   "additionalProperties": false,
   "description": "actions: 列出当前运行时公开 action catalog。",
   "x-purpose": "列出当前运行时公开 action catalog。",
-  "x-how_it_works": "读取 ActionRegistry 中注册的 spec，返回 implemented/removed/modes/descriptors。",
+  "x-how_it_works": "默认返回 compact action names；args.output.verbose=true 时返回 descriptors，并同时返回 removed/modes。",
   "x-when_to_use": "让 agent 在调用前发现真实可用能力。",
-  "x-arg_contract_notes": "none"
+  "x-arg_contract_notes": "no required args"
 }

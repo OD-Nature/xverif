@@ -151,6 +151,24 @@ std::string render_xout_response(const Json& response) {
     if (!ok) {
         if (response.contains("action")) out.emit_kv("action", response["action"]);
         if (response.contains("error")) out.emit_error(response["error"]);
+        if (response.contains("summary") && response["summary"].is_object() &&
+            !response["summary"].empty()) {
+            Json details = Json::object();
+            const Json error = response.value("error", Json::object());
+            const Json data = response.value("data", Json::object());
+            for (auto it = response["summary"].begin(); it != response["summary"].end(); ++it) {
+                if (it.key() == "status" || it.key() == "error_code") continue;
+                if (error.is_object() && error.contains(it.key()) && error[it.key()] == it.value()) continue;
+                if (data.is_object() && data.contains(it.key()) && data[it.key()] == it.value()) continue;
+                details[it.key()] = it.value();
+            }
+            if (!details.empty()) {
+                out.emit_section("failure_summary");
+                for (auto it = details.begin(); it != details.end(); ++it) {
+                    render_data_value(out, it.key(), it.value());
+                }
+            }
+        }
         if (response.contains("error") && response["error"].is_object()) {
             const Json& error = response["error"];
             if (error.contains("candidates") && error["candidates"].is_array()) {

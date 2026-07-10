@@ -68,6 +68,9 @@ struct AxiStatResult {
     double max = 0.0;
     double min = 0.0;
     double avg = 0.0;
+    double p50 = 0.0;
+    double p95 = 0.0;
+    double p99 = 0.0;
     size_t samples = 0;
     const AxiTransaction* max_txn = nullptr;
     const AxiTransaction* min_txn = nullptr;

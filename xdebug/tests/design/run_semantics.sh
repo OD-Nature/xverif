@@ -79,7 +79,7 @@ require_db "$P3_DB"
 printf '%s\n' '{"api_version":"xdebug.v1","action":"actions"}' | "$XDEBUG" --json - | python3 -c '
 import json,sys
 d=json.load(sys.stdin)["data"]
-assert "trace.driver" in d["implemented"]
+assert "trace.driver" in d["actions"]
 '
 
 printf '%s\n' '{"api_version":"xdebug.v1","action":"schema"}' | "$XDEBUG" --json - | python3 -c 'import json,sys; assert json.load(sys.stdin)["ok"]'

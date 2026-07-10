@@ -4,13 +4,13 @@
   "action": "actions",
   "summary": {
     "action_count": 1,
-    "removed_count": 0
+    "removed_count": 0,
+    "verbose": false
   },
   "data": {
-    "implemented": [
+    "actions": [
       "schema"
     ],
-    "actions": [],
     "removed": [],
     "modes": {}
   }

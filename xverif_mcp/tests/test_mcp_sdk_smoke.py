@@ -154,6 +154,23 @@ def test_mcp_ping_call(monkeypatch: pytest.MonkeyPatch):
     assert structured["result"] == "pong"
 
 
+def test_debug_list_actions_verbose_maps_to_native_catalog_projection(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    calls = []
+    server = _server(monkeypatch)
+    monkeypatch.setattr(
+        server.XverifDebugAdapter,
+        "actions",
+        lambda self, verbose=False: calls.append(verbose) or {"ok": True},
+    )
+
+    content, _ = _call_tool(monkeypatch, "xverif_debug_list_actions", {"verbose": True})
+
+    assert json.loads(content[0].text)["ok"] is True
+    assert calls == [True]
+
+
 def test_tool_group_disable_sva(monkeypatch: pytest.MonkeyPatch):
     env = {"XVERIF_MCP_ENABLE_SVA": "0"}
     names = _tool_names(monkeypatch, env)

@@ -146,10 +146,10 @@ def _catalog_actions(xdebug: Path, timeout_sec: float) -> list[str]:
     if proc.returncode != 0:
         raise SystemExit(f"actions catalog failed: rc={proc.returncode} stderr={proc.stderr[-1000:]}")
     rsp = json.loads(proc.stdout)
-    implemented = rsp.get("data", {}).get("implemented")
-    if not isinstance(implemented, list):
-        raise SystemExit("actions catalog response missing data.implemented[]")
-    return sorted(str(item) for item in implemented)
+    actions = rsp.get("data", {}).get("actions")
+    if not isinstance(actions, list) or not all(isinstance(item, str) for item in actions):
+        raise SystemExit("actions catalog response missing compact data.actions[] names")
+    return sorted(actions)
 
 
 def _static_check(cases: list[ReplayCase], xdebug: Path, timeout_sec: float) -> list[dict[str, Any]]:

@@ -2,14 +2,6 @@
   "api_version": "xdebug.v1",
   "ok": true,
   "action": "event.config.list",
-  "summary": {
-    "truncated": false
-  },
-  "data": {
-    "examples": [
-      {
-        "time": "100ns"
-      }
-    ]
-  }
+  "summary": {"name": "evt0", "status": "found"},
+  "data": {"sampling_mode": "clock_edge", "clock": "top.clk", "edge": "negedge", "signals": {"vld": "top.valid", "payload": "top.payload"}}
 }

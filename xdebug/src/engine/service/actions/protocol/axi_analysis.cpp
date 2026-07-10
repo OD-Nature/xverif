@@ -81,6 +81,9 @@ public:
                 {"max", xdebug_core::format_duration(g_fsdb_file, static_cast<npiFsdbTime>(stat.max))},
                 {"min", xdebug_core::format_duration(g_fsdb_file, static_cast<npiFsdbTime>(stat.min))},
                 {"avg", xdebug_core::format_duration(g_fsdb_file, static_cast<npiFsdbTime>(stat.avg))},
+                {"p50", xdebug_core::format_duration(g_fsdb_file, static_cast<npiFsdbTime>(stat.p50))},
+                {"p95", xdebug_core::format_duration(g_fsdb_file, static_cast<npiFsdbTime>(stat.p95))},
+                {"p99", xdebug_core::format_duration(g_fsdb_file, static_cast<npiFsdbTime>(stat.p99))},
                 {"samples",(int)stat.samples}};
             if (stat.max_txn) {
                 out["slowest"] = {{"time", xdebug_core::format_time(g_fsdb_file, stat.max_txn->addr_time)},

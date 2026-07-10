@@ -33,7 +33,14 @@ def test_batch_continue_on_error_keeps_later_requests(
     response = result.response
     assert response["ok"] is False
     assert response["error"]["code"] == "BATCH_PARTIAL_FAILURE"
-    assert response["summary"] == {"count": 3, "all_ok": False}
+    assert response["summary"] == {
+        "count": 3,
+        "all_ok": False,
+        "failed_count": 1,
+        "failed_indexes": [1],
+        "failed_codes": ["UNKNOWN_ACTION"],
+        "failed_layers": ["handler"],
+    }
     child_results = response["data"]["results"]
     assert [child["ok"] for child in child_results] == [True, False, True]
     assert child_results[1]["error"]["code"] == "UNKNOWN_ACTION"
@@ -49,10 +56,29 @@ def test_batch_stop_on_error_stops_after_first_failure(
     response = result.response
     assert response["ok"] is False
     assert response["error"]["code"] == "BATCH_PARTIAL_FAILURE"
-    assert response["summary"] == {"count": 2, "all_ok": False}
+    assert response["summary"] == {
+        "count": 2,
+        "all_ok": False,
+        "failed_count": 1,
+        "failed_indexes": [1],
+        "failed_codes": ["UNKNOWN_ACTION"],
+        "failed_layers": ["handler"],
+    }
     child_results = response["data"]["results"]
     assert [child["ok"] for child in child_results] == [True, False]
     assert child_results[1]["error"]["code"] == "UNKNOWN_ACTION"
+
+
+@pytest.mark.contract
+def test_batch_failure_aggregation_is_visible_in_xout(cli_runner: CliRunner) -> None:
+    result = cli_runner.run(_batch("stop_on_error"), output_format="xout")
+    assert result.returncode == 1
+    assert "failed_count: 1" in result.response
+    assert "failed_indexes:" in result.response
+    assert "failed_codes:" in result.response
+    assert "UNKNOWN_ACTION" in result.response
+    assert "failed_layers:" in result.response
+    assert "handler" in result.response
 
 
 @pytest.mark.contract

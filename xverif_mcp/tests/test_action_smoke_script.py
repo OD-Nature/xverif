@@ -8,6 +8,8 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 
 SCRIPT = Path(__file__).resolve().parents[1] / "tools" / "test_actions.py"
 
@@ -30,7 +32,7 @@ class FakeSession:
         if name == "xverif_debug_list_actions":
             payload = {
                 "ok": True,
-                "data": {"implemented": ["counter.statistics", "value.at"]},
+                "data": {"actions": ["counter.statistics", "value.at"]},
             }
         elif name == "xverif_debug_get_schema":
             payload = {
@@ -38,7 +40,7 @@ class FakeSession:
                 "data": {"action": args["action"], "kind": args["kind"]},
             }
         elif name == "xverif_debug_session_open":
-            payload = {"ok": True, "summary": {"mode": "fake"}}
+            payload = {"ok": True, "session": {"backend": "xdebug", "launcher": "direct"}}
         else:
             payload = {"ok": True}
         return SimpleNamespace(content=[SimpleNamespace(text=json.dumps(payload))])
@@ -61,6 +63,20 @@ def test_schema_smoke_uses_runtime_action_catalog():
         {"action": "counter.statistics", "kind": "response"},
         {"action": "value.at", "kind": "response"},
     ]
+
+
+def test_action_discovery_rejects_malformed_catalog_without_fallback():
+    script = _load_script()
+
+    class MalformedCatalogSession(FakeSession):
+        async def call_tool(self, name: str, args: dict | None = None):
+            if name == "xverif_debug_list_actions":
+                payload = {"ok": True, "data": {"actions": []}}
+                return SimpleNamespace(content=[SimpleNamespace(text=json.dumps(payload))])
+            return await super().call_tool(name, args)
+
+    with pytest.raises(RuntimeError, match="runtime action catalog"):
+        asyncio.run(script.discover_actions(MalformedCatalogSession()))
 
 
 def test_open_session_does_not_send_removed_reuse_arg():

@@ -2,14 +2,6 @@
   "api_version": "xdebug.v1",
   "ok": true,
   "action": "value.batch_at",
-  "summary": {
-    "truncated": false
-  },
-  "data": {
-    "examples": [
-      {
-        "time": "100ns"
-      }
-    ]
-  }
+  "summary": {"time": "75ns", "signal_count": 2, "x_or_z_count": 0, "unknown_count": 0, "missing_count": 0, "clock_edge_hit": true, "target_edge_hit": false, "bracket_complete": true},
+  "data": {"values": [{"signal": "top.a", "time": "75ns", "status": "ok", "value": {"value": "8'h22", "known": true}}, {"signal": "top.b", "time": "75ns", "status": "ok", "value": {"value": "8'h33", "known": true}}]}
 }
