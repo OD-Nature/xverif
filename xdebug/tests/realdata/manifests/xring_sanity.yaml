@@ -32,8 +32,9 @@ queries:
       ok: true
       min:
         summary.actual_transition_count: 1
-      equals:
-        summary.truncated: false
+      absent_paths:
+        - summary.truncated
+        - meta.truncated
   - name: top_scope_preview
     action: scope.list
     args:

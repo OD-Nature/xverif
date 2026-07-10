@@ -8,6 +8,7 @@ class InvariantError(AssertionError):
 
 
 _MISSING = object()
+_ABSENT = object()
 
 
 def get_path(value: Any, path: str, default: Any = _MISSING) -> Any:
@@ -65,6 +66,10 @@ def assert_invariants(response: Any, expected: Mapping[str, Any]) -> None:
 
     for path in expected.get("required_paths", []):
         get_path(response, path)
+
+    for path in expected.get("absent_paths", []):
+        if get_path(response, path, default=_ABSENT) is not _ABSENT:
+            raise InvariantError("response path must be absent: %s" % path)
 
     for path in expected.get("non_empty", []):
         _assert_non_empty(get_path(response, path), path)

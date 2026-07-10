@@ -221,6 +221,7 @@ def test_invariant_assertions() -> None:
         {
             "ok": True,
             "required_paths": ["summary.count", "data.rows.0.signal"],
+            "absent_paths": ["summary.truncated", "meta.truncated"],
             "non_empty": ["data.rows"],
             "equals": {"summary.count": 2},
             "min": {"summary.count": 1},
@@ -231,6 +232,8 @@ def test_invariant_assertions() -> None:
     )
     with pytest.raises(InvariantError):
         assert_invariants(response, {"equals": {"summary.count": 3}})
+    with pytest.raises(InvariantError):
+        assert_invariants(response, {"absent_paths": ["summary.count"]})
 
 
 @pytest.mark.unit
