@@ -186,6 +186,39 @@ def _render_scope_children(items: List[Json]) -> List[str]:
     return ["", "items:", *_render_table(_project_rows(items, SCOPE_CHILDREN_ITEM_COLUMNS), "  ")]
 
 
+def _render_source_annotate(data: Json) -> List[str]:
+    items = data.get("items") or []
+    lines = ["", "items:"]
+    lines.extend(_render_table(_project_rows(items, ["file", "line", "source", "annotation_count"]), "  "))
+    expressions = data.get("expressions") or []
+    if expressions:
+        expression_rows = []
+        for expression in expressions:
+            terms = expression.get("terms") or []
+            expression_rows.append({
+                "expression_id": expression.get("expression_id"),
+                "metric": expression.get("metric"),
+                "expression": expression.get("expression"),
+                "terms": ";".join(str(term.get("name")) for term in terms if isinstance(term, dict)),
+                "ast": "included" if "ast" in expression else "omitted",
+            })
+        lines.extend(["", "expressions:", *_render_table(expression_rows, "  ")])
+    bins = []
+    for item in items:
+        for annotation in item.get("annotations") or []:
+            if isinstance(annotation, dict) and annotation.get("expression_id"):
+                bins.append({
+                    "line": item.get("line"),
+                    "expression_id": annotation.get("expression_id"),
+                    "bin": annotation.get("bin"),
+                    "term_values": annotation.get("term_values"),
+                    "status": annotation.get("status"),
+                })
+    if bins:
+        lines.extend(["", "bins:", *_render_table(bins, "  ")])
+    return lines
+
+
 def render_xout(rsp: Json) -> str:
     rid = rsp.get("request_id", "req-unknown")
     action = rsp.get("action", "")
@@ -226,6 +259,8 @@ def render_xout(rsp: Json) -> str:
                 lines.extend(_render_scope_summary(items))
             elif action == "scope.children" and all(isinstance(item, dict) for item in items):
                 lines.extend(_render_scope_children(items))
+            elif action == "source.annotate" and all(isinstance(item, dict) for item in items):
+                lines.extend(_render_source_annotate(data))
             else:
                 lines.extend(["", "items:"])
                 if all(isinstance(item, dict) for item in items):

@@ -13,6 +13,7 @@
 #include "json.hpp"
 #include "npi.h"
 #include "npi_cov.h"
+#include "npi_pst.h"
 
 using json = nlohmann::json;
 
@@ -236,28 +237,77 @@ std::string toggle_transition(npiCovHandle object, npiCovHandle test,
   return fallback;
 }
 
-std::string collect_terms(npiCovHandle object, npiCovHandle test, int wanted_type) {
-  std::vector<std::string> terms;
-  npiCovHandle iter = npi_cov_iter_start(npiCovChild, object);
-  if (!iter) return {};
+json collect_terms(npiCovHandle object, npiCovHandle test, int wanted_type) {
+  json terms = json::array();
+  npiCovHandle iter = npi_cov_iter_start(
+      static_cast<npiCovObjType_e>(wanted_type), object, test);
+  bool typed_iterator = iter != nullptr;
+  if (!iter) iter = npi_cov_iter_start(npiCovChild, object);
+  if (!iter) return terms;
   npiCovHandle child;
+  int index = 0;
   while ((child = npi_cov_iter_next(iter))) {
-    if (cov_int(npiCovType, child, test) == wanted_type) {
+    if (typed_iterator || cov_int(npiCovType, child, test) == wanted_type) {
       std::string name = cov_str(npiCovName, child);
       std::string value = object_value(child, test);
-      if (!name.empty() && !value.empty() && name != value) name += ":" + value;
-      else if (name.empty()) name = value;
-      if (!name.empty()) terms.push_back(name);
+      json term = {{"index", index++}};
+      if (!name.empty()) term["name"] = name;
+      if (!value.empty()) term["value"] = value;
+      terms.push_back(std::move(term));
     }
     npi_cov_release_handle(child);
   }
   npi_cov_iter_stop(iter);
+  return terms;
+}
+
+std::string terms_text(const json &terms) {
   std::string joined;
-  for (std::size_t i = 0; i < terms.size(); ++i) {
-    if (i) joined += ";";
-    joined += terms[i];
+  for (const auto &term : terms) {
+    std::string name = term.value("name", "");
+    std::string value = term.value("value", "");
+    if (!name.empty() && !value.empty() && name != value) name += ":" + value;
+    else if (name.empty()) name = value;
+    if (name.empty()) continue;
+    if (!joined.empty()) joined += ";";
+    joined += name;
   }
   return joined;
+}
+
+class AllExpressionOps : public npiPstExprTreeParserCallBack_c {
+ public:
+  bool is_op_supported(npiPstOpCode_e) override { return true; }
+};
+
+json expression_node(npiPstExprTree_c *node) {
+  json out = json::object();
+  npiPstOpCode_e opcode = node->get_op_code();
+  out["opcode"] = static_cast<int>(opcode);
+  const char *symbol = npiPstExprTree_c::get_op_symbol(opcode);
+  const char *name = node->get_name();
+  const char *expression = node->get_full_expr();
+  if (symbol && *symbol && std::string(symbol) != "(null)") out["operator"] = symbol;
+  if (name && *name) out["name"] = name;
+  if (expression && *expression) out["expression"] = expression;
+  json children = json::array();
+  npiPstExprTreeIter_c iter;
+  if (node->iter_sub_expr(iter)) {
+    npiPstExprTree_c *child = nullptr;
+    while (iter.next(child)) children.push_back(expression_node(child));
+  }
+  if (!children.empty()) out["children"] = std::move(children);
+  return out;
+}
+
+json parse_expression(const std::string &expression) {
+  if (expression.empty()) return nullptr;
+  AllExpressionOps callback;
+  npiPstExprTree_c *tree = npi_pst_create_expr_tree(expression.c_str(), &callback);
+  if (!tree) return nullptr;
+  json result = expression_node(tree);
+  npi_pst_destroy_expr_tree(tree);
+  return result;
 }
 
 std::string functional_scope(const json &path) {
@@ -474,20 +524,32 @@ class CoverageWorker {
     } else if (metric == "condition") {
       if (type == npiCovCondition) {
         context.path["condition"] = full_name;
-        std::string terms = collect_terms(object, test, npiCovConditionTerm);
-        if (!terms.empty()) context.path["condition_terms"] = terms;
+        context.path["condition_expression"] = name;
+        json ast = parse_expression(name);
+        if (!ast.is_null()) context.path["condition_ast"] = std::move(ast);
       } else if (type == npiCovConditionBin) {
         std::string value = object_value(object, test);
         context.path["condition_bin"] = value.empty() ? name : value;
+        json terms = collect_terms(object, test, npiCovConditionTerm);
+        if (!terms.empty()) {
+          context.path["condition_term_values"] = terms;
+          context.path["condition_terms"] = terms_text(terms);
+        }
       }
     } else if (metric == "branch") {
       if (type == npiCovBranch) {
         context.path["branch"] = full_name;
-        std::string terms = collect_terms(object, test, npiCovBranchTerm);
-        if (!terms.empty()) context.path["branch_terms"] = terms;
+        context.path["branch_expression"] = name;
+        json ast = parse_expression(name);
+        if (!ast.is_null()) context.path["branch_ast"] = std::move(ast);
       } else if (type == npiCovBranchBin) {
         std::string value = object_value(object, test);
         context.path["branch_bin"] = value.empty() ? name : value;
+        json terms = collect_terms(object, test, npiCovBranchTerm);
+        if (!terms.empty()) {
+          context.path["branch_term_values"] = terms;
+          context.path["branch_terms"] = terms_text(terms);
+        }
       }
     } else if (metric == "assert") {
       if (type == npiCovAssert || type == npiCovCoverProperty || type == npiCovCoverSequence) {

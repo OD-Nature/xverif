@@ -209,7 +209,8 @@ SCHEMAS: Dict[str, Json] = {
     "source.map": _schema_entry(
         "source.map",
         target=_target(["session_id"]),
-        args=_args(["file", "line"], {"file": _string(), "line": _integer(0), "window": _integer(0)}),
+        args=_args(["file", "line"], {"file": _string(), "line": _integer(0),
+                                             "window": _integer(0), "include_ast": _bool()}),
     ),
     "source.annotate": _schema_entry(
         "source.annotate",
@@ -222,6 +223,7 @@ SCHEMAS: Dict[str, Json] = {
                 "window": _integer(0),
                 "include_source_text": _bool(),
                 "include_covered": _bool(),
+                "include_ast": _bool(),
             },
         ),
     ),

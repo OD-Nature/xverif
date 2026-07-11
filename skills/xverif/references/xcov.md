@@ -99,6 +99,12 @@ assert export：
   `raw_coverage_pct` 才是总 `covered/coverable` 加权值。结合
   `score_basis:"average_metric_pct"` 和 `score_item_count` 解释结果。
 - 保留 `excluded/unreachable/illegal` 状态，不要误判为普通 hole。
+- Verdi 2018的branch/condition annotation可读取`*_expression`、`*_term_values[]`和
+  可选`*_ast`；生成补测约束时使用结构化term value，不要猜测原始bin编码。
+- `source.annotate`默认使用`data.expressions[] + annotation.expression_id/bin/term_values`
+  去重；只有确实需要语法树时才传`include_ast:true`，避免重复AST消耗token。
+- Coverage NPI不提供exclusion reason/comment/source rule；状态可作为事实，详细原因
+  不能从当前接口推断，也不得伪造。
 - 交互查询优先用 `scope.summary`、`scope.children`、`scope.search`、
   `code_coverage.summary`、`code_coverage.holes` 看层次覆盖率。
 - `scope.summary` 返回扁平覆盖率字段；不要期待 `metrics={...}`，也不要期待

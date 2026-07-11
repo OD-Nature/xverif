@@ -290,6 +290,7 @@ class Dispatcher:
         window = int(args.get("window", 3))
         include_source_text = bool(args.get("include_source_text", True))
         include_covered = bool(args.get("include_covered", True))
+        include_ast = bool(args.get("include_ast", False))
         if file_name is None or line is None:
             raise XcovError("SCHEMA_INVALID", "source.annotate requires file and line")
         metrics = args.get("metrics")
@@ -312,14 +313,20 @@ class Dispatcher:
                 if include_covered or int(item.get("missing") or 0) > 0:
                     by_line[item_line].append(item)
         source_lines = _read_source_window(source_path, lo, hi) if include_source_text else {}
+        expression_ids: Dict[tuple[str, str], str] = {}
+        expressions: List[Json] = []
         for line_no in range(lo, hi + 1):
             line_items = filter_items(by_line.get(line_no, []), query)
             if line_items or line_no in source_lines:
+                annotations = [
+                    _compact_source_annotation(item, expression_ids, expressions, include_ast)
+                    for item in line_items
+                ]
                 rows.append({
                     "file": str(file_name),
                     "line": line_no,
                     "source": source_lines.get(line_no),
-                    "annotations": [_source_annotation(item) for item in line_items],
+                    "annotations": annotations,
                     "annotation_count": len(line_items),
                 })
         summary, inline, warnings = apply_output("source.annotate", args, rows)
@@ -327,8 +334,10 @@ class Dispatcher:
             summary["note"] = ("source text is unavailable from file path; coverage annotations "
                                "still use NPI evidence")
         summary.update({"session_id": sess.session_id, "file": file_name, "line": line,
-                        "window": window, "include_source_text": include_source_text})
-        return ok_response(req, summary, {"filters": filters_summary(query), "items": inline}, warnings)
+                        "window": window, "include_source_text": include_source_text,
+                        "include_ast": include_ast, "expression_count": len(expressions)})
+        return ok_response(req, summary, {"filters": filters_summary(query),
+                                          "expressions": expressions, "items": inline}, warnings)
 
     def _assert_report(self, req: Json, sess) -> Json:
         args = merged_action_args(req)
@@ -748,12 +757,55 @@ def _source_annotation(item: Json) -> Json:
         "file": ev.get("file"),
         "line": ev.get("line"),
     }
-    for key in ("branch", "branch_bin", "branch_terms", "condition", "condition_bin",
-                "condition_terms", "toggle_signal", "toggle_bit", "toggle_transition",
+    for key in ("branch", "branch_bin", "branch_expression", "branch_terms",
+                "branch_term_values", "branch_ast", "condition", "condition_bin",
+                "condition_expression", "condition_terms", "condition_term_values",
+                "condition_ast", "toggle_signal", "toggle_bit", "toggle_transition",
                 "assert_kind", "assert_object"):
         if item.get(key) not in (None, ""):
             out[key] = item.get(key)
     return out
+
+
+def _compact_source_annotation(item: Json, expression_ids: Dict[tuple[str, str], str],
+                               expressions: List[Json], include_ast: bool) -> Json:
+    annotation = _source_annotation(item)
+    metric = str(annotation.get("metric") or "")
+    if metric not in {"branch", "condition"}:
+        return annotation
+    prefix = metric
+    expression = str(annotation.get(f"{prefix}_expression") or annotation.get(prefix) or "")
+    key = (metric, expression)
+    expression_id = expression_ids.get(key)
+    term_objects = annotation.get(f"{prefix}_term_values")
+    if expression_id is None:
+        expression_id = f"expr_{len(expressions) + 1}"
+        expression_ids[key] = expression_id
+        expression_row: Json = {
+            "expression_id": expression_id,
+            "metric": metric,
+            "expression": expression,
+        }
+        if isinstance(term_objects, list):
+            expression_row["terms"] = [
+                {"index": term.get("index"), "name": term.get("name")}
+                for term in term_objects if isinstance(term, dict)
+            ]
+        ast = annotation.get(f"{prefix}_ast")
+        if include_ast and isinstance(ast, dict):
+            expression_row["ast"] = ast
+        expressions.append(expression_row)
+    compact: Json = {
+        key: annotation.get(key)
+        for key in ("metric", "type", "covered", "coverable", "missing", "status", "file", "line")
+    }
+    compact["expression_id"] = expression_id
+    compact["bin"] = annotation.get(f"{prefix}_bin")
+    if isinstance(term_objects, list):
+        compact["term_values"] = [
+            term.get("value") if isinstance(term, dict) else None for term in term_objects
+        ]
+    return compact
 
 
 def _toggle_transition_summary(rows: List[Json]) -> Json:
@@ -982,14 +1034,15 @@ def _code_coverage_markdown(rows: List[Json], threshold: float) -> tuple[str, in
         elif metric in {"branch", "condition", "fsm"}:
             label = {"branch": "branch/bin", "condition": "condition/bin", "fsm": "state/transition"}[metric]
             lines.extend([
-                f"| scope | {label} | covered | coverage_pct | file:line |",
-                "|---|---|---|---:|---|",
+                f"| scope | {label} | term values | covered | coverage_pct | file:line |",
+                "|---|---|---|---|---:|---|",
             ])
             for row in subset:
                 exported += 1
                 lines.append(
                     f"| {_md(row.get('scope'))} | {_md(_code_item_label(row))} | "
-                    f"{_yes_no_covered(row.get('covered'))} | {_md(row.get('coverage_pct'))} | {_md(_evidence_loc(row))} |"
+                    f"{_md(_code_term_values(row))} | {_yes_no_covered(row.get('covered'))} | "
+                    f"{_md(row.get('coverage_pct'))} | {_md(_evidence_loc(row))} |"
                 )
         else:
             lines.extend([
@@ -1043,6 +1096,19 @@ def _code_item_label(row: Json) -> str:
     if metric == "fsm":
         return str(row.get("fsm_transition") or row.get("full_name") or row.get("name") or "")
     return str(row.get("full_name") or row.get("name") or "")
+
+
+def _code_term_values(row: Json) -> str:
+    values = row.get("branch_term_values") or row.get("condition_term_values") or []
+    if not isinstance(values, list):
+        return str(row.get("branch_terms") or row.get("condition_terms") or "")
+    parts = []
+    for term in values:
+        if not isinstance(term, dict):
+            continue
+        name = term.get("name", f"term[{term.get('index', '?')}]")
+        parts.append(f"{name}={term.get('value', '?')}")
+    return "; ".join(parts)
 
 
 def _function_coverage_markdown(rows: List[Json], threshold: float,

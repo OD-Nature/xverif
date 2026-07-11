@@ -713,6 +713,43 @@ def test_source_annotate_returns_source_window_and_annotations(tmp_path):
     assert row["annotations"][0]["metric"] == "assert"
 
 
+def test_source_annotate_groups_expression_terms_and_optional_ast():
+    dispatcher = _dispatch_opened()
+    rsp = dispatcher.dispatch({
+        "api_version": "xcov.v1", "request_id": "annotate-condition",
+        "action": "source.annotate", "target": {"session_id": "cov0"},
+        "args": {"file": "rtl/ctrl.sv", "line": 91, "window": 0,
+                 "include_source_text": False, "include_ast": True,
+                 "metrics": ["condition"]},
+        "output": {"format": "json"},
+    })
+    expression = rsp["data"]["expressions"][0]
+    assert expression["expression"] == "enable && ready"
+    assert expression["terms"] == [
+        {"index": 0, "name": "enable"}, {"index": 1, "name": "ready"}
+    ]
+    annotation = rsp["data"]["items"][0]["annotations"][0]
+    assert annotation["expression_id"] == expression["expression_id"]
+    assert annotation["term_values"] == ["1", "0"]
+    assert "condition_expression" not in annotation
+
+
+def test_source_annotate_xout_shows_compact_expressions_and_bins():
+    dispatcher = _dispatch_opened()
+    rsp = dispatcher.dispatch({
+        "api_version": "xcov.v1", "request_id": "annotate-xout",
+        "action": "source.annotate", "target": {"session_id": "cov0"},
+        "args": {"file": "rtl/ctrl.sv", "line": 91, "window": 0,
+                 "include_source_text": False, "metrics": ["condition"]},
+    })
+    xout = render_xout(rsp)
+    assert "expressions:" in xout
+    assert "enable && ready" in xout
+    assert "bins:" in xout
+    assert "1,0" in xout
+    assert "ast" in xout and "omitted" in xout
+
+
 def test_function_coverage_export_groups_bins_by_covergroup(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     dispatcher = _dispatch_opened()

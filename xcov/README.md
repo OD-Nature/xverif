@@ -199,9 +199,15 @@ coverpoint/cross coverage 百分比的平均值；交互输出不暴露 score_ba
   `query` glob 过滤；不输出 metric/name/full_name/score_basis/score_item_count/raw_* 字段。
 - `source.map`：按源码 file/line/window 反查 coverage item。
 - `source.annotate`：基于 NPI `file_name()/line_no()` evidence 和项目源码文件输出源码
-  窗口。它可以挂接 line/branch/condition/toggle/assert object annotation，但不承诺
+  窗口。Verdi 2018 native backend 对 branch/condition bin 额外返回
+  `*_expression`、`*_term_values[]` 和可解析时的 `*_ast`；term value中的 `-` 保留
+  NPI原始 don't-care语义。它可以挂接 line/branch/condition/toggle/assert object annotation，但不承诺
   URG HTML 专有展示标签，例如 `MISSING_ELSE`；除非后续 NPI API probe 证明这些标签
   可取。
+  默认按表达式分组：`data.expressions[]`只保存一次expression和term名称，每个annotation
+  只保存`expression_id/bin/term_values`。AST默认省略，只有显式传
+  `include_ast:true`时才在每个expression上返回一次。XOUT对应输出`expressions:`和
+  `bins:`紧凑表格。
 - `assert.summary`：输出 assert/cover property/cover sequence 的基础覆盖率和
   attempts/real successes/without attempts；不输出 kind/category/severity/failures/
   incomplete/first_match/file/line。详细报告请使用 `export.assert`。
@@ -211,6 +217,12 @@ coverpoint/cross coverage 百分比的平均值；交互输出不暴露 score_ba
 `export.code_coverage`、`export.function_coverage`、`export.assert` 只输出 Markdown
 文件，不保留 `output.artifact_format` 选择。响应的 `summary.note` 会提示：需要复杂
 处理、二次统计或跨报告加工时，请调用 `x-npi` 学习 `pynpi` coverage API 并编写脚本。
+code coverage的branch/condition表会输出每个bin对应的term=value列表，避免把原始
+bin编码当作可直接解释的布尔向量。
+
+Coverage NPI只暴露 exclusion状态，不暴露reason/comment/author/source rule。
+xcov因此保留`excluded*`、`unreachable`、`illegal`等事实状态，但不虚构排除原因；
+若未来解析exclusion文件，必须作为显式独立数据源设计。
 
 ## XOUT 输出
 

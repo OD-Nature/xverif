@@ -119,6 +119,24 @@ Python Coverage API 证实 coverage object 可读取：
 `source.annotate`。这不是 URG HTML 解析；源码文本来自项目文件，coverage
 annotation 来自 VDB/NPI。
 
+### branch/condition term与表达式树
+
+Verdi 2018官方对象关系为`branch/condition -> bin -> term`。真实GPIO单case VDB验证：
+
+- typed iterator可从每个bin取得term的name/value，建立`*_term_values[]`；
+- `-`表示NPI返回的don't-care值，必须原样保留；
+- `npi_pst_create_expr_tree`可把coverage expression解析为opcode/operator/children AST；
+- term映射来自coverage对象，AST仅用于表达式结构，二者不能相互替代。
+- `source.annotate`默认去重expression和term名称；每个bin只返回紧凑value数组。
+  AST需显式`include_ast:true`，并且每个expression只返回一份。
+
+### exclusion边界
+
+Verdi 2018 `npi_cov.h`提供exclusion状态查询及exclude file的load/save/unload，未提供
+reason、comment、author或source rule属性。因此当前接口只能报告`excluded`、
+`partially_excluded`、`excluded_at_compile_time`、`excluded_at_report_time`等状态，
+不能直接报告详细排除原因。
+
 不公开字段：`MISSING_ELSE` 等 URG HTML 专有显示标签。当前 Python Coverage API
 文档和 probe 没有证实这些标签可取。
 
