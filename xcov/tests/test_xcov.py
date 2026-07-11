@@ -7,11 +7,12 @@ import sys
 from pathlib import Path
 
 from xcov.actions import Dispatcher
-from xcov.backend import CoverageBackend
+from xcov.backend import CoverageBackend, FakeCoverageBackend
+from xcov.errors import XcovError
 from xcov.logging import sanitize_for_log
 from xcov.protocol import render_xout
 from xcov.schemas import schema_actions
-from xcov.session import XcovSession
+from xcov.session import SessionManager, XcovSession
 
 ROOT = Path(__file__).resolve().parents[2]
 XCOV = ROOT / "tools" / "xcov"
@@ -76,6 +77,61 @@ def test_session_open_fake_json():
     assert rsp["ok"] is True
     assert rsp["summary"]["session_id"] == "cov0"
     assert rsp["summary"]["worker"] == "fake"
+
+
+def test_2018_profile_selects_native_backend(monkeypatch):
+    monkeypatch.delenv("XVERIF_XCOV_BACKEND", raising=False)
+    monkeypatch.setenv("XVERIF_EDA_PROFILE", "verdi-2018")
+    monkeypatch.setattr("xcov.session.NativeNpiCoverageBackend", FakeCoverageBackend)
+    manager = SessionManager()
+    session = manager.open("sample.vdb", name="native-profile")
+    assert session.worker == "npi_native_2018"
+    manager.close("native-profile")
+
+
+def test_2023_profile_selects_python_backend(monkeypatch):
+    monkeypatch.delenv("XVERIF_XCOV_BACKEND", raising=False)
+    monkeypatch.setenv("XVERIF_EDA_PROFILE", "verdi-2023")
+    monkeypatch.setattr("xcov.session.NpiCoverageBackend", FakeCoverageBackend)
+    manager = SessionManager()
+    session = manager.open("sample.vdb", name="python-profile")
+    assert session.worker == "npi_python"
+    manager.close("python-profile")
+
+
+def test_explicit_backend_overrides_profile(monkeypatch):
+    monkeypatch.setenv("XVERIF_EDA_PROFILE", "verdi-2023")
+    monkeypatch.setenv("XVERIF_XCOV_BACKEND", "native")
+    monkeypatch.setattr("xcov.session.NativeNpiCoverageBackend", FakeCoverageBackend)
+    manager = SessionManager()
+    session = manager.open("sample.vdb", name="native-explicit")
+    assert session.worker == "npi_native_2018"
+    manager.close("native-explicit")
+
+
+def test_unknown_backend_is_rejected_without_fallback(monkeypatch):
+    monkeypatch.setenv("XVERIF_XCOV_BACKEND", "urg")
+    manager = SessionManager()
+    try:
+        manager.open("sample.vdb", name="invalid-backend")
+    except XcovError as exc:
+        assert exc.code == "INVALID_BACKEND"
+    else:
+        raise AssertionError("unknown backend must not fall back")
+
+
+def test_native_backend_rejects_empty_vdb_before_worker_start(monkeypatch, tmp_path):
+    from xcov.native_backend import NativeNpiCoverageBackend
+
+    coverage_db = tmp_path / "empty.vdb" / "snps" / "coverage" / "db"
+    coverage_db.mkdir(parents=True)
+    monkeypatch.setenv("XVERIF_XCOV_NATIVE_BIN", "/does/not/exist")
+    try:
+        NativeNpiCoverageBackend(str(tmp_path / "empty.vdb"))
+    except XcovError as exc:
+        assert exc.code == "INVALID_VDB"
+    else:
+        raise AssertionError("empty VDB must be rejected before worker startup")
 
 
 def test_schema_registry_covers_all_p0_actions():
@@ -346,6 +402,10 @@ def test_scope_summary_returns_one_requested_scope():
     item = rsp["data"]["items"][0]
     assert item["full_name"] == "top.u_dut"
     assert item["coverable"] == 9
+    assert item["coverage_pct"] == 25.0
+    assert item["score_basis"] == "average_metric_pct"
+    assert item["score_item_count"] == 6
+    assert item["raw_coverage_pct"] == 22.2222
     assert "metrics" not in item
     assert not (set(item) & {"parent", "depth", "type", "def_name"})
     assert item["toggle_pct"] == 0.0
@@ -383,7 +443,9 @@ def test_scope_summary_xout_uses_compact_items_and_coverage_table():
     })
     xout = render_xout(rsp)
     assert "items:\n  name   full_name  covered  coverable  missing  coverage_pct" in xout
-    assert "u_dut  top.u_dut  2        9          7        22.2222" in xout
+    assert "u_dut  top.u_dut  2        9          7        25.0" in xout
+    assert "average_metric_pct" in xout
+    assert "22.2222" in xout
     assert "\ncoverage:\n  metric      coverage_pct" in xout
     assert "line        100.0" in xout
     assert "toggle      0.0" in xout
@@ -402,7 +464,7 @@ def test_scope_children_xout_only_shows_name_full_name_coverage_pct():
     })
     xout = render_xout(rsp)
     assert "items:\n  name    full_name         coverage_pct" in xout
-    assert "u_ctrl  top.u_dut.u_ctrl  20.0" in xout
+    assert "u_ctrl  top.u_dut.u_ctrl  16.6667" in xout
     assert "u_fifo  top.u_dut.u_fifo  0.0" in xout
     items_text = xout.split("items:", 1)[1]
     assert "covered" not in items_text

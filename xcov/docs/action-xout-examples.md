@@ -211,8 +211,8 @@ filters:
   match_field: full_name
 
 items:
-  name     full_name  covered  coverable  missing  coverage_pct
-  uart_tb  uart_tb    2052     2900       848      70.7586
+  name     full_name  covered  coverable  missing  coverage_pct  score_basis        score_item_count  raw_coverage_pct
+  uart_tb  uart_tb    2052     2900       848      80.2846       average_metric_pct  7                 70.7586
 
 coverage:
   metric      coverage_pct
@@ -620,6 +620,9 @@ XOUT_END request_id=export-code
 ```
 
 ## export.function_coverage
+
+示例中的“转用 x-npi”只适用于提供 Python `pynpi.cov` 的版本。Verdi 2018应继续
+使用 xcov native backend及其 Markdown export，不得解析 URG HTML作为 fallback。
 
 ### Request
 

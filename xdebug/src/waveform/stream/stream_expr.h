@@ -53,8 +53,13 @@ public:
 
     StreamExpression();
     ~StreamExpression();
+#if defined(XVERIF_VERDI_2018)
+    StreamExpression(StreamExpression&&);
+    StreamExpression& operator=(StreamExpression&&);
+#else
     StreamExpression(StreamExpression&&) noexcept;
     StreamExpression& operator=(StreamExpression&&) noexcept;
+#endif
 
     StreamExpression(const StreamExpression&) = delete;
     StreamExpression& operator=(const StreamExpression&) = delete;

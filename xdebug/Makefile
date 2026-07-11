@@ -212,11 +212,21 @@ DEPS = $(sort $(CORE_OBJS:.o=.d) \
        $(DESIGN_OBJS:.o=.d) \
        $(WAVEFORM_OBJS:.o=.d))
 
-.PHONY: all internal-engines unit-test log-test test-infra pytest-contract pytest-synthetic-existing pytest-counter-statistics pytest-axi-vip pytest-apb-vip pytest-active-semantics pytest-realdata pytest-session pytest-mcp test-fast test-contract test-synthetic test-vip test-active-trace test-session test-mcp-direct test-mcp-fake-lsf test-realdata-smoke test-regression test-nightly test-mcp-real-lsf mcp-test schema-test clock-sampling-static-test error-contract-static-test response-contract-static-test contract-test combined-test clean
+.PHONY: all internal-engines verdi-profile fixtures-basic self-test unit-test log-test test-infra pytest-contract pytest-synthetic-existing pytest-counter-statistics pytest-axi-vip pytest-apb-vip pytest-active-semantics pytest-realdata pytest-session pytest-mcp test-fast test-contract test-synthetic test-vip test-active-trace test-session test-mcp-direct test-mcp-fake-lsf test-realdata-smoke test-regression test-nightly test-mcp-real-lsf mcp-test schema-test clock-sampling-static-test error-contract-static-test response-contract-static-test contract-test combined-test clean
 
 all: $(EXE) internal-engines
 
 internal-engines: $(LIBEXEC)/xdebug-engine
+
+verdi-profile:
+	@echo "profile=$(XVERIF_EDA_PROFILE_RESOLVED)"
+	@echo "npi_lib=$(NPI_LIB)"
+
+fixtures-basic:
+	$(MAKE) -C testdata/combined/active_driver fixture
+	$(MAKE) -C testdata/waveform/ai_complex_wave all
+	$(MAKE) -C testdata/waveform/stream_v1 all
+	$(MAKE) -C testdata/design/uart fixture
 
 # Unified engine: engine + design helper + waveform helper objects.
 UNIFIED_OBJS = $(ENGINE_OBJS) $(DESIGN_OBJS) $(WAVEFORM_OBJS)
@@ -231,7 +241,7 @@ $(BUILD)/%.o: %.cpp
 	mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) $(DEPFLAGS) -DXDEBUG_INTERNAL_ENGINE -c -o $@ $<
 
-unit-test: $(CORE_OBJS) $(API_SUPPORT_OBJS) $(BUILD)/src/api/response.o $(BUILD)/src/api/text_response_builder.o $(BUILD)/src/api/xout_renderer.o $(BUILD)/src/waveform/service/rc_generator.o $(BUILD)/src/waveform/value/logic_value.o $(BUILD)/src/waveform/event/event_expr.o $(BUILD)/src/waveform/common/expression.o $(BUILD)/src/waveform/stream/stream_expr.o $(BUILD)/src/session/session_catalog.o
+unit-test: $(CORE_OBJS) $(API_SUPPORT_OBJS) $(BUILD)/src/api/response.o $(BUILD)/src/api/text_response_builder.o $(BUILD)/src/api/xout_renderer.o $(BUILD)/src/engine/service/trace_source_path_formatter.o $(BUILD)/src/waveform/service/rc_generator.o $(BUILD)/src/waveform/value/logic_value.o $(BUILD)/src/waveform/event/event_expr.o $(BUILD)/src/waveform/common/expression.o $(BUILD)/src/waveform/stream/stream_expr.o $(BUILD)/src/session/session_catalog.o
 	mkdir -p $(BUILD)/tests
 	$(CXX) $(CXXFLAGS) -o $(BUILD)/tests/test_core_types tests/unit/test_core_types.cpp $(CORE_OBJS) $(LDFLAGS)
 	$(BUILD)/tests/test_core_types
@@ -279,7 +289,7 @@ log-test: $(CORE_OBJS) $(EXE) internal-engines
 test-infra:
 	$(PYTHON) -m pytest -c tests/pytest.ini -q tests/unit/test_test_infra.py
 
-pytest-contract: $(EXE)
+pytest-contract: all
 	$(PYTHON) -m pytest -c tests/pytest.ini -q tests/contract
 
 pytest-synthetic-existing: all
@@ -331,7 +341,9 @@ test-mcp-fake-lsf: all
 
 test-realdata-smoke: pytest-realdata
 
-test-regression: test-fast test-synthetic test-session test-mcp-direct test-mcp-fake-lsf test-realdata-smoke
+self-test: fixtures-basic test-fast test-session test-mcp-direct test-mcp-fake-lsf
+
+test-regression: fixtures-basic test-fast test-synthetic test-session test-mcp-direct test-mcp-fake-lsf test-realdata-smoke
 
 test-nightly: test-regression test-vip
 	@if [ "$$XDEBUG_ENABLE_REAL_LSF" = "1" ]; then \

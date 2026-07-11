@@ -1,5 +1,13 @@
 # xdebug 架构说明书维护日志
 
+## 2026-07-11
+
+- 增加 Verdi 2018/2023 构建 profile 骨架；2018 旧 ABI和 NPI 库目录探测集中在
+  `mk/npi.mk`，现代 profile 保持上游默认 ABI。
+- 增加 `core/npi/decompile_compat.h`，兼容 2018 两参数和新版五参数 decompile API。
+- 修复 `unit-test`、`pytest-contract` 对实际链接/运行产物缺失的 Makefile 依赖。
+- Verdi O-2018.09-SP2 环境下，当前 unified xdebug 已完成干净源码编译和 engine 链接。
+
 ## 2026-07-07
 
 - 初始化 `doc/agents/xdebug/` 说明书目录。

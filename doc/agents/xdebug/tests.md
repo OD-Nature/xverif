@@ -211,6 +211,24 @@ make -C xdebug test-nightly
 - release 前或高风险 refactor。
 - action routing、runtime、session、waveform/design combined 行为大改。
 
+## 可分发 profile 自检
+
+仓库根目录入口：
+
+```bash
+make self-test-2018
+make self-test-2023
+```
+
+xdebug 的 `self-test` 会先通过 `fixtures-basic` 生成 active-driver、complex
+waveform、stream 和 UART design 资源，再运行 fast contract、session、MCP direct
+和 fake-LSF。顶层入口随后运行 xcov 的仓内真实 VDB fixture，因此不依赖 GPIO、
+xip 或其它外部项目。
+
+`self-test-*` 是交付后的基础健康检查；`test-regression`、`test-nightly`、
+`full-test` 仍是扩展回归，可继续要求 numpy、VIP、真实 LSF或外部 realdata。
+两个 profile 的 fixture/NPI动作均按根目录 `AGENTS.md` 在沙箱外执行。
+
 ## 选择测试的规则
 
 - 文档-only：检查链接、路径、引用和内容，不跑源码测试。

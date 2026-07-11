@@ -85,7 +85,10 @@ xdebug/examples/responses/<action>.basic.json
 
 推荐通过仓库根目录的 wrapper 调用，它会设置 Verdi/NPI 运行所需环境：
 
-> **环境要求**：GCC 5.0+。当前基于 Verdi **V-2023.12-SP2** 开发与测试。NPI API 随 Verdi 版本不同可能存在参数差异——如果使用其他版本遇到编译或运行时 NPI 兼容性问题，可让 AI agent 根据编译错误和 NPI 头文件（`$VERDI_HOME/share/NPI/inc`）进行兼容性修复。
+> **支持版本**：Verdi/VCS **O-2018.09-SP2**（`verdi-2018`，已实机验证）和
+> **V-2023.12-SP2**（`verdi-2023`，原作者现代 NPI路径）。使用
+> `XVERIF_EDA_PROFILE` 显式选择 profile，并让 `VERDI_HOME` 指向同一版本。
+> 2018 profile会启用旧 C++ ABI及 NPI API shim；其他版本目前未验证。
 
 ```bash
 tools/xdebug -
@@ -225,6 +228,7 @@ MCP client 配置示例（direct 模式）：
       "env": {
         "PYTHONPATH": "<xverif>/xverif_mcp/src:<xverif>",
         "XVERIF_HOME": "<xverif>",
+        "XVERIF_EDA_PROFILE": "<verdi-profile>",
         "XVERIF_MCP_BACKEND": "direct",
         "VERDI_HOME": "<verdi-install>",
         "LD_LIBRARY_PATH": "<verdi-install>/share/NPI/lib/LINUX64"
@@ -336,6 +340,7 @@ make -C xdebug test-session
 make -C xdebug test-mcp-direct
 make -C xdebug test-mcp-fake-lsf
 make -C xdebug test-realdata-smoke
+make -C xdebug self-test
 make -C xdebug test-regression
 make -C xdebug test-nightly
 ```
@@ -344,6 +349,11 @@ make -C xdebug test-nightly
 `test-fast`。所有涉及 NPI、Verdi/VCS、FSDB、daidir、`session.open`、Unix domain
 socket、SVT VIP 编译/仿真的入口，应在沙箱外运行，否则可能得到 license 连接失败、
 UDS bind 失败或 `SESSION_UNHEALTHY: child_exited` 等环境型失败。
+
+`self-test` 会先用仓内 SV源码生成 active-driver、complex waveform、stream和 UART
+design fixtures，再运行 fast contract、session、MCP direct和 fake-LSF；它是新环境
+的基础健康检查。仓库根目录的 `make self-test-2018` / `make self-test-2023` 还会
+追加 xcov真实 VDB自检。
 
 `test-regression` 不包含真实 LSF。`test-nightly` 默认也不会强制真实 LSF；只有显式
 设置 `XDEBUG_ENABLE_REAL_LSF=1` 时才追加 real LSF smoke：

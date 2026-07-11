@@ -5,8 +5,9 @@
 `xout`；需要机器 JSON 时设置 `output.response_format:"json"`，或使用
 `tools/xcov --json -`。
 
-xcov 只以 VDB/Python NPI coverage API 为数据源，不解析 URG HTML、
-`asserts.html`、`mod*.html` 或 `session.xml`。只有 Verdi/pynpi 文档、headers
+xcov 只以 VDB/Verdi NPI coverage API 为数据源：2018使用 C++ `npi_cov.h` native
+worker，2023使用 Python `pynpi.cov`。它不解析 URG HTML、`asserts.html`、
+`mod*.html` 或 `session.xml`。只有 Verdi NPI文档、headers
 和真实 VDB probe 证实可获取的字段才会进入公开 schema；拿不到的 URG 字段不
 提供接口，也不会用 note 占位。
 
@@ -31,16 +32,43 @@ JSON request，并返回包含 `xout` 和 `json` payload 的 JSONL envelope。NP
 
 ## 真实 NPI 运行
 
-真实 VDB 查询需要 Synopsys Verdi/Python NPI 和 license。按项目规则，NPI、
+真实 VDB 查询需要 Synopsys Verdi NPI和 license。按项目规则，NPI、
 VCS、VIP、真实 coverage probe 必须在沙箱外运行。
 
-已验证的本地形态：
+双版本 backend 选择规则：
 
-```text
-Python 3.11
-VERDI_HOME=~/Synopsys/verdi/V-2023.12-SP2
-示例 VDB=~/uart_example/sim/merged.vdb
+- `XVERIF_EDA_PROFILE=verdi-2018`：使用常驻 C++ native NPI worker。
+- `XVERIF_EDA_PROFILE=verdi-2023`：使用 Python `pynpi.cov` backend。
+- `auto`：从版本化 `VERDI_HOME` 自动判断；无法判断时明确报错。
+- `XVERIF_XCOV_BACKEND=native|python` 可显式覆盖；不会静默 fallback。
+
+`tools/xcov` 会在当前子进程内把对应 NPI library 目录加入
+`LD_LIBRARY_PATH`。2018 worker 需要先执行
+`XVERIF_EDA_PROFILE=verdi-2018 make -C xcov native`。
+
+## 可分发自检
+
+仓库自带 `testdata/basic_coverage`，会用基础 VCS code coverage 生成包含两个
+test 的真实 `simv.vdb`，不依赖外部工程或 VIP：
+
+```bash
+make -C xcov self-test-2018
+make -C xcov self-test-2023
 ```
+
+自检会依次运行纯单测、编译/运行 fixture、打开真实 VDB，并校验
+line/toggle/branch、Verdi 等权 Score、raw weighted coverage 和 session close。
+需要对应版本的 VCS、Verdi/NPI 和可用 license。
+
+支持与验证状态：
+
+| Profile | Coverage API | 状态 |
+|---|---|---|
+| `verdi-2018` / O-2018.09-SP2 | C++ `npi_cov.h` native worker | 已通过仓内2-test VDB、GPIO和xip实机验证 |
+| `verdi-2023` / V-2023.12-SP2 | Python `pynpi.cov` | 原作者支持路径；待本兼容分支在2023机器运行自检 |
+
+2018 coverage smoke已有证据要求 `Verdi` 和 `VCSTools_Net` feature可 checkout；
+不同站点的 VCS compile/runtime feature名称应由 EDA管理员确认。
 
 ## MCP 工具
 
@@ -154,7 +182,10 @@ coverpoint/cross coverage 百分比的平均值；交互输出不暴露 score_ba
 - `scope.summary`：返回当前层次的扁平覆盖率字段，例如
   `coverage_pct`、`line_pct`、`toggle_pct`、`branch_pct`、`condition_pct`、
   `fsm_pct`、`assert_pct`、`functional_pct`，并带 module 对应的 `file/line`
-  evidence（若 NPI 暴露）；不输出 parent/depth/type/def_name。
+  evidence（若 NPI 暴露）；不输出 parent/depth/type/def_name。`coverage_pct` 按
+  Verdi GUI Score 语义对有效 metric 百分比等权平均；`raw_coverage_pct` 保留按
+  全部 coverable 数量加权的原始比值，`score_basis` 明确为
+  `average_metric_pct`。
 - `scope.children` / `scope.search`：只返回 `name/full_name/coverage_pct`，用于定位
   hierarchy 名称和快速查看当前覆盖率。
 - `code_coverage.summary`：按 metric、scope 或 source file 汇总代码覆盖率；不输出

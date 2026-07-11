@@ -2,6 +2,10 @@
 
 使用 Verdi Python coverage wrapper 查询 VCS/Verdi coverage database，例如 `simv.vdb` 或 `merged.vdb`。这类脚本适合离线批量导出 coverage summary、holes、scope metrics 和 functional coverage bins。
 
+本页只适用于提供 Python `pynpi.cov` 的 Verdi版本。O-2018.09-SP2没有该接口，
+应使用 `XVERIF_EDA_PROFILE=verdi-2018` 的 xcov native worker。不要在2018环境
+尝试 import失败后改解析 URG HTML。
+
 ## When To Switch From xcov
 
 优先用 xcov 做交互式查询：
@@ -16,6 +20,10 @@
 - 需要自定义 hierarchy pruning、bin 聚合、排序或阈值策略。
 - 需要把 coverage 与 FSDB、RTL 静态结构或项目自定义映射表关联。
 - xcov 明确说明某个 URG 字段没有稳定 NPI API，不提供接口；不要从 URG HTML 反解析。
+
+如果目标是复现 Verdi hierarchy `Score`，先分别计算各有效 metric的百分比，再做
+等权平均；所有 bin合并后的 `covered/coverable` 只是 raw weighted coverage，二者
+应分别输出。
 
 ## Runtime
 

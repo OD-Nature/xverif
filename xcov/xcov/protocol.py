@@ -146,7 +146,10 @@ def _project_rows(items: Iterable[Json], columns: List[str]) -> List[Json]:
     return rows
 
 
-SCOPE_SUMMARY_ITEM_COLUMNS = ["name", "full_name", "covered", "coverable", "missing", "coverage_pct"]
+SCOPE_SUMMARY_ITEM_COLUMNS = [
+    "name", "full_name", "covered", "coverable", "missing", "coverage_pct",
+    "score_basis", "score_item_count", "raw_coverage_pct",
+]
 SCOPE_CHILDREN_ITEM_COLUMNS = ["name", "full_name", "coverage_pct"]
 SCOPE_METRIC_PCT_FIELDS = [
     ("line", "line_pct"),

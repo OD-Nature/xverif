@@ -4,6 +4,20 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 root="$(cd "$script_dir/.." && pwd)"
 
+verdi_home="${XVERIF_XCOV_VERDI_HOME:-${VERDI_HOME:-}}"
+if [[ -n "$verdi_home" ]]; then
+  export VERDI_HOME="$verdi_home"
+  npi_lib="$verdi_home/share/NPI/lib/LINUX64"
+  if [[ ! -d "$npi_lib" ]]; then
+    npi_lib="$verdi_home/share/NPI/lib/linux64"
+  fi
+  if [[ ! -d "$npi_lib" ]]; then
+    echo "ERROR: cannot find Verdi NPI library directory under VERDI_HOME=$verdi_home" >&2
+    exit 1
+  fi
+  export LD_LIBRARY_PATH="$npi_lib:${LD_LIBRARY_PATH:-}"
+fi
+
 python_bin="${PYTHON:-${XVERIF_XCOV_PYTHON:-}}"
 if [[ -z "$python_bin" ]]; then
   if [[ -x "${HOME}/miniconda3/envs/xdebug-mcp/bin/python" ]]; then

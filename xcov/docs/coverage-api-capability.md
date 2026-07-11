@@ -1,10 +1,14 @@
 # xcov Coverage API 能力审计
 
-本审计用于约束 xcov 公开接口：只有 Verdi/Python NPI 文档、headers 和真实 VDB
+本审计用于约束 xcov 公开接口：只有 Verdi NPI文档、headers和真实 VDB
 probe 证实可获取的字段才能进入 schema。未证实字段不做 fallback，不解析 URG
 HTML，不返回占位 note。
 
-## 本地依据
+xcov现有两个 provider：O-2018.09-SP2使用 C++ `npi_cov.h` native worker，
+V-2023.12-SP2使用 Python `pynpi.cov`。二者必须映射为同一 canonical coverage
+item/action合同；backend差异只允许出现在 worker/provider诊断字段。
+
+## 2023 Python provider依据
 
 - Verdi 安装：`$VERDI_HOME=~/Synopsys/verdi/V-2023.12-SP2`
 - Python Coverage 文档：`$VERDI_HOME/doc/Python_NPI_Coverage.pdf`
@@ -13,6 +17,19 @@ HTML，不返回占位 note。
 - 真实 VDB probe：`~/uart_example/sim/merged.vdb`
 
 真实 probe 已在沙箱外运行，原因是 pynpi/VDB/license 访问属于 NPI/EDA 动作。
+
+## 2018 native provider依据
+
+- Verdi/VCS：O-2018.09-SP2。
+- API header：`$VERDI_HOME/share/NPI/inc/npi_cov.h`。
+- Provider：`xcov/native/xcov-npi-worker.cpp`，通过 JSONL常驻 worker封装。
+- 真实验证：仓内2-test VDB、GPIO 14-test VDB和 xip VDB。
+- 已验证能力：test枚举/合并、instance递归、line/toggle/branch/assert对象、
+  scope summary、Verdi等权 Score、raw weighted coverage和正常 close/checkin。
+- 已有 license证据：`Verdi`、`VCSTools_Net`；站点别名由部署环境确认。
+
+2018 provider启动前必须确认 `vdb/snps/coverage/db` 存在且包含普通文件；空壳 VDB
+直接返回 `INVALID_VDB`。正常关闭必须执行 `npi_cov_close()` 和 `npi_end()`。
 
 ## 已证实能力
 

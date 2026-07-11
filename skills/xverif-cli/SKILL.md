@@ -43,6 +43,9 @@ description: >
 
 ## 通用规则
 
+- 真实 EDA调用前确认 `XVERIF_EDA_PROFILE=verdi-2018|verdi-2023` 与
+  `VERDI_HOME` 一致；2018 xcov走 native worker，2023走 Python backend，不自动
+  fallback。
 - 脚本解析或字段比较时使用 JSON；不要解析默认人类文本。
 - 不确定 action 参数时，先用 CLI 查 `actions` 和 action-specific `schema`，不要猜字段。
 - xdebug 参数错误时先读结构化错误提示：`invalid_arg`、`expected`、`allowed_values`、`did_you_mean`、`required_any_of`、`correct_example`。

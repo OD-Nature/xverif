@@ -525,9 +525,18 @@ def _scope_coverage(items: List[Json], metrics: List[str]) -> Dict[str, Json]:
             metric_rows.append({"metric": metric, "covered": covered, "coverable": coverable,
                                 "missing": coverable - covered,
                                 "coverage_pct": coverage_pct(covered, coverable)})
+        metric_pcts = [
+            float(row["coverage_pct"])
+            for row in metric_rows
+            if row.get("coverage_pct") is not None
+        ]
+        score_pct = round(sum(metric_pcts) / len(metric_pcts), 4) if metric_pcts else None
         out[scope] = {"covered": total_covered, "coverable": total_coverable,
                       "missing": total_coverable - total_covered,
-                      "coverage_pct": coverage_pct(total_covered, total_coverable),
+                      "coverage_pct": score_pct,
+                      "score_basis": "average_metric_pct",
+                      "score_item_count": len(metric_pcts),
+                      "raw_coverage_pct": coverage_pct(total_covered, total_coverable),
                       "metrics": metric_rows}
     return out
 
@@ -572,8 +581,10 @@ def _has_nonnegative_ratio(item: Json) -> bool:
 def _merge_scope_coverage(scope: Json, cov: Optional[Json]) -> Json:
     out = dict(scope)
     cov = cov or {"covered": 0, "coverable": 0, "missing": 0,
-                  "coverage_pct": None, "metrics": []}
-    for key in ("covered", "coverable", "missing", "coverage_pct"):
+                  "coverage_pct": None, "score_basis": "average_metric_pct",
+                  "score_item_count": 0, "raw_coverage_pct": None, "metrics": []}
+    for key in ("covered", "coverable", "missing", "coverage_pct",
+                "score_basis", "score_item_count", "raw_coverage_pct"):
         out[key] = cov.get(key)
     ev = out.pop("evidence", None)
     if isinstance(ev, dict):
@@ -597,6 +608,7 @@ def _project_scope_brief_rows(rows: List[Json]) -> List[Json]:
 def _project_scope_summary_rows(rows: List[Json]) -> List[Json]:
     columns = [
         "name", "full_name", "covered", "coverable", "missing", "coverage_pct",
+        "score_basis", "score_item_count", "raw_coverage_pct",
         "line_pct", "toggle_pct", "branch_pct", "condition_pct",
         "fsm_pct", "assert_pct", "functional_pct", "file", "line",
     ]

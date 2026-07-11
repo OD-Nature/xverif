@@ -7,8 +7,32 @@ from typing import Any, Dict, List, Optional
 from .backend import CoverageBackend, FakeCoverageBackend, NpiCoverageBackend
 from .errors import XcovError
 from .logging import log_lifecycle_event
+from .native_backend import NativeNpiCoverageBackend
 
 Json = Dict[str, Any]
+
+
+def _resolved_backend() -> str:
+    backend = os.environ.get("XVERIF_XCOV_BACKEND", "auto").strip().lower()
+    if backend in ("native", "python"):
+        return backend
+    if backend != "auto":
+        raise XcovError(
+            "INVALID_BACKEND",
+            "XVERIF_XCOV_BACKEND must be auto, native, or python",
+            backend=backend,
+        )
+
+    profile = os.environ.get("XVERIF_EDA_PROFILE", "auto").strip().lower()
+    verdi_home = os.environ.get("XVERIF_XCOV_VERDI_HOME") or os.environ.get("VERDI_HOME", "")
+    if profile == "verdi-2018" or (profile == "auto" and "2018" in verdi_home):
+        return "native"
+    if profile == "verdi-2023" or (profile == "auto" and verdi_home):
+        return "python"
+    raise XcovError(
+        "EDA_PROFILE_UNRESOLVED",
+        "set XVERIF_EDA_PROFILE to verdi-2018 or verdi-2023, or provide a versioned VERDI_HOME",
+    )
 
 
 @dataclass
@@ -57,8 +81,13 @@ class SessionManager:
             backend: CoverageBackend = FakeCoverageBackend(vdb)
             worker = "fake"
         else:
-            backend = NpiCoverageBackend(vdb)
-            worker = "npi_python"
+            backend_name = _resolved_backend()
+            if backend_name == "native":
+                backend = NativeNpiCoverageBackend(vdb)
+                worker = "npi_native_2018"
+            else:
+                backend = NpiCoverageBackend(vdb)
+                worker = "npi_python"
         sess = XcovSession(session_id=sid, vdb=vdb, backend=backend, worker=worker)
         self.sessions[sid] = sess
         log_lifecycle_event(sid, "session.open.ok", True, {"vdb": vdb, "worker": worker})

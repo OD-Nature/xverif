@@ -32,6 +32,13 @@ regression/*
 !skills/xwiki/tests/**
 !xcov/tests/
 !xcov/tests/**
+!xcov/testdata/
+xcov/testdata/*
+!xcov/testdata/basic_coverage/
+!xcov/testdata/basic_coverage/Makefile
+!xcov/testdata/basic_coverage/dut.sv
+!xcov/testdata/basic_coverage/tb.sv
+xcov/testdata/basic_coverage/out/
 !xsva/tests/
 !xsva/tests/**
 !xverif_mcp/tests/
@@ -69,6 +76,8 @@ xdebug/build/
 xdebug/xdebug
 xdebug/libexec/
 xdebug/signal.rc
+xcov/native/xcov-npi-worker
+xcov-npi-workerLog/
 *_probeLog/
 *-engineLog/
 npiLog/

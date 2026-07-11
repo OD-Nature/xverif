@@ -1,4 +1,4 @@
-.PHONY: all xdebug xbit xentry xloc xcov xwaveform test full-test clean xcov-test install-all-skill install-xverif-cli-skill install-xverif-mcp-skill install-xwiki-skill install-x-npi-skill _install-agent-skill
+.PHONY: all xdebug xbit xentry xloc xcov xwaveform test full-test self-test-2018 self-test-2023 clean xcov-test install-all-skill install-xverif-cli-skill install-xverif-mcp-skill install-xwiki-skill install-x-npi-skill _install-agent-skill
 
 PYTHON ?= python3
 
@@ -17,7 +17,7 @@ xloc:
 	$(MAKE) -C xloc
 
 xcov:
-	@true
+	$(MAKE) -C xcov
 
 xwaveform:
 	$(MAKE) -C xwaveform
@@ -83,6 +83,7 @@ _install-agent-skill:
 	echo "Done. Backups, if any, were moved to ~/.codex/ or ~/.claude/ so agents do not load old and new skills twice."
 
 test: xdebug xbit xentry xloc xcov xwaveform
+	$(MAKE) -C xdebug fixtures-basic
 	$(MAKE) -C xdebug PYTHON=$(PYTHON) schema-test
 	$(MAKE) -C xdebug PYTHON=$(PYTHON) contract-test
 	$(MAKE) -C xdebug unit-test
@@ -92,7 +93,6 @@ test: xdebug xbit xentry xloc xcov xwaveform
 	$(MAKE) -C xloc test
 	$(MAKE) -C xcov PYTHON=$(PYTHON) test
 	$(MAKE) -C xwaveform PYTHON=$(PYTHON) test
-	$(MAKE) -C xdebug/testdata/combined/active_driver fixture
 	regression/run_xdebug_regression.sh
 
 full-test: xdebug xbit xentry xloc
@@ -100,6 +100,14 @@ full-test: xdebug xbit xentry xloc
 	$(MAKE) -C xentry PYTHON=$(PYTHON) test
 	$(MAKE) -C xloc test
 	regression/run_full_regression.sh
+
+self-test-2018:
+	XVERIF_EDA_PROFILE=verdi-2018 $(MAKE) -C xdebug self-test PYTHON=$(PYTHON)
+	XVERIF_EDA_PROFILE=verdi-2018 $(MAKE) -C xcov self-test-2018 PYTHON=$(PYTHON)
+
+self-test-2023:
+	XVERIF_EDA_PROFILE=verdi-2023 $(MAKE) -C xdebug self-test PYTHON=$(PYTHON)
+	XVERIF_EDA_PROFILE=verdi-2023 $(MAKE) -C xcov self-test-2023 PYTHON=$(PYTHON)
 
 clean:
 	$(MAKE) -C xdebug clean

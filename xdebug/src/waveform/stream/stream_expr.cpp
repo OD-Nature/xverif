@@ -445,8 +445,13 @@ bool stream_value_has_xz(const StreamValue& value) {
 
 StreamExpression::StreamExpression() = default;
 StreamExpression::~StreamExpression() = default;
+#if defined(XVERIF_VERDI_2018)
+StreamExpression::StreamExpression(StreamExpression&&) = default;
+StreamExpression& StreamExpression::operator=(StreamExpression&&) = default;
+#else
 StreamExpression::StreamExpression(StreamExpression&&) noexcept = default;
 StreamExpression& StreamExpression::operator=(StreamExpression&&) noexcept = default;
+#endif
 
 bool StreamExpression::parse(const std::string& text, std::string& error) {
     text_ = text;

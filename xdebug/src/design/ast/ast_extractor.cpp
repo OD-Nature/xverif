@@ -1,5 +1,7 @@
 #include "ast_extractor.h"
 
+#include "core/npi/decompile_compat.h"
+
 #include "npi_L1.h"
 #include "npi_util_collect_hdl_expr.h"
 #include "npi_util_decompile.h"
@@ -14,7 +16,7 @@ using json = nlohmann::json;
 std::string AstExtractor::decompile(npiHandle hdl) const {
     if (!hdl) return "";
     npi_util_decompile_t decomp;
-    const char* text = decomp.decompile(hdl, true, false, false, true);
+    const char* text = xdebug_core::decompile_npi(decomp, hdl);
     if (text && *text) return text;
     const char* fallback = npi_get_str(npiDecompile, hdl);
     if (fallback && *fallback) return fallback;

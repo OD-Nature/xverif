@@ -23,6 +23,9 @@ tools/xcov --stdio-loop
 
 真实 NPI coverage 查询需要 Synopsys license；受限沙箱内 license 可能不可达。
 
+Backend由 EDA profile选择：`verdi-2018` 使用 C++ native NPI worker，
+`verdi-2023` 使用 Python `pynpi.cov`。失败时不得静默切换 backend或解析 URG HTML。
+
 ## 常用请求
 
 open：
@@ -91,12 +94,16 @@ assert export：
 - 看 `summary.matched_count/returned/truncated/output_path/note`。
 - coverage item 关注 action 当前返回的字段；不要假设所有 action 都输出
   `metric/type/name/full_name/covered/coverable/missing/status/evidence.file/evidence.line`。
-- coverage pct 用 `covered/coverable`，不要用 hit count 代替覆盖率。
+- 普通 metric/item的 coverage pct用 `covered/coverable`，不要用 hit count代替。
+- `scope.summary.coverage_pct` 是与 Verdi GUI一致的有效 metric百分比等权平均；
+  `raw_coverage_pct` 才是总 `covered/coverable` 加权值。结合
+  `score_basis:"average_metric_pct"` 和 `score_item_count` 解释结果。
 - 保留 `excluded/unreachable/illegal` 状态，不要误判为普通 hole。
 - 交互查询优先用 `scope.summary`、`scope.children`、`scope.search`、
   `code_coverage.summary`、`code_coverage.holes` 看层次覆盖率。
 - `scope.summary` 返回扁平覆盖率字段；不要期待 `metrics={...}`，也不要期待
-  parent/depth/type/def_name。
+  parent/depth/type/def_name；它会返回 `coverage_pct/score_basis/score_item_count/`
+  `raw_coverage_pct` 以及各 `*_pct`。
 - `scope.children` 和 `scope.search` 每项只返回 `name/full_name/coverage_pct`。
 - `code_coverage.summary` 不输出 `name/full_name/functional_pct`。
 - `code_coverage.holes` 只输出当前 hierarchy 与子模块覆盖率概览，只保留
@@ -112,8 +119,9 @@ assert export：
 - xout 的 `items:` 是对齐纯文本表格，不是 Markdown 表格；JSON 响应结构不变。
 - 详细未覆盖项必须用 `export.code_coverage`、`export.function_coverage`、
   `export.assert` 导出 Markdown 查看。
-- 三个 export action 只支持 Markdown；复杂二次统计、跨报告处理或自定义格式，转用
-  `x-npi` 编写 `pynpi` coverage 脚本。
+- 三个 export action只支持 Markdown。提供 `pynpi.cov` 的版本可转用 x-npi做复杂
+  二次统计；Verdi 2018没有该 Python coverage API，应继续使用 xcov native导出，
+  不得 fallback到 URG解析。
 - `source.annotate` 的源码文本来自项目源文件，coverage annotation 来自 VDB/NPI，不解析 URG HTML。
 - `assert.summary` 输出基础覆盖率和 attempts/real successes/without attempts；不输出
   kind/category/severity/failures/incomplete/first_match/file/line。需要完整 assertion
