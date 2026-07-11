@@ -15,7 +15,7 @@ MCP query 形态示例：
 
 默认优先使用 xout 输出；以下示例省略 `output_format`，等价于让 MCP 使用默认的 `output_format:"xout"`。只有脚本需要稳定读取 JSON 字段，或专门验证 JSON response/schema 时，才显式写 `output_format:"json"`。JSON 片段展示 MCP tool 调用壳；直接调用 `xverif_debug_query` 时传外层 `args` 对象，写 `xverif_batch` 时整段 JSON 可作为一行请求。
 
-```json
+```json-invalid
 {
   "tool": "xverif_debug_query",
   "args": {

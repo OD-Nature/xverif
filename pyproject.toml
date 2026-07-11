@@ -35,6 +35,7 @@ pythonpath = [
   "xdebug/tests",
 ]
 testpaths = [
+  "skills/tests",
   "testinfra/tests",
   "xbit/tests",
   "xentry/tests",

@@ -34,6 +34,80 @@ from xverif_mcp.xdebug_errors import (
 Json = Dict[str, Any]
 
 
+METHOD_PARAM_CONTRACTS: dict[str, dict[str, tuple[str, ...]]] = {
+    "server.ping": {"required": (), "optional": (), "any_of": ()},
+    "server.shutdown": {"required": (), "optional": (), "any_of": ()},
+    "debug.session.open": {
+        "required": ("name",),
+        "optional": ("fsdb", "daidir", "queue", "resource"),
+        "any_of": ("fsdb", "daidir"),
+    },
+    "debug.session.list": {
+        "required": (), "optional": ("include_tombstones", "verbose"), "any_of": (),
+    },
+    "debug.session.doctor": {
+        "required": (), "optional": ("session", "session_id", "name", "verbose"),
+        "any_of": ("session", "session_id", "name"),
+    },
+    "debug.session.close": {
+        "required": (), "optional": ("session", "session_id", "name"),
+        "any_of": ("session", "session_id", "name"),
+    },
+    "debug.session.kill": {
+        "required": (), "optional": ("session", "session_id", "name"),
+        "any_of": ("session", "session_id", "name"),
+    },
+    "debug.session.gc": {"required": (), "optional": ("verbose",), "any_of": ()},
+    "debug.query": {
+        "required": ("session", "action"),
+        "optional": ("args", "limits", "output_format"),
+        "any_of": (),
+    },
+    "cov.session.open": {
+        "required": ("name", "vdb"),
+        "optional": ("queue", "resource"),
+        "any_of": (),
+    },
+    "cov.session.list": {
+        "required": (), "optional": ("include_tombstones", "verbose"), "any_of": (),
+    },
+    "cov.session.doctor": {
+        "required": (), "optional": ("session", "session_id", "name", "verbose"),
+        "any_of": ("session", "session_id", "name"),
+    },
+    "cov.session.close": {
+        "required": (), "optional": ("session", "session_id", "name"),
+        "any_of": ("session", "session_id", "name"),
+    },
+    "cov.session.kill": {
+        "required": (), "optional": ("session", "session_id", "name"),
+        "any_of": ("session", "session_id", "name"),
+    },
+    "cov.session.gc": {"required": (), "optional": ("verbose",), "any_of": ()},
+    "cov.query": {
+        "required": ("session", "action"),
+        "optional": ("args", "limits", "output", "output_format"),
+        "any_of": (),
+    },
+}
+
+
+def validate_method_params(method: str, params: Json) -> None:
+    contract = METHOD_PARAM_CONTRACTS.get(method)
+    if contract is None:
+        return
+    allowed = set(contract["required"]) | set(contract["optional"])
+    unexpected = sorted(set(params) - allowed)
+    if unexpected:
+        raise TypeError(f"unexpected params for {method}: {', '.join(unexpected)}")
+    missing = [key for key in contract["required"] if key not in params]
+    if missing:
+        raise TypeError(f"missing required params for {method}: {', '.join(missing)}")
+    any_of = contract["any_of"]
+    if any_of and not any(params.get(key) for key in any_of):
+        raise TypeError(f"provide one of for {method}: {', '.join(any_of)}")
+
+
 def default_socket_path() -> str:
     return os.environ.get(
         "XVERIF_LOOP_SOCKET",
@@ -103,6 +177,7 @@ class LoopWrapperService:
         if not isinstance(params, dict):
             return {"id": req_id, **_error("INVALID_REQUEST", "request.params must be an object")}
         try:
+            validate_method_params(method, params)
             result = self._dispatch_method(method, params)
         except TypeError as exc:
             return {"id": req_id, **_error("INVALID_PARAMS", str(exc))}

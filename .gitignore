@@ -28,6 +28,8 @@ regression/
 !xloc/tests/**
 !skills/xwiki/tests/
 !skills/xwiki/tests/**
+!skills/tests/
+!skills/tests/**
 !xcov/tests/
 !xcov/tests/**
 !xsva/tests/

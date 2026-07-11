@@ -163,6 +163,46 @@ suites:
     deterministic: true
     cost: {class: fast, estimate_sec: 3}
 
+  - id: skills.xverif_cli
+    owner: skills/xverif-cli
+    level: static
+    intent: [contract]
+    domains: [skill, cli, schema]
+    runner: {kind: pytest, path: skills/tests/test_xverif_cli_skill.py}
+    hermetic: true
+    deterministic: true
+    cost: {class: fast, estimate_sec: 3}
+
+  - id: skills.xverif_mcp
+    owner: skills/xverif-mcp
+    level: component
+    intent: [contract]
+    domains: [skill, mcp, session]
+    runner: {kind: pytest, path: skills/tests/test_xverif_mcp_skill.py}
+    hermetic: true
+    deterministic: true
+    cost: {class: fast, estimate_sec: 5}
+
+  - id: skills.x_npi
+    owner: skills/x-npi
+    level: unit
+    intent: [contract, semantics]
+    domains: [skill, npi, protocol]
+    runner: {kind: pytest, path: skills/tests/test_x_npi_skill.py}
+    hermetic: true
+    deterministic: true
+    cost: {class: fast, estimate_sec: 3}
+
+  - id: skills.xwiki
+    owner: skills/xwiki
+    level: unit
+    intent: [contract]
+    domains: [skill, wiki]
+    runner: {kind: pytest, path: skills/tests/test_xwiki_skill.py}
+    hermetic: true
+    deterministic: true
+    cost: {class: fast, estimate_sec: 3}
+
   - id: xverif_mcp.unit
     owner: xverif_mcp
     level: component

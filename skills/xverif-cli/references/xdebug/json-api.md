@@ -416,7 +416,7 @@ INTERNAL_ERROR
 
 参数错误示例：
 
-```json
+```json-invalid
 {
   "api_version": "xdebug.v1",
   "action": "apb.query",

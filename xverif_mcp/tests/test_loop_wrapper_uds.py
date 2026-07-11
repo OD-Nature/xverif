@@ -176,6 +176,17 @@ def test_loop_wrapper_reports_bad_requests(tmp_path, monkeypatch):
         missing = send_requests(sock, [{"id": "m", "method": "debug.query", "params": {"session": "d0"}}])[0]
         assert missing["ok"] is False
         assert missing["error"]["code"] == "INVALID_PARAMS"
+        unsupported_output = send_requests(sock, [{
+            "id": "o",
+            "method": "debug.query",
+            "params": {
+                "session": "d0",
+                "action": "value.at",
+                "output": {"response_format": "json"},
+            },
+        }])[0]
+        assert unsupported_output["ok"] is False
+        assert unsupported_output["error"]["code"] == "INVALID_PARAMS"
     finally:
         server.shutdown()
         thread.join(timeout=5)
