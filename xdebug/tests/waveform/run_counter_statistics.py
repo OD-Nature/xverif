@@ -3,7 +3,7 @@ import argparse
 import os
 import sys
 
-from run_complex_wave import AiRunner, NONAXI_FSDB, REPO_ROOT, build_nonaxi, require
+from run_complex_wave import AiRunner, NONAXI_FSDB, REPO_ROOT, require
 
 
 def run_counter_statistics(xdebug, fsdb):
@@ -110,11 +110,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--xdebug", default=os.path.join(REPO_ROOT, "tools", "xdebug"))
     parser.add_argument("--fsdb", default=NONAXI_FSDB)
-    parser.add_argument("--skip-build", action="store_true")
     args = parser.parse_args()
-
-    if not args.skip_build:
-        build_nonaxi()
 
     rows = run_counter_statistics(os.path.abspath(args.xdebug), os.path.abspath(args.fsdb))
     print_rows(rows)

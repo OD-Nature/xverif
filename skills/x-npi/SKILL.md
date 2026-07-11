@@ -32,6 +32,15 @@ from x_npi.protocol import axi_summary
 from x_npi.coverage import open_covdb, coverage_items
 ```
 
+公共 helper 按模块分组：
+
+- `runtime`：`verdi_home`、`configure_pynpi`、`redirect_stdout_to_stderr`、`pynpi_lifecycle`。
+- `wave`：`open_fsdb`、`close_fsdb`、`time_in`、`sample_values`、`iter_signal_changes`、`clock_edges`、`edge_samples`、`value_statistics`。
+- `protocol`：`apb_transactions`、`apb_summary`、`axi_transactions`、`axi_summary`、`stream_summary`。
+- `coverage`：`open_covdb`、`close_covdb`、`test_names`、`merged_test_handle`、`coverage_items`、`coverage_summary`、`score_rows`、`functional_group_scores`。
+- `design`：`handle_name`、`statement_row`、`trace_driver`、`trace_load`。
+- `jsonio`：`ok`、`error`、`print_json`、`split_limited`。
+
 运行示例时，可以把 skill 的 `scripts` 目录加入 `PYTHONPATH`，也可以直接执行 `scripts/examples/` 下的文件。
 
 ## 决策规则

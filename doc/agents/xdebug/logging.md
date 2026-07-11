@@ -110,6 +110,6 @@ xdebug 的 log 是工具可观测性合同的一部分。任何 session、transp
 ## 修改 log 的测试
 
 - C++ log helper 变化：跑相关 unit test，例如 action log/file exchange/process runner。
-- session lifecycle 变化：跑 `make -C xdebug log-test` 或对应 pytest。
+- session lifecycle 变化：跑 `pytest --xverif-gate regression --xverif-suite xdebug.session`。
 - transport 变化：跑 session/MCP focused tests。
 - 如果测试需要真实 LSF/license/VIP，按根目录 `AGENTS.md` 规则在沙箱外执行。

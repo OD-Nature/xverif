@@ -206,7 +206,7 @@ tools/xcov --stdio-loop
 
 MCP 工具入口使用对称的 `xverif_cov_session_open/list/doctor/close/kill/gc` 和 `xverif_cov_query`。coverage query 禁止绕过 manager 直接调用 native lifecycle action；真实 NPI coverage 查询需要可访问 Synopsys license server，环境不满足时直接报告，不自动切换 Python 或 backend。
 
-完整说明见 [`xcov/README.md`](xcov/README.md)，CLI/MCP skill 分别见 [`skills/xverif-cli/references/xcov.md`](skills/xverif-cli/references/xcov.md) 和 [`skills/xverif-mcp/references/xcov.md`](skills/xverif-mcp/references/xcov.md)。
+完整说明见 [`xcov/README.md`](xcov/README.md)，agent 能力说明见 [`skills/xverif/references/xcov.md`](skills/xverif/references/xcov.md)，MCP 运行环境问题见 [`skills/xverif-admin/SKILL.md`](skills/xverif-admin/SKILL.md)。
 
 ### xeda-runner
 
@@ -228,7 +228,7 @@ xeda-runner run --action sim --target compile --option TEST=smoke_test --dry-run
 xeda-runner run --action sim --target compile --option TEST=smoke_test --option SEED=123
 ```
 
-完整说明见 [`xeda_runner/README.md`](xeda_runner/README.md)，skill 见 [`skills/xverif-cli/SKILL.md`](skills/xverif-cli/SKILL.md) 和 [`skills/xverif-cli/references/xeda-runner.md`](skills/xverif-cli/references/xeda-runner.md)。
+完整说明见 [`xeda_runner/README.md`](xeda_runner/README.md)，执行型 skill 见 [`skills/xeda-runner/SKILL.md`](skills/xeda-runner/SKILL.md)。
 
 ## 推荐 Shell 入口
 
@@ -345,11 +345,14 @@ export SNPSLMD_LICENSE_FILE=<synopsys-license配置>
 - `tools/xdebug` / `tools/xcov` 会在各自子进程内注入对应 NPI library路径，
   不需要全局修改 `LD_LIBRARY_PATH`。
 
-构建并运行可分发自检：
+构建并运行 profile 自检：
 
 ```bash
 make
-make self-test-2018
+python3 -m pip install -e .
+pytest --xverif-gate fast
+XVERIF_TEST_EXECUTION_ENV=host pytest --xverif-prepare all-generated
+XVERIF_TEST_EXECUTION_ENV=host pytest --xverif-gate regression -n auto
 ```
 
 ### 4. 配置 Verdi 2023
@@ -361,26 +364,26 @@ export PATH=<VCS_2023安装目录>/bin:"$VERDI_HOME/bin:$PATH"
 export SNPSLMD_LICENSE_FILE=<synopsys-license配置>
 
 make
-make self-test-2023
+python3 -m pip install -e .
+pytest --xverif-gate fast
+XVERIF_TEST_EXECUTION_ENV=host pytest --xverif-prepare all-generated
+XVERIF_TEST_EXECUTION_ENV=host pytest --xverif-gate regression -n auto
 ```
 
 2023 profile保留原作者的 Python `pynpi.cov` backend，不会自动切换到
 2018 native worker。当前仓库已完成 2023自检入口和构建路径；正式交付前仍需在
-安装了 2023 EDA的机器执行一次真实 `make self-test-2023`。
+安装了 2023 EDA的机器执行一次真实 fixture prepare 与 regression gate。
 
 ### 5. 自检层级
 
 | 命令 | 是否需要 EDA/license | 覆盖范围 |
 |---|---|---|
-| `make -C xcov test` | 否 | xcov fake/canonical/backend选择和 Score合同 |
-| `make -C xbit test` 等子工具测试 | 否 | 各 stateless工具单元与 CLI smoke |
-| `make self-test-2018` | 是 | 仓内 xdebug daidir/FSDB、session/MCP及 xcov真实 VDB/native NPI |
-| `make self-test-2023` | 是 | 同一仓内 fixture的 2023 profile/Python coverage NPI |
-| `make test` | 是 | 常规仓库测试和仓内 fixture |
-| `make full-test` | 是 | 更完整设计、波形和条件 realdata回归 |
-| `make -C xdebug test-nightly` | 是 | regression、VIP及可选真实 LSF |
+| `pytest --xverif-gate fast` | 否 | hermetic 单元、合同与静态检查 |
+| `pytest --xverif-prepare all-generated` | 是 | 为当前 EDA profile 显式生成仓内 fixture |
+| `pytest --xverif-gate regression -n auto` | 是 | 确定性回归及缓存 fixture 消费 |
+| `pytest --xverif-gate nightly -n auto` | 是 | VIP、可选 realdata 与真实 LSF |
 
-`self-test-*` 是别人 clone 后首先应运行的基础健康检查。它会从仓内 SV源码生成
+上述 fast → prepare → regression 流程是别人 clone 后首先应运行的基础健康检查。它会从仓内 SV源码生成
 fixture，不依赖 GPIO、xip 或其它外部工程。扩展回归可能额外要求 numpy、VIP、
 真实 LSF或外部 realdata；缺少这些依赖不能冒充通过。
 
@@ -484,40 +487,63 @@ find <vdb>/snps/coverage/db -type f -print -quit
 
 - UDS/TCP/file transport和真实进程通信测试必须在允许 bind/IPC的宿主环境运行。
 - 大 VDB可提高 MCP startup/request timeout，但不能静默改 backend或 transport。
-- 先用 CLI/self-test区分 EDA/NPI问题和 MCP外层 timeout。
+- 先用 CLI、fixture validation 和 focused suite 区分 EDA/NPI问题和 MCP外层 timeout。
 
 ### 测试报告 fixture缺失
 
-先运行对应 profile自检，它会生成基础 daidir、FSDB和 VDB：
+显式准备并校验当前 profile 的 fixture：
 
 ```bash
-make self-test-2018   # 或 self-test-2023
+XVERIF_TEST_EXECUTION_ENV=host pytest --xverif-prepare all-generated
+XVERIF_TEST_EXECUTION_ENV=host pytest --xverif-fixture-validation --xverif-all-fixtures
 ```
 
-`test-regression`、`test-nightly`、VIP、真实 LSF和 realdata仍可能要求额外环境；查看
+`regression`、`nightly`、VIP、真实 LSF和 realdata仍可能要求额外环境；查看
 具体失败命令和 SKIP原因，不要把沙箱失败直接当作产品回归。
+构建仍由 Makefile 负责；测试只有根级 catalog-driven pytest plugin 一个公开入口。首次使用先安装测试包，普通 gate 只消费 `.xverif-test-cache/` 中已经发布的数据库，不会隐式运行 VCS/simv。
+
+```bash
+python3 -m pip install -e .
+make -C xdebug
+pytest --xverif-gate fast
+export XVERIF_TEST_EXECUTION_ENV=host  # 仅在已经进入沙箱外 host 后设置
+pytest --xverif-gate regression -n auto
+pytest --xverif-gate nightly -n auto
+```
+
+显式准备或校验数据库 Fixture：
+
+```bash
+pytest --xverif-prepare all-generated
+pytest --xverif-fixture-validation --xverif-all-fixtures
+pytest --xverif-fixture-clean
+pytest --xverif-results-clean
+```
+
+`fast` 是无外部 EDA 进程的 hermetic 门禁；`regression`、`nightly`、fixture prepare/validation 涉及 NPI、MCP 进程或 VCS 时必须在沙箱外执行。`XVERIF_TEST_EXECUTION_ENV=host` 只记录执行证据，不会提升权限或切换环境。cache miss 对 required suite 是 ERROR，并给出精确 prepare 命令；不会自动 prepare、SKIP 或切换 backend。裸 `pytest` 是 usage error。完整合同见 [`doc/agents/xdebug/tests.md`](doc/agents/xdebug/tests.md)。
 
 ## 文档入口
 
 - xdebug 用户文档：[`xdebug/README.md`](xdebug/README.md)
-- xverif CLI skill：[`skills/xverif-cli/SKILL.md`](skills/xverif-cli/SKILL.md)
-- xverif MCP skill：[`skills/xverif-mcp/SKILL.md`](skills/xverif-mcp/SKILL.md)
+- xverif 能力路由 skill：[`skills/xverif/SKILL.md`](skills/xverif/SKILL.md)
+- xverif 运维 skill：[`skills/xverif-admin/SKILL.md`](skills/xverif-admin/SKILL.md)
+- xeda-runner 执行 skill：[`skills/xeda-runner/SKILL.md`](skills/xeda-runner/SKILL.md)
 - x-npi agent skill：[`skills/x-npi/SKILL.md`](skills/x-npi/SKILL.md)，用于 AI 编写 Python `pynpi` 批量波形统计、APB/AXI/stream 离线分析和静态 driver/load 脚本；实时 active-driver 因果追踪仍用 xdebug。
-- xdebug CLI reference：[`skills/xverif-cli/references/xdebug/overview.md`](skills/xverif-cli/references/xdebug/overview.md)
-- xdebug JSON API 速查：[`skills/xverif-cli/references/xdebug/json-api.md`](skills/xverif-cli/references/xdebug/json-api.md)
-- SDK-free loop wrapper：[`skills/xverif-mcp/references/sdk-free-loop/overview.md`](skills/xverif-mcp/references/sdk-free-loop/overview.md)
-- MCP reference：[`skills/xverif-mcp/references/mcp/overview.md`](skills/xverif-mcp/references/mcp/overview.md)
+- xdebug CLI reference：[`skills/xverif/references/xdebug/overview.md`](skills/xverif/references/xdebug/overview.md)
+- xdebug JSON API 速查：[`skills/xverif/references/xdebug/json-api.md`](skills/xverif/references/xdebug/json-api.md)
+- SDK-free loop wrapper：[`skills/xverif-admin/references/sdk-free-loop/overview.md`](skills/xverif-admin/references/sdk-free-loop/overview.md)
+- MCP reference：[`skills/xverif-admin/references/mcp/overview.md`](skills/xverif-admin/references/mcp/overview.md)
 - xbit 用户文档：[`xbit/README.md`](xbit/README.md)
-- xbit agent reference：[`skills/xverif-cli/references/xbit.md`](skills/xverif-cli/references/xbit.md)
+- xbit agent reference：[`skills/xverif/references/xbit.md`](skills/xverif/references/xbit.md)
 - xentry 用户文档：[`xentry/README.md`](xentry/README.md)
-- xentry agent reference：[`skills/xverif-cli/references/xentry.md`](skills/xverif-cli/references/xentry.md)
+- xentry agent reference：[`skills/xverif/references/xentry.md`](skills/xverif/references/xentry.md)
 - xloc 用户文档：[`xloc/README.md`](xloc/README.md)
-- xloc agent reference：[`skills/xverif-cli/references/xloc.md`](skills/xverif-cli/references/xloc.md)
+- xloc agent reference：[`skills/xverif/references/xloc.md`](skills/xverif/references/xloc.md)
 - xwiki 持续记忆 skill：[`skills/xwiki/SKILL.md`](skills/xwiki/SKILL.md)
 - xsva 用户文档：[`xsva/README.md`](xsva/README.md)
-- xsva agent reference：[`skills/xverif-cli/references/xsva.md`](skills/xverif-cli/references/xsva.md)
+- xsva agent reference：[`skills/xverif/references/xsva.md`](skills/xverif/references/xsva.md)
 - xcov 用户文档：[`xcov/README.md`](xcov/README.md)
-- xcov agent reference：[`skills/xverif-cli/references/xcov.md`](skills/xverif-cli/references/xcov.md)
+- xcov agent reference：[`skills/xverif/references/xcov.md`](skills/xverif/references/xcov.md)
 - xverif-mcp 用户文档：[`xverif_mcp/README.md`](xverif_mcp/README.md)
 - xeda-runner 用户文档：[`xeda_runner/README.md`](xeda_runner/README.md)
-- xeda-runner agent reference：[`skills/xverif-cli/references/xeda-runner.md`](skills/xverif-cli/references/xeda-runner.md)
+- xeda-runner agent reference：[`skills/xeda-runner/references/execution.md`](skills/xeda-runner/references/execution.md)

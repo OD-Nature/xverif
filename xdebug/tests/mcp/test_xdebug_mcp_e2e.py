@@ -29,6 +29,20 @@ sys.modules.pop("mcp", None)
 pytest.importorskip("mcp")
 
 
+_PORTALS: dict[int, tuple[Any, Any]] = {}
+
+
+def _portal(server):
+    key = id(server)
+    existing = _PORTALS.get(key)
+    if existing is not None:
+        return existing[1]
+    manager = anyio.from_thread.start_blocking_portal()
+    portal = manager.__enter__()
+    _PORTALS[key] = (manager, portal)
+    return portal
+
+
 def _close_loaded_server() -> None:
     server = sys.modules.get("xverif_mcp.server")
     if server is None:
@@ -38,6 +52,9 @@ def _close_loaded_server() -> None:
         sessions = getattr(adapter, "_sessions", None)
         if sessions is not None:
             sessions.close_all()
+    entry = _PORTALS.pop(id(server), None)
+    if entry is not None:
+        entry[0].__exit__(None, None, None)
 
 
 def _load_server(
@@ -75,10 +92,7 @@ def _load_server(
 
 
 def _call(server, name: str, args: dict[str, Any] | None = None):
-    async def run():
-        return await server.mcp.call_tool(name, args or {})
-
-    return anyio.run(run)
+    return _portal(server).call(server.mcp.call_tool, name, args or {})
 
 
 def _text(result) -> str:
@@ -92,10 +106,7 @@ def _json(result) -> dict[str, Any]:
 
 
 def _list_tools(server) -> set[str]:
-    async def run():
-        return await server.mcp.list_tools()
-
-    return {tool.name for tool in anyio.run(run)}
+    return {tool.name for tool in _portal(server).call(server.mcp.list_tools)}
 
 
 def _kill_native_sessions(isolated_home: Path) -> None:
@@ -119,35 +130,15 @@ def _kill_native_sessions(isolated_home: Path) -> None:
 
 
 @pytest.fixture
-def mcp_resources(xdebug_root: Path) -> dict[str, str]:
+def mcp_resources(xverif_fixture) -> dict[str, str]:
+    uart = xverif_fixture("xdebug.design_uart")
+    wave = xverif_fixture("xdebug.ai_complex_wave")
+    combined = xverif_fixture("xdebug.active_driver")
     return {
-        "daidir": str(
-            xdebug_root / "testdata" / "design" / "uart" / "simv.daidir"
-        ),
-        "fsdb": str(
-            xdebug_root
-            / "testdata"
-            / "waveform"
-            / "ai_complex_wave"
-            / "out"
-            / "waves.fsdb"
-        ),
-        "combined_daidir": str(
-            xdebug_root
-            / "testdata"
-            / "combined"
-            / "active_driver"
-            / "out"
-            / "simv.daidir"
-        ),
-        "combined_fsdb": str(
-            xdebug_root
-            / "testdata"
-            / "combined"
-            / "active_driver"
-            / "out"
-            / "waves.fsdb"
-        ),
+        "daidir": str(uart / "simv.daidir"),
+        "fsdb": str(wave / "out/waves.fsdb"),
+        "combined_daidir": str(combined / "out/simv.daidir"),
+        "combined_fsdb": str(combined / "out/waves.fsdb"),
     }
 
 

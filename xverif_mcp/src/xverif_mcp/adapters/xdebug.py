@@ -7,6 +7,8 @@ from typing import Any, Dict, Optional
 from xverif_mcp.config import (default_xdebug_bin, mcp_backend,
                                 startup_timeout, request_timeout)
 from xverif_mcp.sessions.session_manager import McpSessionManager
+from xverif_loop.config import configure_mcp_environment
+from xverif_loop.logging import configure_mcp_logging
 
 Json = Dict[str, Any]
 
@@ -15,6 +17,8 @@ class XverifDebugAdapter:
     def __init__(self, mode: Optional[str] = None,
                  startup_timeout_sec: Optional[float] = None,
                  request_timeout_sec: Optional[float] = None) -> None:
+        configure_mcp_environment()
+        configure_mcp_logging()
         if startup_timeout_sec is None:
             startup_timeout_sec = startup_timeout()
         if request_timeout_sec is None:

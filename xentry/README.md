@@ -174,7 +174,7 @@ export PATH="$XVERIF_HOME/tools:$PATH"
 
 ```bash
 make -C xentry
-make -C xentry test
+pytest --xverif-gate regression --xverif-suite xentry.unit
 ```
 
 `xentry` 只依赖 Python 标准库。

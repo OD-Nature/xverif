@@ -1,0 +1,14 @@
+version: 1
+cases:
+  - prompt: ready 为什么在 1024ns 拉低
+    capability: xdebug
+    workflow: ready-low
+  - prompt: data[47:32] 等于多少
+    capability: xbit
+  - prompt: merged.vdb 中 uart 的 toggle hole
+    capability: xcov
+  - prompt: 把这 100 个信号在 1ms 内的活动率生成 CSV
+    capability: x-npi
+  - prompt: 观察一段长窗口内多个 stream 的 stall 分布
+    capability: xdebug
+    workflow: waveform-render

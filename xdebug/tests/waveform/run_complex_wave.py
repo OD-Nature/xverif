@@ -455,39 +455,6 @@ class AiRunner(object):
         return data
 
 
-def build_nonaxi():
-    rc, out, err, _ = run_cmd(["make", "clean"], cwd=NONAXI_DIR, timeout=60,
-                              progress_label="nonaxi clean")
-    require(rc == 0, "non-AXI clean failed\n{}\n{}".format(out, err))
-    rc, out, err, _ = run_cmd(["make"], cwd=NONAXI_DIR, timeout=120,
-                              progress_label="nonaxi build")
-    require(rc == 0, "non-AXI wave build failed\n{}\n{}".format(out, err))
-    require(os.path.exists(NONAXI_FSDB), "missing non-AXI fsdb: {}".format(NONAXI_FSDB))
-
-
-def build_axi():
-    env = apply_axi_env_defaults(os.environ.copy())
-    env["PWD"] = AXI_DIR
-    required = ["AXI_REFERENCE_ROOT", "SVT_VIP_INCDIR", "SVT_VIP_SRCDIR"]
-    missing = [name for name in required if not env.get(name)]
-    require(
-        not missing,
-        "AXI fixture requires environment variables: {}".format(", ".join(missing)),
-    )
-    rc, out, err, _ = run_cmd(
-        [
-            "make", "run",
-            "SEED=7",
-        ],
-        cwd=AXI_DIR,
-        env=env,
-        timeout=2400,
-        progress_label="axi vip compile/sim",
-    )
-    require(rc == 0, "AXI wave build failed\n{}\n{}".format(out[-4000:], err[-4000:]))
-    require(os.path.exists(AXI_FSDB), "missing AXI fsdb: {}".format(AXI_FSDB))
-
-
 def run_nonaxi(xdebug, fsdb):
     r = AiRunner(xdebug, fsdb, "nonaxi")
     try:
@@ -1070,14 +1037,7 @@ def main():
     parser.add_argument("--fsdb", default=NONAXI_FSDB)
     parser.add_argument("--axi-fsdb", default=AXI_FSDB)
     parser.add_argument("--mode", choices=["all", "nonaxi", "axi"], default="all")
-    parser.add_argument("--skip-build", action="store_true")
     args = parser.parse_args()
-
-    if not args.skip_build:
-        if args.mode in ("all", "nonaxi"):
-            build_nonaxi()
-        if args.mode in ("all", "axi"):
-            build_axi()
 
     rows = []
     if args.mode in ("all", "nonaxi"):

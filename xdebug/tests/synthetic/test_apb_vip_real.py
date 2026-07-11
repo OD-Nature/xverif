@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from runner import ArtifactWriter, CliRunner, CommandRunner, RunResult
+from runner import ArtifactWriter, CliRunner, RunResult
 
 
 def _require_success(
@@ -84,46 +83,20 @@ def _resources_ready(fixture_dir: Path, manifest: dict[str, Any]) -> bool:
 @pytest.mark.regression
 @pytest.mark.slow
 def test_apb_vip_real_wait_state_and_error_actions(
-    command_runner: CommandRunner,
     cli_runner: CliRunner,
     xdebug_root: Path,
     artifact_root: Path,
+    xverif_fixture: Any,
 ) -> None:
     fixture_dir = xdebug_root / "testdata" / "waveform" / "apb_vip_real"
     manifest = json.loads(
         (fixture_dir / "manifest.json").read_text(encoding="utf-8")
     )
-    if not _resources_ready(fixture_dir, manifest):
-        missing = [
-            name for name in manifest["required_env"] if not os.environ.get(name)
-        ]
-        assert not missing, (
-            "APB VIP fixture requires environment variables: %s"
-            % ", ".join(missing)
-        )
-
-        build = command_runner.run(
-            ["make", "clean", "run"],
-            cwd=fixture_dir,
-            timeout_sec=1200,
-            metadata={
-                "suite": "apb_vip_real",
-                "fixture": str(fixture_dir),
-                "seed": manifest["seed"],
-            },
-        )
-        if build.returncode != 0 or build.timed_out:
-            _require_success(
-                build,
-                case_name="apb-vip-real-build",
-                artifact_root=artifact_root,
-                manifest=manifest,
-            )
-
+    resources_root = xverif_fixture("xdebug.apb_vip")
     resources = manifest["resources"]
-    fsdb = fixture_dir / resources["fsdb"]
-    daidir = fixture_dir / resources["daidir"]
-    sim_log = fixture_dir / resources["simulation_log"]
+    fsdb = resources_root / resources["fsdb"]
+    daidir = resources_root / resources["daidir"]
+    sim_log = resources_root / resources["simulation_log"]
     assert fsdb.is_file() and fsdb.stat().st_size > 0
     assert daidir.is_dir()
     log_text = sim_log.read_text(encoding="utf-8", errors="replace")

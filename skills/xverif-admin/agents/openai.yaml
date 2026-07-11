@@ -1,0 +1,6 @@
+interface:
+  display_name: xverif-admin
+  short_description: 管理 xverif MCP、session、transport、LSF 和 timeout
+  default_prompt: >
+    仅处理 xverif 运行环境和托管生命周期；普通事实查询使用 xverif，
+    不自动 retry、reopen 或切换 backend/transport。

@@ -13,11 +13,7 @@ regression/
 **/testdata/
 **/regression/
 
-# Public xdebug verification assets
-!regression/
-regression/*
-!regression/run_xdebug_regression.sh
-!regression/run_full_regression.sh
+# Catalog-owned verification assets
 !xdebug/tests/
 !xdebug/tests/**
 !xdebug/testdata/
@@ -28,8 +24,12 @@ regression/*
 !xentry/tests/**
 !xwaveform/tests/
 !xwaveform/tests/**
+!xloc/tests/
+!xloc/tests/**
 !skills/xwiki/tests/
 !skills/xwiki/tests/**
+!skills/tests/
+!skills/tests/**
 !xcov/tests/
 !xcov/tests/**
 !xcov/testdata/
@@ -45,6 +45,8 @@ xcov/testdata/basic_coverage/out/
 !xverif_mcp/tests/**
 !xeda_runner/tests/
 !xeda_runner/tests/**
+!testinfra/tests/
+!testinfra/tests/**
 xdebug/testdata/**/out/
 xdebug/testdata/**/csrc/
 xdebug/testdata/**/ucli.key
@@ -71,6 +73,9 @@ CLAUDE.md
 __pycache__/
 *.py[cod]
 .pytest_cache/
+*.egg-info/
+.xverif-test-cache/
+.xverif-test-results/
 
 xdebug/build/
 xdebug/xdebug

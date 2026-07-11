@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "xverif-test-catalog.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "suites"],
+  "properties": {
+    "version": {"const": "xverif-test-catalog.v1"},
+    "suites": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/suite"}
+    }
+  },
+  "$defs": {
+    "suite": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "owner", "level", "runner"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9_.-]+$"},
+        "owner": {"type": "string", "minLength": 1},
+        "level": {"enum": ["static", "unit", "component", "integration", "system"]},
+        "intent": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "domains": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "runner": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["kind"],
+          "properties": {
+            "kind": {"enum": ["pytest", "command"]},
+            "path": {"type": "string"},
+            "paths": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+            "argv": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+            "cwd": {"type": "string"}
+            ,"marker": {"type": "string"}
+          },
+          "allOf": [
+            {
+              "if": {"properties": {"kind": {"const": "pytest"}}},
+              "then": {"anyOf": [{"required": ["path"]}, {"required": ["paths"]}]}
+            },
+            {
+              "if": {"properties": {"kind": {"const": "command"}}},
+              "then": {"required": ["argv"]}
+            }
+          ]
+        },
+        "fixtures": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "capabilities": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "hermetic": {"type": "boolean"},
+        "deterministic": {"type": "boolean"},
+        "availability": {"enum": ["required", "optional"]},
+        "cost": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "class": {"enum": ["fast", "medium", "slow"]},
+            "estimate_sec": {"type": "integer", "minimum": 0}
+          }
+        },
+        "resources": {"type": "object"},
+        "timeouts": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "prepare_sec": {"type": "integer", "minimum": 1},
+            "execute_sec": {"type": "integer", "minimum": 1},
+            "cleanup_sec": {"type": "integer", "minimum": 1}
+          }
+        },
+        "impact": {"type": "object"},
+        "enabled": {"type": "boolean"}
+      }
+    }
+  }
+}

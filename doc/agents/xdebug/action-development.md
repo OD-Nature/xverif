@@ -101,12 +101,11 @@
 必须检查：
 
 - `xdebug/docs/action-inventory.md`
-- `skills/xverif-cli/references/xdebug/action-reference.md`
-- `skills/xverif-cli/references/xdebug/json-api.md`
-- `skills/xverif-cli/references/xdebug/response-fields.md`
-- `skills/xverif-mcp/references/xdebug/action-reference.md`
-- `skills/xverif-mcp/references/xdebug/json-api.md`
-- `skills/xverif-mcp/references/xdebug/response-fields.md`
+- `skills/xverif/references/capabilities/xdebug.md`
+- `skills/xverif/references/generated/xdebug-actions.md`
+- `skills/xverif/references/xdebug/json-api.md`
+- `skills/xverif/references/xdebug/response-fields.md`
+- `skills/xverif/specs/examples.yaml`
 - 两个 skill 中相关 recipe/example 文档
 - 本目录说明书相关页面
 
@@ -120,11 +119,11 @@
 
 最小要求：
 
-- schema/example 变化：`make -C xdebug schema-test`
-- action inventory/runtime 变化：`make -C xdebug contract-test`
+- schema/example 变化：`pytest --xverif-gate fast --xverif-suite xdebug.static`
+- action inventory/runtime 变化：`pytest --xverif-gate regression --xverif-suite xdebug.action_runtime_catalog`
 - C++ helper 变化：相关 unit test 或新增 unit test。
 - waveform/design/combined 行为变化：添加 focused pytest 或 fixture。
-- MCP 暴露变化：更新 `xverif_mcp/tests/` 或 `make -C xdebug mcp-test-schema`。
+- MCP 暴露变化：更新 `xverif_mcp/tests/`，运行 `pytest --xverif-gate regression --xverif-suite xverif_mcp.action_smoke`。
 
 提交前必须按变更范围跑通关联测试。
 

@@ -415,7 +415,6 @@ class XdebugLoopSession:
             "api_version": self.api_version,
             "action": action,
             "target": {"session_id": self.session_id},
-            "output": {"response_format": "json"},
         }
         try:
             proc = subprocess.run(

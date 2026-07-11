@@ -1,0 +1,6 @@
+interface:
+  display_name: xverif
+  short_description: 按验证任务选择 xdebug、xcov、xbit、xentry、xloc、xsva 或 xwaveform
+  default_prompt: >
+    使用 xverif 先按问题类型选择能力，再按当前环境选择 MCP 或 CLI。
+    精确参数先查询 runtime catalog 和 action-specific schema，不自动 fallback。

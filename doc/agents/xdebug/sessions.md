@@ -121,9 +121,9 @@ MCP coverage 工具使用对称的 `xverif_cov_session_open/list/doctor/close/ki
 
 优先测试：
 
-- `make -C xdebug test-session`
-- `make -C xdebug mcp-session-test`
-- `make -C xdebug log-test`
+- `pytest --xverif-gate regression --xverif-suite xdebug.session`
+- `pytest --xverif-gate regression --xverif-suite xverif_mcp.process`
+- `pytest --xverif-gate regression --xverif-suite xdebug.mcp_direct`
 - `xverif_mcp/tests/test_session_errors.py`
 - `xverif_mcp/tests/test_stdio_loop_session_lifecycle.py`
 

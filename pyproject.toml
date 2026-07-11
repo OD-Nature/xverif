@@ -1,0 +1,75 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "xverif-testinfra"
+version = "0.1.0"
+description = "Catalog-driven pytest infrastructure for xverif"
+requires-python = ">=3.11"
+dependencies = [
+  "pytest>=8",
+  "pytest-xdist>=3.6",
+  "PyYAML>=6",
+  "jsonschema>=4",
+]
+
+[project.entry-points.pytest11]
+xverif = "testinfra.xverif_test.plugin"
+
+[tool.setuptools.packages.find]
+where = [".", "xverif_mcp/src"]
+include = ["testinfra*", "xverif_mcp*", "xverif_loop*"]
+namespaces = false
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-markers --dist=loadgroup"
+pythonpath = [
+  "xbit/src",
+  "xentry/src",
+  "xcov",
+  "xwaveform/src",
+  "xsva/src",
+  "xeda_runner/src",
+  "xverif_mcp/src",
+  "xdebug/tests",
+]
+testpaths = [
+  "skills/tests",
+  "testinfra/tests",
+  "xbit/tests",
+  "xentry/tests",
+  "xloc/tests",
+  "xcov/tests",
+  "xwaveform/tests",
+  "xsva/tests",
+  "xeda_runner/tests",
+  "xverif_mcp/tests",
+  "xdebug/tests",
+]
+python_files = ["test_*.py"]
+markers = [
+  "unit: legacy marker retained only during catalog migration",
+  "contract: legacy marker retained only during catalog migration",
+  "synthetic: legacy marker retained only during catalog migration",
+  "design: legacy marker retained only during catalog migration",
+  "waveform: legacy marker retained only during catalog migration",
+  "combined: legacy marker retained only during catalog migration",
+  "active_trace: legacy marker retained only during catalog migration",
+  "apb: legacy marker retained only during catalog migration",
+  "axi: legacy marker retained only during catalog migration",
+  "stream: legacy marker retained only during catalog migration",
+  "vip: legacy marker retained only during catalog migration",
+  "session: legacy marker retained only during catalog migration",
+  "stdio_loop: legacy marker retained only during catalog migration",
+  "mcp: legacy marker retained only during catalog migration",
+  "mcp_direct: legacy marker retained only during catalog migration",
+  "mcp_fake_lsf: legacy marker retained only during catalog migration",
+  "mcp_real_lsf: legacy marker retained only during catalog migration",
+  "optional_lsf: legacy marker retained only during catalog migration",
+  "realdata: legacy marker retained only during catalog migration",
+  "smoke: legacy marker retained only during catalog migration",
+  "regression: legacy marker retained only during catalog migration",
+  "nightly: legacy marker retained only during catalog migration",
+  "slow: legacy marker retained only during catalog migration",
+]

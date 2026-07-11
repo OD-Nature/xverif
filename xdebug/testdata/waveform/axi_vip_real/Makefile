@@ -18,7 +18,8 @@ SEED             ?= 7
 VERBOSITY        ?= UVM_LOW
 
 ROOT_DIR  := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
-OUT_DIR   := $(ROOT_DIR)/out/$(MODE)
+OUTPUT_ROOT ?= $(ROOT_DIR)/out
+OUT_DIR   := $(OUTPUT_ROOT)/$(MODE)
 BUILD_DIR := $(OUT_DIR)/build
 ANDB_DIR  := $(BUILD_DIR)/work
 SIMV      := $(BUILD_DIR)/simv

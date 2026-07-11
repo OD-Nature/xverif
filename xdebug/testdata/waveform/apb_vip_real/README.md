@@ -18,13 +18,13 @@ interface 连接和 `dv/cfg/Makefile` 编译选项，生成真实 APB VIP 波形
 Python 依赖包。
 
 ```bash
-make -C xdebug pytest-apb-vip
+pytest --xverif-gate nightly --xverif-suite xdebug.apb_vip
 ```
 
 也可以只生成波形：
 
 ```bash
-make -C xdebug/testdata/waveform/apb_vip_real run
+pytest --xverif-prepare xdebug.apb_vip
 ```
 
 `manifest.json` 定义固定 seed、资源路径和预期 transfer 数。pytest 会同时

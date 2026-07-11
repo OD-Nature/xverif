@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "xverif-execution-report.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "gate", "catalog_version", "exitstatus", "counts", "items"],
+  "properties": {
+    "schema_version": {"const": "xverif-execution-report.v1"},
+    "gate": {"enum": ["fast", "regression", "nightly"]},
+    "catalog_version": {"type": "string"},
+    "exitstatus": {"type": "integer"},
+    "counts": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
+    "parent_report": {"type": "string"},
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["nodeid", "suite_id", "phase", "outcome", "duration_sec", "error_layer"],
+        "properties": {
+          "nodeid": {"type": "string"},
+          "suite_id": {"type": "string"},
+          "phase": {"enum": ["setup", "call", "teardown"]},
+          "outcome": {"enum": ["passed", "failed", "skipped"]},
+          "duration_sec": {"type": "number", "minimum": 0},
+          "error_layer": {"type": ["string", "null"]}
+        }
+      }
+    }
+  }
+}

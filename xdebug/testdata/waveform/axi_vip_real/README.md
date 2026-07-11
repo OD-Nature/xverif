@@ -18,13 +18,13 @@ VIP 环境。
 ## 执行
 
 ```bash
-make -C xdebug pytest-axi-vip
+pytest --xverif-gate nightly --xverif-suite xdebug.axi_vip
 ```
 
 也可以只构建波形：
 
 ```bash
-make -C xdebug/testdata/waveform/axi_vip_real run
+pytest --xverif-prepare xdebug.axi_vip
 ```
 
 默认固定 seed 7，生成 16 个 ID、每个 ID 200 笔读和 200 笔写，允许每个

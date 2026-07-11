@@ -1,0 +1,29 @@
+VCS ?= vcs -full64
+UVM_HOME ?= $(VCS_HOME)/etc/uvm
+OUT_DIR ?= $(CURDIR)/out
+
+VCS_FLAGS = -sverilog -ntb_opts uvm-1.2 +v2k -timescale=1ns/1ps \
+            -CFLAGS "-std=c++11" \
+            +incdir+$(UVM_HOME)/src \
+            +incdir+$(CURDIR)/sv \
+            +incdir+$(CURDIR)/tb
+
+VCS_SRCS = $(UVM_HOME)/src/uvm_pkg.sv \
+           $(CURDIR)/sv/xloc_pkg.sv \
+           $(CURDIR)/tb/xloc_tb.sv
+
+.PHONY: all clean
+
+all: $(OUT_DIR)/sim.log
+
+$(OUT_DIR):
+	mkdir -p $(OUT_DIR)
+
+$(OUT_DIR)/simv: $(OUT_DIR) $(CURDIR)/sv/xloc_pkg.sv $(CURDIR)/sv/xloc_report_server.sv $(CURDIR)/tb/xloc_tb.sv $(CURDIR)/tb/simple_test.sv
+	cd $(OUT_DIR) && $(VCS) $(VCS_FLAGS) $(VCS_SRCS) -o simv -l compile.log
+
+$(OUT_DIR)/sim.log: $(OUT_DIR)/simv
+	cd $(OUT_DIR) && ./simv -l sim.log +UVM_VERBOSITY=UVM_LOW
+
+clean:
+	rm -rf $(OUT_DIR)

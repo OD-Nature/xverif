@@ -101,8 +101,8 @@ xdebug 参数错误有两层：
 ## 基础校验
 
 ```bash
-make -C xdebug schema-test
-make -C xdebug contract-test
+pytest --xverif-gate fast --xverif-suite xdebug.static
+pytest --xverif-gate regression --xverif-suite xdebug.action_runtime_catalog
 ```
 
 `schema-test` 覆盖 schema 文件和 examples。

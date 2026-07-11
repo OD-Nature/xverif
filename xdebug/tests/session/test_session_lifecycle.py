@@ -85,38 +85,20 @@ def _single_engine_log(isolated_home: Path, session_prefix: str, log_name: str) 
 
 
 @pytest.fixture
-def resource_targets(xdebug_root: Path):
+def resource_targets(xverif_fixture):
+    uart = xverif_fixture("xdebug.design_uart")
+    wave = xverif_fixture("xdebug.ai_complex_wave")
+    combined = xverif_fixture("xdebug.active_driver")
     return {
         "design": {
-            "daidir": str(xdebug_root / "testdata" / "design" / "uart" / "simv.daidir")
+            "daidir": str(uart / "simv.daidir")
         },
         "waveform": {
-            "fsdb": str(
-                xdebug_root
-                / "testdata"
-                / "waveform"
-                / "ai_complex_wave"
-                / "out"
-                / "waves.fsdb"
-            )
+            "fsdb": str(wave / "out/waves.fsdb")
         },
         "combined": {
-            "daidir": str(
-                xdebug_root
-                / "testdata"
-                / "combined"
-                / "active_driver"
-                / "out"
-                / "simv.daidir"
-            ),
-            "fsdb": str(
-                xdebug_root
-                / "testdata"
-                / "combined"
-                / "active_driver"
-                / "out"
-                / "waves.fsdb"
-            ),
+            "daidir": str(combined / "out/simv.daidir"),
+            "fsdb": str(combined / "out/waves.fsdb"),
         },
     }
 

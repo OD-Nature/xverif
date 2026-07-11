@@ -6,7 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def test_stateless_adapters_do_not_use_cli_runner(monkeypatch):
+def test_stateless_adapters_do_not_use_cli_runner(monkeypatch, tmp_path):
     from xverif_mcp.runner import StatelessCliRunner
 
     def fail_run_raw(self, tool, argv, input_text=None, timeout_sec=None,
@@ -32,9 +32,14 @@ def test_stateless_adapters_do_not_use_cli_runner(monkeypatch):
     assert entry["ok"] is True
     assert entry["api_version"] == "xentry.v1"
 
+    map_path = tmp_path / "sim.log.xloc.jsonl"
+    map_path.write_text(
+        '{"loc_id":"L_00000001","file":"tb/test.sv","line":15,"msg_id":"TEST"}\n',
+        encoding="utf-8",
+    )
     loc = loc_resolve(
         "L_00000001",
-        str(ROOT / "xloc/out/sim.log.xloc.jsonl"),
+        str(map_path),
         output_format="json",
     )
     assert loc["ok"] is True

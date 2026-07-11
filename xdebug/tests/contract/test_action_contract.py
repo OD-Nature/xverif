@@ -502,9 +502,9 @@ def test_bad_parameter_xout_shows_correct_example(cli_runner: CliRunner) -> None
 @pytest.mark.contract
 def test_bad_parameter_runtime_errors_include_ai_repair_hints(
     cli_runner: CliRunner,
-    xdebug_root: Path,
+    complex_wave_fsdb: Path,
 ) -> None:
-    fsdb = xdebug_root / "testdata" / "waveform" / "ai_complex_wave" / "out" / "waves.fsdb"
+    fsdb = complex_wave_fsdb
     session_name = "bad_param_runtime_contract"
     opened = cli_runner.run(
         {
@@ -572,8 +572,9 @@ def test_bad_parameter_runtime_errors_include_ai_repair_hints(
 def test_stream_handler_errors_include_current_entry_examples(
     cli_runner: CliRunner,
     xdebug_root: Path,
+    stream_wave_fsdb: Path,
 ) -> None:
-    fsdb = xdebug_root / "testdata" / "waveform" / "stream_v1" / "out" / "waves.fsdb"
+    fsdb = stream_wave_fsdb
     session_name = "stream_error_contract"
     opened = cli_runner.run(
         {
@@ -670,9 +671,9 @@ def test_stream_handler_errors_include_current_entry_examples(
 @pytest.mark.contract
 def test_list_handler_errors_include_current_entry_examples(
     cli_runner: CliRunner,
-    xdebug_root: Path,
+    complex_wave_fsdb: Path,
 ) -> None:
-    fsdb = xdebug_root / "testdata" / "waveform" / "ai_complex_wave" / "out" / "waves.fsdb"
+    fsdb = complex_wave_fsdb
     session_name = "list_error_contract"
     opened = cli_runner.run(
         {
@@ -759,9 +760,9 @@ def test_list_handler_errors_include_current_entry_examples(
 @pytest.mark.contract
 def test_event_handler_errors_include_current_entry_examples(
     cli_runner: CliRunner,
-    xdebug_root: Path,
+    complex_wave_fsdb: Path,
 ) -> None:
-    fsdb = xdebug_root / "testdata" / "waveform" / "ai_complex_wave" / "out" / "waves.fsdb"
+    fsdb = complex_wave_fsdb
     session_name = "event_error_contract"
     opened = cli_runner.run(
         {
@@ -846,9 +847,9 @@ def test_event_handler_errors_include_current_entry_examples(
 @pytest.mark.contract
 def test_value_and_verify_handler_errors_include_current_entry_examples(
     cli_runner: CliRunner,
-    xdebug_root: Path,
+    complex_wave_fsdb: Path,
 ) -> None:
-    fsdb = xdebug_root / "testdata" / "waveform" / "ai_complex_wave" / "out" / "waves.fsdb"
+    fsdb = complex_wave_fsdb
     session_name = "value_verify_error_contract"
     opened = cli_runner.run(
         {
@@ -937,9 +938,9 @@ def test_value_and_verify_handler_errors_include_current_entry_examples(
 @pytest.mark.contract
 def test_protocol_handler_errors_include_current_entry_examples(
     cli_runner: CliRunner,
-    xdebug_root: Path,
+    complex_wave_fsdb: Path,
 ) -> None:
-    fsdb = xdebug_root / "testdata" / "waveform" / "ai_complex_wave" / "out" / "waves.fsdb"
+    fsdb = complex_wave_fsdb
     session_name = "protocol_error_contract"
     opened = cli_runner.run(
         {
@@ -1031,6 +1032,7 @@ def test_protocol_handler_errors_include_current_entry_examples(
 def test_rc_and_source_handler_errors_include_repair_hints(
     cli_runner: CliRunner,
     xdebug_root: Path,
+    complex_wave_fsdb: Path,
 ) -> None:
     source_result = cli_runner.run(
         {
@@ -1047,7 +1049,7 @@ def test_rc_and_source_handler_errors_include_repair_hints(
     assert source_error["invalid_arg"] == "args.file"
     assert source_error["missing_resource"] == "source file"
 
-    fsdb = xdebug_root / "testdata" / "waveform" / "ai_complex_wave" / "out" / "waves.fsdb"
+    fsdb = complex_wave_fsdb
     session_name = "rc_error_contract"
     opened = cli_runner.run(
         {

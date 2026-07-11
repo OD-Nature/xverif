@@ -2,15 +2,7 @@ TOP ?= ..
 
 include $(TOP)/mk/common_flags.mk
 
-ifneq ($(MAKECMDGOALS),)
-ifeq ($(filter-out schema-test,$(MAKECMDGOALS)),)
-XDEBUG_SCHEMA_ONLY := 1
-endif
-endif
-
-ifeq ($(XDEBUG_SCHEMA_ONLY),)
 include $(TOP)/mk/npi.mk
-endif
 
 NPI_CXXFLAGS ?=
 NPI_LDFLAGS ?=
@@ -212,7 +204,7 @@ DEPS = $(sort $(CORE_OBJS:.o=.d) \
        $(DESIGN_OBJS:.o=.d) \
        $(WAVEFORM_OBJS:.o=.d))
 
-.PHONY: all internal-engines verdi-profile fixtures-basic self-test unit-test log-test test-infra pytest-contract pytest-synthetic-existing pytest-counter-statistics pytest-axi-vip pytest-apb-vip pytest-active-semantics pytest-realdata pytest-session pytest-mcp test-fast test-contract test-synthetic test-vip test-active-trace test-session test-mcp-direct test-mcp-fake-lsf test-realdata-smoke test-regression test-nightly test-mcp-real-lsf mcp-test schema-test clock-sampling-static-test error-contract-static-test response-contract-static-test contract-test combined-test clean
+.PHONY: all internal-engines verdi-profile cpp-unit-binaries clean
 
 all: $(EXE) internal-engines
 
@@ -221,12 +213,6 @@ internal-engines: $(LIBEXEC)/xdebug-engine
 verdi-profile:
 	@echo "profile=$(XVERIF_EDA_PROFILE_RESOLVED)"
 	@echo "npi_lib=$(NPI_LIB)"
-
-fixtures-basic:
-	$(MAKE) -C testdata/combined/active_driver fixture
-	$(MAKE) -C testdata/waveform/ai_complex_wave all
-	$(MAKE) -C testdata/waveform/stream_v1 all
-	$(MAKE) -C testdata/design/uart fixture
 
 # Unified engine: engine + design helper + waveform helper objects.
 UNIFIED_OBJS = $(ENGINE_OBJS) $(DESIGN_OBJS) $(WAVEFORM_OBJS)
@@ -241,169 +227,24 @@ $(BUILD)/%.o: %.cpp
 	mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) $(DEPFLAGS) -DXDEBUG_INTERNAL_ENGINE -c -o $@ $<
 
-unit-test: $(CORE_OBJS) $(API_SUPPORT_OBJS) $(BUILD)/src/api/response.o $(BUILD)/src/api/text_response_builder.o $(BUILD)/src/api/xout_renderer.o $(BUILD)/src/engine/service/trace_source_path_formatter.o $(BUILD)/src/waveform/service/rc_generator.o $(BUILD)/src/waveform/value/logic_value.o $(BUILD)/src/waveform/event/event_expr.o $(BUILD)/src/waveform/common/expression.o $(BUILD)/src/waveform/stream/stream_expr.o $(BUILD)/src/session/session_catalog.o
+cpp-unit-binaries: $(CORE_OBJS) $(API_SUPPORT_OBJS) $(BUILD)/src/api/response.o $(BUILD)/src/api/text_response_builder.o $(BUILD)/src/api/xout_renderer.o $(BUILD)/src/engine/service/trace_source_path_formatter.o $(BUILD)/src/waveform/service/rc_generator.o $(BUILD)/src/waveform/value/logic_value.o $(BUILD)/src/waveform/event/event_expr.o $(BUILD)/src/waveform/common/expression.o $(BUILD)/src/waveform/stream/stream_expr.o $(BUILD)/src/session/session_catalog.o
 	mkdir -p $(BUILD)/tests
 	$(CXX) $(CXXFLAGS) -o $(BUILD)/tests/test_core_types tests/unit/test_core_types.cpp $(CORE_OBJS) $(LDFLAGS)
-	$(BUILD)/tests/test_core_types
 	$(CXX) $(CXXFLAGS) -o $(BUILD)/tests/test_env_config tests/unit/test_env_config.cpp $(CORE_OBJS) $(LDFLAGS)
-	$(BUILD)/tests/test_env_config
 	$(CXX) $(CXXFLAGS) -o $(BUILD)/tests/test_unique_resource tests/unit/test_unique_resource.cpp
-	$(BUILD)/tests/test_unique_resource
 	$(CXX) $(CXXFLAGS) -o $(BUILD)/tests/test_action_log tests/unit/test_action_log.cpp $(CORE_OBJS) $(LDFLAGS)
-	$(BUILD)/tests/test_action_log
 	$(CXX) $(CXXFLAGS) -o $(BUILD)/tests/test_file_exchange tests/unit/test_file_exchange.cpp $(CORE_OBJS) $(LDFLAGS)
-	$(BUILD)/tests/test_file_exchange
 	$(CXX) $(CXXFLAGS) -o $(BUILD)/tests/test_process_runner tests/unit/test_process_runner.cpp $(CORE_OBJS) $(LDFLAGS)
-	$(BUILD)/tests/test_process_runner
 	$(CXX) $(CXXFLAGS) -o $(BUILD)/tests/test_session_catalog tests/unit/test_session_catalog.cpp $(BUILD)/src/session/session_catalog.o $(BUILD)/src/core/common/env_config.o
-	$(BUILD)/tests/test_session_catalog
 	$(CXX) $(CXXFLAGS) -o $(BUILD)/tests/test_action_registry tests/unit/test_action_registry.cpp $(CORE_OBJS) $(API_SUPPORT_OBJS) $(BUILD)/src/api/response.o $(LDFLAGS)
-	$(BUILD)/tests/test_action_registry
 	$(CXX) $(CXXFLAGS) -o $(BUILD)/tests/test_request_contract tests/unit/test_request_contract.cpp $(CORE_OBJS) $(API_SUPPORT_OBJS) $(BUILD)/src/api/response.o $(LDFLAGS)
-	$(BUILD)/tests/test_request_contract
 	$(CXX) $(CXXFLAGS) -o $(BUILD)/tests/test_text_response_builder tests/unit/test_text_response_builder.cpp $(BUILD)/src/api/text_response_builder.o $(BUILD)/src/api/xout_renderer.o
-	$(BUILD)/tests/test_text_response_builder
 	$(CXX) $(CXXFLAGS) -o $(BUILD)/tests/test_trace_source_path_formatter tests/unit/test_trace_source_path_formatter.cpp $(BUILD)/src/engine/service/trace_source_path_formatter.o $(BUILD)/src/api/text_response_builder.o $(CORE_OBJS) $(LDFLAGS)
-	$(BUILD)/tests/test_trace_source_path_formatter
 	$(CXX) $(CXXFLAGS) -o $(BUILD)/tests/test_common_blocks tests/unit/test_common_blocks.cpp $(CORE_OBJS) $(BUILD)/src/api/text_response_builder.o $(BUILD)/src/api/xout_renderer.o $(LDFLAGS)
-	$(BUILD)/tests/test_common_blocks
 	$(CXX) $(CXXFLAGS) -o $(BUILD)/tests/test_logic_value tests/unit/test_logic_value.cpp $(BUILD)/src/waveform/value/logic_value.o
-	$(BUILD)/tests/test_logic_value
 	$(CXX) $(CXXFLAGS) -o $(BUILD)/tests/test_event_expr tests/unit/test_event_expr.cpp $(BUILD)/src/waveform/event/event_expr.o $(BUILD)/src/waveform/common/expression.o $(BUILD)/src/waveform/stream/stream_expr.o $(BUILD)/src/waveform/value/logic_value.o
-	$(BUILD)/tests/test_event_expr
 	$(CXX) $(CXXFLAGS) -o $(BUILD)/tests/test_expression tests/unit/test_expression.cpp $(BUILD)/src/waveform/common/expression.o $(BUILD)/src/waveform/stream/stream_expr.o $(BUILD)/src/waveform/value/logic_value.o
-	$(BUILD)/tests/test_expression
 	$(CXX) $(CXXFLAGS) -o $(BUILD)/tests/test_rc_generator tests/unit/test_rc_generator.cpp $(BUILD)/src/waveform/service/rc_generator.o
-	$(BUILD)/tests/test_rc_generator
-
-log-test: $(CORE_OBJS) $(EXE) internal-engines
-	mkdir -p $(BUILD)/tests
-	$(CXX) $(CXXFLAGS) -o $(BUILD)/tests/test_action_log tests/unit/test_action_log.cpp $(CORE_OBJS)
-	$(BUILD)/tests/test_action_log
-	$(PYTHON) -m pytest -c tests/pytest.ini -q tests/session/test_stdio_loop_lifecycle.py
-	$(PYTHON) -m pytest -c tests/pytest.ini -q tests/session/test_session_lifecycle.py -k "engine_crash_marker_is_written_by_signal_handler"
-	$(PYTHON) -m pytest -c tests/pytest.ini -q tests/session/test_session_lifecycle.py -k "uds_direct_query_times_out_without_spawn_fallback or uds_connect_failure_is_logged or uds_invalid_json_response_is_logged"
-	PYTHONPATH=$(CURDIR)/../xverif_mcp/src:$(CURDIR)/.. \
-		$(PYTHON) -m pytest -q $(CURDIR)/../xverif_mcp/tests/test_stdio_loop_session_lifecycle.py
-
-test-infra:
-	$(PYTHON) -m pytest -c tests/pytest.ini -q tests/unit/test_test_infra.py
-
-pytest-contract: all
-	$(PYTHON) -m pytest -c tests/pytest.ini -q tests/contract
-
-pytest-synthetic-existing: all
-	$(PYTHON) -m pytest -c tests/pytest.ini -q tests/synthetic/test_existing_regressions.py
-
-pytest-counter-statistics: all
-	$(PYTHON) -m pytest -c tests/pytest.ini -q tests/synthetic/test_counter_statistics.py
-
-pytest-axi-vip: all
-	AXI_REFERENCE_ROOT=$(AXI_REFERENCE_ROOT) SVT_VIP_INCDIR=$(SVT_VIP_INCDIR) SVT_VIP_SRCDIR=$(SVT_VIP_SRCDIR) \
-		$(PYTHON) -m pytest -c tests/pytest.ini -q tests/synthetic/test_axi_vip_real.py
-
-pytest-apb-vip: all
-	SVT_VIP_INCDIR=$(SVT_VIP_INCDIR) SVT_VIP_SRCDIR=$(SVT_VIP_SRCDIR) \
-		$(PYTHON) -m pytest -c tests/pytest.ini -q tests/synthetic/test_apb_vip_real.py
-
-pytest-active-semantics: all
-	$(PYTHON) -m pytest -c tests/pytest.ini -q tests/combined/test_active_semantics.py
-
-pytest-realdata: all
-	$(PYTHON) -m pytest -c tests/pytest.ini -q tests/realdata
-
-pytest-session: all
-	$(PYTHON) -m pytest -c tests/pytest.ini -q tests/session
-
-pytest-mcp: all
-	PYTHONPATH=$(CURDIR)/../xverif_mcp/src:$(CURDIR)/.. \
-		$(PYTHON) -m pytest -c tests/pytest.ini -q tests/mcp
-
-test-fast: test-infra schema-test unit-test contract-test pytest-contract
-
-test-contract: test-fast
-
-test-synthetic: pytest-synthetic-existing pytest-counter-statistics pytest-active-semantics
-
-test-vip: pytest-axi-vip pytest-apb-vip
-
-test-active-trace: pytest-active-semantics
-
-test-session: pytest-session
-
-test-mcp-direct: all
-	PYTHONPATH=$(CURDIR)/../xverif_mcp/src:$(CURDIR)/.. \
-		$(PYTHON) -m pytest -c tests/pytest.ini -q tests/mcp -m "mcp_direct"
-
-test-mcp-fake-lsf: all
-	PYTHONPATH=$(CURDIR)/../xverif_mcp/src:$(CURDIR)/.. \
-		$(PYTHON) -m pytest -c tests/pytest.ini -q tests/mcp -m "mcp_fake_lsf"
-
-test-realdata-smoke: pytest-realdata
-
-self-test: fixtures-basic test-fast test-session test-mcp-direct test-mcp-fake-lsf
-
-test-regression: fixtures-basic test-fast test-synthetic test-session test-mcp-direct test-mcp-fake-lsf test-realdata-smoke
-
-test-nightly: test-regression test-vip
-	@if [ "$$XDEBUG_ENABLE_REAL_LSF" = "1" ]; then \
-		$(MAKE) test-mcp-real-lsf PYTHON=$(PYTHON); \
-	else \
-		echo "skip optional real LSF tests: set XDEBUG_ENABLE_REAL_LSF=1 and run make test-mcp-real-lsf"; \
-	fi
-
-test-mcp-real-lsf: all
-	PYTHONPATH=$(CURDIR)/../xverif_mcp/src:$(CURDIR)/.. XDEBUG_ENABLE_REAL_LSF=1 \
-		$(PYTHON) -m pytest -c tests/pytest.ini -q tests/mcp -m "mcp_real_lsf"
-
-schema-test:
-	$(PYTHON) tools/validate_schema.py schemas/v1
-	$(PYTHON) tools/validate_examples.py examples schemas/v1
-
-clock-sampling-static-test:
-	$(PYTHON) tools/check_clock_sampling_consolidation.py
-
-error-contract-static-test:
-	$(PYTHON) tools/check_error_contract_consolidation.py
-
-response-contract-static-test:
-	$(PYTHON) tools/check_response_contract_consolidation.py
-
-mcp-test:
-	PYTHONPATH=$(CURDIR)/../xverif_mcp/src:$(CURDIR)/.. $(PYTHON) $(CURDIR)/../xverif_mcp/tools/test_actions.py
-
-mcp-test-schema:
-	PYTHONPATH=$(CURDIR)/../xverif_mcp/src:$(CURDIR)/.. $(PYTHON) $(CURDIR)/../xverif_mcp/tools/test_actions.py --schema-only
-
-mcp-test-lsf:
-	PYTHONPATH=$(CURDIR)/../xverif_mcp/src:$(CURDIR)/.. XVERIF_MCP_BACKEND=lsf XVERIF_MCP_FAKE_LSF=1 $(PYTHON) $(CURDIR)/../xverif_mcp/tools/test_actions.py
-
-mcp-session-test:
-	PYTHONPATH=$(CURDIR)/../xverif_mcp/src:$(CURDIR)/.. $(PYTHON) -m pytest -q \
-		$(CURDIR)/../xverif_mcp/tests/test_loop_session.py \
-		$(CURDIR)/../xverif_mcp/tests/test_stdio_loop_session_lifecycle.py \
-		$(CURDIR)/../xverif_mcp/tests/test_loop_wrapper_uds.py \
-		$(CURDIR)/../xverif_mcp/tests/test_session_capabilities.py \
-		$(CURDIR)/../xverif_mcp/tests/test_backend_wiring.py \
-		$(CURDIR)/../xverif_mcp/tests/test_session_errors.py -v
-
-mcp-sdk-test:
-	PYTHONPATH=$(CURDIR)/../xverif_mcp/src:$(CURDIR)/.. $(PYTHON) -m pytest -q \
-		$(CURDIR)/../xverif_mcp/tests/test_mcp_sdk_smoke.py \
-		$(CURDIR)/../xverif_mcp/tests/test_xdebug_session_action_guard.py -v
-
-mcp-inspect:
-	cd $(CURDIR)/.. && PYTHONPATH=xverif_mcp/src$(PYTHON) -m mcp dev xverif_mcp/src/xverif_mcp/server.py
-
-mcp-run:
-	cd $(CURDIR)/.. && PYTHONPATH=xverif_mcp/src$(PYTHON) -m mcp run xverif_mcp/src/xverif_mcp/server.py
-
-contract-test: $(EXE) schema-test clock-sampling-static-test error-contract-static-test response-contract-static-test
-	$(PYTHON) tools/audit_action_schema_coverage.py $(CURDIR)
-	$(PYTHON) tools/check_action_contract.py specs/actions $(CURDIR)/$(EXE)
-
-combined-test: $(EXE)
-	$(PYTHON) tests/combined/run_active_driver_fixture.py
 
 clean:
 	rm -rf $(BUILD) $(LIBEXEC) $(EXE)

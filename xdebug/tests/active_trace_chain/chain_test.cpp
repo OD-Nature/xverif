@@ -260,7 +260,8 @@ static void run_probe(npiFsdbFileHandle fsdb,
 static ChainResult build_chain(npiFsdbFileHandle fsdb,
                                 const std::string& signal,
                                 const std::string& time,
-                                int max_depth, int max_nodes) {
+                                int max_depth, int max_nodes,
+                                bool stop_on_temporal) {
     ChainResult result;
 
     struct Hop {
@@ -413,6 +414,11 @@ static ChainResult build_chain(npiFsdbFileHandle fsdb,
         node.next_time = next_signal.empty() ? "" : active.activeTime;
         result.chain.push_back(node);
 
+        if (temporal && stop_on_temporal) {
+            result.temporal_boundary_stops++;
+            result.termination = "temporal_boundary";
+        }
+
         // ── control_only upgrade: scan branch_evidence ──
         if (result.termination == "control_only") {
             for (auto& be : result.branch_evidence) {
@@ -535,7 +541,8 @@ static void usage(const char* prog) {
               << "  -max_depth N   max chain hops (default 20)\n"
               << "  -max_nodes N   max chain nodes (default 50)\n"
               << "  --mode=chain   build trace chain (default)\n"
-              << "  --mode=probe   compare edgeCheck true vs false\n";
+              << "  --mode=probe   compare edgeCheck true vs false\n"
+              << "  --stop-on-temporal  stop after the first temporal boundary\n";
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -546,6 +553,7 @@ int main(int argc, char** argv) {
     std::string daidir, fsdb_path, signal, time;
     int max_depth = 20, max_nodes = 50;
     std::string mode = "chain";
+    bool stop_on_temporal = false;
 
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
@@ -556,6 +564,7 @@ int main(int argc, char** argv) {
         else if (a == "-max_depth" && i + 1 < argc) max_depth = std::atoi(argv[++i]);
         else if (a == "-max_nodes" && i + 1 < argc) max_nodes = std::atoi(argv[++i]);
         else if (a.rfind("--mode=", 0) == 0) mode = a.substr(7);
+        else if (a == "--stop-on-temporal") stop_on_temporal = true;
         else if (a == "-h" || a == "--help") { usage(argv[0]); return 0; }
         else { std::cerr << "Unknown: " << a << "\n"; usage(argv[0]); return 1; }
     }
@@ -595,7 +604,8 @@ int main(int argc, char** argv) {
     if (mode == "probe") {
         run_probe(fsdb, signal, time);
     } else {
-        ChainResult r = build_chain(fsdb, signal, time, max_depth, max_nodes);
+        ChainResult r = build_chain(fsdb, signal, time, max_depth, max_nodes,
+                                    stop_on_temporal);
         print_chain_json(r);
     }
 

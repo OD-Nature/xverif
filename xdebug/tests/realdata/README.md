@@ -6,7 +6,7 @@ FSDB、daidir、top 或信号路径。
 运行：
 
 ```bash
-make -C xdebug pytest-realdata
+pytest --xverif-gate nightly --xverif-suite xdebug.realdata
 ```
 
 manifest 放在 `manifests/` 下，每个 case 至少描述：

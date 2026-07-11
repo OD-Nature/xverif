@@ -77,10 +77,8 @@ line/toggle/branch、Verdi 等权 Score、raw weighted coverage 和 session clos
 ```text
 xverif_cov_session_open
 xverif_cov_session_list
-xverif_cov_session_use
 xverif_cov_session_close
 xverif_cov_query
-xverif_cov_raw_request
 xverif_cov_list_actions
 xverif_cov_get_schema
 ```

@@ -1,0 +1,6 @@
+interface:
+  display_name: xeda-runner
+  short_description: 在受管环境中执行 EDA 命令
+  default_prompt: >
+    仅在任务明确要求执行 make、VCS、simv、Verdi 或 URG 时使用项目的
+    xeda-runner 配置，不用于普通事实查询，不自动 fallback。

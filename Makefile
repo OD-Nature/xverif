@@ -1,4 +1,4 @@
-.PHONY: all xdebug xbit xentry xloc xcov xwaveform test full-test self-test-2018 self-test-2023 clean xcov-test install-all-skill install-xverif-cli-skill install-xverif-mcp-skill install-xwiki-skill install-x-npi-skill _install-agent-skill
+.PHONY: all xdebug xbit xentry xloc xcov xwaveform clean install-all-skill remove-legacy-xverif-skills install-xverif-skill install-xverif-admin-skill install-xeda-runner-skill install-xwiki-skill install-x-npi-skill _install-agent-skill
 
 PYTHON ?= python3
 
@@ -22,14 +22,14 @@ xcov:
 xwaveform:
 	$(MAKE) -C xwaveform
 
-xcov-test:
-	$(MAKE) -C xcov PYTHON=$(PYTHON) test
+install-xverif-skill:
+	$(MAKE) _install-agent-skill SKILL_SRC=skills/xverif SKILL_NAME=xverif
 
-install-xverif-cli-skill:
-	$(MAKE) _install-agent-skill SKILL_SRC=skills/xverif-cli SKILL_NAME=xverif-cli
+install-xverif-admin-skill:
+	$(MAKE) _install-agent-skill SKILL_SRC=skills/xverif-admin SKILL_NAME=xverif-admin
 
-install-xverif-mcp-skill:
-	$(MAKE) _install-agent-skill SKILL_SRC=skills/xverif-mcp SKILL_NAME=xverif-mcp
+install-xeda-runner-skill:
+	$(MAKE) _install-agent-skill SKILL_SRC=skills/xeda-runner SKILL_NAME=xeda-runner
 
 install-xwiki-skill:
 	$(MAKE) _install-agent-skill SKILL_SRC=skills/xwiki SKILL_NAME=xwiki
@@ -37,7 +37,19 @@ install-xwiki-skill:
 install-x-npi-skill:
 	$(MAKE) _install-agent-skill SKILL_SRC=skills/x-npi SKILL_NAME=x-npi
 
-install-all-skill:
+remove-legacy-xverif-skills:
+	@set -eu; \
+	for home in "$$HOME/.codex" "$$HOME/.claude"; do \
+		for legacy in xverif-cli xverif-mcp; do \
+			dst="$$home/skills/$$legacy"; \
+			if [ -e "$$dst" ]; then \
+				echo "==> Removing retired skill $$dst"; \
+				rm -rf "$$dst"; \
+			fi; \
+		done; \
+	done
+
+install-all-skill: remove-legacy-xverif-skills
 	@set -eu; \
 	found=0; \
 	for skill_md in skills/*/SKILL.md; do \
@@ -82,36 +94,10 @@ _install-agent-skill:
 	done; \
 	echo "Done. Backups, if any, were moved to ~/.codex/ or ~/.claude/ so agents do not load old and new skills twice."
 
-test: xdebug xbit xentry xloc xcov xwaveform
-	$(MAKE) -C xdebug fixtures-basic
-	$(MAKE) -C xdebug PYTHON=$(PYTHON) schema-test
-	$(MAKE) -C xdebug PYTHON=$(PYTHON) contract-test
-	$(MAKE) -C xdebug unit-test
-	$(MAKE) -C xdebug PYTHON=$(PYTHON) mcp-test
-	$(MAKE) -C xbit PYTHON=$(PYTHON) test
-	$(MAKE) -C xentry PYTHON=$(PYTHON) test
-	$(MAKE) -C xloc test
-	$(MAKE) -C xcov PYTHON=$(PYTHON) test
-	$(MAKE) -C xwaveform PYTHON=$(PYTHON) test
-	regression/run_xdebug_regression.sh
-
-full-test: xdebug xbit xentry xloc
-	$(MAKE) -C xbit PYTHON=$(PYTHON) test
-	$(MAKE) -C xentry PYTHON=$(PYTHON) test
-	$(MAKE) -C xloc test
-	regression/run_full_regression.sh
-
-self-test-2018:
-	XVERIF_EDA_PROFILE=verdi-2018 $(MAKE) -C xdebug self-test PYTHON=$(PYTHON)
-	XVERIF_EDA_PROFILE=verdi-2018 $(MAKE) -C xcov self-test-2018 PYTHON=$(PYTHON)
-
-self-test-2023:
-	XVERIF_EDA_PROFILE=verdi-2023 $(MAKE) -C xdebug self-test PYTHON=$(PYTHON)
-	XVERIF_EDA_PROFILE=verdi-2023 $(MAKE) -C xcov self-test-2023 PYTHON=$(PYTHON)
-
 clean:
 	$(MAKE) -C xdebug clean
 	$(MAKE) -C xbit clean
 	$(MAKE) -C xentry clean
 	$(MAKE) -C xloc clean
+	$(MAKE) -C xcov clean
 	$(MAKE) -C xwaveform clean

@@ -6,6 +6,7 @@ interface:
     严格执行 LLM Wiki 编译流程，逐步通过 index、concept、backlinks 和
     rg 查询验证环境、DUT 功能、接口、testbench、sequence、checker、
     coverage、BT/IT/ST/SoC workflow 与 debug 入口，并把新知识写回 wiki。
-    debug 完 case fail 后必须更新 env_bug、rtl_bug 或 spec_bug 主题。
+    查询可隐式执行；只有用户、项目规则或任务范围授权写回时，debug 完 case fail
+    后才更新 env_bug、rtl_bug 或 spec_bug 主题。
 policy:
   allow_implicit_invocation: true

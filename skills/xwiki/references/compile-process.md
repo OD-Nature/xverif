@@ -30,7 +30,7 @@ xwiki 要求 AI 严格执行 LLM Wiki 的编译过程。
 
 ## Case Fail Debug
 
-debug 完 case fail 后必须更新 xwiki wiki。根因主题只能归入以下三类之一：
+获得写回授权后，debug 完 case fail 时更新 xwiki wiki。根因主题只能归入以下三类之一：
 
 - `env_bug`：写入 `dv_issue/`，描述 testbench、UVM env、sequence、checker、scoreboard、配置、脚本、仿真参数或环境依赖导致的问题。
 - `rtl_bug`：写入 `de_issue/rtl/`，描述 DUT/RTL 实现、时序、状态机、接口行为、reset/clock、backpressure、ordering 等设计实现问题。

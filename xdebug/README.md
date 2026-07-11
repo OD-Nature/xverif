@@ -2,7 +2,7 @@
 
 xdebug 是 xtrace 与 xwave 合并后的统一调试工具。公开入口使用 JSON request 描述动作，默认输出 `xout` 结构化文本；需要机器解析、schema 校验或回归兼容时显式加 `--json` 获取原 JSON response。旧的 xtrace/xwave 人类 CLI 不再作为主路径维护。
 
-仓库内 xverif skill source-of-truth 已按入口拆分为 [../skills/xverif-cli/SKILL.md](../skills/xverif-cli/SKILL.md) 和 [../skills/xverif-mcp/SKILL.md](../skills/xverif-mcp/SKILL.md)。原生命令行与 JSON envelope 看 CLI skill，MCP tool 参数壳、托管 session 和 SDK-free loop wrapper 看 MCP skill。
+仓库内验证能力的唯一通用入口是 [../skills/xverif/SKILL.md](../skills/xverif/SKILL.md)；MCP、transport、LSF、timeout 和 session 运维见 [../skills/xverif-admin/SKILL.md](../skills/xverif-admin/SKILL.md)。先按任务选择能力，再选择 MCP 或 CLI surface。
 
 Action 协议由 `ActionSpec` / `ActionRegistry` 约束。`actions` 输出来自 runtime registry，并带有 `category`、`status`、`requires`、action-specific schema 和 example 信息；`xdebug/specs/actions/actions.yaml`、`xdebug/schemas/v1/actions` 与 `xdebug/examples` 由 contract test 校验一致。所有 non-removed action 都必须有自己的 request/response schema，不能退回通用 envelope schema。
 
@@ -81,14 +81,11 @@ xdebug/examples/requests/<action>.basic.json
 xdebug/examples/responses/<action>.basic.json
 ```
 
-`make -C xdebug contract-test` 会检查 runtime `actions` 输出、`specs/actions/actions.yaml`、schemas 和 examples 是否完全对齐。
+`pytest --xverif-gate regression --xverif-suite xdebug.action_runtime_catalog` 会检查 runtime `actions` 输出、`specs/actions/actions.yaml`、schemas 和 examples 是否完全对齐；纯静态 schema/example 合同由 `pytest --xverif-gate fast --xverif-suite xdebug.static` 检查。
 
 推荐通过仓库根目录的 wrapper 调用，它会设置 Verdi/NPI 运行所需环境：
 
-> **支持版本**：Verdi/VCS **O-2018.09-SP2**（`verdi-2018`，已实机验证）和
-> **V-2023.12-SP2**（`verdi-2023`，原作者现代 NPI路径）。使用
-> `XVERIF_EDA_PROFILE` 显式选择 profile，并让 `VERDI_HOME` 指向同一版本。
-> 2018 profile会启用旧 C++ ABI及 NPI API shim；其他版本目前未验证。
+> **环境要求**：GCC 5.0+。当前基于 Verdi **V-2023.12-SP2** 开发与测试。NPI API 随 Verdi 版本不同可能存在参数差异——如果使用其他版本遇到编译或运行时 NPI 兼容性问题，可让 AI agent 根据编译错误和 NPI 头文件（`$VERDI_HOME/share/NPI/inc`）进行兼容性修复。
 
 ```bash
 tools/xdebug -
@@ -228,7 +225,6 @@ MCP client 配置示例（direct 模式）：
       "env": {
         "PYTHONPATH": "<xverif>/xverif_mcp/src:<xverif>",
         "XVERIF_HOME": "<xverif>",
-        "XVERIF_EDA_PROFILE": "<verdi-profile>",
         "XVERIF_MCP_BACKEND": "direct",
         "VERDI_HOME": "<verdi-install>",
         "LD_LIBRARY_PATH": "<verdi-install>/share/NPI/lib/LINUX64"
@@ -248,7 +244,7 @@ MCP client 配置示例（direct 模式）：
 - `xverif_debug_session_gc`：删除已确认终止的 tombstone，未确认 orphan 只报告 unresolved。
 - `xverif_debug_query`：通过 loop session 调用 xdebug action。
 - `xverif_debug_list_actions` / `xverif_debug_get_schema`：查询 action catalog 和 schema。
-- `xverif_wave_value_at`、`xverif_design_trace_driver` 等高频别名。
+- action 统一通过 `xverif_debug_query(session_id, action, args, limits, output_format)` 调用，不暴露快捷别名。
 
 xcov 提供对称的 `xverif_cov_session_open/list/doctor/close/kill/gc`。debug/cov query 都禁止 native lifecycle action。xdebug dead loop 只使用固定 native admin path 精确 doctor/kill；xcov backend 随 loop 退出，kill 不虚构 native kill。清理部分失败会保留 tombstone，不切换 transport/backend。
 
@@ -327,44 +323,36 @@ tools/xverif-loop-client --socket /tmp/xverif-loop.sock --json \
 
 ## Test Entry Points
 
-xdebug 测试入口以 Makefile 聚合 target 和 pytest marker 为主，Python 解释器可通过
-`PYTHON=/path/to/python` 覆盖。
+xdebug 与全仓其它组件共享根级 catalog-driven pytest plugin；Makefile 只负责构建。
 
-常用入口：
+常用入口（从仓库根目录运行）：
 
 ```bash
-make -C xdebug test-fast
-make -C xdebug test-synthetic
-make -C xdebug test-vip
-make -C xdebug test-session
-make -C xdebug test-mcp-direct
-make -C xdebug test-mcp-fake-lsf
-make -C xdebug test-realdata-smoke
-make -C xdebug self-test
-make -C xdebug test-regression
-make -C xdebug test-nightly
+pytest --xverif-gate fast
+export XVERIF_TEST_EXECUTION_ENV=host  # 仅在已经进入沙箱外 host 后设置
+pytest --xverif-gate regression -n auto
+pytest --xverif-gate nightly -n auto
+pytest --xverif-gate regression --xverif-suite xdebug.contract
+pytest --xverif-gate nightly --xverif-suite xdebug.axi_vip
 ```
 
-在 Codex 受限沙箱中，只建议直接运行不启动 NPI/EDA/session 子进程的基础入口，例如
-`test-fast`。所有涉及 NPI、Verdi/VCS、FSDB、daidir、`session.open`、Unix domain
+> **支持版本**：Verdi/VCS **O-2018.09-SP2**（`verdi-2018`，已实机验证）和
+> **V-2023.12-SP2**（`verdi-2023`，上游现代 NPI 路径）。`VERDI_HOME` 必须与
+> `XVERIF_EDA_PROFILE` 一致；2018 profile 会启用旧 C++ ABI 与 NPI API shim。
+
+在 Codex 受限沙箱中，只运行 `fast`。所有涉及 NPI、Verdi/VCS、FSDB、daidir、`session.open`、Unix domain
 socket、SVT VIP 编译/仿真的入口，应在沙箱外运行，否则可能得到 license 连接失败、
 UDS bind 失败或 `SESSION_UNHEALTHY: child_exited` 等环境型失败。
+沙箱外 gate 应显式设置 `XVERIF_TEST_EXECUTION_ENV=host` 记录证据；该变量不提供权限提升，也不触发 fallback。
 
-`self-test` 会先用仓内 SV源码生成 active-driver、complex waveform、stream和 UART
-design fixtures，再运行 fast contract、session、MCP direct和 fake-LSF；它是新环境
-的基础健康检查。仓库根目录的 `make self-test-2018` / `make self-test-2023` 还会
-追加 xcov真实 VDB自检。
-
-`test-regression` 不包含真实 LSF。`test-nightly` 默认也不会强制真实 LSF；只有显式
-设置 `XDEBUG_ENABLE_REAL_LSF=1` 时才追加 real LSF smoke：
+普通 gate 不生成 FSDB/daidir；先显式 prepare：
 
 ```bash
-XDEBUG_ENABLE_REAL_LSF=1 make -C xdebug test-mcp-real-lsf
-XDEBUG_ENABLE_REAL_LSF=1 make -C xdebug test-nightly
+pytest --xverif-prepare all-generated
+pytest --xverif-fixture-validation --xverif-all-fixtures
 ```
 
-真实项目 FSDB/daidir 通过 `xdebug/tests/realdata/manifests/*.yaml` 描述，Python
-测试代码不硬编码项目路径。realdata 使用 invariant 检查，不做完整 JSON golden。
+nightly 中 realdata 与 real LSF 是 catalog optional suite；能力缺失会在 environment snapshot 和报告中明确 SKIP。required fixture 缺失则在执行前 ERROR，不会 fallback。真实项目资源仍由 `xdebug/tests/realdata/manifests/*.yaml` 描述。
 
 ## Core Concepts
 
@@ -880,10 +868,10 @@ xdebug log bundle --session <id> --out debug_bundle.redacted.tgz --redact
 5. 如果是 MCP/LSF 启动、ready timeout、stdout pollution 或 cleanup 问题，看 `~/.xverif/mcp/sessions/<alias>/*.ndjson`。
 6. 如果是非 MCP UDS wrapper 的请求解析、socket、LSF 或 cleanup 问题，看 `~/.xverif/loop-wrapper/logs/uds.ndjson` 和 `~/.xverif/loop-wrapper/sessions/<alias>/*.ndjson`。
 
-日志相关快速回归入口：
+日志相关 focused 回归入口：
 
 ```bash
-make -C xdebug log-test
+pytest --xverif-gate regression --xverif-suite xdebug.session
 ```
 
 ## 参考文档
@@ -891,15 +879,13 @@ make -C xdebug log-test
 - [docs/JSON_API.md](docs/JSON_API.md)：JSON envelope、target、输出策略。
 - [docs/PAYLOAD_COMPACT.md](docs/PAYLOAD_COMPACT.md)：业务 payload 压缩契约。
 - [docs/AGENT_GUIDE.md](docs/AGENT_GUIDE.md)：面向 agent 的最短调试指南。
-- [../skills/xverif-cli/SKILL.md](../skills/xverif-cli/SKILL.md)：xverif CLI skill source-of-truth。
-- [../skills/xverif-mcp/SKILL.md](../skills/xverif-mcp/SKILL.md)：xverif MCP skill source-of-truth。
-- [../skills/xverif-cli/references/xdebug/json-api.md](../skills/xverif-cli/references/xdebug/json-api.md)：CLI JSON envelope API 速查。
-- [../skills/xverif-mcp/references/xdebug/json-api.md](../skills/xverif-mcp/references/xdebug/json-api.md)：MCP tool 参数壳 API 速查。
-- [../skills/xverif-cli/references/xdebug/response-fields.md](../skills/xverif-cli/references/xdebug/response-fields.md)：CLI 响应字段字典。
-- [../skills/xverif-mcp/references/xdebug/response-fields.md](../skills/xverif-mcp/references/xdebug/response-fields.md)：MCP 响应字段字典。
-- [../skills/xverif-cli/references/xdebug/recipes.md](../skills/xverif-cli/references/xdebug/recipes.md)：CLI 常见 debug workflow。
-- [../skills/xverif-mcp/references/xdebug/recipes.md](../skills/xverif-mcp/references/xdebug/recipes.md)：MCP 常见 debug workflow。
-- [../skills/xverif-mcp/references/mcp/lsf.md](../skills/xverif-mcp/references/mcp/lsf.md)：MCP LSF backend 说明。
-- [../skills/xverif-mcp/references/sdk-free-loop/uds-jsonl.md](../skills/xverif-mcp/references/sdk-free-loop/uds-jsonl.md)：SDK-free UDS JSONL 说明。
-- [../skills/xverif-cli/references/xdebug/rc-generate.md](../skills/xverif-cli/references/xdebug/rc-generate.md)：CLI nWave `signal.rc` 生成说明。
-- [../skills/xverif-mcp/references/xdebug/rc-generate.md](../skills/xverif-mcp/references/xdebug/rc-generate.md)：MCP nWave `signal.rc` 生成说明。
+- [../skills/xverif/SKILL.md](../skills/xverif/SKILL.md)：xverif 能力路由 source-of-truth。
+- [../skills/xverif/references/capabilities/xdebug.md](../skills/xverif/references/capabilities/xdebug.md)：按一次 debug 流程组织的 xdebug 主参考。
+- [../skills/xverif/references/generated/xdebug-actions.md](../skills/xverif/references/generated/xdebug-actions.md)：自动生成的全量 action 索引。
+- [../skills/xverif-admin/SKILL.md](../skills/xverif-admin/SKILL.md)：MCP、transport 和 session 运维。
+- [../skills/xverif/references/xdebug/json-api.md](../skills/xverif/references/xdebug/json-api.md)：CLI JSON envelope API 速查。
+- [../skills/xverif/references/xdebug/response-fields.md](../skills/xverif/references/xdebug/response-fields.md)：CLI 响应字段字典。
+- [../skills/xverif/references/xdebug/recipes.md](../skills/xverif/references/xdebug/recipes.md)：CLI 常见 debug workflow。
+- [../skills/xverif-admin/references/mcp/lsf.md](../skills/xverif-admin/references/mcp/lsf.md)：MCP LSF backend 说明。
+- [../skills/xverif-admin/references/sdk-free-loop/uds-jsonl.md](../skills/xverif-admin/references/sdk-free-loop/uds-jsonl.md)：SDK-free UDS JSONL 说明。
+- [../skills/xverif/references/xdebug/rc-generate.md](../skills/xverif/references/xdebug/rc-generate.md)：CLI nWave `signal.rc` 生成说明。

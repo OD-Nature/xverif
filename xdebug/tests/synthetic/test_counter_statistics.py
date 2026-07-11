@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -39,13 +40,17 @@ def test_counter_statistics_targeted_waveform(
     xdebug_root: Path,
     xdebug_bin: Path,
     artifact_root: Path,
+    xverif_fixture: Any,
 ) -> None:
+    resources = xverif_fixture("xdebug.ai_complex_wave")
     result = command_runner.run(
         [
             sys.executable,
             str(xdebug_root / "tests" / "waveform" / "run_counter_statistics.py"),
             "--xdebug",
             str(xdebug_bin),
+            "--fsdb",
+            str(resources / "out" / "waves.fsdb"),
         ],
         cwd=repo_root,
         timeout_sec=1200,

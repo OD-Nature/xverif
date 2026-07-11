@@ -45,5 +45,7 @@ endproperty
 ## 测试
 
 ```bash
-make test
+pytest --xverif-gate fast --xverif-suite xsva.core
+pytest --xverif-gate regression --xverif-suite xsva.cli
+pytest --xverif-gate nightly --xverif-suite xsva.vcs
 ```

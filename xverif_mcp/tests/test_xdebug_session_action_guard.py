@@ -33,7 +33,7 @@ def test_loop_wrapper_rejects_native_session_action() -> None:
 
 @pytest.mark.parametrize("action", ["session.open", "session.status", "session.close"])
 def test_cov_query_rejects_native_session_action_with_cov_guidance(action: str) -> None:
-    rsp = xverif_cov_query(session="cov_a", action=action, args={})
+    rsp = xverif_cov_query(session_id="cov_a", action=action, args={})
     assert rsp["ok"] is False
     error = rsp["error"]
     assert error["code"] == "NATIVE_SESSION_ACTION_FORBIDDEN"

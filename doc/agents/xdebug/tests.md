@@ -1,243 +1,83 @@
-# xdebug 测试矩阵
+# xverif 统一测试合同
 
-xdebug 测试按成本和覆盖面分层。修改源码后，提交 git 前必须跑通关联测试；不能用一个宽泛测试替代更直接的 focused test。
+全仓测试只有根级 catalog-driven pytest plugin 一个公开入口。suite 身份、gate、能力、Fixture、资源和 required/optional 归属以 `testinfra/catalog.v1.yaml` 为唯一事实源；数据库生成合同以 `testinfra/fixtures.v1.yaml` 为事实源。
 
-## Schema 与 Contract
-
-命令：
+## 门禁
 
 ```bash
-make -C xdebug schema-test
-make -C xdebug contract-test
+pytest --xverif-gate fast
+export XVERIF_TEST_EXECUTION_ENV=host  # 仅在已经进入沙箱外 host 后设置
+pytest --xverif-gate regression -n auto
+pytest --xverif-gate nightly -n auto
 ```
 
-覆盖：
+- `fast`：static/unit/component 中的 hermetic 测试，不启动 NPI、VCS、VIP、MCP 子进程。
+- `regression`：全部 required deterministic fast/medium suite；可读取缓存 FSDB/daidir，但不生成。
+- `nightly`：包含 regression，并增加 VIP、active-trace、xif-event、xsva VCS 和 optional realdata/real LSF。
+- 裸 `pytest`、未知 suite、互斥操作组合都是 usage error。
+- `XVERIF_TEST_EXECUTION_ENV` 只接受 `host`/`sandbox`；它只写 environment snapshot，不改变真实权限边界。沙箱外 gate 必须显式设为 `host`。
 
-- JSON schema 文件合法性。
-- request/response examples 合法性。
-- action inventory 与 runtime actions 一致。
-- action schema coverage。
-- schema hints 和 required/anyOf 同步。
-
-适用：
-
-- 修改 `actions.yaml`。
-- 修改 `schemas/v1/actions/`。
-- 修改 examples。
-- 修改 action registry、help、catalog。
-
-## C++ Unit
-
-命令：
+查看无副作用执行计划：
 
 ```bash
-make -C xdebug unit-test
+pytest --xverif-gate regression --xverif-plan
+pytest --xverif-gate fast --xverif-plan --xverif-changed HEAD
 ```
 
-覆盖：
-
-- core types
-- env config
-- action log
-- file exchange
-- process runner
-- session catalog
-- action registry
-- request contract
-- text response builder
-- common blocks
-- logic value
-- event expression
-- rc generator
-
-适用：
-
-- 修改 C++ helper、core、response、value、event、session、process、log。
-
-## Test Infra
-
-命令：
+focused 执行只能在 suite 所属 gate 内收窄：
 
 ```bash
-make -C xdebug test-infra
+pytest --xverif-gate fast --xverif-suite xdebug.static
+pytest --xverif-gate regression --xverif-suite xdebug.contract
+pytest --xverif-gate nightly --xverif-suite xdebug.active_trace.phase5
 ```
 
-覆盖：
+## 数据库 Fixture
 
-- pytest runner、artifact、normalization、command helper。
-
-适用：
-
-- 修改 `xdebug/tests/runner/` 或测试基础设施。
-
-## Pytest Contract
-
-命令：
+普通 gate 不调用 VCS/simv。显式准备、校验和清理：
 
 ```bash
-make -C xdebug pytest-contract
+pytest --xverif-prepare xdebug.active_driver
+pytest --xverif-prepare all-generated
+pytest --xverif-fixture-validation --xverif-all-fixtures
+pytest --xverif-fixture-validation --xverif-changed HEAD
+pytest --xverif-fixture-clean
+pytest --xverif-results-clean
 ```
 
-覆盖：
+Fixture 使用内容指纹、工具兼容 identity、跨进程锁、staging、backend-aware semantic probe、不可变 generation 和原子 `current.json` 切换。builder 与 probe 只在显式 prepare/validation 发布新 generation 时执行；普通 gate 和 cache-hit prepare 只读 manifest/产物，不重新编译或仿真。cache miss、指纹不符或输出不完整会在 suite 启动前形成 required preflight ERROR，并给出 prepare 命令；不会自动生成、SKIP 或换数据源。连续两次 prepare 的第二次必须命中缓存。
 
-- CLI contract
-- batch contract
-- output contract
-- JSON response contract
-- time output contract
-- unified runtime contract
+## 结果与诊断
 
-适用：
+每次 gate 写入 `.xverif-test-results/<run>/`：
 
-- 修改 CLI/API 输出、batch、runtime contract、response shape。
+- `report.json`：suite/node、phase、outcome、duration、error layer。
+- `junit.xml`：标准 JUnit 报告。
+- `environment.json`：去敏 capability 与 host/sandbox 类别。
+- `suites/<id>/`：external stdout/stderr 与 pytest 捕获日志。
 
-## Waveform/Synthetic
-
-命令：
+失败 suite 可显式诊断重跑：
 
 ```bash
-make -C xdebug test-synthetic
+pytest --rerun-failed .xverif-test-results/<run>/report.json
 ```
 
-或 focused：
+重跑生成独立 run，并记录 `parent_report`；不会改写原 gate 结论，也不会自动 retry。
 
-```bash
-make -C xdebug pytest-synthetic-existing
-make -C xdebug pytest-counter-statistics
-```
+## 执行环境
 
-覆盖：
+Verdi 2018/2023 兼容分支运行 EDA gate 或准备 Fixture 前必须显式设置
+`XVERIF_EDA_PROFILE=verdi-2018|verdi-2023`，并确保 `VERDI_HOME` 指向相同版本。
 
-- 现有 synthetic waveform regression。
-- counter statistics。
-- active semantics。
+- 沙箱内：plan/collect、catalog/schema/testinfra、`fast`。
+- 沙箱外：NPI/FSDB/daidir engine、MCP stdio/UDS/process、fake/real LSF、VCS/simv、VIP、fixture prepare/validation。
+- 沙箱内的 EDA/进程失败不能判定为产品回归。
+- realdata 与 real LSF 仅在 nightly 中 optional；缺失会明确 SKIP。其它 required suite 不得自行 skip。
 
-适用：
+## 维护规则
 
-- 修改 waveform value/event/signal/statistics/window/counter/clock sampling。
-
-## VIP
-
-命令：
-
-```bash
-make -C xdebug test-vip
-```
-
-覆盖：
-
-- AXI VIP real waveform。
-- APB VIP real waveform。
-
-要求：
-
-- 这类测试依赖真实 VIP/VCS/EDA 环境，按根目录 `AGENTS.md` 在沙箱外执行。
-
-## Combined / Active Trace
-
-命令：
-
-```bash
-make -C xdebug combined-test
-make -C xdebug test-active-trace
-```
-
-覆盖：
-
-- active driver fixture。
-- combined design+waveform active semantics。
-
-适用：
-
-- 修改 `src/combined/`、active trace、design+waveform join。
-
-## Session / Log / Transport
-
-命令：
-
-```bash
-make -C xdebug test-session
-make -C xdebug log-test
-```
-
-覆盖：
-
-- session lifecycle。
-- stdio-loop lifecycle。
-- crash marker。
-- UDS connect failure。
-- transport log。
-
-适用：
-
-- 修改 session manager、transport、stdio-loop、engine lifecycle、logging。
-
-## MCP
-
-命令：
-
-```bash
-make -C xdebug mcp-test-schema
-make -C xdebug mcp-test
-make -C xdebug test-mcp-direct
-make -C xdebug test-mcp-fake-lsf
-make -C xdebug mcp-session-test
-```
-
-真实 LSF：
-
-```bash
-make -C xdebug test-mcp-real-lsf
-```
-
-要求：
-
-- MCP stdio、real LSF、license/port/file-system 相关测试默认沙箱外执行。
-- 如果沙箱内失败，先判断是否为 sandbox，而不是直接改代码。
-
-## Realdata / Regression / Nightly
-
-命令：
-
-```bash
-make -C xdebug test-realdata-smoke
-make -C xdebug test-regression
-make -C xdebug test-nightly
-```
-
-适用：
-
-- 跨层行为改动。
-- release 前或高风险 refactor。
-- action routing、runtime、session、waveform/design combined 行为大改。
-
-## 可分发 profile 自检
-
-仓库根目录入口：
-
-```bash
-make self-test-2018
-make self-test-2023
-```
-
-xdebug 的 `self-test` 会先通过 `fixtures-basic` 生成 active-driver、complex
-waveform、stream 和 UART design 资源，再运行 fast contract、session、MCP direct
-和 fake-LSF。顶层入口随后运行 xcov 的仓内真实 VDB fixture，因此不依赖 GPIO、
-xip 或其它外部项目。
-
-`self-test-*` 是交付后的基础健康检查；`test-regression`、`test-nightly`、
-`full-test` 仍是扩展回归，可继续要求 numpy、VIP、真实 LSF或外部 realdata。
-两个 profile 的 fixture/NPI动作均按根目录 `AGENTS.md` 在沙箱外执行。
-
-## 选择测试的规则
-
-- 文档-only：检查链接、路径、引用和内容，不跑源码测试。
-- schema-only：`schema-test`。
-- public contract：`schema-test` + `contract-test`。
-- C++ helper：`unit-test` + focused pytest。
-- waveform action：schema/contract + focused waveform test。
-- session/transport/log：session/log/MCP focused tests。
-- MCP wrapper：MCP tests。
-- NPI/VCS/VIP/LSF：沙箱外运行对应测试。
-
-若测试无法运行，必须说明具体命令、失败原因、环境缺口和未覆盖风险。
+- 新增测试必须先登记 catalog；不得新增 Makefile test target、独立 gate shell 或局部 pytest.ini。
+- 测试消费数据库必须声明 Fixture；测试函数不得执行 `make clean run/fixture`。
+- active-trace case 由公共 `testinfra/leaf/prepare_active_trace.py` 和 `cases.v1.yaml` 管理，不恢复逐 case Makefile。
+- C++/Vim/命令测试通过 catalog external item 运行，stdout/stderr 归档并受 process-group timeout/cleanup 管理。
+- 修改源码后跑 focused suite；跨层或高风险变更跑 regression/nightly。最终交付必须先 `make clean all`，再跑完整 gate。

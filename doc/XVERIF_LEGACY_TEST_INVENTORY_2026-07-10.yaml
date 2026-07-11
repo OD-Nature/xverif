@@ -1,0 +1,55 @@
+version: xverif-legacy-test-inventory.v1
+purpose: migration-parity-only
+public_orchestration:
+  - file: Makefile
+    targets: [test, full-test, xcov-test]
+  - file: xdebug/Makefile
+    target_patterns: [unit-test, log-test, test-*, pytest-*, mcp-*, contract-test, combined-test, schema-test]
+  - file: xbit/Makefile
+    targets: [test, unit-test, smoke]
+  - file: xentry/Makefile
+    targets: [test, unit-test, smoke]
+  - file: xloc/Makefile
+    targets: [test, unit-test, vim-test]
+  - file: xcov/Makefile
+    targets: [test]
+  - file: xsva/Makefile
+    targets: [test]
+  - file: xwaveform/Makefile
+    targets: [test, unit-test, smoke]
+gate_scripts:
+  - regression/run_xdebug_regression.sh
+  - regression/run_full_regression.sh
+pytest_roots:
+  - testinfra/tests
+  - xbit/tests
+  - xentry/tests
+  - xloc/tests
+  - xcov/tests
+  - xwaveform/tests
+  - xsva/tests
+  - xeda_runner/tests
+  - xverif_mcp/tests
+  - xdebug/tests
+non_pytest_test_sources:
+  - xdebug/tests/unit/*.cpp
+  - xdebug/tests/design/run_semantics.sh
+  - xdebug/tests/waveform/run_complex_wave.py
+  - xdebug/tests/waveform/run_counter_statistics.py
+  - xdebug/tests/combined/run_active_driver_fixture.py
+  - xsva/tests/vcs/run_all.sh
+fixture_builder_patterns:
+  - xdebug/testdata/**/Makefile
+  - xdebug/tests/active_trace_chain/**/Makefile
+  - xsva/tests/vcs/Makefile
+active_trace_groups:
+  - xdebug/tests/active_trace_chain/p0_composability
+  - xdebug/tests/active_trace_chain/composite
+  - xdebug/tests/active_trace_chain/timing
+  - xdebug/tests/active_trace_chain/phase4
+  - xdebug/tests/active_trace_chain/phase5
+required_parity_rules:
+  - every collected pytest item has exactly one catalog suite owner
+  - every non-pytest source maps to a catalog command suite or fixture builder
+  - every public orchestration target is deleted after its suite coverage migrates
+  - leaf runners do not select gates, prepare fixtures implicitly, or downgrade required failures

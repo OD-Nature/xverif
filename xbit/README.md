@@ -24,7 +24,7 @@
 默认输出为 `xout` 结构化文本；需要脚本解析完整字段时加 `--json`。
 
 ```bash
-make -C xbit test
+pytest --xverif-gate regression --xverif-suite xbit.unit
 
 xbit conv "8'shff"
 xbit slice "32'hdead_beef" 15 8

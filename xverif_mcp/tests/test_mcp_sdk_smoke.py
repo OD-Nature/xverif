@@ -138,13 +138,35 @@ def test_mcp_tools_list(monkeypatch: pytest.MonkeyPatch):
     assert "xverif_session_use" not in names
     assert "xverif_session_close" not in names
     assert "xverif_debug_raw_request" not in names
-    assert "xverif_waveform_render_list" in names
+    assert "xverif_cov_raw_request" not in names
+    assert "xverif_wave_value_at" not in names
+    assert "xverif_wave_changes" not in names
+    assert "xverif_wave_generate_rc" not in names
+    assert "xverif_waveform_render_list" not in names
+    assert "xverif_design_trace_driver" not in names
     assert "xverif_tools" in names
     assert "xverif_bit_eval" in names
     assert "xverif_entry_decode" in names
     assert "xverif_loc_resolve" in names
     assert "xverif_sva_explain_property" in names
     assert all(not name.startswith("xverif_" + "context") for name in names)
+
+
+def test_cov_tools_use_session_id_contract(monkeypatch: pytest.MonkeyPatch):
+    server = _server(monkeypatch)
+
+    async def _schemas():
+        return {tool.name: tool.inputSchema for tool in await server.mcp.list_tools()}
+
+    schemas = anyio.run(_schemas)
+    for name in (
+        "xverif_cov_query", "xverif_cov_session_doctor",
+        "xverif_cov_session_close", "xverif_cov_session_kill",
+    ):
+        properties = schemas[name]["properties"]
+        assert "session_id" in properties
+        assert "session" not in properties
+        assert "name" not in properties
 
 
 def test_mcp_ping_call(monkeypatch: pytest.MonkeyPatch):
@@ -214,14 +236,14 @@ def test_cov_session_fake_lifecycle(monkeypatch: pytest.MonkeyPatch):
         )
         queried = await server.mcp.call_tool(
             "xverif_cov_query",
-            {"session": "cov_fake", "action": "code_coverage.holes",
+            {"session_id": "cov_fake", "action": "code_coverage.holes",
              "args": {"metrics": ["toggle", "branch"]},
              "limits": {"max_items": 1},
              "output_format": "json"},
         )
         closed = await server.mcp.call_tool(
             "xverif_cov_session_close",
-            {"name": "cov_fake"},
+            {"session_id": "cov_fake"},
         )
         return opened, queried, closed
 
@@ -354,11 +376,11 @@ def test_batch_fake_lifecycle(tmp_path, monkeypatch: pytest.MonkeyPatch):
         json.dumps({"tool": "xverif_cov_session_open",
                      "args": {"name": "cov_fake", "vdb": "fake"}}),
         json.dumps({"tool": "xverif_cov_query",
-                     "args": {"session": "cov_fake", "action": "code_coverage.holes",
+                     "args": {"session_id": "cov_fake", "action": "code_coverage.holes",
                               "args": {"metrics": ["line"], "limits": {"max_items": 2}},
                               "output_format": "json"}}),
         json.dumps({"tool": "xverif_cov_session_close",
-                     "args": {"name": "cov_fake"}}),
+                     "args": {"session_id": "cov_fake"}}),
         json.dumps({"tool": "xverif_ping", "args": {}}),
         json.dumps({"tool": "xverif_bit_eval",
                      "args": {"expr": "2 + 3"}}),

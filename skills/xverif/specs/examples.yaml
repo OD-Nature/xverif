@@ -1,0 +1,10 @@
+version: 1
+examples:
+  - id: ready-low-point-check
+    backend: xdebug
+    action: value.batch_at
+    session: case_a
+    args:
+      time: 100ns
+      clock: top.clk
+      signals: [top.u.valid, top.u.ready, top.u.full]

@@ -18,6 +18,7 @@ import time
 from pathlib import Path
 
 import pytest
+from jsonschema import Draft202012Validator
 
 from xverif_mcp.lsf.bsub import BsubRunner
 from xverif_mcp.sessions.launchers import DirectLauncher, LsfLauncher
@@ -115,6 +116,22 @@ def _fake_loop_dead_session(dirpath: Path) -> str:
         '               "error": {"code": "SESSION_DEAD", "message": "backend session is dead"}}',
         "    print(json.dumps(rsp))",
         "    sys.stdout.flush()",
+    ])
+
+
+def _fake_native_admin_cli(dirpath: Path, capture_path: Path) -> str:
+    return _make_fake_script(dirpath / "fake_native_admin", [
+        "import json, sys",
+        f"capture_path = {str(capture_path)!r}",
+        "request = json.loads(sys.stdin.read())",
+        "with open(capture_path, 'a', encoding='utf-8') as stream:",
+        "    stream.write(json.dumps(request) + '\\n')",
+        "if 'output' in request:",
+        "    print(json.dumps({'ok': False, 'error': {'code': 'SCHEMA_VALIDATION_FAILED',",
+        "                      'message': 'unexpected top-level output'}}))",
+        "    sys.exit(0)",
+        "print(json.dumps({'ok': True, 'action': request['action'],",
+        "                  'summary': {'session_id': request['target']['session_id']}}))",
     ])
 
 
@@ -404,6 +421,45 @@ class TestOpenAfterLost:
         r = mgr.open_session("reopen_me", fsdb="test.fsdb")
         assert r.get("ok"), r
         assert "reopen_me" in mgr.sessions
+
+
+class TestFixedNativeAdminPath:
+    def test_dead_loop_doctor_and_kill_send_schema_valid_cli_requests(self, tmp_path):
+        capture_path = tmp_path / "native_admin_requests.ndjson"
+        session = _new_session(_fake_native_admin_cli(tmp_path, capture_path), alias="dead_admin")
+        session.session_id = "native-session"
+        session.state = "dead"
+
+        doctor = session.doctor(verbose=True)
+        killed = session.kill()
+
+        assert doctor["summary"]["source"] == "fixed_native_admin"
+        assert doctor["summary"]["backend_healthy"] is True
+        assert doctor["backend_response"]["action"] == "session.doctor"
+        assert killed["ok"] is True
+        assert killed["cleanup"]["native_kill"] == "ok"
+
+        requests = _read_ndjson(capture_path)
+        assert [request["action"] for request in requests] == [
+            "session.doctor",
+            "session.kill",
+        ]
+        for request in requests:
+            assert request == {
+                "api_version": "xdebug.v1",
+                "action": request["action"],
+                "target": {"session_id": "native-session"},
+            }
+            schema_path = (
+                Path(__file__).resolve().parents[2]
+                / "xdebug"
+                / "schemas"
+                / "v1"
+                / "actions"
+                / f"{request['action']}.request.schema.json"
+            )
+            schema = json.loads(schema_path.read_text(encoding="utf-8"))
+            Draft202012Validator(schema).validate(request)
 
 
 class TestXoutFormatOnLost:

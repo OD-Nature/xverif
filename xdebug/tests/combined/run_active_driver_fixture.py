@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
 """Live combined regression tests for trace.active_driver.
 
-Requires NPI license.  Without license, all tests are skipped (exit 0).
-Set XDEBUG_REQUIRE_NPI=1 to make license-unavailable a hard failure.
+Requires pre-published fixtures and an available NPI runtime.
 
-Usage:
-  make -C xdebug combined-test
-  XDEBUG_REQUIRE_NPI=1 make -C xdebug combined-test
+This is an internal leaf runner; invoke it through the catalog pytest suite.
 """
 
 import json
@@ -25,10 +22,29 @@ _XDEBUG_CANDIDATES = [
     str(REPO_ROOT / "xdebug" / "xdebug"),   # xdebug/xdebug binary
 ]
 XDEBUG = next((c for c in _XDEBUG_CANDIDATES if c and Path(c).is_file()), "xdebug")
-REQUIRE_NPI = os.environ.get("XDEBUG_REQUIRE_NPI", "") == "1"
 
-ACTIVE_DRIVER_DIR = Path(__file__).resolve().parent.parent.parent / "testdata" / "combined" / "active_driver"
-IF_PORT_ROOT_DIR = Path(__file__).resolve().parent.parent.parent / "testdata" / "combined" / "interface_port_root"
+ACTIVE_DRIVER_DIR = Path(
+    os.environ.get(
+        "XDEBUG_ACTIVE_DRIVER_FIXTURE_DIR",
+        str(
+            Path(__file__).resolve().parent.parent.parent
+            / "testdata"
+            / "combined"
+            / "active_driver"
+        ),
+    )
+)
+IF_PORT_ROOT_DIR = Path(
+    os.environ.get(
+        "XDEBUG_INTERFACE_PORT_ROOT_FIXTURE_DIR",
+        str(
+            Path(__file__).resolve().parent.parent.parent
+            / "testdata"
+            / "combined"
+            / "interface_port_root"
+        ),
+    )
+)
 
 ACTIVE_DRIVER_DAIDIR = str(ACTIVE_DRIVER_DIR / "out" / "simv.daidir")
 ACTIVE_DRIVER_FSDB = str(ACTIVE_DRIVER_DIR / "out" / "waves.fsdb")
@@ -131,20 +147,6 @@ def open_session(name: str, daidir: str, fsdb: str) -> "tuple[str, str]":
             except (json.JSONDecodeError, ValueError):
                 pass
 
-    # Fallback: try line-by-line for compact single-line JSON
-    if resp is None:
-        for line in reversed(stripped.split("\n")):
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                candidate = json.loads(line)
-                if isinstance(candidate, dict) and "api_version" in candidate:
-                    resp = candidate
-                    break
-            except (json.JSONDecodeError, ValueError):
-                continue
-
     if resp is None:
         return name, out
 
@@ -196,19 +198,6 @@ def do_active_driver(session_id: str, signal: str, requested_time: str,
                     resp = candidate
             except (json.JSONDecodeError, ValueError):
                 pass
-    # Fallback: line-by-line
-    if resp is None:
-        for line in reversed(stripped.split("\n")):
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                candidate = json.loads(line)
-                if isinstance(candidate, dict) and "api_version" in candidate:
-                    resp = candidate
-                    break
-            except (json.JSONDecodeError, ValueError):
-                continue
     if resp is None:
         return rc, out, {}
     return rc, out, resp
@@ -217,18 +206,9 @@ def do_active_driver(session_id: str, signal: str, requested_time: str,
 def check(name: str, session_id: str, signal: str, requested_time: str,
           checks: list, extra_args: dict = None):
     """Run a check case. Each check is a callable(resp, raw) -> bool."""
-    global failed, passed, skipped
+    global failed, passed
     rc, raw, resp = do_active_driver(session_id, signal, requested_time, extra_args)
     if not resp:
-        if _has_license_issue(raw):
-            print(f"SKIP: {name} — NPI license unavailable")
-            if REQUIRE_NPI:
-                global _hard_fail
-                failed += 1
-                print(f"  FAIL (hard): XDEBUG_REQUIRE_NPI=1 but got license error")
-            else:
-                skipped += 1
-            return
         print(f"FAIL: {name} — no JSON response")
         print(f"  raw output (last 500 chars): {raw[-500:]}")
         failed += 1
@@ -236,14 +216,6 @@ def check(name: str, session_id: str, signal: str, requested_time: str,
 
     if not resp.get("ok", False):
         err = resp.get("error", {})
-        if _has_license_issue(err.get("code", "") + err.get("message", "")):
-            print(f"SKIP: {name} — NPI license unavailable")
-            if REQUIRE_NPI:
-                failed += 1
-                print(f"  FAIL (hard): XDEBUG_REQUIRE_NPI=1 but got license error")
-            else:
-                skipped += 1
-            return
         print(f"FAIL: {name} — request failed: {err}")
         failed += 1
         return
@@ -401,25 +373,15 @@ def main():
             timeout=5,
         )
     except Exception:
-        print(f"SKIP: xdebug binary not available at {XDEBUG}")
-        print(f"  Build with: make -C xdebug")
-        sys.exit(0)
+        print(f"FAIL: xdebug binary not available at {XDEBUG}")
+        sys.exit(1)
 
-    # Ensure fixtures are built (optional - may fail if VCS not available)
     for name, fixture_dir in [("active_driver", ACTIVE_DRIVER_DIR),
-                               ("interface_port_root", IF_PORT_ROOT_DIR)]:
-        daidir = fixture_dir / "out" / "simv.daidir"
-        if not daidir.exists():
-            print(f"Building fixture: {name} ...")
-            try:
-                subprocess.run(
-                    ["make", "-C", str(fixture_dir), "fixture"],
-                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                    universal_newlines=True, timeout=300,
-                    cwd=str(REPO_ROOT),
-                )
-            except Exception as e:
-                print(f"Note: fixture build for {name} failed: {e}")
+                              ("interface_port_root", IF_PORT_ROOT_DIR)]:
+        for resource in (fixture_dir / "out/simv.daidir", fixture_dir / "out/waves.fsdb"):
+            if not resource.exists():
+                print(f"FAIL: missing published {name} resource: {resource}")
+                sys.exit(1)
 
     # Open sessions
     print("Opening sessions...")
@@ -427,11 +389,6 @@ def main():
         f"active_driver_py_{os.getpid()}", ACTIVE_DRIVER_DAIDIR, ACTIVE_DRIVER_FSDB)
     if ad_err:
         print(f"active_driver session open error: {ad_err[:200]}")
-        if _has_license_issue(ad_err):
-            print("SKIP: all tests — NPI license unavailable")
-            if REQUIRE_NPI:
-                sys.exit(1)
-            sys.exit(0)
         print("FAIL: cannot open active_driver session")
         failed += 1
     else:
@@ -442,11 +399,6 @@ def main():
         f"if_port_root_py_{os.getpid()}", IF_PORT_ROOT_DAIDIR, IF_PORT_ROOT_FSDB)
     if if_err:
         print(f"interface_port_root session open error: {if_err[:200]}")
-        if _has_license_issue(if_err):
-            print("SKIP: all tests — NPI license unavailable")
-            if REQUIRE_NPI:
-                sys.exit(1)
-            sys.exit(0)
         print("FAIL: cannot open interface_port_root session")
         failed += 1
     else:

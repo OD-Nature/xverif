@@ -16,8 +16,6 @@ XDEBUG_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = XDEBUG_ROOT.parent
 SPEC_PATH = XDEBUG_ROOT / "specs" / "actions" / "actions.yaml"
 REFERENCE_PATH_CANDIDATES = [
-    REPO_ROOT / "skills" / "xverif-cli" / "references" / "xdebug" / "action-reference.md",
-    REPO_ROOT / "skills" / "xverif-mcp" / "references" / "xdebug" / "action-reference.md",
     REPO_ROOT / "skills" / "xverif" / "references" / "xdebug" / "action-reference.md",
 ]
 

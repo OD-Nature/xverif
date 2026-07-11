@@ -23,29 +23,6 @@ require_db() {
   fi
 }
 
-build_p3_db() {
-  if [[ -d "$P3_DB" ]]; then
-    return
-  fi
-  if ! command -v vcs >/dev/null 2>&1; then
-    echo "missing regression database and vcs is unavailable: $P3_DB" >&2
-    exit 1
-  fi
-  local out_dir
-  out_dir="$(dirname "$P3_DB")"
-  rm -rf "$out_dir"
-  mkdir -p "$out_dir"
-  (
-    cd "$out_dir"
-    vcs -full64 -sverilog -kdb -debug_access+all \
-      "$ROOT_DIR/testdata/design/p3_semantics/p3_semantics.sv" \
-      -top p3_sem_top -o simv >/tmp/xdebug_p3_vcs.log 2>&1
-  ) || {
-    cat /tmp/xdebug_p3_vcs.log >&2
-    exit 1
-  }
-}
-
 query() {
   printf '%s\n' "$1" | HOME="$TMP_HOME" "$XDEBUG" --json -
 }
@@ -73,7 +50,6 @@ if not eval(expr, {}, ns):
 }
 
 require_db "$UART_DB"
-build_p3_db
 require_db "$P3_DB"
 
 printf '%s\n' '{"api_version":"xdebug.v1","action":"actions"}' | "$XDEBUG" --json - | python3 -c '

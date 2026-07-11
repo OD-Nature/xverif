@@ -1,0 +1,26 @@
+# MCP 排障
+
+## 日志位置
+
+默认根目录：`~/.xverif/mcp`，可用 `XVERIF_MCP_LOG_DIR` 覆盖。
+
+- server：`logs/server.ndjson`
+- session：`sessions/<alias>/session.ndjson`
+- stdio-loop：`sessions/<alias>/stdio.ndjson`
+- LSF：`sessions/<alias>/lsf.ndjson`
+
+## 定位顺序
+
+1. 工具不可见：调用 `xverif_tools`，检查 `XVERIF_MCP_ENABLE_*`。
+2. FastMCP/SDK 启动失败：确认 Python 3.11+ 和 `mcp[cli]`。
+3. session open 失败：看 `session.ndjson` 和 `stdio.ndjson`。
+4. ready timeout/stdout pollution/backend exit：看 `stdio.ndjson`。
+5. LSF job id、bsub、bkill、cleanup：看 `lsf.ndjson`。
+6. xdebug backend native 问题：继续读 xdebug troubleshooting。
+
+## 常见错误
+
+- `SESSION_LOST`：MCP 已清理失效 session；重新 open。
+- `SESSION_STALE`：同名 session 记录存在但进程不健康；显式 close/gc 后重开。
+- `TOOL_NOT_ENABLED`：对应工具组被 env policy 关闭。
+- `BAD_JSON` 或 envelope 异常：检查 MCP tool 参数壳和 `output_format`；xdebug 原生 envelope 请改用 `xverif`。

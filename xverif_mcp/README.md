@@ -188,8 +188,8 @@ session 空闲最长存活时间看 `XDEBUG_SESSION_IDLE_TIMEOUT_SEC`（默认 8
 
 示例：
 ```python
-# 将 cov.holes 响应写入 /tmp/holes.json
-xverif_cov_query(action="cov.holes", args={...},
+# 将 code_coverage.holes 响应写入 /tmp/holes.json
+xverif_cov_query(action="code_coverage.holes", args={...},
                  xverif_output_path="/tmp/holes.json")
 
 # 追加模式
@@ -217,9 +217,9 @@ xverif_debug_query(action="value.at", args={...},
 ```bash
 cat > /tmp/batch_requests.ndjson << 'EOF'
 {"tool": "xverif_cov_session_open", "args": {"name": "uart0", "vdb": "/path/to/merged.vdb"}}
-{"tool": "xverif_cov_query", "args": {"session": "uart0", "action": "cov.holes", "args": {"metrics": ["line"], "limits": {"max_items": 5}}, "output_format": "json"}}
-{"tool": "xverif_cov_query", "args": {"session": "uart0", "action": "cov.holes", "args": {"metrics": ["toggle"], "limits": {"max_items": 5}}, "output_format": "json"}}
-{"tool": "xverif_cov_session_close", "args": {"name": "uart0"}}
+{"tool": "xverif_cov_query", "args": {"session_id": "uart0", "action": "code_coverage.holes", "args": {"metrics": ["line"], "limits": {"max_items": 5}}, "output_format": "json"}}
+{"tool": "xverif_cov_query", "args": {"session_id": "uart0", "action": "code_coverage.holes", "args": {"metrics": ["toggle"], "limits": {"max_items": 5}}, "output_format": "json"}}
+{"tool": "xverif_cov_session_close", "args": {"session_id": "uart0"}}
 EOF
 ```
 
@@ -229,9 +229,9 @@ EOF
 import json
 requests = [
     {"tool": "xverif_cov_session_open", "args": {"name": "uart0", "vdb": "/path/to/merged.vdb"}},
-    {"tool": "xverif_cov_query", "args": {"session": "uart0", "action": "cov.holes",
+    {"tool": "xverif_cov_query", "args": {"session_id": "uart0", "action": "code_coverage.holes",
         "args": {"metrics": ["line"], "limits": {"max_items": 5}}, "output_format": "json"}},
-    {"tool": "xverif_cov_session_close", "args": {"name": "uart0"}},
+    {"tool": "xverif_cov_session_close", "args": {"session_id": "uart0"}},
 ]
 with open("/tmp/batch_requests.ndjson", "w") as f:
     for req in requests:
@@ -432,6 +432,10 @@ XVERIF_MCP_ENABLE_SVA=0 tools/xverif-mcp
 ## 测试
 
 ```bash
-make -C xdebug PYTHON=python3 mcp-test
+pytest --xverif-gate fast --xverif-suite xverif_mcp.unit
+pytest --xverif-gate regression --xverif-suite xverif_mcp.process
+pytest --xverif-gate regression --xverif-suite xverif_mcp.action_smoke
 PYTHON=python3 XVERIF_MCP_FAKE_LSF=1 tools/xverif-lsf-doctor --fake
 ```
+
+MCP stdio/UDS、NPI 和 fake/real LSF 测试必须在沙箱外运行。real LSF 由 nightly catalog optional capability 控制，不会切换到 fake backend。

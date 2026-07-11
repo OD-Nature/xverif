@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "xverif-environment-snapshot.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "captured_at", "execution_environment", "capabilities"],
+  "properties": {
+    "schema_version": {"const": "xverif-environment-snapshot.v1"},
+    "captured_at": {"type": "string"},
+    "execution_environment": {"enum": ["host", "sandbox"]},
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "available", "reason"],
+        "properties": {
+          "name": {"type": "string"},
+          "available": {"type": "boolean"},
+          "reason": {"type": "string"}
+        }
+      }
+    }
+  }
+}

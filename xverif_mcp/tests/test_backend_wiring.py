@@ -14,3 +14,16 @@ def test_lsf_mode_rejected():
     from xverif_mcp.sessions.session_manager import McpSessionManager
     with pytest.raises(ValueError, match="unsupported"):
         McpSessionManager(mode="invalid")
+
+
+def test_mcp_adapter_restores_its_config_after_loop_wrapper(monkeypatch):
+    from xverif_loop.wrapper import LoopWrapperService
+    from xverif_mcp.adapters.xcov import XverifCoverageAdapter
+
+    wrapper = LoopWrapperService(mode="direct", xdebug_bin="xdebug", xcov_bin="xcov")
+    monkeypatch.setenv("XVERIF_MCP_BACKEND", "lsf")
+    debug = XverifDebugAdapter()
+    cov = XverifCoverageAdapter()
+    assert wrapper.mode == "direct"
+    assert debug.mode == "lsf"
+    assert cov.mode == "lsf"

@@ -1,0 +1,75 @@
+version: xdebug-active-trace-cases.v1
+groups:
+  p0:
+    - {case: p0_0_assign_chain, signal: top.out, time: 10ns}
+    - {case: p0_1_flop_boundary, signal: top.out, time: 17ns}
+    - {case: p0_2_module_boundary, signal: top.y, time: 10ns}
+    - {case: p0_3_generate_for, signal: "top.y[2]", time: 10ns}
+    - {case: p0_5_mux_branch, signal: top.y, time: 10ns}
+    - {case: p0_6_procedural_for, signal: top.y, time: 15ns}
+  composite:
+    - {case: case_01, signal: top.data_out, time: 50ns, hops: 11, termination: primary_input, temporal_boundaries: 1}
+    - {case: case_02, signal: top.data_out, time: 50ns, hops: 11, termination: primary_input, temporal_boundaries: 1}
+    - {case: case_03, signal: top.data_out, time: 50ns, hops: 11, termination: primary_input, temporal_boundaries: 1}
+    - {case: case_04, signal: top.data_out, time: 50ns, hops: 12, termination: primary_input, temporal_boundaries: 1}
+    - {case: case_05, signal: top.data_out, time: 50ns, hops: 12, termination: primary_input, temporal_boundaries: 1}
+    - {case: case_06, signal: top.data_out, time: 50ns, hops: 6, termination: ambiguous, temporal_boundaries: 1}
+    - {case: case_07, signal: top.data_out, time: 50ns, hops: 6, termination: ambiguous, temporal_boundaries: 1}
+    - {case: case_08, signal: top.data_out, time: 50ns, hops: 6, termination: ambiguous, temporal_boundaries: 1}
+    - {case: case_09, signal: top.data_out, time: 50ns, hops: 6, termination: ambiguous, temporal_boundaries: 1}
+    - {case: case_10, signal: top.data_out, time: 50ns, hops: 6, termination: ambiguous, temporal_boundaries: 1}
+    - {case: case_11, signal: top.data_out, time: 50ns, hops: 6, termination: ambiguous, temporal_boundaries: 1}
+    - {case: case_12, signal: top.data_out, time: 50ns, hops: 6, termination: ambiguous, temporal_boundaries: 1}
+    - {case: case_13, signal: top.data_out, time: 50ns, hops: 6, termination: ambiguous, temporal_boundaries: 1}
+    - {case: case_14, signal: top.data_out, time: 50ns, hops: 7, termination: ambiguous, temporal_boundaries: 1}
+    - {case: case_15, signal: top.data_out, time: 50ns, hops: 6, termination: primary_input, temporal_boundaries: 1}
+    - {case: case_16, signal: top.data_out, time: 50ns, hops: 6, termination: primary_input, temporal_boundaries: 1}
+    - {case: case_17, signal: top.data_out, time: 50ns, hops: 7, termination: ambiguous, temporal_boundaries: 1}
+    - {case: case_18, signal: top.data_out, time: 50ns, hops: 7, termination: primary_input, temporal_boundaries: 1}
+    - {case: case_19, signal: top.data_out, time: 50ns, hops: 7, termination: primary_input, temporal_boundaries: 1}
+    - {case: case_20, signal: top.data_out, time: 50ns, hops: 6, termination: primary_input, temporal_boundaries: 1}
+  timing:
+    - {case: case_01, signal: top.data_out, time: 75ns, stop_on_temporal: true}
+    - {case: case_02, signal: top.data_out, time: 35ns, stop_on_temporal: true}
+    - {case: case_03, signal: top.data_out, time: 75ns, stop_on_temporal: true}
+    - {case: case_04, signal: top.data_out, time: 75ns, stop_on_temporal: true}
+    - {case: case_05, signal: top.data_out, time: 75ns, stop_on_temporal: true}
+    - {case: case_06, signal: top.data_out, time: 75ns, stop_on_temporal: true}
+    - {case: case_07, signal: top.data_out, time: 75ns, stop_on_temporal: true}
+    - {case: case_08, signal: top.data_out, time: 75ns, stop_on_temporal: true}
+    - {case: case_09, signal: top.data_out, time: 75ns, stop_on_temporal: true}
+    - {case: case_10, signal: top.data_out, time: 15ns, stop_on_temporal: true}
+    - {case: case_11, signal: top.data_out, time: 75ns, stop_on_temporal: true}
+    - {case: case_12, signal: top.data_out, time: 75ns, stop_on_temporal: true}
+  phase4:
+    - {case: case_01, signal: top.data_out, time: 30ns, hops: 16, termination: primary_input, temporal_boundaries: 2}
+    - {case: case_02, signal: top.data_out, time: 30ns, hops: 16, termination: primary_input, temporal_boundaries: 2}
+    - {case: case_03, signal: top.data_out, time: 30ns, hops: 16, termination: primary_input, temporal_boundaries: 2}
+    - {case: case_04, signal: top.data_out, time: 30ns, hops: 17, termination: primary_input, temporal_boundaries: 2}
+    - {case: case_05, signal: top.data_out, time: 30ns, hops: 16, termination: primary_input, temporal_boundaries: 2}
+    - {case: case_06, signal: top.data_out, time: 30ns, hops: 11, termination: ambiguous, temporal_boundaries: 2}
+    - {case: case_07, signal: top.data_out, time: 30ns, hops: 11, termination: ambiguous, temporal_boundaries: 2}
+    - {case: case_08, signal: top.data_out, time: 30ns, hops: 11, termination: ambiguous, temporal_boundaries: 2}
+    - {case: case_09, signal: top.data_out, time: 30ns, hops: 10, termination: ambiguous, temporal_boundaries: 2}
+    - {case: case_10, signal: top.data_out, time: 30ns, hops: 11, termination: ambiguous, temporal_boundaries: 2}
+    - {case: case_11, signal: top.data_out, time: 30ns, hops: 11, termination: ambiguous, temporal_boundaries: 2}
+    - {case: case_12, signal: top.data_out, time: 30ns, hops: 11, termination: ambiguous, temporal_boundaries: 2}
+    - {case: case_13, signal: top.data_out, time: 30ns, hops: 11, termination: ambiguous, temporal_boundaries: 2}
+    - {case: case_14, signal: top.data_out, time: 30ns, hops: 12, termination: ambiguous, temporal_boundaries: 2}
+    - {case: case_15, signal: top.data_out, time: 30ns, hops: 11, termination: primary_input, temporal_boundaries: 2}
+    - {case: case_16, signal: top.data_out, time: 30ns, hops: 11, termination: primary_input, temporal_boundaries: 2}
+    - {case: case_17, signal: top.data_out, time: 30ns, hops: 11, termination: ambiguous, temporal_boundaries: 2}
+    - {case: case_18, signal: top.data_out, time: 30ns, hops: 12, termination: primary_input, temporal_boundaries: 2}
+    - {case: case_19, signal: top.data_out, time: 30ns, hops: 12, termination: primary_input, temporal_boundaries: 2}
+    - {case: case_20, signal: top.data_out, time: 30ns, hops: 11, termination: primary_input, temporal_boundaries: 2}
+  phase5:
+    - {case: phase5, signal: "top.u_dut.dout[2]", time: 10ns, termination: ambiguous}
+    - {case: phase5, signal: "top.u_dut.dout[2]", time: 20ns, termination: primary_input}
+    - {case: phase5, signal: "top.u_dut.dout[2]", time: 30ns, termination: primary_input}
+    - {case: phase5, signal: "top.u_dut.dout[2]", time: 41ns, termination: primary_input}
+    - {case: phase5, signal: "top.u_dut.dout[1]", time: 50ns, termination: control_only}
+    - {case: phase5, signal: "top.u_dut.dout[1]", time: 60ns, termination: ambiguous}
+    - {case: phase5, signal: "top.u_dut.flag[2]", time: 71ns, termination: control_only}
+    - {case: phase5, signal: "top.u_dut.flag[2]", time: 81ns, termination: primary_input}
+    - {case: phase5, signal: "top.u_dut.dout[2]", time: 90ns, termination: primary_input}
+    - {case: phase5, signal: "top.u_dut.flag[2]", time: 100ns, termination: control_only}
