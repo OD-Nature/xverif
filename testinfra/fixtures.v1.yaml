@@ -10,6 +10,8 @@ fixtures:
     outputs:
       - {name: fsdb, path: out/waves.fsdb, kind: file, min_bytes: 1024}
       - {name: daidir, path: out/simv.daidir, kind: dir}
+    probes:
+      - argv: [python3, "{repo}/testinfra/leaf/probe_fixture.py", --resources, "{resources}", --xdebug, "{repo}/tools/xdebug", --fsdb-glob, out/waves.fsdb, --daidir-glob, out/simv.daidir]
     tool_env: [VERDI_HOME]
 
   - id: xdebug.active_semantics
@@ -22,6 +24,8 @@ fixtures:
     outputs:
       - {name: fsdb, path: out/waves.fsdb, kind: file, min_bytes: 1024}
       - {name: daidir, path: out/simv.daidir, kind: dir}
+    probes:
+      - argv: [python3, "{repo}/testinfra/leaf/probe_fixture.py", --resources, "{resources}", --xdebug, "{repo}/tools/xdebug", --fsdb-glob, out/waves.fsdb, --daidir-glob, out/simv.daidir]
     tool_env: [VERDI_HOME]
 
   - id: xdebug.active_zero_evidence
@@ -34,6 +38,8 @@ fixtures:
     outputs:
       - {name: fsdb, path: out/waves.fsdb, kind: file, min_bytes: 1024}
       - {name: daidir, path: out/simv.daidir, kind: dir}
+    probes:
+      - argv: [python3, "{repo}/testinfra/leaf/probe_fixture.py", --resources, "{resources}", --xdebug, "{repo}/tools/xdebug", --fsdb-glob, out/waves.fsdb, --daidir-glob, out/simv.daidir]
     tool_env: [VERDI_HOME]
 
   - id: xdebug.interface_port_root
@@ -46,6 +52,8 @@ fixtures:
     outputs:
       - {name: fsdb, path: out/waves.fsdb, kind: file, min_bytes: 1024}
       - {name: daidir, path: out/simv.daidir, kind: dir}
+    probes:
+      - argv: [python3, "{repo}/testinfra/leaf/probe_fixture.py", --resources, "{resources}", --xdebug, "{repo}/tools/xdebug", --fsdb-glob, out/waves.fsdb, --daidir-glob, out/simv.daidir]
     tool_env: [VERDI_HOME]
 
   - id: xdebug.ai_complex_wave
@@ -58,6 +66,8 @@ fixtures:
     outputs:
       - {name: fsdb, path: out/waves.fsdb, kind: file, min_bytes: 1024}
       - {name: daidir, path: out/simv.daidir, kind: dir}
+    probes:
+      - argv: [python3, "{repo}/testinfra/leaf/probe_fixture.py", --resources, "{resources}", --xdebug, "{repo}/tools/xdebug", --fsdb-glob, out/waves.fsdb, --daidir-glob, out/simv.daidir]
     tool_env: [VERDI_HOME]
 
   - id: xdebug.stream_v1
@@ -71,6 +81,8 @@ fixtures:
       - {name: fsdb, path: out/waves.fsdb, kind: file, min_bytes: 1024}
       - {name: daidir, path: out/simv.daidir, kind: dir}
       - {name: expected, path: out/stream_expected.json, kind: file, min_bytes: 1}
+    probes:
+      - argv: [python3, "{repo}/testinfra/leaf/probe_fixture.py", --resources, "{resources}", --xdebug, "{repo}/tools/xdebug", --fsdb-glob, out/waves.fsdb, --daidir-glob, out/simv.daidir, --json-glob, out/stream_expected.json]
     tool_env: [VERDI_HOME]
 
   - id: xdebug.apb_vip
@@ -87,6 +99,8 @@ fixtures:
       - {name: fsdb, path: out/regression/test/apb_vip_test/waves.fsdb, kind: file, min_bytes: 1024}
       - {name: daidir, path: out/regression/build/simv.daidir, kind: dir}
       - {name: simulation_log, path: out/regression/test/apb_vip_test/sim.log, kind: file, min_bytes: 1}
+    probes:
+      - argv: [python3, "{repo}/testinfra/leaf/probe_fixture.py", --resources, "{resources}", --xdebug, "{repo}/tools/xdebug", --fsdb-glob, out/regression/test/apb_vip_test/waves.fsdb, --daidir-glob, out/regression/build/simv.daidir, --text-glob, out/regression/test/apb_vip_test/sim.log, --uvm-zero]
     tool_env: [VERDI_HOME]
 
   - id: xdebug.axi_vip
@@ -104,6 +118,8 @@ fixtures:
       - {name: fsdb, path: out/regression/test/axi_multi_id_test/waves.fsdb, kind: file, min_bytes: 1024}
       - {name: daidir, path: out/regression/build/simv.daidir, kind: dir}
       - {name: simulation_log, path: out/regression/test/axi_multi_id_test/sim.log, kind: file, min_bytes: 1}
+    probes:
+      - argv: [python3, "{repo}/testinfra/leaf/probe_fixture.py", --resources, "{resources}", --xdebug, "{repo}/tools/xdebug", --fsdb-glob, out/regression/test/axi_multi_id_test/waves.fsdb, --daidir-glob, out/regression/build/simv.daidir, --text-glob, out/regression/test/axi_multi_id_test/sim.log, --uvm-zero]
     tool_env: [VERDI_HOME]
 
   - id: xdebug.design_uart
@@ -115,6 +131,8 @@ fixtures:
       timeout_sec: 1200
     outputs:
       - {name: daidir, path: simv.daidir, kind: dir}
+    probes:
+      - argv: [python3, "{repo}/testinfra/leaf/probe_fixture.py", --resources, "{resources}", --xdebug, "{repo}/tools/xdebug", --daidir-glob, simv.daidir]
     tool_env: [VERDI_HOME]
 
   - id: xdebug.design_p3
@@ -126,6 +144,8 @@ fixtures:
       timeout_sec: 1200
     outputs:
       - {name: daidir, path: simv.daidir, kind: dir}
+    probes:
+      - argv: [python3, "{repo}/testinfra/leaf/probe_fixture.py", --resources, "{resources}", --xdebug, "{repo}/tools/xdebug", --daidir-glob, simv.daidir]
     tool_env: [VERDI_HOME]
 
   - id: xdebug.active_trace_runner
@@ -137,6 +157,8 @@ fixtures:
       timeout_sec: 600
     outputs:
       - {name: runner, path: build/chain_test, kind: file, min_bytes: 1024}
+    probes:
+      - argv: [python3, "{repo}/testinfra/leaf/probe_fixture.py", --resources, "{resources}", --executable-glob, build/chain_test]
     tool_env: [VERDI_HOME]
 
   - id: xdebug.active_trace_p0
@@ -148,6 +170,9 @@ fixtures:
       timeout_sec: 3600
     outputs:
       - {name: cases, path: cases, kind: dir}
+    probes:
+      - argv: [python3, "{repo}/testinfra/leaf/probe_fixture.py", --resources, "{resources}", --xdebug, "{repo}/tools/xdebug", --fsdb-glob, "cases/*/out/waves.fsdb", --daidir-glob, "cases/*/out/simv.daidir"]
+        timeout_sec: 1800
     tool_env: [VERDI_HOME]
 
   - id: xdebug.active_trace_composite
@@ -159,6 +184,9 @@ fixtures:
       timeout_sec: 7200
     outputs:
       - {name: cases, path: cases, kind: dir}
+    probes:
+      - argv: [python3, "{repo}/testinfra/leaf/probe_fixture.py", --resources, "{resources}", --xdebug, "{repo}/tools/xdebug", --fsdb-glob, "cases/*/out/waves.fsdb", --daidir-glob, "cases/*/out/simv.daidir"]
+        timeout_sec: 3600
     tool_env: [VERDI_HOME]
 
   - id: xdebug.active_trace_timing
@@ -170,6 +198,9 @@ fixtures:
       timeout_sec: 5400
     outputs:
       - {name: cases, path: cases, kind: dir}
+    probes:
+      - argv: [python3, "{repo}/testinfra/leaf/probe_fixture.py", --resources, "{resources}", --xdebug, "{repo}/tools/xdebug", --fsdb-glob, "cases/*/out/waves.fsdb", --daidir-glob, "cases/*/out/simv.daidir"]
+        timeout_sec: 2400
     tool_env: [VERDI_HOME]
 
   - id: xdebug.active_trace_phase4
@@ -181,6 +212,9 @@ fixtures:
       timeout_sec: 7200
     outputs:
       - {name: cases, path: cases, kind: dir}
+    probes:
+      - argv: [python3, "{repo}/testinfra/leaf/probe_fixture.py", --resources, "{resources}", --xdebug, "{repo}/tools/xdebug", --fsdb-glob, "cases/*/out/waves.fsdb", --daidir-glob, "cases/*/out/simv.daidir"]
+        timeout_sec: 3600
     tool_env: [VERDI_HOME]
 
   - id: xdebug.active_trace_phase5
@@ -192,6 +226,9 @@ fixtures:
       timeout_sec: 1200
     outputs:
       - {name: cases, path: cases, kind: dir}
+    probes:
+      - argv: [python3, "{repo}/testinfra/leaf/probe_fixture.py", --resources, "{resources}", --xdebug, "{repo}/tools/xdebug", --fsdb-glob, "cases/*/out/waves.fsdb", --daidir-glob, "cases/*/out/simv.daidir"]
+        timeout_sec: 1200
     tool_env: [VERDI_HOME]
 
   - id: xdebug.xif_event
@@ -207,6 +244,8 @@ fixtures:
       - {name: fsdb, path: out/waves/xif_event_multi_if_test.fsdb, kind: file, min_bytes: 1024}
       - {name: daidir, path: out/simv.daidir, kind: dir}
       - {name: simulation_log, path: out/logs/xif_event_multi_if_test.log, kind: file, min_bytes: 1}
+    probes:
+      - argv: [python3, "{repo}/testinfra/leaf/probe_fixture.py", --resources, "{resources}", --xdebug, "{repo}/tools/xdebug", --fsdb-glob, out/waves/xif_event_multi_if_test.fsdb, --daidir-glob, out/simv.daidir, --text-glob, out/logs/xif_event_multi_if_test.log, --uvm-zero]
     tool_env: [VERDI_HOME]
 
   - id: xsva.vcs
@@ -218,6 +257,8 @@ fixtures:
       timeout_sec: 2400
     outputs:
       - {name: cases, path: out, kind: dir}
+    probes:
+      - argv: [python3, "{repo}/testinfra/leaf/probe_fixture.py", --resources, "{resources}", --text-glob, "out/*/sim.log", --min-count, "4"]
     tool_env: [VERDI_HOME]
 
   - id: xloc.uvm
@@ -230,4 +271,6 @@ fixtures:
     outputs:
       - {name: simulation_log, path: out/sim.log, kind: file, min_bytes: 1}
       - {name: daidir, path: out/simv.daidir, kind: dir}
+    probes:
+      - argv: [python3, "{repo}/testinfra/leaf/probe_fixture.py", --resources, "{resources}", --text-glob, out/sim.log, --require-text, UVM_ERROR]
     tool_env: [VERDI_HOME]

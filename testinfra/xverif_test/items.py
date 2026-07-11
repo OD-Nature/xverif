@@ -110,8 +110,11 @@ class ExternalSuiteItem(pytest.Item):
             return f"{failure}{suffix}"
         return super().repr_failure(excinfo)
 
-    def reportinfo(self) -> tuple[Path, int | None, str]:
-        return Path(str(self.config.rootpath)) / "testinfra/catalog.v1.yaml", None, self.name
+    def reportinfo(self) -> tuple[Path, int, str]:
+        # pytest requires an integer source line when a custom item is skipped
+        # during setup; None causes TestReport construction to fail before the
+        # intended optional-suite skip can be recorded.
+        return Path(str(self.config.rootpath)) / "testinfra/catalog.v1.yaml", 0, self.name
 
 
 def _terminate_process_group(process: subprocess.Popen[str], timeout_sec: int) -> None:

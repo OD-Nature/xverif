@@ -220,6 +220,7 @@ def xverif_fixture(xverif_fixture_store: FixtureStore) -> Any:
     return xverif_fixture_store.resolve
 
 
+@pytest.hookimpl(tryfirst=True)
 def pytest_collection_modifyitems(
     config: pytest.Config, items: list[pytest.Item]
 ) -> None:

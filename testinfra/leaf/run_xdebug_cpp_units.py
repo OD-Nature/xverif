@@ -27,9 +27,10 @@ BINARIES = (
 
 def main() -> int:
     root = Path(__file__).resolve().parents[2]
+    xdebug_root = root / "xdebug"
     subprocess.run(["make", "-C", "xdebug", "cpp-unit-binaries"], cwd=root, check=True)
     for name in BINARIES:
-        subprocess.run([str(root / "xdebug/build/tests" / name)], cwd=root, check=True)
+        subprocess.run([str(xdebug_root / "build/tests" / name)], cwd=xdebug_root, check=True)
     return 0
 
 

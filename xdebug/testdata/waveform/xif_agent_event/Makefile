@@ -1,7 +1,6 @@
 VCS        ?= vcs
 VERDI_HOME ?= ~/Synopsys/verdi/V-2023.12-SP2
 XIF_AGENT  ?= $(HOME)/xif_agent
-XDEBUG     ?= ../../../../tools/xdebug
 SOURCE_DIR := $(abspath .)
 
 OUT        ?= out
@@ -28,7 +27,7 @@ VCS_FLAGS := \
 	$(SOURCE_DIR)/tb/xif_event_pkg.sv \
 	$(SOURCE_DIR)/tb/xif_event_top.sv
 
-.PHONY: all sim run check clean
+.PHONY: all sim run clean
 
 all: sim
 
@@ -41,9 +40,6 @@ sim:
 run: sim
 	@mkdir -p $(OUT)/logs $(OUT)/waves
 	cd $(OUT) && ./simv +UVM_TESTNAME=$(TEST) -l logs/$(TEST).log
-
-check: run
-	python3 scripts/check_event_waves.py --xdebug $(XDEBUG) --fsdb $(OUT)/waves/$(TEST).fsdb
 
 clean:
 	rm -rf $(OUT) csrc simv simv.daidir ucli.key novas* verdiLog .vcs_lib_lock

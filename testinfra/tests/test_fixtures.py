@@ -58,6 +58,15 @@ def test_prepare_publishes_and_reuses_fixture(tmp_path: Path) -> None:
     assert store.resolve(spec.id) == first
 
 
+def test_rebuild_atomically_switches_to_new_immutable_generation(tmp_path: Path) -> None:
+    store, spec = make_store(tmp_path)
+    first = store.prepare(spec.id)
+    second = store.prepare(spec.id, rebuild=True)
+    assert second != first
+    assert (first / "out.txt").read_text(encoding="utf-8") == "ok"
+    assert store.resolve(spec.id) == second
+
+
 def test_tool_identity_uses_compatible_major_minor() -> None:
     assert _compatibility_identity("/tools/verdi/V-2023.12-SP2") == "V-2023.12"
     assert _compatibility_identity("") == "unset"

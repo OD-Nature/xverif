@@ -6,6 +6,7 @@
 
 ```bash
 pytest --xverif-gate fast
+export XVERIF_TEST_EXECUTION_ENV=host  # 仅在已经进入沙箱外 host 后设置
 pytest --xverif-gate regression -n auto
 pytest --xverif-gate nightly -n auto
 ```
@@ -14,6 +15,7 @@ pytest --xverif-gate nightly -n auto
 - `regression`：全部 required deterministic fast/medium suite；可读取缓存 FSDB/daidir，但不生成。
 - `nightly`：包含 regression，并增加 VIP、active-trace、xif-event、xsva VCS 和 optional realdata/real LSF。
 - 裸 `pytest`、未知 suite、互斥操作组合都是 usage error。
+- `XVERIF_TEST_EXECUTION_ENV` 只接受 `host`/`sandbox`；它只写 environment snapshot，不改变真实权限边界。沙箱外 gate 必须显式设为 `host`。
 
 查看无副作用执行计划：
 
@@ -43,7 +45,7 @@ pytest --xverif-fixture-clean
 pytest --xverif-results-clean
 ```
 
-Fixture 使用内容指纹、工具兼容 identity、跨进程锁、staging 和原子 publish。cache miss、指纹不符或输出不完整会在 suite 启动前形成 required preflight ERROR，并给出 prepare 命令；不会自动生成、SKIP 或换数据源。连续两次 prepare 的第二次必须命中缓存。
+Fixture 使用内容指纹、工具兼容 identity、跨进程锁、staging、backend-aware semantic probe、不可变 generation 和原子 `current.json` 切换。builder 与 probe 只在显式 prepare/validation 发布新 generation 时执行；普通 gate 和 cache-hit prepare 只读 manifest/产物，不重新编译或仿真。cache miss、指纹不符或输出不完整会在 suite 启动前形成 required preflight ERROR，并给出 prepare 命令；不会自动生成、SKIP 或换数据源。连续两次 prepare 的第二次必须命中缓存。
 
 ## 结果与诊断
 

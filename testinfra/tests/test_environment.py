@@ -21,3 +21,19 @@ def test_environment_snapshot_is_schema_valid(tmp_path: Path) -> None:
     )
     jsonschema.Draft202012Validator(schema).validate(payload)
     assert statuses["unknown-test-capability"].available is False
+
+
+def test_environment_snapshot_uses_only_explicit_contract(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("CODEX_SANDBOX_NETWORK_DISABLED", "1")
+    monkeypatch.setenv("XVERIF_TEST_EXECUTION_ENV", "host")
+    path = tmp_path / "environment.json"
+    write_snapshot(path, {})
+    assert json.loads(path.read_text(encoding="utf-8"))["execution_environment"] == "host"
+
+    monkeypatch.setenv("XVERIF_TEST_EXECUTION_ENV", "invalid")
+    try:
+        write_snapshot(path, {})
+    except ValueError as exc:
+        assert "must be 'host' or 'sandbox'" in str(exc)
+    else:
+        raise AssertionError("invalid execution environment was accepted")

@@ -8,7 +8,7 @@ from testinfra.xverif_test.catalog import Catalog
 
 ROOT = Path(__file__).resolve().parents[2]
 FORBIDDEN_TARGET = re.compile(
-    r"^(?:test|full-test|unit-test|smoke|vim-test|pytest-[A-Za-z0-9_.-]+|mcp-[A-Za-z0-9_.-]+|[A-Za-z0-9_.-]+-test):"
+    r"^(?:test|check|full-test|unit-test|smoke|vim-test|pytest-[A-Za-z0-9_.-]+|mcp-[A-Za-z0-9_.-]+|[A-Za-z0-9_.-]+-test):"
 )
 
 
@@ -38,6 +38,13 @@ def test_every_collected_python_test_has_catalog_owner() -> None:
 
 def test_legacy_pytest_configs_and_gate_scripts_are_absent() -> None:
     assert list(ROOT.rglob("pytest.ini")) == []
+    nested_pytest_configs: list[Path] = []
+    for path in ROOT.rglob("pyproject.toml"):
+        if path == ROOT / "pyproject.toml":
+            continue
+        if "[tool.pytest.ini_options]" in path.read_text(encoding="utf-8"):
+            nested_pytest_configs.append(path.relative_to(ROOT))
+    assert nested_pytest_configs == []
     assert not (ROOT / "regression/run_xdebug_regression.sh").exists()
     assert not (ROOT / "regression/run_full_regression.sh").exists()
 
@@ -74,3 +81,23 @@ def test_product_test_consumers_do_not_prepare_fixtures() -> None:
             if token in text:
                 violations.append(f"{path.relative_to(ROOT)}:{token}")
     assert violations == []
+
+
+def test_cpp_unit_runner_matches_every_cpp_test_binary() -> None:
+    from testinfra.leaf.run_xdebug_cpp_units import BINARIES
+
+    sources = {
+        path.stem for path in (ROOT / "xdebug/tests/unit").glob("test_*.cpp")
+    }
+    assert set(BINARIES) == sources
+
+
+def test_every_testinfra_leaf_is_declared_by_catalog_or_fixture_registry() -> None:
+    declared = (ROOT / "testinfra/catalog.v1.yaml").read_text(encoding="utf-8")
+    declared += (ROOT / "testinfra/fixtures.v1.yaml").read_text(encoding="utf-8")
+    leaves = {
+        path.relative_to(ROOT).as_posix()
+        for path in (ROOT / "testinfra/leaf").glob("*.py")
+        if path.name != "__init__.py"
+    }
+    assert all(path in declared for path in leaves)

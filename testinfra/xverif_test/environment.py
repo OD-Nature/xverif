@@ -25,13 +25,16 @@ def probe_capabilities(names: Iterable[str], repo_root: Path) -> dict[str, Capab
 
 
 def write_snapshot(path: Path, statuses: dict[str, CapabilityStatus]) -> None:
+    execution_environment = os.environ.get("XVERIF_TEST_EXECUTION_ENV", "sandbox")
+    if execution_environment not in {"host", "sandbox"}:
+        raise ValueError(
+            "XVERIF_TEST_EXECUTION_ENV must be 'host' or 'sandbox', got: "
+            + execution_environment
+        )
     payload = {
         "schema_version": "xverif-environment-snapshot.v1",
         "captured_at": datetime.now(timezone.utc).isoformat(),
-        "execution_environment": os.environ.get(
-            "XVERIF_TEST_EXECUTION_ENV",
-            "sandbox" if os.environ.get("CODEX_SANDBOX_NETWORK_DISABLED") else "host",
-        ),
+        "execution_environment": execution_environment,
         "capabilities": [asdict(statuses[name]) for name in sorted(statuses)],
     }
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")

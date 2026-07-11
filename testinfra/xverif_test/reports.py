@@ -57,7 +57,7 @@ class ResultManager:
             (value for key, value in report.user_properties if key == "xverif_suite"),
             "unmapped",
         )
-        if report.when == "call" or report.failed:
+        if report.when == "call" or report.failed or report.skipped:
             self.items.append(
                 {
                     "nodeid": report.nodeid,

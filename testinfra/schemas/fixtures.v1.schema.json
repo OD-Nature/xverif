@@ -11,7 +11,7 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "source_dir", "inputs", "builder", "outputs"],
+        "required": ["id", "source_dir", "inputs", "builder", "outputs", "probes"],
         "properties": {
           "id": {"type": "string", "pattern": "^[a-z0-9_.-]+$"},
           "source_dir": {"type": "string"},
@@ -41,6 +41,21 @@
                 "path": {"type": "string"},
                 "kind": {"enum": ["file", "dir"]},
                 "min_bytes": {"type": "integer", "minimum": 0}
+              }
+            }
+          },
+          "probes": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["argv"],
+              "properties": {
+                "argv": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+                "cwd": {"type": "string"},
+                "env": {"type": "object", "additionalProperties": {"type": "string"}},
+                "timeout_sec": {"type": "integer", "minimum": 1}
               }
             }
           },

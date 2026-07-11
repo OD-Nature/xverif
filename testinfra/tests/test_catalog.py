@@ -4,6 +4,7 @@ import pytest
 
 from testinfra.xverif_test.catalog import Catalog, CatalogError
 from testinfra.xverif_test.gates import build_plan, filter_plan
+from testinfra.xverif_test.resources import apply_xdist_resource_group
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -55,3 +56,19 @@ def test_suite_filter_can_only_narrow_a_gate() -> None:
     assert narrowed.selected_ids() == {"xloc.vim"}
     with pytest.raises(ValueError, match="not part of gate"):
         filter_plan(build_plan(load_catalog(), "fast"), ["xloc.vim"])
+
+
+def test_npi_capability_implies_common_xdist_resource_group() -> None:
+    catalog = load_catalog()
+    suite = next(item for item in catalog.suites if item.id == "xdebug.stream")
+
+    class FakeItem:
+        marker = None
+
+        def add_marker(self, marker: object) -> None:
+            self.marker = marker
+
+    item = FakeItem()
+    apply_xdist_resource_group(item, suite)  # type: ignore[arg-type]
+    assert item.marker is not None
+    assert item.marker.kwargs["name"] == "xverif-resource-verdi_npi"

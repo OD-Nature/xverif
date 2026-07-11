@@ -6,6 +6,7 @@ import signal
 import subprocess
 import sys
 import time
+import uuid
 from pathlib import Path
 
 import pytest
@@ -18,6 +19,7 @@ XDEBUG_ROOT = TESTS_ROOT.parent
 REPO_ROOT = XDEBUG_ROOT.parent
 ENGINE_BIN = XDEBUG_ROOT / "libexec" / "xdebug-engine"
 _INITIAL_ENGINE_PIDS: set[int] = set()
+_ENGINE_OWNER_TOKEN = ""
 
 if str(TESTS_ROOT) not in sys.path:
     sys.path.insert(0, str(TESTS_ROOT))
@@ -60,6 +62,17 @@ def _pid_still_matches_engine(pid: int) -> bool:
     except OSError:
         return False
     return proc.returncode == 0 and str(ENGINE_BIN) in proc.stdout
+
+
+def _pid_has_owner_token(pid: int, token: str) -> bool:
+    if not token:
+        return False
+    try:
+        environ = Path(f"/proc/{pid}/environ").read_bytes().split(b"\0")
+    except OSError:
+        return False
+    expected = f"XDEBUG_TEST_OWNER_TOKEN={token}".encode("utf-8")
+    return expected in environ
 
 
 def _terminate_pids(pids: set[int]) -> None:
@@ -109,13 +122,21 @@ def _kill_all_sessions_for_home(xdebug_bin: Path, home: Path) -> None:
 
 
 def pytest_sessionstart(session: pytest.Session) -> None:
-    global _INITIAL_ENGINE_PIDS
+    global _INITIAL_ENGINE_PIDS, _ENGINE_OWNER_TOKEN
     _INITIAL_ENGINE_PIDS = _xdebug_engine_pids()
+    _ENGINE_OWNER_TOKEN = uuid.uuid4().hex
+    os.environ["XDEBUG_TEST_OWNER_TOKEN"] = _ENGINE_OWNER_TOKEN
 
 
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     current = _xdebug_engine_pids()
-    _terminate_pids(current - _INITIAL_ENGINE_PIDS)
+    owned = {
+        pid
+        for pid in current - _INITIAL_ENGINE_PIDS
+        if _pid_has_owner_token(pid, _ENGINE_OWNER_TOKEN)
+    }
+    _terminate_pids(owned)
+    os.environ.pop("XDEBUG_TEST_OWNER_TOKEN", None)
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:

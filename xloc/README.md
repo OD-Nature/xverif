@@ -209,10 +209,11 @@ let g:xloc_auto_enable = 0
 ## 内建 UVM 测试环境
 
 ```bash
-make -f Makefile.test   # 需要 VCS + UVM
+pytest --xverif-prepare xloc.uvm
+XVERIF_TEST_EXECUTION_ENV=host pytest --xverif-gate nightly --xverif-suite xloc.uvm
 ```
 
-测试环境位于 `xloc/tb/`，在不同文件中调用 `uvm_error`/`uvm_warning`/`uvm_info`，验证多文件 loc_id 生成和去重。产物输出到 `xloc/out/`。
+测试环境位于 `xloc/tb/`，在不同文件中调用 `uvm_error`/`uvm_warning`/`uvm_info`，验证多文件 loc_id 生成和去重。显式 prepare 通过 `Makefile.fixture` 构建并发布内容寻址缓存；nightly 只消费缓存，不会隐式重复仿真。
 
 ## Agent 使用原则
 
@@ -228,9 +229,9 @@ make -f Makefile.test   # 需要 VCS + UVM
 ```bash
 make -C xloc          # 语法检查
 pytest --xverif-gate fast --xverif-suite xloc.unit
-pytest --xverif-gate regression --xverif-suite xloc.vim
+XVERIF_TEST_EXECUTION_ENV=host pytest --xverif-gate regression --xverif-suite xloc.vim
 pytest --xverif-prepare xloc.uvm
-pytest --xverif-gate nightly --xverif-suite xloc.uvm
+XVERIF_TEST_EXECUTION_ENV=host pytest --xverif-gate nightly --xverif-suite xloc.uvm
 ```
 
 `xloc` 只依赖 Python 标准库，不依赖 NPI、Verdi 或任何 Synopsys 工具。UVM 测试环境需要 VCS。

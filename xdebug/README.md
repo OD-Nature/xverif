@@ -81,7 +81,7 @@ xdebug/examples/requests/<action>.basic.json
 xdebug/examples/responses/<action>.basic.json
 ```
 
-`make -C xdebug contract-test` 会检查 runtime `actions` 输出、`specs/actions/actions.yaml`、schemas 和 examples 是否完全对齐。
+`pytest --xverif-gate regression --xverif-suite xdebug.action_runtime_catalog` 会检查 runtime `actions` 输出、`specs/actions/actions.yaml`、schemas 和 examples 是否完全对齐；纯静态 schema/example 合同由 `pytest --xverif-gate fast --xverif-suite xdebug.static` 检查。
 
 推荐通过仓库根目录的 wrapper 调用，它会设置 Verdi/NPI 运行所需环境：
 
@@ -329,6 +329,7 @@ xdebug 与全仓其它组件共享根级 catalog-driven pytest plugin；Makefile
 
 ```bash
 pytest --xverif-gate fast
+export XVERIF_TEST_EXECUTION_ENV=host  # 仅在已经进入沙箱外 host 后设置
 pytest --xverif-gate regression -n auto
 pytest --xverif-gate nightly -n auto
 pytest --xverif-gate regression --xverif-suite xdebug.contract
@@ -338,6 +339,7 @@ pytest --xverif-gate nightly --xverif-suite xdebug.axi_vip
 在 Codex 受限沙箱中，只运行 `fast`。所有涉及 NPI、Verdi/VCS、FSDB、daidir、`session.open`、Unix domain
 socket、SVT VIP 编译/仿真的入口，应在沙箱外运行，否则可能得到 license 连接失败、
 UDS bind 失败或 `SESSION_UNHEALTHY: child_exited` 等环境型失败。
+沙箱外 gate 应显式设置 `XVERIF_TEST_EXECUTION_ENV=host` 记录证据；该变量不提供权限提升，也不触发 fallback。
 
 普通 gate 不生成 FSDB/daidir；先显式 prepare：
 

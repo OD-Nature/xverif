@@ -169,6 +169,16 @@ class CliTests(unittest.TestCase):
         payload = self.run_cli("decode", "--config", "examples/entry.yaml", "--input", "examples/fragments.jsonl", "--json")
         self.assertTrue(payload["ok"])
 
+    def test_compat_explain(self):
+        payload = self.run_cli("explain", "--config", "examples/entry.yaml", "--json")
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["action"], "explain")
+
+    def test_compat_validate(self):
+        payload = self.run_cli("validate", "--config", "examples/entry.yaml", "--input", "examples/fragments.jsonl", "--json")
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["action"], "validate")
+
 
 if __name__ == "__main__":
     unittest.main()

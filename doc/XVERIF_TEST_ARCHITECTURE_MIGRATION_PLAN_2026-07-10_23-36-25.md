@@ -1,7 +1,7 @@
 # xverif 全仓测试体系统一迁移计划
 
 - 生成时间：2026-07-10 23:36:25（Asia/Shanghai）
-- 状态：待用户确认后进入实现；当前只完成事实盘点、领域词汇、ADR 与迁移计划
+- 状态：已获用户授权并完成实施；最终验收与独立复审见 `XVERIF_TEST_ARCHITECTURE_MIGRATION_VERIFICATION_2026-07-11_02-16-19.md`
 - 目标：在本次任务内把全仓分散测试全部迁移到 catalog 驱动的 pytest plugin，统一 fixture、选择、执行、并行、错误语义和报告
 - 关键约束：不做 fallback；普通测试不隐式仿真；所有 NPI/VCS/VIP/真实 license/进程通信测试在沙箱外执行
 - CI：不在本次范围内；只交付 provider-neutral 的仓库测试合同和机器可消费报告
@@ -416,24 +416,24 @@ pytest --xverif-results-clean
 
 ## 11. 最终验收标准
 
-- [ ] catalog 覆盖所有现有 Python、C++、shell、Make/VCS、VIP、MCP、realdata、active-trace suite。
-- [ ] 顶层 YAML catalog 与 schema 是唯一 suite/gate 事实源。
-- [ ] 裸 pytest usage ERROR；所有文档使用显式 `--xverif-*`。
-- [ ] fast/regression/nightly/fixture-validation 选择与 required/optional 合同稳定。
-- [ ] 普通 regression/nightly 在 cache hit 时不运行 VCS/simv。
-- [ ] cache miss 不自动 prepare、不 SKIP required、不 fallback。
-- [ ] fixture 指纹、完整性、semantic probe 和 atomic publish 全覆盖。
-- [ ] pytest-xdist 并行不破坏 license/token/cache/process cleanup。
-- [ ] FAIL/ERROR/SKIP/DESELECT/error_layer 可从终端、JUnit、JSON 一致解释。
-- [ ] 无自动 retry；rerun 不改写原 gate。
-- [ ] `.xverif-test-results` 保留完整可移动 run evidence。
-- [ ] 所有 Makefile 测试 target、重复 gate shell、局部公共 pytest.ini 已删除。
-- [ ] `xsva` 与 `xeda_runner` 纳入全仓 gate。
-- [ ] README、xdebug agent 文档、AGENTS.md、skills 与新入口一致。
-- [ ] clean build 后 fast、regression、nightly required 全通过。
-- [ ] 外部 realdata/real LSF 缺失仅形成明确 optional SKIP，无 fake fallback。
-- [ ] 第二次全量运行证明 fixture cache 命中且无重复仿真。
-- [ ] 独立 reviewer 确认无 suite 丢失、无旧编排残留、无结果语义夸大。
+- [x] catalog 覆盖所有现有 Python、C++、shell、Make/VCS、VIP、MCP、realdata、active-trace suite。
+- [x] 顶层 YAML catalog 与 schema 是唯一 suite/gate 事实源。
+- [x] 裸 pytest usage ERROR；所有当前文档使用显式 `--xverif-*`。
+- [x] fast/regression/nightly/fixture-validation 选择与 required/optional 合同稳定。
+- [x] 普通 regression/nightly 在 cache hit 时不运行 VCS/simv。
+- [x] cache miss 不自动 prepare、不 SKIP required、不 fallback。
+- [x] fixture 指纹、完整性、semantic probe 和 atomic publish 全覆盖。
+- [x] pytest-xdist 并行不破坏 license/token/cache/process cleanup。
+- [x] FAIL/ERROR/SKIP/DESELECT/error_layer 可从终端、JUnit、JSON 一致解释。
+- [x] 无自动 retry；rerun 不改写原 gate。
+- [x] `.xverif-test-results` 保留完整可移动 run evidence。
+- [x] 所有 Makefile 测试 target、重复 gate shell、局部公共 pytest 配置已删除。
+- [x] `xsva` 与 `xeda_runner` 纳入全仓 gate。
+- [x] README、xdebug agent 文档、AGENTS.md、skills 与新入口一致。
+- [x] clean build 后 fast、regression、nightly required 全通过。
+- [x] 外部 realdata/real LSF 缺失仅形成明确 optional SKIP，无 fake fallback。
+- [x] 第二次全量运行证明 fixture cache 命中且无重复仿真。
+- [x] 独立 reviewer 确认无 suite 丢失、无旧编排残留、无结果语义夸大。
 
 ## 12. Commit 规划
 
@@ -480,11 +480,6 @@ pytest --xverif-results-clean
 - 必须保留某个 Make test target 才能完成迁移，与 pytest-only 决策冲突。
 - regression/nightly parity 需要降低断言、把 required 改 optional 或引入 fallback。
 
-## 14. 实施授权边界
+## 14. 实施授权与完成状态
 
-本文件当前只是计划。依据 grilling 规则，在用户明确确认“共享理解已达成并开始实现”前：
-
-- 不创建 testinfra 源码。
-- 不修改现有测试、Makefile、pytest.ini、fixture 或 runner。
-- 不执行 NPI/VCS/VIP/真实 EDA 回归。
-- 不 commit、不 push，除非用户另行明确要求。
+用户已明确要求以本计划为目标进入 goal 模式，完成全量迁移、保持测试内容和范围一致，并在最终门禁通过后推送远端。实施按第 12 节分批提交；最终验证报告记录 clean build、三层 gate、19 个 fixture 的强制重建与 cache-hit 复验，以及独立 reviewer 的结论。

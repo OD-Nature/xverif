@@ -23,7 +23,7 @@ include = ["testinfra*", "xverif_mcp*", "xverif_loop*"]
 namespaces = false
 
 [tool.pytest.ini_options]
-addopts = "-ra --strict-markers"
+addopts = "-ra --strict-markers --dist=loadgroup"
 pythonpath = [
   "xbit/src",
   "xentry/src",

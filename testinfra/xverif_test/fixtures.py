@@ -38,6 +38,7 @@ class FixtureSpec:
     builder: dict[str, Any]
     outputs: tuple[FixtureOutput, ...]
     tool_env: tuple[str, ...]
+    probes: tuple[dict[str, Any], ...] = ()
 
     @classmethod
     def from_json(cls, data: dict[str, Any]) -> "FixtureSpec":
@@ -57,6 +58,7 @@ class FixtureSpec:
                 for item in data["outputs"]
             ),
             tool_env=tuple(data.get("tool_env", [])),
+            probes=tuple(dict(item) for item in data.get("probes", [])),
         )
 
 
@@ -105,6 +107,9 @@ class FixtureStore:
         digest.update(
             json.dumps(spec.builder, sort_keys=True, separators=(",", ":")).encode("utf-8")
         )
+        digest.update(
+            json.dumps(spec.probes, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        )
         tool_identity = {
             name: _compatibility_identity(os.environ.get(name, ""))
             for name in spec.tool_env
@@ -117,7 +122,7 @@ class FixtureStore:
     def resolve(self, fixture_id: str) -> Path:
         spec = self.registry.by_id(fixture_id)
         fingerprint, _ = self.fingerprint(spec)
-        target = self._target(spec, fingerprint)
+        target = self._published_target(spec, fingerprint)
         self._validate_published(spec, target, fingerprint)
         return target / "resources"
 
@@ -129,11 +134,14 @@ class FixtureStore:
         lock_path = fixture_root / ".prepare.lock"
         with lock_path.open("a+", encoding="utf-8") as lock_stream:
             fcntl.flock(lock_stream.fileno(), fcntl.LOCK_EX)
-            target = self._target(spec, fingerprint)
-            if target.exists() and not rebuild:
-                self._validate_published(spec, target, fingerprint)
-                self._write_current(fixture_root, fingerprint)
-                return target / "resources"
+            if not rebuild:
+                try:
+                    target = self._published_target(spec, fingerprint)
+                except FixtureError:
+                    target = None
+                if target is not None:
+                    self._validate_published(spec, target, fingerprint)
+                    return target / "resources"
             staging_root = fixture_root / ".staging"
             staging_root.mkdir(parents=True, exist_ok=True)
             staging = Path(tempfile.mkdtemp(prefix="prepare-", dir=staging_root))
@@ -141,6 +149,7 @@ class FixtureStore:
             try:
                 self._run_builder(spec, staging)
                 self._validate_outputs(spec, staging / "resources")
+                self._run_probes(spec, staging / "resources", staging)
                 manifest = {
                     "schema_version": "xverif-fixture-manifest.v1",
                     "fixture_id": spec.id,
@@ -155,10 +164,12 @@ class FixtureStore:
                     json.dumps(manifest, indent=2, sort_keys=True) + "\n",
                     encoding="utf-8",
                 )
-                if target.exists():
-                    shutil.rmtree(target)
+                versions = fixture_root / "versions"
+                versions.mkdir(parents=True, exist_ok=True)
+                version = f"{fingerprint}-{staging.name}"
+                target = versions / version
                 os.replace(staging, target)
-                self._write_current(fixture_root, fingerprint)
+                self._write_current(fixture_root, fingerprint, version)
                 return target / "resources"
             except Exception:
                 shutil.rmtree(staging, ignore_errors=True)
@@ -198,6 +209,12 @@ class FixtureStore:
             for path in self.repo_root.glob(pattern):
                 if path.is_file():
                     files.add(path.resolve())
+        for probe in spec.probes:
+            for value in probe.get("argv", []):
+                candidate = str(value).replace("{repo}/", "")
+                path = self.repo_root / candidate
+                if path.is_file():
+                    files.add(path.resolve())
         return tuple(sorted(files))
 
     def _run_builder(self, spec: FixtureSpec, staging: Path) -> None:
@@ -233,6 +250,38 @@ class FixtureStore:
                 f"fixture builder failed for {spec.id}: rc={result.returncode}\n{tail}"
             )
 
+    def _run_probes(self, spec: FixtureSpec, resources: Path, staging: Path) -> None:
+        values = {
+            "repo": str(self.repo_root),
+            "source": str((self.repo_root / spec.source_dir).resolve()),
+            "staging": str(staging),
+            "resources": str(resources),
+            "home": str(Path.home()),
+        }
+        for index, probe in enumerate(spec.probes):
+            argv = [str(value).format(**values) for value in probe["argv"]]
+            cwd = Path(str(probe.get("cwd", "{repo}")).format(**values))
+            env = os.environ.copy()
+            for key, value in probe.get("env", {}).items():
+                env[str(key)] = str(value).format(**values)
+            log_path = staging / f"probe-{index}.log"
+            with log_path.open("w", encoding="utf-8") as log:
+                result = subprocess.run(
+                    argv,
+                    cwd=cwd,
+                    env=env,
+                    text=True,
+                    stdout=log,
+                    stderr=subprocess.STDOUT,
+                    timeout=int(probe.get("timeout_sec", 1200)),
+                    check=False,
+                )
+            if result.returncode != 0:
+                tail = log_path.read_text(encoding="utf-8", errors="replace")[-4000:]
+                raise FixtureError(
+                    f"fixture semantic probe failed for {spec.id}: rc={result.returncode}\n{tail}"
+                )
+
     def _validate_published(self, spec: FixtureSpec, target: Path, fingerprint: str) -> None:
         manifest_path = target / "manifest.json"
         if not manifest_path.is_file():
@@ -259,14 +308,32 @@ class FixtureStore:
             else:
                 raise FixtureError(f"fixture {spec.id} has unknown output kind {output.kind}")
 
-    def _target(self, spec: FixtureSpec, fingerprint: str) -> Path:
-        return self.root / spec.id / fingerprint
+    def _published_target(self, spec: FixtureSpec, fingerprint: str) -> Path:
+        fixture_root = self.root / spec.id
+        current_path = fixture_root / "current.json"
+        try:
+            current = json.loads(current_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise FixtureError(
+                f"fixture cache miss for {spec.id}; run: pytest --xverif-prepare {spec.id}"
+            ) from exc
+        if current.get("fingerprint") != fingerprint or not current.get("version"):
+            raise FixtureError(
+                f"fixture cache miss for {spec.id}; run: pytest --xverif-prepare {spec.id}"
+            )
+        target = fixture_root / "versions" / str(current["version"])
+        if not target.is_dir():
+            raise FixtureError(f"fixture current generation missing for {spec.id}")
+        return target
 
     @staticmethod
-    def _write_current(fixture_root: Path, fingerprint: str) -> None:
+    def _write_current(fixture_root: Path, fingerprint: str, version: str) -> None:
         temporary = fixture_root / ".current.tmp"
         temporary.write_text(
-            json.dumps({"fingerprint": fingerprint}, sort_keys=True) + "\n",
+            json.dumps(
+                {"fingerprint": fingerprint, "version": version}, sort_keys=True
+            )
+            + "\n",
             encoding="utf-8",
         )
         os.replace(temporary, fixture_root / "current.json")

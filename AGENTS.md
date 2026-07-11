@@ -61,8 +61,8 @@
 常用入口：
 
 - 全仓快速门禁：`pytest --xverif-gate fast`
-- 全仓确定性回归：`pytest --xverif-gate regression -n auto`
-- 全仓 nightly：`pytest --xverif-gate nightly -n auto`
+- 全仓确定性回归（沙箱外）：`XVERIF_TEST_EXECUTION_ENV=host pytest --xverif-gate regression -n auto`
+- 全仓 nightly（沙箱外）：`XVERIF_TEST_EXECUTION_ENV=host pytest --xverif-gate nightly -n auto`
 - focused suite：在对应 gate 后追加 `--xverif-suite <catalog-id>`
 - 显式准备数据库：`pytest --xverif-prepare <fixture-id>` 或 `all-generated`
 - 全量 Fixture 校验：`pytest --xverif-fixture-validation --xverif-all-fixtures`
