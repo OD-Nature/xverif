@@ -1,5 +1,7 @@
 #include "engine_query.h"
 
+#include "api/response.h"
+
 #include "session/client.h"
 #include "session/session_manager.h"
 #include "../design/protocol/protocol.h"
@@ -52,7 +54,7 @@ OrderedJson make_response(const OrderedJson& request, const std::string& action,
     response["request_id"] = request.value("request_id", std::string());
     response["ok"] = ok;
     response["action"] = action;
-    response["tool"] = {{"name", "xdebug_engine"}, {"version", "1.0"}};
+    response["tool"] = xdebug::tool_metadata();
     response["session"] = nullptr;
     response["summary"] = OrderedJson::object();
     response["data"] = OrderedJson::object();

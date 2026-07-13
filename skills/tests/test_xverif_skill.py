@@ -34,11 +34,11 @@ def test_links_and_all_references_are_reachable() -> None:
 
 def test_generated_action_inventory_matches_canonical_registry() -> None:
     specs = json.loads((ROOT / "xdebug/specs/actions/actions.yaml").read_text())
-    expected = {entry["name"] for entry in specs["actions"]}
+    expected = {entry["name"] for entry in specs["actions"] if entry["status"] != "removed"}
     generated = (SKILL / "references/generated/xdebug-actions.md").read_text()
     documented = set(re.findall(r"^\| `([^`]+)` \|", generated, re.MULTILINE))
     assert documented == expected
-    assert len(expected) == 71
+    assert len(expected) == 70
 
 
 def test_generated_references_are_current() -> None:

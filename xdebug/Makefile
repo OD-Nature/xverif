@@ -8,7 +8,10 @@ NPI_CXXFLAGS ?=
 NPI_LDFLAGS ?=
 NPI_LIB ?=
 
-CXXFLAGS = $(COMMON_CXXFLAGS) $(NPI_CXXFLAGS) -pthread -Isrc -Isrc/core -Isrc/engine -Isrc/design -Isrc/waveform -isystem third_party -isystem third_party/json-schema-validator/src
+BUILD_GIT_REVISION := $(shell git -C $(TOP) rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
+BUILD_SCHEMA_REVISION := $(shell sha256sum specs/actions/actions.yaml 2>/dev/null | awk '{print $$1}' || echo unknown)
+BUILD_ID := $(BUILD_GIT_REVISION)-$(BUILD_SCHEMA_REVISION)
+CXXFLAGS = $(COMMON_CXXFLAGS) $(NPI_CXXFLAGS) -pthread -Isrc -Isrc/core -Isrc/engine -Isrc/design -Isrc/waveform -isystem third_party -isystem third_party/json-schema-validator/src -DXDEBUG_GIT_REVISION=\"$(BUILD_GIT_REVISION)\" -DXDEBUG_SCHEMA_REVISION=\"$(BUILD_SCHEMA_REVISION)\" -DXDEBUG_BUILD_ID=\"$(BUILD_ID)\"
 LDFLAGS  = $(NPI_LDFLAGS) -pthread $(if $(NPI_LIB),-Xlinker -rpath -Xlinker $(NPI_LIB),)
 DEPFLAGS = -MMD -MP
 # Frontend does not need NPI (all NPI is in the engine subprocess).

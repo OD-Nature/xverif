@@ -34,7 +34,8 @@ def action_reference() -> str:
         "| Action | Category | Requires | Required inputs | Request schema | Example |",
         "| --- | --- | --- | --- | --- | --- |",
     ]
-    for entry in payload["actions"]:
+    entries = [entry for entry in payload["actions"] if entry.get("status") != "removed"]
+    for entry in entries:
         request_schema = entry.get("schemas", {}).get("request")
         schema = "xdebug/" + request_schema if request_schema else "-"
         examples = entry.get("examples", {}).get("request", [])
@@ -46,7 +47,7 @@ def action_reference() -> str:
         )
     lines.extend([
         "",
-        f"共 {len(payload['actions'])} 个 action。主流程见 [xdebug capability](../capabilities/xdebug.md)。",
+        f"共 {len(entries)} 个当前公开 action。主流程见 [xdebug capability](../capabilities/xdebug.md)。",
         "",
     ])
     return "\n".join(lines)

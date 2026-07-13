@@ -57,6 +57,16 @@
         "active_time": {
           "type": "string"
         },
+        "requested_time": {"type": "string"},
+        "driver_last_change_time": {"type": "string"},
+        "time_semantics": {"type": "object"},
+        "driver_status": {"type": "string"},
+        "evidence_scope": {"type": "string"},
+        "evidence_status": {"type": "string"},
+        "evidence_source": {"type": ["string", "null"]},
+        "static_candidate_count": {"type": "integer", "minimum": 0},
+        "active_check_count": {"type": "integer", "minimum": 0},
+        "trace_node_count": {"type": "integer", "minimum": 0},
         "path_count": {
           "type": "integer",
           "minimum": 0
@@ -68,7 +78,7 @@
           "type": "string"
         }
       },
-      "additionalProperties": false
+      "additionalProperties": true
     },
     "data": {
       "type": "object",
@@ -92,7 +102,7 @@
           "type": "array"
         }
       },
-      "additionalProperties": false
+      "additionalProperties": true
     },
     "error": {},
     "meta": {

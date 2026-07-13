@@ -79,6 +79,13 @@
         "summary": {
           "type": "object"
         },
+        "requested_time": {"type": "string"},
+        "time_semantics": {"type": "object"},
+        "evidence_scope": {"type": "string"},
+        "evidence_status": {"type": "string"},
+        "evidence_source": {"type": ["string", "null"]},
+        "static_candidate_count": {"type": "integer", "minimum": 0},
+        "active_check_count": {"type": "integer", "minimum": 0},
         "hops": {
           "type": "array",
           "items": {

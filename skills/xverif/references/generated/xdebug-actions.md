@@ -75,6 +75,5 @@
 | `stream.validate` | waveform | waveform | stream | `xdebug/schemas/v1/actions/stream.validate.request.schema.json` | `xdebug/examples/requests/stream.validate.basic.json` |
 | `stream.query` | waveform | waveform | stream, query | `xdebug/schemas/v1/actions/stream.query.request.schema.json` | `xdebug/examples/requests/stream.query.basic.json` |
 | `stream.export` | waveform | waveform | stream | `xdebug/schemas/v1/actions/stream.export.request.schema.json` | `xdebug/examples/requests/stream.export.basic.json` |
-| `signal.search` | design | design | 以 action schema 为准 | `-` | `-` |
 
-共 71 个 action。主流程见 [xdebug capability](../capabilities/xdebug.md)。
+共 70 个当前公开 action。主流程见 [xdebug capability](../capabilities/xdebug.md)。

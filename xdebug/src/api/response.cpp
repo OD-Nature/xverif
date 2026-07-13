@@ -9,7 +9,7 @@ Json make_response(const Json& request, const std::string& action, bool ok) {
     if (request.contains("request_id")) response["request_id"] = request["request_id"];
     response["ok"] = ok;
     response["action"] = action;
-    response["tool"] = {{"name", "xdebug"}, {"version", kToolVersion}};
+    response["tool"] = tool_metadata();
     response["session"] = nullptr;
     response["summary"] = Json::object();
     response["data"] = ok ? Json::object() : Json(nullptr);
@@ -52,8 +52,7 @@ Json normalize_engine_response(const Json& engine_response) {
     Json response = engine_response;
     response["api_version"] = kApiVersion;
     if (response.contains("tool") && response["tool"].is_object()) {
-        response["tool"]["name"] = "xdebug";
-        response["tool"]["version"] = kToolVersion;
+        response["tool"] = tool_metadata();
     }
     if (response.contains("suggested_next_actions") &&
         response["suggested_next_actions"].is_array()) {
