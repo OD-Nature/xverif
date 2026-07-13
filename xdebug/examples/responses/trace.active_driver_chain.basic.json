@@ -10,6 +10,13 @@
     "truncated": false
   },
   "data": {
+    "requested_time": "26ns",
+    "time_semantics": {"requested_time": "query time"},
+    "evidence_scope": "design_and_waveform",
+    "evidence_status": "supported",
+    "evidence_source": "assignment",
+    "static_candidate_count": 2,
+    "active_check_count": 2,
     "hops": [
       {
         "index": 0,
