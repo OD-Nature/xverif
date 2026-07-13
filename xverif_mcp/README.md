@@ -404,6 +404,12 @@ xverif_cov_query
 
 xdebug detached backend 可能比 stdio-loop 活得更久，dead loop 只由固定 native admin path 精确 doctor/kill；xcov backend 由 loop 进程拥有，kill 只终止 loop/process/LSF job，并明确返回 native kill `not_supported`。任一 cleanup 阶段失败时返回 `SESSION_CLEANUP_PARTIAL_FAILURE`、`error_layer=session_manager` 并保留 unresolved tombstone。debug/cov query 均拒绝 native lifecycle action，不会 fallback 到其它 transport 或 backend。
 
+`xverif_debug_session_open` 与 `xverif_cov_session_open` 都接受可选 `run_manifest`。
+它们会在启动后端前严格校验已发布的资源清单：xdebug 使用
+`xdebug.run-manifest.v1`（FSDB/daidir），xcov 使用 `xcov.run-manifest.v1`（VDB）。
+清单内资源路径相对 manifest 文件，且必须匹配路径、`size_bytes` 与 SHA-256；失败返回
+`RESOURCE_PROVENANCE_MISMATCH`，不会自动重试、重开或切换后端。
+
 ## 工具暴露开关
 
 每个工具组都有独立开关，取值支持 `1/0`、`true/false`、`yes/no`、`on/off`。未设置时，read-only 工具组默认开启；写入类工具默认不暴露。

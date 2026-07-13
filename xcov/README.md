@@ -72,6 +72,21 @@ xverif_cov_get_schema
 {"api_version":"xcov.v1","action":"session.open","target":{"vdb":"merged.vdb"},"args":{"name":"cov0"}}
 ```
 
+### 可复现输入：run manifest
+
+`target.run_manifest` 是可选的 provenance gate。提供时，xcov 在打开 VDB/Python
+NPI 前校验 `xcov.run-manifest.v1` 的 `state:"published"`，以及相对 manifest 文件的
+`resources.vdb.path`、`size_bytes` 和 SHA-256。不匹配返回
+`RESOURCE_PROVENANCE_MISMATCH`，不会启动后端；未提供则保持既有打开行为。
+
+```json
+{"api_version":"xcov.v1","action":"session.open","target":{"vdb":"merged.vdb","run_manifest":"run-manifest.json"},"args":{"name":"cov0"}}
+```
+
+```json
+{"schema_version":"xcov.run-manifest.v1","state":"published","resources":{"vdb":{"path":"merged.vdb","size_bytes":4096,"sha256":"<64-hex-sha256>"}}}
+```
+
 查询 holes：
 
 ```json

@@ -180,7 +180,7 @@ SCHEMAS: Dict[str, Json] = {
     "schema": _schema_entry("schema", args=_args(["action"], {"action": _string(), "kind": {"enum": ["request", "response"]}})),
     "session.open": _schema_entry(
         "session.open",
-        target=_target(["vdb"]),
+        target=_target(["vdb"], {"run_manifest": _string()}),
         args=_args(None, {"name": _string(), "fake": _bool(), "reuse": _bool(), "reopen": _bool()}),
     ),
     "session.status": _schema_entry("session.status", target=_target(["session_id"])),

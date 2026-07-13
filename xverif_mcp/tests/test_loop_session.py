@@ -63,7 +63,7 @@ for line in sys.stdin:
         result = {
             "ok": True, "action": "session.open",
             "summary": {"session_id": name, "mode": "combined",
-                        "open_args": args},
+                        "open_args": args, "open_target": target},
         }
     elif action == "value.at":
         delay = float(args.get("sleep", 0))
@@ -179,6 +179,29 @@ class TestLoopSessionOpen:
             assert s.state == "alive"
             rsp = s.query("fake", {}, output_format="json")
             assert rsp["summary"]["echo_target"]["session_id"] == "test2"
+        finally:
+            s.close(force=True)
+
+    def test_open_forwards_run_manifest_in_native_target(self, fake_xdebug_bin):
+        s = XdebugLoopSession(
+            alias="manifest_test", fsdb="t.fsdb", daidir=None,
+            run_manifest="run-manifest.json",
+            launcher=DirectLauncher(), xdebug_bin=fake_xdebug_bin,
+            startup_timeout_sec=5.0, request_timeout_sec=5.0,
+        )
+        try:
+            requests = []
+            call_raw = s._call_raw
+
+            def capture(request, timeout=None):
+                requests.append(request)
+                return call_raw(request, timeout)
+
+            s._call_raw = capture
+            response = s.open()
+            assert response["ok"] is True
+            opened = next(request for request in requests if request["action"] == "session.open")
+            assert opened["target"]["run_manifest"] == "run-manifest.json"
         finally:
             s.close(force=True)
 

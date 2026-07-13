@@ -10,6 +10,7 @@ from .errors import XcovError, error_response
 from .logging import (log_action_event, request_summary_for_log,
                       response_summary_for_log, update_session_manifest)
 from .protocol import ok_response
+from .provenance import validate_run_manifest
 from .query import (apply_output, coverage_pct, filter_items, filters_summary,
                     query_args, resolve_artifact_path, sort_items)
 from .schemas import schema_for_action
@@ -32,8 +33,12 @@ def _safe_error_response(req: Json, exc: XcovError) -> Json:
     detail = dict(exc.detail)
     if "action" in detail:
         detail["requested_action"] = detail.pop("action")
-    return error_response(req.get("action", ""), req.get("request_id", "req-unknown"),
-                          exc.code, exc.message, **detail)
+    response = error_response(req.get("action", ""), req.get("request_id", "req-unknown"),
+                              exc.code, exc.message, **detail)
+    if exc.code == "RESOURCE_PROVENANCE_MISMATCH":
+        response["summary"]["status"] = "manifest_mismatch"
+        response["data"] = {"manifest": detail.get("manifest", {})}
+    return response
 
 
 class Dispatcher:
@@ -131,12 +136,17 @@ class Dispatcher:
         vdb = target.get("vdb")
         if not vdb:
             raise XcovError("VDB_OPEN_FAILED", "target.vdb is required")
+        manifest_details = validate_run_manifest(target)
         sess = self.sessions.open(
             str(vdb), name=args.get("name"), fake=bool(args.get("fake")),
             reuse=bool(args.get("reuse", True)), reopen=bool(args.get("reopen", False)))
         summary = sess.public_json()
         summary.update({"matched_count": 1, "returned": 1,
-                        "truncated": False, "output_path": None})
+                        "truncated": False, "output_path": None,
+                        "resource_snapshot": {
+                            "vdb": sess.vdb,
+                            "run_manifest": manifest_details,
+                        }})
         session_json = sess.public_json()
         update_session_manifest(sess.session_id, session_json)
         return ok_response(req, summary, {"session": session_json})

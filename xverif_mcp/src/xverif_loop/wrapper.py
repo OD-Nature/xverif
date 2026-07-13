@@ -39,7 +39,7 @@ METHOD_PARAM_CONTRACTS: dict[str, dict[str, tuple[str, ...]]] = {
     "server.shutdown": {"required": (), "optional": (), "any_of": ()},
     "debug.session.open": {
         "required": ("name",),
-        "optional": ("fsdb", "daidir", "queue", "resource"),
+        "optional": ("fsdb", "daidir", "run_manifest", "queue", "resource"),
         "any_of": ("fsdb", "daidir"),
     },
     "debug.session.list": {
@@ -65,7 +65,7 @@ METHOD_PARAM_CONTRACTS: dict[str, dict[str, tuple[str, ...]]] = {
     },
     "cov.session.open": {
         "required": ("name", "vdb"),
-        "optional": ("queue", "resource"),
+        "optional": ("run_manifest", "queue", "resource"),
         "any_of": (),
     },
     "cov.session.list": {
@@ -194,6 +194,7 @@ class LoopWrapperService:
                 name=name,
                 fsdb=params.get("fsdb"),
                 daidir=params.get("daidir"),
+                run_manifest=params.get("run_manifest"),
                 queue=params.get("queue"),
                 resource=params.get("resource"),
             )
@@ -229,6 +230,7 @@ class LoopWrapperService:
             return self.cov.open_session(
                 name=_required_str(params, "name"),
                 fsdb=_required_str(params, "vdb"),
+                run_manifest=params.get("run_manifest"),
                 queue=params.get("queue"),
                 resource=params.get("resource"),
             )

@@ -120,6 +120,7 @@ class McpSessionManager:
     def open_session(self, name: str, fsdb: Optional[str] = None,
                      daidir: Optional[str] = None,
                      queue: Optional[str] = None, resource: Optional[str] = None,
+                     run_manifest: Optional[str] = None,
                      **kwargs: Any) -> Json:
         if not _valid_session_name(name):
             log_session_event(name, "manager.open.rejected", False,
@@ -161,6 +162,7 @@ class McpSessionManager:
         log_session_event(name, "manager.open.begin", True,
                           backend=self.backend, launcher=self.mode,
                           fsdb=fsdb, daidir=daidir,
+                          run_manifest=run_manifest,
                           queue=actual_queue, resource=actual_resource,
                           job_name=job_name)
         session = XdebugLoopSession(
@@ -171,7 +173,7 @@ class McpSessionManager:
             request_timeout_sec=self.request_timeout_sec,
             backend=self.backend, api_version=self.api_version,
             ready_protocol=self.ready_protocol, target_key=self.target_key,
-            recovery_tool=self.recovery_tool)
+            recovery_tool=self.recovery_tool, run_manifest=run_manifest)
         result = session.open()
         if not result.get("ok"):
             log_session_event(name, "manager.open.end", False,

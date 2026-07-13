@@ -69,8 +69,10 @@ class XverifCoverageAdapter:
         return StatelessCliRunner().run_json("xcov", ["--json", "-"],
                                              json.dumps(req))
 
-    def session_open(self, name: str, vdb: str, **kwargs: Any) -> Json:
-        return self._sessions.open_session(name=name, fsdb=vdb, **kwargs)
+    def session_open(self, name: str, vdb: str,
+                     run_manifest: Optional[str] = None, **kwargs: Any) -> Json:
+        return self._sessions.open_session(name=name, fsdb=vdb,
+                                           run_manifest=run_manifest, **kwargs)
 
     def session_list(self, **kwargs: Any) -> Json:
         return self._sessions.list_sessions(**kwargs)

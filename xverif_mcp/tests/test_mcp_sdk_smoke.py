@@ -169,6 +169,40 @@ def test_cov_tools_use_session_id_contract(monkeypatch: pytest.MonkeyPatch):
         assert "name" not in properties
 
 
+def test_session_open_tools_expose_run_manifest_and_forward_it(monkeypatch: pytest.MonkeyPatch):
+    server = _server(monkeypatch)
+    calls = []
+
+    class DummyAdapter:
+        def session_open(self, **kwargs):
+            calls.append(kwargs)
+            return {"ok": True, "session": kwargs}
+
+    monkeypatch.setattr(server, "debug", DummyAdapter())
+    monkeypatch.setattr(server, "cov", DummyAdapter())
+
+    async def _run():
+        schemas = {tool.name: tool.inputSchema for tool in await server.mcp.list_tools()}
+        for name in ("xverif_debug_session_open", "xverif_cov_session_open"):
+            assert "run_manifest" in schemas[name]["properties"]
+        await server.mcp.call_tool("xverif_debug_session_open", {
+            "name": "debug_manifest", "fsdb": "waves.fsdb",
+            "run_manifest": "debug-run-manifest.json",
+        })
+        await server.mcp.call_tool("xverif_cov_session_open", {
+            "name": "cov_manifest", "vdb": "merged.vdb",
+            "run_manifest": "cov-run-manifest.json",
+        })
+
+    anyio.run(_run)
+    assert calls == [
+        {"name": "debug_manifest", "daidir": None, "fsdb": "waves.fsdb",
+         "run_manifest": "debug-run-manifest.json", "queue": None, "resource": None},
+        {"name": "cov_manifest", "vdb": "merged.vdb",
+         "run_manifest": "cov-run-manifest.json", "queue": None, "resource": None},
+    ]
+
+
 def test_mcp_ping_call(monkeypatch: pytest.MonkeyPatch):
     """Calling xverif_ping should return a string containing 'pong'."""
     content, structured = _call_tool(monkeypatch, "xverif_ping")

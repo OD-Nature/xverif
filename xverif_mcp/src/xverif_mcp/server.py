@@ -276,12 +276,13 @@ def xverif_debug_session_open(
     name: str,
     daidir: Optional[str] = None,
     fsdb: Optional[str] = None,
+    run_manifest: Optional[str] = None,
     queue: Optional[str] = None,
     resource: Optional[str] = None,
 ) -> dict:
-    """Open a loop-backed xdebug session."""
+    """Open a loop-backed xdebug session, optionally verifying a published run manifest."""
     return debug.session_open(
-        name=name, daidir=daidir, fsdb=fsdb, queue=queue,
+        name=name, daidir=daidir, fsdb=fsdb, run_manifest=run_manifest, queue=queue,
         resource=resource,
     )
 
@@ -401,12 +402,13 @@ def xverif_cov_get_schema(action: str, kind: str = "request") -> dict:
 def xverif_cov_session_open(
     name: str,
     vdb: str,
+    run_manifest: Optional[str] = None,
     queue: Optional[str] = None,
     resource: Optional[str] = None,
 ) -> dict:
-    """Open a loop-backed xcov coverage database session."""
+    """Open a loop-backed xcov session, optionally verifying a published run manifest."""
     return cov.session_open(
-        name=name, vdb=vdb, queue=queue, resource=resource,
+        name=name, vdb=vdb, run_manifest=run_manifest, queue=queue, resource=resource,
     )
 
 
@@ -765,7 +767,7 @@ TOOL_CATALOG = [
      "description": "Return an action-specific xdebug JSON schema."},
     {"name": "xverif_debug_session_open", "category": "debug", "backend": "xdebug",
      "stateful": True, "requires_session": True,
-     "description": "Open a loop-backed xdebug session (direct or LSF)."},
+     "description": "Open a loop-backed xdebug session, optionally verifying a published run manifest."},
     {"name": "xverif_debug_session_list", "category": "debug", "backend": "xdebug",
      "stateful": True, "requires_session": False,
      "description": "List xdebug sessions managed by this server."},
@@ -793,7 +795,7 @@ TOOL_CATALOG = [
      "description": "Return an xcov action schema."},
     {"name": "xverif_cov_session_open", "category": "cov", "backend": "xcov",
      "stateful": True, "requires_session": True,
-     "description": "Open a loop-backed xcov coverage database session."},
+     "description": "Open a loop-backed xcov session, optionally verifying a published run manifest."},
     {"name": "xverif_cov_session_list", "category": "cov", "backend": "xcov",
      "stateful": True, "requires_session": False,
      "description": "List xcov sessions managed by this server."},

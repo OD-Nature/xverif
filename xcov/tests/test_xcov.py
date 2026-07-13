@@ -9,6 +9,7 @@ from pathlib import Path
 from xcov.actions import Dispatcher
 from xcov.backend import CoverageBackend
 from xcov.logging import sanitize_for_log
+from xcov.provenance import resource_sha256
 from xcov.protocol import render_xout
 from xcov.schemas import schema_actions
 from xcov.session import XcovSession
@@ -78,6 +79,65 @@ def test_session_open_fake_json():
     assert rsp["summary"]["worker"] == "fake"
 
 
+def _write_run_manifest(vdb: Path, manifest: Path) -> None:
+    manifest.write_text(json.dumps({
+        "schema_version": "xcov.run-manifest.v1",
+        "state": "published",
+        "resources": {
+            "vdb": {
+                "path": vdb.name,
+                "size_bytes": vdb.stat().st_size,
+                "sha256": resource_sha256(vdb),
+            },
+        },
+    }), encoding="utf-8")
+
+
+def test_session_open_validates_published_vdb_run_manifest_before_backend_open(tmp_path):
+    vdb = tmp_path / "merged.vdb"
+    vdb.mkdir()
+    (vdb / "coverage.bin").write_bytes(b"coverage-data")
+    manifest = tmp_path / "run-manifest.json"
+    _write_run_manifest(vdb, manifest)
+
+    rsp = Dispatcher().dispatch({
+        "api_version": "xcov.v1", "request_id": "manifest-open",
+        "action": "session.open",
+        "target": {"vdb": str(vdb), "run_manifest": str(manifest)},
+        "args": {"name": "cov_manifest", "fake": True},
+    })
+
+    assert rsp["ok"] is True
+    snapshot = rsp["summary"]["resource_snapshot"]
+    assert snapshot["vdb"] == str(vdb)
+    assert snapshot["run_manifest"]["schema_version"] == "xcov.run-manifest.v1"
+    assert snapshot["run_manifest"]["manifest_path"] == str(manifest.resolve())
+
+
+def test_session_open_rejects_changed_vdb_run_manifest_without_opening_backend(tmp_path):
+    vdb = tmp_path / "merged.vdb"
+    vdb.mkdir()
+    content = vdb / "coverage.bin"
+    content.write_bytes(b"coverage-data")
+    manifest = tmp_path / "run-manifest.json"
+    _write_run_manifest(vdb, manifest)
+    content.write_bytes(b"changed-coverage-data")
+    dispatcher = Dispatcher()
+
+    rsp = dispatcher.dispatch({
+        "api_version": "xcov.v1", "request_id": "manifest-mismatch",
+        "action": "session.open",
+        "target": {"vdb": str(vdb), "run_manifest": str(manifest)},
+        "args": {"name": "cov_manifest", "fake": True},
+    })
+
+    assert rsp["ok"] is False
+    assert rsp["error"]["code"] == "RESOURCE_PROVENANCE_MISMATCH"
+    assert rsp["summary"]["status"] == "manifest_mismatch"
+    assert rsp["data"]["manifest"]["resource"] == "vdb"
+    assert dispatcher.sessions.sessions == {}
+
+
 def test_schema_registry_covers_all_p0_actions():
     dispatcher = Dispatcher()
     for action in schema_actions():
@@ -112,6 +172,7 @@ def test_schema_required_fields_are_action_specific():
     })["data"]["schema"]
     assert set(source["properties"]["args"]["required"]) == {"file", "line"}
     assert session_open["properties"]["target"]["required"] == ["vdb"]
+    assert "run_manifest" in session_open["properties"]["target"]["properties"]
     assert "threshold_pct" in code_export["properties"]["args"]["properties"]
 
 

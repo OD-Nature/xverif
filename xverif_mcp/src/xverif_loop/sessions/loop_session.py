@@ -79,6 +79,7 @@ class XdebugLoopSession:
     ready_protocol: str = "xdebug-stdio-loop"
     target_key: str = "fsdb"
     recovery_tool: str = "xverif_debug_session_open"
+    run_manifest: Optional[str] = None
     queue: Optional[str] = None
     resource: Optional[str] = None
     job_name: Optional[str] = None
@@ -197,6 +198,8 @@ class XdebugLoopSession:
                 open_req["target"][self.target_key] = self.fsdb
             if self.daidir:
                 open_req["target"]["daidir"] = self.daidir
+            if self.run_manifest:
+                open_req["target"]["run_manifest"] = self.run_manifest
             rsp = self._call_raw(open_req, timeout=self.startup_timeout_sec)
             if not rsp.get("ok"):
                 self.state = "dead"
@@ -565,6 +568,7 @@ class XdebugLoopSession:
                 os.path.abspath(resource_path).encode("utf-8")).hexdigest()[:12]
         if verbose:
             out["resource_path"] = resource_path
+            if self.run_manifest: out["run_manifest"] = self.run_manifest
             if self.queue: out["queue"] = self.queue
             if self.resource: out["lsf_resource"] = self.resource
             if self.job_name: out["job_name"] = self.job_name

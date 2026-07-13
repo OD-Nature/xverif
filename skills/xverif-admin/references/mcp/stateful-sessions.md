@@ -4,7 +4,7 @@ MCP 的 xdebug/xcov stateful session 通过同一套 stdio-loop session manager 
 
 ## xdebug
 
-- `xverif_debug_session_open(name, fsdb=None, daidir=None, queue=None, resource=None)`
+- `xverif_debug_session_open(name, fsdb=None, daidir=None, run_manifest=None, queue=None, resource=None)`
 - `xverif_debug_query(session_id, action, args=None, limits=None, output_format="xout")`
 - `xverif_debug_session_list(include_tombstones=False, verbose=False)`
 - `xverif_debug_session_doctor(name=..., session_id=..., verbose=False)`
@@ -14,7 +14,7 @@ MCP 的 xdebug/xcov stateful session 通过同一套 stdio-loop session manager 
 
 ## xcov
 
-- `xverif_cov_session_open(name, vdb, queue=None, resource=None)`
+- `xverif_cov_session_open(name, vdb, run_manifest=None, queue=None, resource=None)`
 - `xverif_cov_query(session_id, action, args=None, limits=None, output=None, output_format="xout")`
 - `xverif_cov_session_list(include_tombstones=False, verbose=False)`
 - `xverif_cov_session_doctor(session_id=..., verbose=False)`
@@ -35,3 +35,6 @@ MCP 的 xdebug/xcov stateful session 通过同一套 stdio-loop session manager 
 - xcov backend 随 loop 进程退出；xcov kill 终止 loop/process/LSF job，并明确标记 native kill 不支持。
 - close/kill 分层返回 native backend、stdio loop、process、LSF job、manager record、tombstone 状态；部分失败为 `SESSION_CLEANUP_PARTIAL_FAILURE`，不得同名隐式 reopen。
 - debug/cov query 都禁止 native lifecycle action；使用专用 tool，不做 transport/backend fallback。
+- 两类 session-open 的 `run_manifest` 均为可选路径。提供时会在启动后端前校验
+  `state:"published"`、相对资源路径、`size_bytes` 与 SHA-256；xdebug 使用
+  `xdebug.run-manifest.v1`（`fsdb`/`daidir`），xcov 使用 `xcov.run-manifest.v1`（`vdb`）。

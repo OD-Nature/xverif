@@ -10,7 +10,7 @@ XVERIF_LOOP_SOCKET=/tmp/xverif-loop.sock tools/xverif-loop-server
 
 ```bash
 tools/xverif-loop-client --socket /tmp/xverif-loop.sock --json \
-  '{"id":"1","method":"debug.session.open","params":{"name":"s0","fsdb":"waves.fsdb"}}'
+  '{"id":"1","method":"debug.session.open","params":{"name":"s0","fsdb":"waves.fsdb","run_manifest":"run-manifest.json"}}'
 ```
 
 也可从 stdin 发送 JSONL。

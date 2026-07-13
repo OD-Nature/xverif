@@ -115,7 +115,8 @@ def test_loop_wrapper_debug_session_lifecycle(tmp_path, monkeypatch):
     server, thread, sock = _start_server(tmp_path, service)
     try:
         responses = send_requests(sock, [
-            {"id": "open", "method": "debug.session.open", "params": {"name": "d0", "fsdb": "wave.fsdb"}},
+            {"id": "open", "method": "debug.session.open", "params": {
+                "name": "d0", "fsdb": "wave.fsdb", "run_manifest": "debug-run-manifest.json"}},
             {"id": "doctor", "method": "debug.session.doctor", "params": {"session": "d0"}},
             {"id": "query", "method": "debug.query", "params": {
                 "session": "d0", "action": "value.at", "args": {"signal": "clk"}, "output_format": "json"}},
@@ -142,7 +143,8 @@ def test_loop_wrapper_cov_session_lifecycle(tmp_path, monkeypatch):
     server, thread, sock = _start_server(tmp_path, service)
     try:
         responses = send_requests(sock, [
-            {"id": "open", "method": "cov.session.open", "params": {"name": "c0", "vdb": "merged.vdb"}},
+            {"id": "open", "method": "cov.session.open", "params": {
+                "name": "c0", "vdb": "merged.vdb", "run_manifest": "cov-run-manifest.json"}},
             {"id": "doctor", "method": "cov.session.doctor", "params": {"session": "c0"}},
             {"id": "query", "method": "cov.query", "params": {
                 "session": "c0", "action": "coverage.summary", "output_format": "json"}},
