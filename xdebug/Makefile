@@ -1,5 +1,7 @@
 TOP ?= ..
 
+.DEFAULT_GOAL := all
+
 include $(TOP)/mk/common_flags.mk
 
 include $(TOP)/mk/npi.mk
