@@ -8,10 +8,8 @@ NPI_CXXFLAGS ?=
 NPI_LDFLAGS ?=
 NPI_LIB ?=
 
-BUILD_GIT_REVISION := $(shell git -C $(TOP) rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
-BUILD_SCHEMA_REVISION := $(shell sha256sum specs/actions/actions.yaml 2>/dev/null | awk '{print $$1}' || echo unknown)
-BUILD_ID := $(BUILD_GIT_REVISION)-$(BUILD_SCHEMA_REVISION)
-CXXFLAGS = $(COMMON_CXXFLAGS) $(NPI_CXXFLAGS) -pthread -Isrc -Isrc/core -Isrc/engine -Isrc/design -Isrc/waveform -isystem third_party -isystem third_party/json-schema-validator/src -DXDEBUG_GIT_REVISION=\"$(BUILD_GIT_REVISION)\" -DXDEBUG_SCHEMA_REVISION=\"$(BUILD_SCHEMA_REVISION)\" -DXDEBUG_BUILD_ID=\"$(BUILD_ID)\"
+BUILD_INFO = $(BUILD)/build_info.h
+CXXFLAGS = $(COMMON_CXXFLAGS) $(NPI_CXXFLAGS) -pthread -I$(BUILD) -Isrc -Isrc/core -Isrc/engine -Isrc/design -Isrc/waveform -isystem third_party -isystem third_party/json-schema-validator/src
 LDFLAGS  = $(NPI_LDFLAGS) -pthread $(if $(NPI_LIB),-Xlinker -rpath -Xlinker $(NPI_LIB),)
 DEPFLAGS = -MMD -MP
 # Frontend does not need NPI (all NPI is in the engine subprocess).
@@ -208,7 +206,18 @@ DEPS = $(sort $(CORE_OBJS:.o=.d) \
        $(DESIGN_OBJS:.o=.d) \
        $(WAVEFORM_OBJS:.o=.d))
 
-.PHONY: all internal-engines cpp-unit-binaries clean
+.PHONY: all internal-engines cpp-unit-binaries clean FORCE
+
+FORCE:
+
+$(BUILD_INFO): FORCE specs/actions/actions.yaml
+	@mkdir -p $(dir $@)
+	@rev=$$(git -C $(TOP) rev-parse --short=12 HEAD 2>/dev/null || echo unknown); \
+	schema=$$(sha256sum specs/actions/actions.yaml 2>/dev/null | awk '{print $$1}' || echo unknown); \
+	{ echo '#pragma once'; echo "#define XDEBUG_GIT_REVISION \"$$rev\""; \
+	  echo "#define XDEBUG_SCHEMA_REVISION \"$$schema\""; \
+	  echo "#define XDEBUG_BUILD_ID \"$$rev-$$schema\""; } > $@.tmp; \
+	cmp -s $@.tmp $@ 2>/dev/null || mv $@.tmp $@; rm -f $@.tmp
 
 all: $(EXE) internal-engines
 
@@ -223,7 +232,7 @@ $(LIBEXEC)/xdebug-engine: $(CORE_OBJS) $(UNIFIED_OBJS)
 $(EXE): $(CORE_OBJS) $(APP_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
 
-$(BUILD)/%.o: %.cpp
+$(BUILD)/%.o: %.cpp $(BUILD_INFO)
 	mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) $(DEPFLAGS) -DXDEBUG_INTERNAL_ENGINE -c -o $@ $<
 

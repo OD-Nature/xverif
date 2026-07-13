@@ -1,6 +1,7 @@
 #pragma once
 
 #include "api/json_types.h"
+#include "build_info.h"
 
 #include <string>
 
@@ -8,16 +9,6 @@ namespace xdebug {
 
 static const char* const kApiVersion = "xdebug.v1";
 static const char* const kToolVersion = "0.1.0";
-
-#ifndef XDEBUG_BUILD_ID
-#define XDEBUG_BUILD_ID "unknown"
-#endif
-#ifndef XDEBUG_GIT_REVISION
-#define XDEBUG_GIT_REVISION "unknown"
-#endif
-#ifndef XDEBUG_SCHEMA_REVISION
-#define XDEBUG_SCHEMA_REVISION "unknown"
-#endif
 
 inline Json tool_metadata() {
     return {{"name", "xdebug"}, {"version", kToolVersion},
