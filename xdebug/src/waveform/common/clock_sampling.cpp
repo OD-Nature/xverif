@@ -144,6 +144,21 @@ bool normalize_clock_sample_spec(npiFsdbFileHandle fsdb,
     return true;
 }
 
+bool find_first_clock_sample(npiFsdbFileHandle fsdb,
+                             const ClockSampleSpec& spec,
+                             npiFsdbTime begin,
+                             npiFsdbTime end,
+                             ClockSamplePoint& point,
+                             std::string& error) {
+    ClockSampleTimeResolver resolver(fsdb, spec);
+    if (!resolver.find_next_sample(begin, point, error)) return false;
+    if (point.sample_time > end) {
+        error = "no requested clock edge found in FSDB range";
+        return false;
+    }
+    return true;
+}
+
 bool resolve_clock_sample_signals(npiFsdbFileHandle fsdb,
                                   const std::vector<std::string>& aliases,
                                   const std::vector<std::string>& paths,

@@ -74,32 +74,6 @@ static bool is_active(const std::string& v) {
     return !v.empty() && v != "0" && v != "X" && v != "Z";
 }
 
-static void inc_osd(int& total, std::map<std::string, int>& by_id, const std::string& id) {
-    ++total;
-    ++by_id[id];
-}
-
-static void dec_osd(int& total, std::map<std::string, int>& by_id, const std::string& id) {
-    if (total > 0) --total;
-    auto it = by_id.find(id);
-    if (it != by_id.end()) {
-        if (it->second > 0) --it->second;
-        if (it->second == 0) by_id.erase(it);
-    }
-}
-
-struct WBeat {
-    npiFsdbTime time;
-    std::string data;
-    std::string strb;
-    bool last = false;
-};
-
-struct PendingWrite {
-    AxiTransaction txn;
-    bool data_complete = false;
-};
-
 bool AxiAnalyzer::analyze(const std::string& name, npiFsdbFileHandle file, const AxiConfig& config) {
     if (get_result(name) != nullptr) {
         return true; // already cached
@@ -157,174 +131,46 @@ bool AxiAnalyzer::analyze(const std::string& name, npiFsdbFileHandle file, const
         sample_signals.push_back({signals[i], signals[i], sig_handles[i]});
     }
 
-    AxiResult result;
-    std::deque<WBeat> w_beat_buffer;
-    std::list<PendingWrite> pending_writes;
-    std::map<std::string, std::deque<AxiTransaction>> pending_reads;
-    int read_outstanding = 0;
-    int write_outstanding = 0;
-    std::map<std::string, int> read_outstanding_by_id;
-    std::map<std::string, int> write_outstanding_by_id;
+    AxiTransactionTracker tracker;
 
     auto process_edge = [&](npiFsdbTime t, const std::vector<std::string>& values) {
-            if (values.size() != signals.size()) return;
-            // Reset check
-            bool reset_active = false;
-            if (idx.rst_n >= 0) {
-                const std::string& rst = values[idx.rst_n];
-                if (rst.empty() || rst == "0" || rst == "X" || rst == "Z") {
-                    reset_active = true;
-                }
-            }
-            if (reset_active) {
-                w_beat_buffer.clear();
-                pending_writes.clear();
-                pending_reads.clear();
-                read_outstanding = 0;
-                write_outstanding = 0;
-                read_outstanding_by_id.clear();
-                write_outstanding_by_id.clear();
-                return;
-            }
-
-            // Detect handshakes
-            bool aw_handshake = false;
-            if (idx.awvalid >= 0 && idx.awready >= 0) {
-                aw_handshake = is_active(values[idx.awvalid]) && is_active(values[idx.awready]);
-            }
-            bool w_handshake = false;
-            if (idx.wvalid >= 0 && idx.wready >= 0) {
-                w_handshake = is_active(values[idx.wvalid]) && is_active(values[idx.wready]);
-            }
-            bool b_handshake = false;
-            if (idx.bvalid >= 0 && idx.bready >= 0) {
-                b_handshake = is_active(values[idx.bvalid]) && is_active(values[idx.bready]);
-            }
-            bool ar_handshake = false;
-            if (idx.arvalid >= 0 && idx.arready >= 0) {
-                ar_handshake = is_active(values[idx.arvalid]) && is_active(values[idx.arready]);
-            }
-            bool r_handshake = false;
-            if (idx.rvalid >= 0 && idx.rready >= 0) {
-                r_handshake = is_active(values[idx.rvalid]) && is_active(values[idx.rready]);
-            }
-
-            // W handling: push beat into buffer
-            if (w_handshake) {
-                WBeat beat;
-                beat.time = t;
-                beat.data = (idx.wdata >= 0) ? values[idx.wdata] : "";
-                beat.strb = (idx.wstrb >= 0) ? values[idx.wstrb] : "";
-                if (idx.wlast >= 0) {
-                    beat.last = is_active(values[idx.wlast]);
-                } else {
-                    beat.last = true; // AXI4-Lite default
-                }
-                w_beat_buffer.push_back(std::move(beat));
-            }
-
-            // AW handling: create pending write and drain buffer
-            if (aw_handshake) {
-                PendingWrite pw;
-                pw.txn.addr_time = t;
-                pw.txn.addr = (idx.awaddr >= 0) ? values[idx.awaddr] : "";
-                pw.txn.id = (idx.awid >= 0) ? values[idx.awid] : "0";
-                pw.txn.len = (idx.awlen >= 0) ? values[idx.awlen] : "0";
-                pw.txn.size = (idx.awsize >= 0) ? values[idx.awsize] : "";
-                pw.txn.burst = (idx.awburst >= 0) ? values[idx.awburst] : "";
-                pw.txn.is_write = true;
-                inc_osd(write_outstanding, write_outstanding_by_id, pw.txn.id);
-                pending_writes.push_back(std::move(pw));
-
-                while (!w_beat_buffer.empty()) {
-                    PendingWrite* target = nullptr;
-                    for (auto& p : pending_writes) {
-                        if (!p.data_complete) {
-                            target = &p;
-                            break;
-                        }
-                    }
-                    if (!target) break;
-                    WBeat beat = std::move(w_beat_buffer.front());
-                    w_beat_buffer.pop_front();
-                    if (target->txn.data.empty()) {
-                        target->txn.first_data_time = beat.time;
-                    }
-                    target->txn.data.push_back(std::move(beat.data));
-                    target->txn.wstrb.push_back(std::move(beat.strb));
-                    target->txn.last_data_time = beat.time;
-                    if (beat.last) {
-                        target->data_complete = true;
-                    }
-                }
-            }
-
-            // B handling: match to first pending write with same ID and data complete
-            if (b_handshake) {
-                std::string b_id_val = (idx.bid >= 0) ? values[idx.bid] : "0";
-                for (auto it = pending_writes.begin(); it != pending_writes.end(); ++it) {
-                    if (!it->data_complete) continue;
-                    if (idx.bid >= 0 && it->txn.id != b_id_val) continue;
-                    it->txn.resp_time = t;
-                    it->txn.resp = (idx.bresp >= 0) ? values[idx.bresp] : "";
-                    dec_osd(write_outstanding, write_outstanding_by_id, it->txn.id);
-                    result.writes.push_back(std::move(it->txn));
-                    pending_writes.erase(it);
-                    break;
-                }
-            }
-
-            // AR handling
-            if (ar_handshake) {
-                AxiTransaction txn;
-                txn.addr_time = t;
-                txn.addr = (idx.araddr >= 0) ? values[idx.araddr] : "";
-                txn.id = (idx.arid >= 0) ? values[idx.arid] : "0";
-                txn.len = (idx.arlen >= 0) ? values[idx.arlen] : "0";
-                txn.size = (idx.arsize >= 0) ? values[idx.arsize] : "";
-                txn.burst = (idx.arburst >= 0) ? values[idx.arburst] : "";
-                txn.is_write = false;
-                inc_osd(read_outstanding, read_outstanding_by_id, txn.id);
-                pending_reads[txn.id].push_back(std::move(txn));
-            }
-
-            // R handling
-            if (r_handshake) {
-                std::string r_id_val = (idx.rid >= 0) ? values[idx.rid] : "0";
-                auto it_fifo = pending_reads.find(r_id_val);
-                if (it_fifo != pending_reads.end() && !it_fifo->second.empty()) {
-                    AxiTransaction& txn = it_fifo->second.front();
-                    if (txn.data.empty()) {
-                        txn.first_data_time = t;
-                    }
-                    txn.data.push_back((idx.rdata >= 0) ? values[idx.rdata] : "");
-                    txn.resp = (idx.rresp >= 0) ? values[idx.rresp] : "";
-                    txn.last_data_time = t;
-                    bool last = false;
-                    if (idx.rlast >= 0) {
-                        last = is_active(values[idx.rlast]);
-                    } else {
-                        last = true; // AXI4-Lite default
-                    }
-                    if (last) {
-                        txn.resp_time = t;
-                        dec_osd(read_outstanding, read_outstanding_by_id, txn.id);
-                        result.reads.push_back(std::move(txn));
-                        it_fifo->second.pop_front();
-                        if (it_fifo->second.empty()) {
-                            pending_reads.erase(it_fifo);
-                        }
-                    }
-                }
-            }
-
-            AxiOutstandingSample sample;
-            sample.time = t;
-            sample.read = read_outstanding;
-            sample.write = write_outstanding;
-            sample.read_by_id = read_outstanding_by_id;
-            sample.write_by_id = write_outstanding_by_id;
-            result.outstanding_samples.push_back(std::move(sample));
+        if (values.size() != signals.size()) return;
+        AxiSample sample;
+        sample.time = t;
+        if (idx.rst_n >= 0) {
+            const std::string& rst = values[idx.rst_n];
+            sample.reset_active = rst.empty() || rst == "0" || rst == "X" || rst == "Z";
+        }
+        sample.aw_handshake = idx.awvalid >= 0 && idx.awready >= 0 &&
+            is_active(values[idx.awvalid]) && is_active(values[idx.awready]);
+        sample.w_handshake = idx.wvalid >= 0 && idx.wready >= 0 &&
+            is_active(values[idx.wvalid]) && is_active(values[idx.wready]);
+        sample.b_handshake = idx.bvalid >= 0 && idx.bready >= 0 &&
+            is_active(values[idx.bvalid]) && is_active(values[idx.bready]);
+        sample.ar_handshake = idx.arvalid >= 0 && idx.arready >= 0 &&
+            is_active(values[idx.arvalid]) && is_active(values[idx.arready]);
+        sample.r_handshake = idx.rvalid >= 0 && idx.rready >= 0 &&
+            is_active(values[idx.rvalid]) && is_active(values[idx.rready]);
+        sample.wlast = idx.wlast >= 0 ? is_active(values[idx.wlast]) : true;
+        sample.rlast = idx.rlast >= 0 ? is_active(values[idx.rlast]) : true;
+        sample.awaddr = idx.awaddr >= 0 ? values[idx.awaddr] : "";
+        sample.awid = idx.awid >= 0 ? values[idx.awid] : "0";
+        sample.awlen = idx.awlen >= 0 ? values[idx.awlen] : "0";
+        sample.awsize = idx.awsize >= 0 ? values[idx.awsize] : "";
+        sample.awburst = idx.awburst >= 0 ? values[idx.awburst] : "";
+        sample.wdata = idx.wdata >= 0 ? values[idx.wdata] : "";
+        sample.wstrb = idx.wstrb >= 0 ? values[idx.wstrb] : "";
+        sample.bid = idx.bid >= 0 ? values[idx.bid] : "0";
+        sample.bresp = idx.bresp >= 0 ? values[idx.bresp] : "";
+        sample.araddr = idx.araddr >= 0 ? values[idx.araddr] : "";
+        sample.arid = idx.arid >= 0 ? values[idx.arid] : "0";
+        sample.arlen = idx.arlen >= 0 ? values[idx.arlen] : "0";
+        sample.arsize = idx.arsize >= 0 ? values[idx.arsize] : "";
+        sample.arburst = idx.arburst >= 0 ? values[idx.arburst] : "";
+        sample.rid = idx.rid >= 0 ? values[idx.rid] : "0";
+        sample.rdata = idx.rdata >= 0 ? values[idx.rdata] : "";
+        sample.rresp = idx.rresp >= 0 ? values[idx.rresp] : "";
+        tracker.consume(sample);
     };
 
     npiFsdbTime min_time = 0;
@@ -344,27 +190,8 @@ bool AxiAnalyzer::analyze(const std::string& name, npiFsdbFileHandle file, const
         return false;
     }
 
-    // Discard incomplete pending transactions
-    pending_writes.clear();
-    pending_reads.clear();
-    w_beat_buffer.clear();
-
-    // Build all vector and sort by addr_time
-    result.all.reserve(result.writes.size() + result.reads.size());
-    for (const auto& w : result.writes) result.all.push_back(w);
-    for (const auto& r : result.reads) result.all.push_back(r);
-    auto cmp = [](const AxiTransaction& a, const AxiTransaction& b) { return a.addr_time < b.addr_time; };
-    std::sort(result.all.begin(), result.all.end(), cmp);
-    std::sort(result.writes.begin(), result.writes.end(), cmp);
-    std::sort(result.reads.begin(), result.reads.end(), cmp);
-    result.all_by_resp_time.resize(result.all.size());
-    for (size_t i = 0; i < result.all.size(); ++i) result.all_by_resp_time[i] = i;
-    std::sort(result.all_by_resp_time.begin(), result.all_by_resp_time.end(),
-        [&](size_t lhs, size_t rhs) {
-            return result.all[lhs].resp_time < result.all[rhs].resp_time;
-        });
-
-    results_[name] = std::move(result);
+    results_[name] = tracker.finish(min_time, max_time, !truncated);
+    results_[name].diagnostics.full_scan_count = 1;
     cursors_[name] = AxiCursor();
     return true;
 }
@@ -974,6 +801,9 @@ bool AxiAnalyzer::summarize_outstanding_in_range(const std::string& name,
     int previous_write = -1;
     for (; it != result->outstanding_samples.end() && it->time <= end; ++it) {
         ++out.sample_count;
+        out.has_samples = true;
+        out.final_read = it->read;
+        out.final_write = it->write;
         if (it->read > out.peak_read) {
             out.peak_read = it->read;
             out.peak_read_time = it->time;

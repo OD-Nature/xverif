@@ -183,6 +183,7 @@ WAVEFORM_SRCS = src/waveform/service/action_support.cpp \
                 src/waveform/apb/apb_manager.cpp \
                 src/waveform/apb/apb_analyzer.cpp \
                 src/waveform/axi/axi_manager.cpp \
+                src/waveform/axi/axi_transaction_tracker.cpp \
                 src/waveform/axi/axi_analyzer.cpp \
                 src/waveform/axi/axi_exporter.cpp \
                 src/waveform/event/event_manager.cpp \
@@ -238,7 +239,7 @@ $(BUILD)/%.o: %.cpp $(BUILD_INFO)
 	mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) $(DEPFLAGS) -DXDEBUG_INTERNAL_ENGINE -c -o $@ $<
 
-cpp-unit-binaries: $(CORE_OBJS) $(API_SUPPORT_OBJS) $(BUILD)/src/api/response.o $(BUILD)/src/api/text_response_builder.o $(BUILD)/src/api/xout_renderer.o $(BUILD)/src/waveform/service/rc_generator.o $(BUILD)/src/waveform/value/logic_value.o $(BUILD)/src/waveform/event/event_expr.o $(BUILD)/src/waveform/common/expression.o $(BUILD)/src/waveform/stream/stream_expr.o $(BUILD)/src/session/session_catalog.o
+cpp-unit-binaries: $(CORE_OBJS) $(API_SUPPORT_OBJS) $(BUILD)/src/api/response.o $(BUILD)/src/api/text_response_builder.o $(BUILD)/src/api/xout_renderer.o $(BUILD)/src/waveform/service/rc_generator.o $(BUILD)/src/waveform/value/logic_value.o $(BUILD)/src/waveform/event/event_expr.o $(BUILD)/src/waveform/common/expression.o $(BUILD)/src/waveform/stream/stream_expr.o $(BUILD)/src/waveform/axi/axi_transaction_tracker.o $(BUILD)/src/session/session_catalog.o
 	mkdir -p $(BUILD)/tests
 	$(CXX) $(CXXFLAGS) -o $(BUILD)/tests/test_core_types tests/unit/test_core_types.cpp $(CORE_OBJS) $(LDFLAGS)
 	$(CXX) $(CXXFLAGS) -o $(BUILD)/tests/test_env_config tests/unit/test_env_config.cpp $(CORE_OBJS) $(LDFLAGS)
@@ -257,6 +258,7 @@ cpp-unit-binaries: $(CORE_OBJS) $(API_SUPPORT_OBJS) $(BUILD)/src/api/response.o 
 	$(CXX) $(CXXFLAGS) -o $(BUILD)/tests/test_expression tests/unit/test_expression.cpp $(BUILD)/src/waveform/common/expression.o $(BUILD)/src/waveform/stream/stream_expr.o $(BUILD)/src/waveform/value/logic_value.o
 	$(CXX) $(CXXFLAGS) -o $(BUILD)/tests/test_rc_generator tests/unit/test_rc_generator.cpp $(BUILD)/src/waveform/service/rc_generator.o
 	$(CXX) $(CXXFLAGS) -o $(BUILD)/tests/test_sha256 tests/unit/test_sha256.cpp $(BUILD)/src/core/common/sha256.o
+	$(CXX) $(CXXFLAGS) -o $(BUILD)/tests/test_axi_transaction_tracker tests/unit/test_axi_transaction_tracker.cpp $(BUILD)/src/waveform/axi/axi_transaction_tracker.o
 
 clean:
 	rm -rf $(BUILD) $(LIBEXEC) $(EXE)

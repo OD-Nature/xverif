@@ -23,6 +23,7 @@ BINARIES = (
     "test_expression",
     "test_rc_generator",
     "test_sha256",
+    "test_axi_transaction_tracker",
 )
 
 

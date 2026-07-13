@@ -1,6 +1,7 @@
 #pragma once
 
 #include "axi_config.h"
+#include "axi_transaction_tracker.h"
 #include "npi_fsdb.h"
 #include <string>
 #include <vector>
@@ -8,34 +9,9 @@
 
 namespace xdebug_waveform {
 
-struct AxiTransaction {
-    npiFsdbTime addr_time = 0;       // AW/AR handshake time
-    npiFsdbTime first_data_time = 0; // first W/R beat handshake time
-    npiFsdbTime last_data_time = 0;  // WLAST / RLAST handshake time
-    npiFsdbTime resp_time = 0;       // B handshake time (write) or RLAST time (read)
-    std::string addr;
-    std::string id;
-    std::string len;
-    std::string size;
-    std::string burst;
-    std::vector<std::string> data;   // per-beat data
-    std::vector<std::string> wstrb;  // per-beat wstrb (write only)
-    std::string resp;
-    bool is_write = false;
-    bool is_out_of_order = false;
-};
-
 struct AxiContextTransaction {
     const AxiTransaction* txn = nullptr;
     npiFsdbTime match_time = 0;
-};
-
-struct AxiOutstandingSample {
-    npiFsdbTime time = 0;
-    int read = 0;
-    int write = 0;
-    std::map<std::string, int> read_by_id;
-    std::map<std::string, int> write_by_id;
 };
 
 struct AxiOutstandingSummary {
@@ -48,14 +24,9 @@ struct AxiOutstandingSummary {
     npiFsdbTime peak_write_time = 0;
     npiFsdbTime first_nonzero_time = 0;
     bool has_first_nonzero = false;
-};
-
-struct AxiResult {
-    std::vector<AxiTransaction> all;
-    std::vector<AxiTransaction> writes;
-    std::vector<AxiTransaction> reads;
-    std::vector<AxiOutstandingSample> outstanding_samples;
-    std::vector<size_t> all_by_resp_time;
+    int final_read = 0;
+    int final_write = 0;
+    bool has_samples = false;
 };
 
 struct AxiCursor {
@@ -81,6 +52,7 @@ public:
     // Analyze and cache result for the given config name.
     // If already cached, returns cached result.
     bool analyze(const std::string& name, npiFsdbFileHandle file, const AxiConfig& config);
+    const AxiResult* get_result(const std::string& name) const;
 
     // Getters for wr/rd counts
     size_t get_write_count(const std::string& name) const;
@@ -151,7 +123,6 @@ private:
     std::map<std::string, AxiResult> results_;
     std::map<std::string, AxiCursor> cursors_;
 
-    const AxiResult* get_result(const std::string& name) const;
     AxiResult* get_result_mut(const std::string& name);
     AxiCursor* get_cursor_mut(const std::string& name);
 

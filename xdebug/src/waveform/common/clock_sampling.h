@@ -112,6 +112,12 @@ bool clock_edge_transition_matches(ClockEdgeKind requested,
 bool normalize_clock_sample_spec(npiFsdbFileHandle fsdb,
                                  ClockSampleSpec& spec,
                                  std::string& error);
+bool find_first_clock_sample(npiFsdbFileHandle fsdb,
+                             const ClockSampleSpec& spec,
+                             npiFsdbTime begin,
+                             npiFsdbTime end,
+                             ClockSamplePoint& point,
+                             std::string& error);
 bool resolve_clock_sample_signals(npiFsdbFileHandle fsdb,
                                   const std::vector<std::string>& aliases,
                                   const std::vector<std::string>& paths,

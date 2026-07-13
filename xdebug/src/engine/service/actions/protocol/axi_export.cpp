@@ -80,10 +80,16 @@ public:
         AxiExportResult result;
         result.format = format;
         std::string error;
-        if (!exporter.scan(g_fsdb_file, cfg, begin, end, result, error))
-            return make_handler_error("ACTION_FAILED", error,
+        if (!g_axi_analyzer.analyze(name, g_fsdb_file, cfg))
+            return make_handler_error("ACTION_FAILED", "Failed to analyze AXI: " + name,
                                       {{"cause_code", "ANALYZE_FAILED"},
                                        {"correct_example", protocol_action_example(action_name())}});
+        const AxiResult* canonical = g_axi_analyzer.get_result(name);
+        if (!canonical)
+            return make_handler_error("ACTION_FAILED", "AXI canonical result unavailable: " + name,
+                                      {{"cause_code", "ANALYZE_FAILED"},
+                                       {"correct_example", protocol_action_example(action_name())}});
+        exporter.build(*canonical, cfg, begin, end, result);
         result.format = format;
 
         auto txn_json = [](const AxiExportTransaction& txn) {
@@ -95,6 +101,8 @@ public:
                         {"first_data_time", format_time(txn.first_data_time)},
                         {"last_data_time", format_time(txn.last_data_time)},
                         {"latency", format_duration(latency)},
+                        {"phase_order", txn.phase_order},
+                        {"response_dependency_violation", txn.response_dependency_violation},
                         {"id", txn.id},
                         {"addr", txn.addr},
                         {"len", txn.len},
@@ -114,6 +122,17 @@ public:
                         {"status", output_prefix.empty() ? "preview" : "written"},
                         {"output_written", !output_prefix.empty()},
                         {"truncated", false},
+                        {"analysis_complete", result.analysis_complete},
+                        {"sample_count", result.sample_count},
+                        {"full_scan_count", result.full_scan_count},
+                        {"incomplete_write_count", result.incomplete_write_count},
+                        {"incomplete_read_count", result.incomplete_read_count},
+                        {"buffered_w_beat_count", result.buffered_w_beat_count},
+                        {"buffered_w_burst_count", result.buffered_w_burst_count},
+                        {"orphan_w_beat_count", result.orphan_w_beat_count},
+                        {"orphan_b_count", result.orphan_b_count},
+                        {"orphan_r_beat_count", result.orphan_r_beat_count},
+                        {"response_dependency_violation_count", result.response_dependency_violation_count},
                         {"requested_range", {{"begin", format_time(begin)}, {"end", format_time(end)}}},
                         {"scanned_range", {{"begin", format_time(result.scan_begin)},
                                             {"end", format_time(result.scan_end)}}}};
