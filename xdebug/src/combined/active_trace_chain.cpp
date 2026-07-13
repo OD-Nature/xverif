@@ -343,6 +343,8 @@ Json chain_to_json(const ChainResult& r) {
         Json j;
         j["index"] = n.index; j["signal"] = n.signal;
         j["time"] = n.time; j["active_time"] = n.active_time;
+        j["requested_time"] = n.time;
+        j["driver_last_change_time"] = n.active_time;
         j["value"] = n.value_str; j["value_known"] = n.value_known;
         j["driver_kind"] = n.driver_kind; j["driver"] = n.driver;
         j["file"] = n.file; j["line"] = n.line;
@@ -410,12 +412,20 @@ nlohmann::ordered_json build_active_driver_chain_payload(const Json& request,
     resp["summary"] = {
         {"signal", signal},
         {"time", req_time},
+        {"requested_time", req_time},
         {"chain_length", static_cast<int>(result.chain.size())},
         {"termination", result.termination},
         {"evidence_source", result.evidence_source.empty()
             ? nlohmann::ordered_json(nullptr) : nlohmann::ordered_json(result.evidence_source)},
         {"static_candidate_count", result.static_candidate_count},
-        {"active_check_count", result.active_check_count}
+        {"active_check_count", result.active_check_count},
+        {"evidence_scope", "static_hdl_and_fsdb_active_driver"},
+        {"evidence_status", result.active_check_count > 0 ? "active_driver_checked" : "static_or_unavailable"},
+        {"time_semantics", {
+            {"requested_time", "the user query time"},
+            {"driver_last_change_time", "per-chain-node time attached to active-driver evidence"},
+            {"active_time", "compatibility alias of driver_last_change_time"}
+        }}
     };
     resp["chain"] = chain_to_json(result);
     resp["truncated"] = result.truncated;

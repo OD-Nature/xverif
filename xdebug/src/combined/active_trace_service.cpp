@@ -239,6 +239,7 @@ Json to_json(const TraceNode& node) {
         {"line", node.line},
         {"text", node.text},
         {"active_time", node.active_time},
+        {"driver_last_change_time", node.active_time},
         {"value", node.value},
         {"next_signal", node.next_signal},
         {"alias_kind", node.alias_kind}
@@ -1239,12 +1240,21 @@ nlohmann::ordered_json build_active_driver_payload(const Json& request,
     resp["summary"] = {
         {"signal", signal_name},
         {"time", requested_time},
+        {"requested_time", requested_time},
         {"active_time", first_active_time},
+        {"driver_last_change_time", first_active_time},
+        {"time_semantics", {
+            {"requested_time", "the user query time"},
+            {"driver_last_change_time", "the time attached to the active-driver evidence"},
+            {"active_time", "compatibility alias of driver_last_change_time"}
+        }},
         {"driver_status", driver_status},
         {"evidence_source", trace_result.evidence_source.empty()
             ? nlohmann::ordered_json(nullptr) : nlohmann::ordered_json(trace_result.evidence_source)},
         {"static_candidate_count", trace_result.static_candidate_count},
         {"active_check_count", trace_result.active_check_count},
+        {"evidence_scope", "static_hdl_and_fsdb_active_driver"},
+        {"evidence_status", trace_result.active_check_count > 0 ? "active_driver_checked" : "static_or_unavailable"},
         {"trace_node_count", trace_result.node_count}
     };
     resp["driver"] = trace_result.current_driver.is_null()
