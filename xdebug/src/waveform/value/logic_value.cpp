@@ -102,6 +102,27 @@ std::string bits_to_hex(std::string bits) {
     return out.empty() ? "0" : out;
 }
 
+std::string bits_to_decimal(const std::string& bits) {
+    std::string decimal("0");
+    for (char bit : bits) {
+        int carry = bit == '1' ? 1 : 0;
+        for (size_t i = decimal.size(); i > 0; --i) {
+            int value = (decimal[i - 1] - '0') * 2 + carry;
+            decimal[i - 1] = static_cast<char>('0' + value % 10);
+            carry = value / 10;
+        }
+        if (carry) decimal.insert(decimal.begin(), static_cast<char>('0' + carry));
+    }
+    const size_t first = decimal.find_first_not_of('0');
+    return first == std::string::npos ? "0" : decimal.substr(first);
+}
+
+std::string sv_literal(const LogicValue& value, char radix, const std::string& body) {
+    const std::string width = value.width_reliable && value.width > 0
+        ? std::to_string(value.width) : std::string();
+    return width + "'" + radix + body;
+}
+
 void apply_width(LogicValue& value, int width_hint) {
     if (width_hint <= 0) return;
     value.width = width_hint;
@@ -167,6 +188,23 @@ LogicValue from_body(const std::string& raw, char radix, const std::string& body
 
 } // namespace
 
+bool parse_value_render_format(const std::string& text, ValueRenderFormat& out) {
+    const std::string normalized = clean_lower(text);
+    if (normalized == "h" || normalized == "hex") { out = ValueRenderFormat::Hex; return true; }
+    if (normalized == "b" || normalized == "bin" || normalized == "binary") { out = ValueRenderFormat::Bin; return true; }
+    if (normalized == "d" || normalized == "dec" || normalized == "decimal") { out = ValueRenderFormat::Dec; return true; }
+    return false;
+}
+
+std::string value_render_format_text(ValueRenderFormat format) {
+    switch (format) {
+    case ValueRenderFormat::Hex: return "hex";
+    case ValueRenderFormat::Bin: return "bin";
+    case ValueRenderFormat::Dec: return "dec";
+    }
+    return "hex";
+}
+
 bool is_legacy_0x_literal(const std::string& text) {
     std::string s = trim(text);
     return s.size() > 2 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X');
@@ -229,9 +267,21 @@ LogicValue parse_user_logic_literal(const std::string& text) {
     return from_body(text, 'd', s, 0, false);
 }
 
-Json logic_value_json(const LogicValue& value) {
+Json logic_value_json(const LogicValue& value, ValueRenderFormat format) {
     Json out;
-    out["value"] = logic_value_compact_string(value);
+    if (format == ValueRenderFormat::Bin) {
+        out["value"] = sv_literal(value, 'b', value.bits.empty() ? logic_value_compact_string(value) : value.bits);
+    } else if (format == ValueRenderFormat::Dec && value.known && !value.bits.empty()) {
+        out["value"] = sv_literal(value, 'd', bits_to_decimal(value.bits));
+    } else {
+        out["value"] = logic_value_compact_string(value);
+        if (format == ValueRenderFormat::Dec && !value.known) {
+            out["requested_value_format"] = "dec";
+            out["effective_value_format"] = "bin";
+            out["value_format_reason"] = "decimal cannot preserve per-bit X/Z";
+            out["value"] = sv_literal(value, 'b', value.bits.empty() ? logic_value_compact_string(value) : value.bits);
+        }
+    }
     out["known"] = value.known;
     if (value.width_reliable && value.width > 0) out["width"] = value.width;
     if (value.width_reliable && !value.bits.empty()) out["bits"] = value.bits;
@@ -240,6 +290,27 @@ Json logic_value_json(const LogicValue& value) {
         out["has_z"] = value.has_z;
     }
     return out;
+}
+
+void apply_value_render_format(Json& response, ValueRenderFormat format) {
+    if (response.is_array()) {
+        for (auto& item : response) apply_value_render_format(item, format);
+        return;
+    }
+    if (!response.is_object()) return;
+
+    // A canonical logic value always has a bit-accurate representation.  Do
+    // not infer a value object from its display string alone: arbitrary action
+    // payloads may also use a key named "value".
+    if (response.contains("bits") && response["bits"].is_string() &&
+        response.contains("value") && response["value"].is_string()) {
+        const int width = response.value("width", 0);
+        LogicValue value = logic_value_from_bits(response["bits"].get<std::string>(), width);
+        Json rendered = logic_value_json(value, format);
+        for (auto it = rendered.begin(); it != rendered.end(); ++it) response[it.key()] = it.value();
+    }
+    for (auto it = response.begin(); it != response.end(); ++it)
+        apply_value_render_format(it.value(), format);
 }
 
 std::string logic_value_compact_string(const LogicValue& value) {

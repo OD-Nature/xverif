@@ -89,6 +89,11 @@
             "ms",
             "s"
           ]
+        },
+        "value_format": {
+          "type": "string",
+          "enum": ["hex", "bin", "dec"],
+          "description": "仅控制信号值显示格式；不影响查询、时间或导出格式。"
         }
       },
       "additionalProperties": false,

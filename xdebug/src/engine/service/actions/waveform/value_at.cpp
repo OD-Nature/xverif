@@ -86,7 +86,6 @@ public:
         Json args = request.value("args", Json::object());
         std::string signal = args.value("signal", std::string());
         std::string time_str = args.value("time", args.value("at", std::string()));
-        std::string fmt_str = args.value("format", std::string("h"));
         if (signal.empty() || time_str.empty())
             return waveform_missing_field_error(
                 action_name(),
@@ -97,17 +96,27 @@ public:
         Json clock_error;
         if (!parse_point_clock_args(args, clock_spec, clock_error)) return clock_error;
 
-        char fmt = static_cast<char>(std::tolower(
-            static_cast<unsigned char>(fmt_str.empty() ? 'h' : fmt_str[0])));
-        if (fmt != 'h' && fmt != 'b' && fmt != 'd') fmt = 'h';
-
+        if (args.contains("format") && args.contains("value_format") &&
+            args["format"].is_string() && args["value_format"].is_string() &&
+            args["format"].get<std::string>() != "array_indexed") {
+            xdebug_waveform::ValueRenderFormat legacy, requested;
+            if (xdebug_waveform::parse_value_render_format(args["format"].get<std::string>(), legacy) &&
+                xdebug_waveform::parse_value_render_format(args["value_format"].get<std::string>(), requested) &&
+                legacy != requested)
+                return waveform_invalid_arg_error(action_name(), "args.value_format",
+                    "value_format must match legacy args.format when both are provided",
+                    "the same normalized value format as args.format");
+        }
         npiFsdbTime fsdb_time = 0;
         std::string time_error;
         if (!xdebug_waveform::parse_user_time(time_str.c_str(), false, fsdb_time, time_error))
             return waveform_time_error(action_name(), "args.time",
                                        time_error.empty() ? "failed to parse time: " + time_str : time_error);
 
-        npiFsdbValType vtype = xdebug_waveform::parse_format(fmt);
+        // Read a bit-accurate value regardless of display preference.  The
+        // server response boundary applies args.value_format afterwards; this
+        // is what lets decimal requests preserve X/Z as binary.
+        npiFsdbValType vtype = xdebug_waveform::parse_format('b');
 
         std::string formatted_time = xdebug_core::format_time(g_fsdb_file, fsdb_time);
         Json out;
@@ -119,7 +128,7 @@ public:
                                      formatted_time,
                                      std::vector<PointSignalSpec>{{signal, signal}},
                                      vtype,
-                                     fmt,
+                                     'b',
                                      point,
                                      point_error)) {
             return point_error;
@@ -140,7 +149,7 @@ public:
         // xbit hints require the raw FSDB scalar. Keep the old direct middle read for hints only.
         std::string raw;
         if (npi_fsdb_sig_value_at(g_fsdb_file, signal.c_str(), fsdb_time, raw, vtype)) {
-            raw = with_value_prefix(raw, fmt);
+            raw = with_value_prefix(raw, 'b');
             Json hints = make_xbit_hints(args, signal, raw);
             if (!hints.is_null()) out["xbit_hints"] = hints;
         }

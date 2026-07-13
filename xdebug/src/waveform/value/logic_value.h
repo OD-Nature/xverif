@@ -21,12 +21,22 @@ struct LogicValue {
     std::string error;
 };
 
+enum class ValueRenderFormat { Hex, Bin, Dec };
+
+bool parse_value_render_format(const std::string& text, ValueRenderFormat& out);
+std::string value_render_format_text(ValueRenderFormat format);
+
 LogicValue logic_value_from_fsdb_raw(const std::string& raw, char radix,
                                      int width_hint = 0);
 LogicValue logic_value_from_bits(const std::string& bits, int width_hint = 0);
 LogicValue parse_user_logic_literal(const std::string& text);
 
-Json logic_value_json(const LogicValue& value);
+Json logic_value_json(const LogicValue& value,
+                      ValueRenderFormat format = ValueRenderFormat::Hex);
+// Re-render every logic-value JSON object in a response tree.  Only objects
+// carrying the canonical bits field are touched, so unrelated strings such as
+// times, paths and exported-file metadata keep their original meaning.
+void apply_value_render_format(Json& response, ValueRenderFormat format);
 std::string logic_value_compact_string(const LogicValue& value);
 std::string logic_value_compare_key(const LogicValue& value);
 bool logic_value_has_xz(const LogicValue& value);

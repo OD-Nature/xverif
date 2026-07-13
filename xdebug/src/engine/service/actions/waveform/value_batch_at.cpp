@@ -86,7 +86,6 @@ public:
         Json args = request.value("args", Json::object());
         Json signals_j = args.value("signals", Json::array());
         std::string time_str = args.value("time", args.value("at", std::string()));
-        std::string fmt_str = args.value("format", std::string("h"));
         if (!signals_j.is_array() || signals_j.empty() || time_str.empty())
             return waveform_missing_field_error(
                 action_name(),
@@ -97,10 +96,17 @@ public:
         Json clock_error;
         if (!parse_point_clock_args(args, clock_spec, clock_error)) return clock_error;
 
-        char fmt = static_cast<char>(std::tolower(
-            static_cast<unsigned char>(fmt_str.empty() ? 'h' : fmt_str[0])));
-        if (fmt != 'h' && fmt != 'b' && fmt != 'd') fmt = 'h';
-
+        if (args.contains("format") && args.contains("value_format") &&
+            args["format"].is_string() && args["value_format"].is_string() &&
+            args["format"].get<std::string>() != "array_indexed") {
+            xdebug_waveform::ValueRenderFormat legacy, requested;
+            if (xdebug_waveform::parse_value_render_format(args["format"].get<std::string>(), legacy) &&
+                xdebug_waveform::parse_value_render_format(args["value_format"].get<std::string>(), requested) &&
+                legacy != requested)
+                return waveform_invalid_arg_error(action_name(), "args.value_format",
+                    "value_format must match legacy args.format when both are provided",
+                    "the same normalized value format as args.format");
+        }
         npiFsdbTime fsdb_time = 0;
         std::string time_error;
         if (!xdebug_waveform::parse_user_time(time_str.c_str(), false, fsdb_time, time_error))
@@ -122,8 +128,8 @@ public:
                                      fsdb_time,
                                      formatted_time,
                                      specs,
-                                     xdebug_waveform::parse_format(fmt),
-                                     fmt,
+                                     xdebug_waveform::parse_format('b'),
+                                     'b',
                                      point,
                                      point_error)) {
             return point_error;
@@ -141,8 +147,8 @@ public:
                 item["value"] = middle.value("value", Json());
                 if (item["value"].is_object() && contains_xz(item["value"].value("value", std::string()))) unknown_count++;
                 std::string raw;
-                if (npi_fsdb_sig_value_at(g_fsdb_file, names[i].c_str(), fsdb_time, raw, xdebug_waveform::parse_format(fmt))) {
-                    raw = with_value_prefix(raw, fmt);
+                if (npi_fsdb_sig_value_at(g_fsdb_file, names[i].c_str(), fsdb_time, raw, xdebug_waveform::parse_format('b'))) {
+                    raw = with_value_prefix(raw, 'b');
                     Json hints = make_xbit_hints(args, names[i], raw);
                     if (!hints.is_null()) item["xbit_hints"] = hints;
                 }

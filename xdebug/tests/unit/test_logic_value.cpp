@@ -16,6 +16,8 @@ int main() {
     assert(fsdb_sized.width == 8);
     assert(logic_value_compact_string(fsdb_sized) == "8'h22");
     assert(logic_value_json(fsdb_sized)["bits"] == "00100010");
+    assert(logic_value_json(fsdb_sized, ValueRenderFormat::Dec)["value"] == "8'd34");
+    assert(logic_value_json(fsdb_sized, ValueRenderFormat::Bin)["value"] == "8'b00100010");
 
     LogicValue unknown = logic_value_from_fsdb_raw("xz", 'h', 8);
     assert(unknown.valid);
@@ -23,6 +25,18 @@ int main() {
     assert(unknown.has_x);
     assert(unknown.has_z);
     assert(logic_value_compact_string(unknown) == "8'hxz");
+    Json unknown_dec = logic_value_json(unknown, ValueRenderFormat::Dec);
+    assert(unknown_dec["value"] == "8'bxxxxzzzz");
+    assert(unknown_dec["requested_value_format"] == "dec");
+    assert(unknown_dec["effective_value_format"] == "bin");
+
+    Json nested = {{"stable", unknown_dec},
+                   {"changes", Json::array({{{"value", logic_value_json(fsdb_sized)}}})},
+                   {"time", "10ns"}};
+    apply_value_render_format(nested, ValueRenderFormat::Dec);
+    assert(nested["stable"]["value"] == "8'bxxxxzzzz");
+    assert(nested["changes"][0]["value"]["value"] == "8'd34");
+    assert(nested["time"] == "10ns");
 
     LogicValue user_sv = parse_user_logic_literal("8'h22");
     assert(user_sv.valid);

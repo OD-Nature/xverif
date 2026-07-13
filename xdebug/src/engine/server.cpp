@@ -10,6 +10,7 @@
 #include "core/session/session_timeout.h"
 #include "core/schema/runtime_schema_validator.h"
 #include "core/transport/file_exchange.h"
+#include "waveform/value/logic_value.h"
 #include "json.hpp"
 
 #include <cstdio>
@@ -596,6 +597,12 @@ static bool handle_client(int client_fd, bool& should_quit) {
     }
     if (data.contains("error"))
         return send_response(client_fd, action_error_response(request, data));
+    std::string value_format = args.value("value_format", args.value("format", std::string()));
+    xdebug_waveform::ValueRenderFormat render_format;
+    if (!value_format.empty() &&
+        xdebug_waveform::parse_value_render_format(value_format, render_format)) {
+        xdebug_waveform::apply_value_render_format(data, render_format);
+    }
     Json resp = ok_response(data);
     // Propagate truncation flag from handler to response envelope.
     if (data.contains("truncated") && data["truncated"].is_boolean() &&
