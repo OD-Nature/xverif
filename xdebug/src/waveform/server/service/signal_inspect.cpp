@@ -321,6 +321,11 @@ Json ai_handshake_inspect(const Json& args, std::string& error) {
     Json rules = args.value("rules", Json::object());
     int max_wait = rules.value("max_wait_cycles", 100);
     bool check_data = rules.value("check_data_stable_when_stalled", false);
+    std::string ready_reporting = rules.value("ready_without_valid", std::string("summary"));
+    if (ready_reporting != "summary" && ready_reporting != "intervals" && ready_reporting != "all") {
+        error = "handshake.inspect rules.ready_without_valid must be summary, intervals, or all";
+        return Json();
+    }
     int samples = 0, transfers = 0, stall_cycles = 0, max_stall = 0, ready_only = 0, data_violations = 0;
     bool in_stall = false, scan_truncated = false;
     npiFsdbTime stall_begin = 0;
@@ -332,6 +337,28 @@ Json ai_handshake_inspect(const Json& args, std::string& error) {
         ++finding_count;
         if (finding_limit < 0 || static_cast<int>(findings.size()) < finding_limit)
             findings.push_back(finding);
+    };
+    bool in_ready_only = false;
+    npiFsdbTime ready_only_begin = 0;
+    npiFsdbTime ready_only_end = 0;
+    int ready_only_interval_cycles = 0;
+    int ready_only_interval_count = 0;
+    Json ready_only_intervals = Json::array();
+    auto finish_ready_only_interval = [&](npiFsdbTime interval_end, bool open_at_window_end) {
+        if (!in_ready_only) return;
+        ++ready_only_interval_count;
+        if (ready_reporting == "intervals") {
+            Json interval = {{"begin", format_time(ready_only_begin)},
+                             {"end", format_time(interval_end)},
+                             {"cycle_count", ready_only_interval_cycles},
+                             // Retain the previous field for clients that had
+                             // already consumed the short-lived interval form.
+                             {"cycles", ready_only_interval_cycles}};
+            if (open_at_window_end) interval["open_at_window_end"] = true;
+            ready_only_intervals.push_back(interval);
+        }
+        in_ready_only = false;
+        ready_only_interval_cycles = 0;
     };
     ClockSampleScanner scanner(g_fsdb_file, clock_sample);
     if (!scanner.scan(sample_signals, begin, end, npiFsdbBinStrVal, 'b', -1,
@@ -345,8 +372,14 @@ Json ai_handshake_inspect(const Json& args, std::string& error) {
             if (transfer) transfers++;
             if (r == ExprTri::True && v == ExprTri::False) {
                 ready_only++;
-                add_finding({{"type", "ready_without_valid"}, {"severity", "info"},
-                             {"time", format_time(t)}});
+                if (!in_ready_only) { in_ready_only = true; ready_only_begin = t; }
+                ready_only_end = t;
+                ++ready_only_interval_cycles;
+                if (ready_reporting == "all")
+                    add_finding({{"type", "ready_without_valid"}, {"severity", "info"},
+                                 {"time", format_time(t)}});
+            } else {
+                finish_ready_only_interval(ready_only_end, false);
             }
             if (stall) {
                 stall_cycles++;
@@ -384,6 +417,7 @@ Json ai_handshake_inspect(const Json& args, std::string& error) {
                          {"cycles", stall_cycles}, {"open_at_window_end", true}});
         }
     }
+    finish_ready_only_interval(ready_only_end, true);
     const bool response_truncated = finding_limit >= 0 && finding_count > finding_limit;
     Json data;
     data["summary"] = {
@@ -395,6 +429,8 @@ Json ai_handshake_inspect(const Json& args, std::string& error) {
         {"transfer_count", transfers},
         {"max_stall_cycles", max_stall},
         {"ready_without_valid_cycles", ready_only},
+        {"ready_without_valid_reporting", ready_reporting},
+        {"ready_without_valid_interval_count", ready_only_interval_count},
         {"data_stability_violations", data_violations},
         {"finding_count", finding_count},
         {"returned_finding_count", findings.size()},
@@ -402,6 +438,7 @@ Json ai_handshake_inspect(const Json& args, std::string& error) {
         {"truncated", response_truncated},
         {"truncation_scope", response_truncated ? Json("response_findings") : Json(nullptr)}
     };
+    if (ready_reporting == "intervals") data["ready_without_valid_intervals"] = ready_only_intervals;
     data["findings"] = findings;
     return data;
 }

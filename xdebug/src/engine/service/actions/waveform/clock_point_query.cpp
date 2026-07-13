@@ -28,6 +28,8 @@ Json invalid_arg(const std::string& arg, const std::string& expected) {
 }
 
 Json value_object(const std::string& raw, char fmt) {
+    // The raw FSDB radix only affects parsing.  Display formatting is applied
+    // once at the engine response boundary so all value-bearing fields agree.
     return xdebug_waveform::logic_value_json(
         xdebug_waveform::logic_value_from_fsdb_raw(raw, fmt));
 }
@@ -118,11 +120,7 @@ bool parse_point_clock_args(const Json& args,
             return false;
         }
     }
-    if (!xdebug_waveform::normalize_clock_sample_spec(nullptr, spec, parse_error)) {
-        error = invalid_arg("args.sample_point", "only valid with edge:posedge or edge:dual");
-        error["message"] = parse_error;
-        return false;
-    }
+    if (!xdebug_waveform::normalize_clock_sample_spec(nullptr, spec, parse_error)) return false;
     return true;
 }
 
@@ -166,6 +164,14 @@ bool build_clock_point_query(npiFsdbFileHandle fsdb,
     Json context;
     context["clock"] = spec.clock;
     context["edge"] = xdebug_waveform::clock_edge_kind_text(spec.edge);
+    context["requested_sampling"] = {{"edge", xdebug_waveform::clock_edge_kind_text(spec.edge)},
+                                      {"sample_point", spec.has_sample_point
+                                          ? Json(xdebug_waveform::clock_sample_point_text(spec.sample_point))
+                                          : Json(nullptr)}};
+    context["effective_sampling"] = {{"edge", xdebug_waveform::clock_edge_kind_text(spec.edge)},
+                                      {"sample_point", spec.edge == ClockEdgeKind::Negedge
+                                          ? Json(nullptr)
+                                          : Json(xdebug_waveform::clock_sample_point_text(spec.sample_point))}};
     context["requested_time"] = xdebug_core::format_time(fsdb, point_result.context.requested_time);
     context["requested_any_edge_hit"] = point_result.context.clock_edge_hit;
     context["clock_edge_kind"] = point_result.context.has_clock_edge_kind
@@ -176,6 +182,7 @@ bool build_clock_point_query(npiFsdbFileHandle fsdb,
         point_result.context.target_edge_hit && spec.edge != ClockEdgeKind::Negedge
         ? Json(xdebug_waveform::clock_sample_point_text(spec.sample_point))
         : Json(nullptr);
+    context["sample_point_ignored_for_negedge"] = spec.edge == ClockEdgeKind::Negedge && spec.has_sample_point;
     context["previous_sample_time"] = point_result.context.has_previous_sample_time
         ? Json(xdebug_core::format_time(fsdb, point_result.context.previous_sample_time)) : Json(nullptr);
     context["next_sample_time"] = point_result.context.has_next_sample_time

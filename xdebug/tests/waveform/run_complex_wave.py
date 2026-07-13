@@ -865,8 +865,16 @@ def run_nonaxi(xdebug, fsdb):
         require(bad_type["error"]["code"] == "INVALID_REQUEST", "unknown check type should return INVALID_REQUEST")
         require(bad_type["error"]["invalid_arg"] == "args.checks[0].type",
                 "unknown check type should expose invalid type path")
-        health = r.query("value.at", args={"signal": "ai_complex_top.clk", "clock": "ai_complex_top.clk", "time": "10ns"})
+        health = r.query("value.at", args={"signal": "ai_complex_top.clk", "clock": "ai_complex_top.clk",
+                                            "edge": "negedge", "sample_point": "after", "time": "10ns"})
         require(health["ok"] is True, "session should remain healthy after invalid detect_abnormal checks")
+        clock_context = health["data"]["clock_context"]
+        require(clock_context["requested_sampling"]["sample_point"] == "after",
+                "negedge request must retain requested sample_point")
+        require(clock_context["effective_sampling"]["sample_point"] is None and
+                clock_context["sample_point_applied"] is False and
+                clock_context["sample_point_ignored_for_negedge"] is True,
+                "negedge sample_point must use the existing negedge semantics")
         hs = r.query("handshake.inspect", args={
             "clock": "ai_complex_top.clk",
             "valid": "ai_complex_top.hs_valid",
@@ -877,6 +885,38 @@ def run_nonaxi(xdebug, fsdb):
         })
         require(hs["summary"]["max_stall_cycles"] >= 3 and hs["summary"]["data_stability_violations"] >= 1, "handshake.inspect mismatch")
         require_clock_summary(hs, "negedge")
+        require(hs["summary"]["ready_without_valid_reporting"] == "summary",
+                "handshake default ready-without-valid reporting must be summary")
+        require(not any(item.get("type") == "ready_without_valid" for item in hs["data"]["findings"]),
+                "summary reporting must not emit one finding per ready-without-valid cycle")
+        hs_intervals = r.query("handshake.inspect", args={
+            "clock": "ai_complex_top.clk",
+            "valid": "ai_complex_top.hs_valid",
+            "ready": "ai_complex_top.hs_ready",
+            "time_range": {"begin": "120ns", "end": "210ns"},
+            "rules": {"ready_without_valid": "intervals"},
+        })
+        require(hs_intervals["summary"]["ready_without_valid_reporting"] == "intervals",
+                "interval ready-without-valid reporting mismatch")
+        require(hs_intervals["summary"]["ready_without_valid_cycles"] == hs["summary"]["ready_without_valid_cycles"],
+                "ready-without-valid reporting mode must not change the count")
+        intervals = hs_intervals["data"].get("ready_without_valid_intervals", [])
+        require(all("begin" in item and "end" in item and "cycle_count" in item for item in intervals),
+                "ready-without-valid intervals must expose begin/end/cycle_count")
+        hs_all = r.query("handshake.inspect", args={
+            "clock": "ai_complex_top.clk",
+            "valid": "ai_complex_top.hs_valid",
+            "ready": "ai_complex_top.hs_ready",
+            "time_range": {"begin": "120ns", "end": "210ns"},
+            "rules": {"ready_without_valid": "all"},
+        })
+        ready_rows = [item for item in hs_all["data"]["findings"]
+                      if item.get("type") == "ready_without_valid"]
+        require(len(ready_rows) == hs_all["summary"]["ready_without_valid_cycles"],
+                "all reporting must retain one ready-without-valid finding per cycle")
+        sampling = hs["data"]["sampling"]
+        require(sampling["effective"]["sample_point"] is None and not sampling["sample_point_applied"],
+                "negedge sampling contract must report no effective sample_point")
         return r.rows
     finally:
         r.cleanup()

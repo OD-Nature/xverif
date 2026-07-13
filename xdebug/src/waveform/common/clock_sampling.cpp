@@ -139,10 +139,8 @@ bool normalize_clock_sample_spec(npiFsdbFileHandle fsdb,
                                  ClockSampleSpec& spec,
                                  std::string& error) {
     (void)fsdb;
-    if (spec.edge == ClockEdgeKind::Negedge && spec.has_sample_point) {
-        error = "sample_point is only valid with edge:posedge or edge:dual";
-        return false;
-    }
+    // Negedge keeps its established current-value semantics.  A supplied
+    // sample_point is accepted for uniform public requests but is not applied.
     return true;
 }
 

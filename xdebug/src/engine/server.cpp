@@ -11,6 +11,7 @@
 #include "core/schema/runtime_schema_validator.h"
 #include "core/transport/file_exchange.h"
 #include "waveform/value/logic_value.h"
+#include "waveform/common/clock_sampling.h"
 #include "json.hpp"
 
 #include <cstdio>
@@ -192,6 +193,47 @@ static std::string hash_string_hex(const std::string& value) {
     char buf[32];
     snprintf(buf, sizeof(buf), "%016llx", h);
     return std::string(buf);
+}
+
+static void append_sampling_contract(const Json& args, Json& data) {
+    if (!args.value("clock", std::string()).empty()) {
+        const Json summary = data.value("summary", Json::object());
+        const bool sampled = data.contains("clock_context") ||
+            summary.value("sampling_mode", std::string()) == "clock_edge";
+        if (!sampled) return;
+
+        xdebug_waveform::ClockEdgeKind edge;
+        std::string parse_error;
+        if (!xdebug_waveform::parse_clock_edge_kind(args.value("edge", std::string("negedge")),
+                                                    edge, parse_error)) return;
+        Json requested = {{"edge", xdebug_waveform::clock_edge_kind_text(edge)},
+                          {"sample_point", args.contains("sample_point")
+                              ? args["sample_point"] : Json(nullptr)}};
+        const bool negedge = edge == xdebug_waveform::ClockEdgeKind::Negedge;
+        Json effective = {{"edge", xdebug_waveform::clock_edge_kind_text(edge)},
+                          {"sample_point", negedge ? Json(nullptr)
+                              : Json(args.value("sample_point", std::string("before")))}};
+        Json contract = {{"requested", requested},
+                         {"effective", effective},
+                         {"sample_point_applied", !negedge},
+                         {"sample_point_ignored_for_negedge", negedge && args.contains("sample_point")}};
+        if (negedge && args.contains("sample_point"))
+            contract["sample_point_not_applied_reason"] =
+                "negedge keeps the established current-value sampling semantics";
+
+        if (data.contains("clock_context") && data["clock_context"].is_object()) {
+            data["clock_context"]["requested_sampling"] = requested;
+            data["clock_context"]["effective_sampling"] = effective;
+            data["clock_context"]["sample_point_applied"] = !negedge;
+            data["clock_context"]["sample_point_ignored_for_negedge"] =
+                negedge && args.contains("sample_point");
+            if (negedge && args.contains("sample_point"))
+                data["clock_context"]["sample_point_not_applied_reason"] =
+                    contract["sample_point_not_applied_reason"];
+        } else {
+            data["sampling"] = contract;
+        }
+    }
 }
 
 static void log_environment_snapshot(int argc, char** argv) {
@@ -597,6 +639,7 @@ static bool handle_client(int client_fd, bool& should_quit) {
     }
     if (data.contains("error"))
         return send_response(client_fd, action_error_response(request, data));
+    append_sampling_contract(args, data);
     std::string value_format = args.value("value_format", args.value("format", std::string()));
     xdebug_waveform::ValueRenderFormat render_format;
     if (!value_format.empty() &&
