@@ -161,7 +161,18 @@ std::string ensure_error_code(const SessionEnsureResult& result) {
     if (result.status == "invalid_args") return "INVALID_REQUEST";
     if (result.status == "invalid_transport") return "INVALID_REQUEST";
     if (result.message.find("invalid_config:") != std::string::npos) return "INVALID_CONFIG";
+    if (result.status == "startup_failed") return "ENGINE_START_FAILED";
     return "SESSION_UNHEALTHY";
+}
+
+OrderedJson session_open_failure_details(const SessionEnsureResult& result) {
+    std::string summary = result.message;
+    if (summary.size() > 512) summary.resize(512);
+    std::string reason = "unknown";
+    const std::string marker = "Server did not become ready: ";
+    if (summary.compare(0, marker.size(), marker) == 0) reason = summary.substr(marker.size());
+    return {{"failure_kind", result.status == "startup_failed" ? "engine_startup_failed" : "session_open_failed"},
+            {"startup_reason", reason}, {"native_error_summary", summary}};
 }
 
 std::string health_error_code(SessionHealthStatus status) {
@@ -289,7 +300,8 @@ OrderedJson handle_session_action(const OrderedJson& request, const std::string&
         std::string name = request_session_name(request);
         if (name.empty()) return make_error(request, action, "MISSING_FIELD", "args.name is required");
         SessionEnsureResult result = manager.ensure_session(open_args, name, request_transport_options(request));
-        if (!result.ok) return make_error(request, action, ensure_error_code(result), result.message);
+        if (!result.ok) return make_error(request, action, ensure_error_code(result), result.message,
+                                          true, session_open_failure_details(result));
         OrderedJson response = make_response(request, action);
         response["session"] = session_to_json(result.info);
         response["session"]["healthy"] = true;
