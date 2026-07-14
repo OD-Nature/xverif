@@ -9,6 +9,7 @@
     "complete_packet_count": 16,
     "partial_packet_count": 0,
     "packet_count_status": "exact",
+    "filter_applied": false,
     "truncated": false
   },
   "data": {

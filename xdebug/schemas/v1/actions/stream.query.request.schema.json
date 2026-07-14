@@ -34,62 +34,112 @@
         "channel": {
           "type": "string"
         },
-        "field_scope": {
-          "type": "string",
-          "enum": [
-            "beat",
-            "packet_stable",
-            "any"
-          ]
+        "filter": {
+          "type": "object",
+          "required": [
+            "fields"
+          ],
+          "properties": {
+            "position": {
+              "type": "string",
+              "enum": [
+                "sop",
+                "eop"
+              ]
+            },
+            "fields": {
+              "type": "object",
+              "minProperties": 1,
+              "additionalProperties": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "required": [
+                      "mode",
+                      "values"
+                    ],
+                    "properties": {
+                      "mode": {
+                        "const": "exact"
+                      },
+                      "values": {
+                        "type": "array",
+                        "minItems": 1,
+                        "uniqueItems": true,
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "Known unsigned integer or SystemVerilog literal of arbitrary width; X/Z and 0x are rejected.",
+                          "x-description-zh": "任意位宽的已知无符号整数或 SystemVerilog literal；不允许 X/Z 和 0x。"
+                        }
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "mode",
+                      "begin",
+                      "end"
+                    ],
+                    "properties": {
+                      "mode": {
+                        "const": "range"
+                      },
+                      "begin": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Known unsigned integer or SystemVerilog literal of arbitrary width; X/Z and 0x are rejected.",
+                        "x-description-zh": "任意位宽的已知无符号整数或 SystemVerilog literal；不允许 X/Z 和 0x。"
+                      },
+                      "end": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Known unsigned integer or SystemVerilog literal of arbitrary width; X/Z and 0x are rejected.",
+                        "x-description-zh": "任意位宽的已知无符号整数或 SystemVerilog literal；不允许 X/Z 和 0x。"
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "mode",
+                      "value",
+                      "mask"
+                    ],
+                    "properties": {
+                      "mode": {
+                        "const": "mask"
+                      },
+                      "value": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Known unsigned integer or SystemVerilog literal of arbitrary width; X/Z and 0x are rejected.",
+                        "x-description-zh": "任意位宽的已知无符号整数或 SystemVerilog literal；不允许 X/Z 和 0x。"
+                      },
+                      "mask": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Known unsigned integer or SystemVerilog literal of arbitrary width; X/Z and 0x are rejected.",
+                        "x-description-zh": "任意位宽的已知无符号整数或 SystemVerilog literal；不允许 X/Z 和 0x。"
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            }
+          },
+          "additionalProperties": false,
+          "description": "AND-combined Stream field filters; each field selects exact queue, inclusive range, or value/mask.",
+          "x-description-zh": "Stream 字段间取 AND；每个字段只能选择精确值队列、闭区间或 value/mask。packet stream 必须指定 SOP/EOP position。"
         },
         "line_limit": {
           "type": "integer",
           "minimum": 1,
           "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
-        },
-        "match": {
-          "type": "object",
-          "properties": {
-            "field": {
-              "type": "string"
-            },
-            "op": {
-              "type": "string",
-              "enum": [
-                "==",
-                "!=",
-                "<",
-                "<=",
-                ">",
-                ">=",
-                "range"
-              ]
-            },
-            "value": {
-              "type": "string"
-            },
-            "lo": {
-              "type": "string"
-            },
-            "hi": {
-              "type": "string"
-            },
-            "mask": {
-              "type": "string"
-            },
-            "field_scope": {
-              "type": "string",
-              "enum": [
-                "beat",
-                "packet_stable",
-                "any"
-              ]
-            }
-          },
-          "required": [
-            "field"
-          ],
-          "additionalProperties": false
         },
         "packet_index": {
           "type": "integer",
@@ -161,10 +211,10 @@
     }
   },
   "additionalProperties": false,
-  "description": "Query stream transfers, stalls, packets, and fields.",
-  "x-purpose": "查询 stream transfer。",
-  "x-how_it_works": "按 stream 配置和 query 条件扫描握手/beat。",
-  "x-when_to_use": "抽取流事务或 beats。",
-  "x-arg_contract_notes": "required: stream, query",
-  "x-description-zh": "查询 stream transfer。"
+  "description": "Query and filter stream transfers, stalls, and packets.",
+  "x-purpose": "查询并过滤 stream transfer/packet。",
+  "x-how_it_works": "无 sop/eop 时按 transfer 在线过滤；packet stream 必须用 filter.position=sop/eop 选择边界拍并返回整包。",
+  "x-when_to_use": "按多个 data/beat/stable 字段筛选流事务。",
+  "x-arg_contract_notes": "required: stream, query; filter.fields conditions AND; each mode exact/range/mask; packet filter requires position sop/eop",
+  "x-description-zh": "查询并按多个字段过滤 stream transfer 或 packet。"
 }

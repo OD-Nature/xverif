@@ -1,4 +1,5 @@
 #include "engine/service/actions/protocol/protocol_statistics_filter.h"
+#include "waveform/filter/value_filter.h"
 
 #include <cassert>
 #include <string>
@@ -6,6 +7,32 @@
 using namespace xdebug_design;
 
 int main() {
+    {
+        xdebug_waveform::ValueFilter wide_filter;
+        xdebug_waveform::ValueFilterError wide_error;
+        xdebug_waveform::ValueFilterParseOptions wide_options;
+        Json spec = {{"mode", "range"},
+                     {"begin", "128'h10000000000000000000000000000000"},
+                     {"end", "128'h1fffffffffffffffffffffffffffffff"}};
+        assert(xdebug_waveform::parse_value_filter(
+            spec, "args.filter.fields.data", wide_options, wide_filter, wide_error));
+        assert(xdebug_waveform::match_value_filter(
+            wide_filter,
+            xdebug_waveform::logic_value_from_bits(
+                "00011000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                128)) == xdebug_waveform::ValueFilterMatch::Yes);
+
+        Json mask_spec = {{"mode", "mask"}, {"value", "8'ha0"}, {"mask", "8'hf0"}};
+        assert(xdebug_waveform::parse_value_filter(
+            mask_spec, "args.filter.fields.data", wide_options, wide_filter, wide_error));
+        assert(xdebug_waveform::match_value_filter(
+            wide_filter, xdebug_waveform::logic_value_from_bits("1010xxxx", 8)) ==
+            xdebug_waveform::ValueFilterMatch::Yes);
+        assert(xdebug_waveform::match_value_filter(
+            wide_filter, xdebug_waveform::logic_value_from_bits("x0100000", 8)) ==
+            xdebug_waveform::ValueFilterMatch::Unresolved);
+    }
+
     StatisticsFilter filter;
     StatisticsFilterError error;
 

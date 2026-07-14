@@ -25,7 +25,6 @@ using xdebug_waveform::StreamAnalyzer;
 using xdebug_waveform::StreamConfig;
 using xdebug_waveform::StreamExporter;
 using xdebug_waveform::StreamManager;
-using xdebug_waveform::StreamMatch;
 using xdebug_waveform::StreamQueryOptions;
 
 Json err(const std::string& code, const std::string& message, const Json& details) {

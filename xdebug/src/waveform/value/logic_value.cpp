@@ -35,14 +35,22 @@ bool decimal_only(const std::string& text) {
 std::string dec_to_bits(const std::string& text) {
     std::string clean = clean_lower(text);
     if (!decimal_only(clean)) return std::string();
-    char* end = nullptr;
-    unsigned long long value = std::strtoull(clean.c_str(), &end, 10);
-    if (!end || *end != '\0') return std::string();
-    if (value == 0) return "0";
+    const size_t first = clean.find_first_not_of('0');
+    if (first == std::string::npos) return "0";
+    clean.erase(0, first);
     std::string bits;
-    while (value) {
-        bits.push_back((value & 1ULL) ? '1' : '0');
-        value >>= 1ULL;
+    while (clean != "0") {
+        std::string quotient;
+        int carry = 0;
+        for (char digit : clean) {
+            const int value = carry * 10 + (digit - '0');
+            const int q = value / 2;
+            carry = value % 2;
+            if (!quotient.empty() || q != 0)
+                quotient.push_back(static_cast<char>('0' + q));
+        }
+        bits.push_back(carry ? '1' : '0');
+        clean = quotient.empty() ? "0" : quotient;
     }
     std::reverse(bits.begin(), bits.end());
     return bits;

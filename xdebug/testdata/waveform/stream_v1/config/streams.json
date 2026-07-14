@@ -35,7 +35,7 @@
       "vld": "vld && !flush",
       "rdy": "rdy",
       "channel_id": "chid",
-      "data_fields": {
+      "beat_fields": {
         "low8": "data_sig[7:0]",
         "addr": "{addr_hi, addr_lo}",
         "is_wr": "cmd == 2'b01",
@@ -142,7 +142,7 @@
       "eop": "eop",
       "channel_id": "chid",
       "channel_id_valid": "every_beat",
-      "data_fields": {
+      "beat_fields": {
         "seq": "seq",
         "data": "data"
       },

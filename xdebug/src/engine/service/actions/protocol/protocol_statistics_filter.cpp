@@ -3,56 +3,11 @@
 #include "api/text_response_builder.h"
 #include "waveform/value/logic_value.h"
 
-#include <algorithm>
 #include <iomanip>
-#include <set>
 #include <sstream>
 
 namespace xdebug_design {
 namespace {
-
-bool parse_uint64_literal(const std::string& text, uint64_t& out,
-                          std::string& message) {
-    xdebug_waveform::LogicValue value;
-    if (xdebug_waveform::is_legacy_0x_literal(text)) {
-        value = xdebug_waveform::logic_value_from_fsdb_raw(text, 'h');
-    } else {
-        value = xdebug_waveform::parse_user_logic_literal(text);
-    }
-    if (!value.valid) {
-        message = value.error;
-        return false;
-    }
-    if (xdebug_waveform::logic_value_has_xz(value)) {
-        message = "value literal must not contain X/Z: " + text;
-        return false;
-    }
-    if (value.bits.size() > 64) {
-        message = "value literal must be at most 64 bits: " + text;
-        return false;
-    }
-    out = 0;
-    for (char bit : value.bits) {
-        out <<= 1U;
-        if (bit == '1') out |= 1U;
-    }
-    return true;
-}
-
-bool parse_fsdb_uint64(const std::string& text, uint64_t& out) {
-    xdebug_waveform::LogicValue value =
-        xdebug_waveform::logic_value_from_fsdb_raw(text, 'h');
-    if (!value.valid || xdebug_waveform::logic_value_has_xz(value) ||
-        value.bits.size() > 64) {
-        return false;
-    }
-    out = 0;
-    for (char bit : value.bits) {
-        out <<= 1U;
-        if (bit == '1') out |= 1U;
-    }
-    return true;
-}
 
 std::string hex_value(uint64_t value) {
     std::ostringstream out;
@@ -60,32 +15,37 @@ std::string hex_value(uint64_t value) {
     return out.str();
 }
 
+StatisticsMatch from_value_match(xdebug_waveform::ValueFilterMatch match);
+
 StatisticsMatch tri_and(StatisticsMatch lhs, StatisticsMatch rhs) {
-    if (lhs == StatisticsMatch::No || rhs == StatisticsMatch::No)
-        return StatisticsMatch::No;
-    if (lhs == StatisticsMatch::Unresolved || rhs == StatisticsMatch::Unresolved)
-        return StatisticsMatch::Unresolved;
-    return StatisticsMatch::Yes;
+    const auto to_value_match = [](StatisticsMatch match) {
+        return match == StatisticsMatch::Yes ? xdebug_waveform::ValueFilterMatch::Yes
+            : match == StatisticsMatch::Unresolved
+                ? xdebug_waveform::ValueFilterMatch::Unresolved
+                : xdebug_waveform::ValueFilterMatch::No;
+    };
+    return from_value_match(xdebug_waveform::value_filter_and(
+        to_value_match(lhs), to_value_match(rhs)));
 }
 
-bool parse_unique_values(const Json& values, const std::string& path,
-                         std::vector<uint64_t>& out,
-                         StatisticsFilterError& error) {
-    std::set<uint64_t> seen;
-    for (size_t index = 0; index < values.size(); ++index) {
+StatisticsMatch from_value_match(xdebug_waveform::ValueFilterMatch match) {
+    if (match == xdebug_waveform::ValueFilterMatch::Yes) return StatisticsMatch::Yes;
+    if (match == xdebug_waveform::ValueFilterMatch::Unresolved)
+        return StatisticsMatch::Unresolved;
+    return StatisticsMatch::No;
+}
+
+void copy_filter_error(const xdebug_waveform::ValueFilterError& source,
+                       StatisticsFilterError& target) {
+    target = {source.invalid_arg, source.message, source.expected};
+}
+
+bool populate_uint64_values(const std::vector<std::string>& bits,
+                            std::vector<uint64_t>& values) {
+    for (const auto& item : bits) {
         uint64_t value = 0;
-        std::string message;
-        if (!parse_uint64_literal(values[index].get<std::string>(), value, message)) {
-            error = {path + "[" + std::to_string(index) + "]", message,
-                     "known integer, hexadecimal, or SystemVerilog literal up to 64 bits"};
-            return false;
-        }
-        if (!seen.insert(value).second) {
-            error = {path, "values must remain unique after numeric normalization",
-                     "non-empty queue of numerically distinct values"};
-            return false;
-        }
-        out.push_back(value);
+        if (!xdebug_waveform::filter_bits_to_uint64(item, value)) return false;
+        values.push_back(value);
     }
     return true;
 }
@@ -112,61 +72,47 @@ bool parse_statistics_filter(const Json& args, bool allow_ids,
             return false;
         }
         out.has_ids = true;
-        if (!parse_unique_values(filter["ids"], "args.filter.ids", out.ids, error))
+        const Json id_spec = {{"mode", "exact"}, {"values", filter["ids"]}};
+        xdebug_waveform::ValueFilterError parse_error;
+        xdebug_waveform::ValueFilterParseOptions options;
+        options.allow_legacy_0x = true;
+        options.max_bits = 64;
+        if (!xdebug_waveform::parse_value_filter(id_spec, "args.filter.ids",
+                                                 options, out.id_filter,
+                                                 parse_error)) {
+            const std::string synthetic = "args.filter.ids.values";
+            if (parse_error.invalid_arg.compare(0, synthetic.size(), synthetic) == 0)
+                parse_error.invalid_arg.replace(0, synthetic.size(), "args.filter.ids");
+            copy_filter_error(parse_error, error);
             return false;
+        }
+        if (!populate_uint64_values(out.id_filter.values, out.ids)) return false;
     }
 
     if (!filter.contains("address")) return true;
     const Json& address = filter["address"];
     const std::string mode = address.value("mode", std::string());
-    if (mode == "exact") {
-        out.address_mode = StatisticsAddressMode::Exact;
-        return parse_unique_values(address["values"], "args.filter.address.values",
-                                   out.address_values, error);
-    }
-
-    std::string message;
-    if (mode == "range") {
-        out.address_mode = StatisticsAddressMode::Range;
-        if (!parse_uint64_literal(address["begin"].get<std::string>(),
-                                  out.address_begin, message)) {
-            error = {"args.filter.address.begin", message,
-                     "known integer, hexadecimal, or SystemVerilog literal up to 64 bits"};
-            return false;
-        }
-        if (!parse_uint64_literal(address["end"].get<std::string>(),
-                                  out.address_end, message)) {
-            error = {"args.filter.address.end", message,
-                     "known integer, hexadecimal, or SystemVerilog literal up to 64 bits"};
-            return false;
-        }
-        if (out.address_begin > out.address_end) {
-            error = {"args.filter.address.end", "address range begin must not exceed end",
-                     "inclusive range with begin <= end"};
-            return false;
-        }
-        return true;
-    }
-
-    out.address_mode = StatisticsAddressMode::Mask;
-    if (!parse_uint64_literal(address["value"].get<std::string>(),
-                              out.address_value, message)) {
-        error = {"args.filter.address.value", message,
-                 "known integer, hexadecimal, or SystemVerilog literal up to 64 bits"};
+    out.address_mode = mode == "exact" ? StatisticsAddressMode::Exact
+        : mode == "range" ? StatisticsAddressMode::Range
+        : StatisticsAddressMode::Mask;
+    xdebug_waveform::ValueFilterError parse_error;
+    xdebug_waveform::ValueFilterParseOptions options;
+    options.allow_legacy_0x = true;
+    options.max_bits = 64;
+    options.require_nonzero_mask = true;
+    if (!xdebug_waveform::parse_value_filter(address, "args.filter.address",
+                                             options, out.address_filter,
+                                             parse_error)) {
+        copy_filter_error(parse_error, error);
         return false;
     }
-    if (!parse_uint64_literal(address["mask"].get<std::string>(),
-                              out.address_mask, message)) {
-        error = {"args.filter.address.mask", message,
-                 "non-zero known integer, hexadecimal, or SystemVerilog literal up to 64 bits"};
-        return false;
-    }
-    if (out.address_mask == 0) {
-        error = {"args.filter.address.mask", "address mask must be non-zero",
-                 "non-zero mask"};
-        return false;
-    }
-    return true;
+    if (out.address_mode == StatisticsAddressMode::Exact)
+        return populate_uint64_values(out.address_filter.values, out.address_values);
+    if (out.address_mode == StatisticsAddressMode::Range)
+        return xdebug_waveform::filter_bits_to_uint64(out.address_filter.begin, out.address_begin) &&
+               xdebug_waveform::filter_bits_to_uint64(out.address_filter.end, out.address_end);
+    return xdebug_waveform::filter_bits_to_uint64(out.address_filter.value, out.address_value) &&
+           xdebug_waveform::filter_bits_to_uint64(out.address_filter.mask, out.address_mask);
 }
 
 StatisticsMatch match_statistics_transaction(
@@ -179,34 +125,18 @@ StatisticsMatch match_statistics_transaction(
     }
 
     if (filter.address_mode != StatisticsAddressMode::None) {
-        uint64_t address = 0;
-        StatisticsMatch address_match = StatisticsMatch::Unresolved;
-        if (parse_fsdb_uint64(transaction.address, address)) {
-            bool matched = false;
-            if (filter.address_mode == StatisticsAddressMode::Exact) {
-                matched = std::find(filter.address_values.begin(),
-                                    filter.address_values.end(), address) !=
-                          filter.address_values.end();
-            } else if (filter.address_mode == StatisticsAddressMode::Range) {
-                matched = address >= filter.address_begin && address <= filter.address_end;
-            } else {
-                matched = (address & filter.address_mask) ==
-                          (filter.address_value & filter.address_mask);
-            }
-            address_match = matched ? StatisticsMatch::Yes : StatisticsMatch::No;
-        }
+        const xdebug_waveform::LogicValue address =
+            xdebug_waveform::logic_value_from_fsdb_raw(transaction.address, 'h');
+        const StatisticsMatch address_match = from_value_match(
+            xdebug_waveform::match_value_filter(filter.address_filter, address));
         result = tri_and(result, address_match);
     }
 
     if (filter.has_ids) {
-        uint64_t id = 0;
-        StatisticsMatch id_match = StatisticsMatch::Unresolved;
-        if (parse_fsdb_uint64(transaction.id, id)) {
-            id_match = std::find(filter.ids.begin(), filter.ids.end(), id) !=
-                               filter.ids.end()
-                           ? StatisticsMatch::Yes
-                           : StatisticsMatch::No;
-        }
+        const xdebug_waveform::LogicValue id =
+            xdebug_waveform::logic_value_from_fsdb_raw(transaction.id, 'h');
+        const StatisticsMatch id_match = from_value_match(
+            xdebug_waveform::match_value_filter(filter.id_filter, id));
         result = tri_and(result, id_match);
     }
     return result;

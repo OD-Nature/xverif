@@ -40,7 +40,7 @@ Each stream config requires:
 - `name`
 - `clock`
 - `vld`
-- `data` or `data_fields`
+- at least one of `data`, `beat_fields`, or `packet_stable_fields`
 
 Optional fields:
 
@@ -51,6 +51,8 @@ Optional fields:
 - `sop`
 - `eop`
 - `channel_id`
+- `beat_fields`
+- `packet_stable_fields`
 - `description`
 
 `reset` is reset-active. A low-active reset should be written as an expression,
@@ -126,7 +128,7 @@ X/Z handling:
 - `first_packet`
 - `last_packet`
 - `packet_window`
-- `match_field`
+- `filter.fields` 多字段 exact/range/mask 过滤（旧 `match_field` 已删除）
 
 Default inline limit is 32 rows. Truncated inline results return
 `truncated:true` and a hint to use `stream.export`.

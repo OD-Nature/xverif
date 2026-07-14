@@ -94,12 +94,6 @@
                   "data": {
                     "type": "string"
                   },
-                  "data_fields": {
-                    "type": "object",
-                    "additionalProperties": {
-                      "type": "string"
-                    }
-                  },
                   "beat_fields": {
                     "type": "object",
                     "additionalProperties": {
@@ -214,12 +208,6 @@
               },
               "data": {
                 "type": "string"
-              },
-              "data_fields": {
-                "type": "object",
-                "additionalProperties": {
-                  "type": "string"
-                }
               },
               "beat_fields": {
                 "type": "object",

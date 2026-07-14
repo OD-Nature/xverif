@@ -25,7 +25,7 @@
 - `sampled_pulse.inspect`：valid sampling explanation。用于回答“raw valid 脉冲存在，但没有被采样边沿看到”以及 payload 在未采样窗口附近是否变化；payload 风险由 `rules.payload_changed_without_sampled_valid=off|summary|all` 控制，默认 `summary`，避免无界展开。它不是通用 glitch/stuck/XZ 扫描入口。
 - `handshake.inspect`：valid/ready protocol inspection。用于统计 transfer、stall、ready-without-valid、stalled data stability violation；默认启用 `rules.require_valid_hold_until_handshake:true`；`rules.ready_without_valid` 默认 `summary`，可选 `intervals` 或 `all`；适合协议层风险，不替代 raw glitch 检测。
 - `value.at` / `value.batch_at`：用 `args.value_format:"hex"|"bin"|"dec"` 控制响应显示。decimal 遇 X/Z 会明确报告 binary effective format。aggregate 根和 `format:"array_indexed"` 当前统一返回 `UNSUPPORTED_AGGREGATE_QUERY`；应传入最终 leaf signal，xdebug 不猜测 indexed path。
-- `stream.*`：通用 vld-data / vld-rdy-data 任务抽取，是重要能力。凡是可抽象成 `clock + vld + data`，并可选 `rdy`、`bp`、`sop/eop`、`channel_id` 的外部接口、模块内部交互、pipeline stage、FIFO/queue 出入口、仲裁请求授予、RM/scoreboard 内部任务流，都可以注册 stream 后查询 transfer、stall、packet、field match 或导出 beats。一次性条件找点用 `event.find/export`；协议统计用 `handshake.inspect`；标准 AXI/APB 可优先用专用 action；非标准或模块内部 vld-data 任务优先考虑 stream。stream action 字段统一写 `stream`，不写 `name`。
+- `stream.*`：通用 vld-data / vld-rdy-data 任务抽取，是重要能力。凡是可抽象成 `clock + vld + data`，并可选 `rdy`、`bp`、`sop/eop`、`channel_id` 的外部接口、模块内部交互、pipeline stage、FIFO/queue 出入口、仲裁请求授予、RM/scoreboard 内部任务流，都可以注册 stream 后查询 transfer、stall、packet、多字段 filter 或导出 beats。一次性条件找点用 `event.find/export`；协议统计用 `handshake.inspect`；标准 AXI/APB 可优先用专用 action；非标准或模块内部 vld-data 任务优先考虑 stream。stream action 字段统一写 `stream`，不写 `name`。
 - `window.verify`：sampled proof。用于证明某个 clock window 内条件 always/eventually/never 是否成立；适合最终证明，不适合枚举原始 value-change timeline。
 - `signal.changes`：raw timeline。用于列出某个信号的精确变化时间；需要按表达式关联多信号时改用 `event.find/export`。
 
@@ -107,12 +107,13 @@
 | `window.verify` | stable | waveform | 按 clock 在窗口内验证条件。 | 按 clock edge 采样 args.signals 中的 alias，逐个 conditions[].expr 统计 pass/fail/unknown。 | 判断协议或断言类条件是否持续满足。 | required: clock, conditions, signals |
 
 Stream 配置必须使用 `signals` map：真实信号路径只写在 `signals` 的 value 里，`clock`、`reset`、`vld`、`rdy`、`bp`、`sop/eop`、`channel_id`、`data`、`*_fields` 只能引用 alias 或 alias 表达式。
+命名逐拍 payload 字段只使用 `beat_fields`；`data_fields` 已删除且不会兼容解析。
 
 | `stream.config.load` | stable | waveform | 加载 stream 配置。 | 把 stream 定义写入 stream manager。 | 定义 valid/ready/data 类流接口。 | also one of: streams / config / config_path / file |
 | `stream.config.list` | stable | waveform | 列出 stream 配置。 | 读取已保存 stream 定义；`args:{}` 列全部，`args.name` 显示单个配置详情。 | 查看可查询的 stream。 | args:{} list all; optional name shows one config |
 | `stream.show` | stable | waveform | 显示 stream 定义和摘要。 | 按 stream 名读取配置并返回字段。 | 确认 stream 绑定了哪些信号。 | required: stream |
 | `stream.validate` | stable | waveform | 验证 stream 配置。 | 检查 stream 信号在 FSDB 中是否可解析。 | 提前发现错误信号路径。 | required: stream |
-| `stream.query` | stable | waveform | 查询 stream transfer。 | 按 stream 配置和 query 条件扫描握手/beat。 | 抽取流事务或 beats。 | required: stream, query |
+| `stream.query` | stable | waveform | 查询并过滤 stream transfer/packet。 | 无 `sop/eop` 时按 transfer 在线过滤；packet stream 必须用 `filter.position=sop/eop` 选择边界拍并返回整包。 | 按多个 data/beat/stable 字段筛选流事务。 | required: stream, query<br>filter.fields conditions AND; each mode exact/range/mask<br>packet filter requires position sop/eop |
 | `stream.export` | stable | waveform | 导出 stream 查询结果。 | 运行 stream query 后按 kind/format 写出；`kind` 只能是 `transfer`、`packet`、`packet_beats`。 | 把流数据输出给外部脚本。 | required: stream<br>kind: transfer / packet / packet_beats<br>format: tsv / csv / xout<br>when kind=packet_beats: output |
 ## Combined Actions
 | action | status | resource | purpose | how it works | objective | args contract |

@@ -630,10 +630,10 @@ if (spec.name == "stream.validate") {
     return;
 }
 if (spec.name == "stream.query") {
-    spec.description_en = "Query stream transfers, stalls, packets, and fields.";
-    spec.description_zh = "查询 stream transfer。";
+    spec.description_en = "Query and filter stream transfers, stalls, and packets.";
+    spec.description_zh = "查询并按多个字段过滤 stream transfer 或 packet。";
     spec.purposes = {"query"};
-    spec.use_for = {"Query stream transfers, stalls, packets, and fields."};
+    spec.use_for = {"Query stream transfers, stalls, or packets and apply AND-combined exact/range/mask field filters."};
     spec.do_not_use_for = {"Tasks outside this action's documented contract."};
     spec.preferred_alternative = Json::object();
     return;

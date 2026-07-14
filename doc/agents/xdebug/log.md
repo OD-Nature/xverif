@@ -5,6 +5,12 @@
 - 新增 `apb.statistics` / `axi.statistics`，基于 canonical 协议缓存按方向、AXI ID 与
   exact/range/mask 地址过滤统计 completed transaction；补齐 APB scan diagnostics，
   XOUT 固定解释 `unresolved_transaction_count`，避免 AI 猜测字段语义。
+- 删除 Stream `data_fields` 配置和 runtime 兼容路径，命名逐拍字段统一使用
+  `beat_fields`；inline schema 与 config file parser 均明确拒绝旧字段。
+- 为 `stream.query` 增加扫描期多字段 exact/range/mask 过滤，data、beat 和
+  packet-stable 字段在过滤视图内统一；packet 按 SOP/EOP 边界匹配并返回整包。
+- 抽取通用任意位宽 value filter helper，Stream、APB statistics 和 AXI
+  statistics 共用 literal 解析、三态 AND 与 mask/XZ 判断。
 
 ## 2026-07-07
 

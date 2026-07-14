@@ -115,6 +115,10 @@ bool parse_stream_config_json(const Json& item, StreamConfig& config, std::strin
         error = "stream config field stable_fields is not supported; use packet_stable_fields";
         return false;
     }
+    if (item.contains("data_fields")) {
+        error = "stream config field data_fields is not supported; use beat_fields";
+        return false;
+    }
     config = StreamConfig();
     static const char* legacy[] = {"clk", "sampling", "clock_edge", "posedge", "sample_offset", nullptr};
     for (int i = 0; legacy[i]; ++i) {
@@ -181,33 +185,24 @@ bool parse_stream_config_json(const Json& item, StreamConfig& config, std::strin
         error = "stream " + config.name + " channel_id_valid must be sop, eop, or every_beat";
         return false;
     }
-    if (!parse_field_map(item, config.name, "data_fields", config.data_fields, error)) return false;
     if (!parse_field_map(item, config.name, "packet_stable_fields", config.packet_stable_fields, error)) return false;
     if (!parse_field_map(item, config.name, "beat_fields", config.beat_fields, error)) return false;
-    for (const auto& kv : config.data_fields) {
-        if (config.beat_fields.find(kv.first) != config.beat_fields.end()) {
-            error = "duplicate legacy data_fields and beat_fields field name: " + kv.first;
-            return false;
-        }
-    }
     if (!config.data.empty()) {
-        if (config.beat_fields.find("data") != config.beat_fields.end() ||
-            config.data_fields.find("data") != config.data_fields.end()) {
-            error = "duplicate legacy data field name: data";
+        if (config.beat_fields.find("data") != config.beat_fields.end()) {
+            error = "data and beat_fields must not share field name: data";
             return false;
         }
     }
     for (const auto& kv : config.packet_stable_fields) {
         if (config.beat_fields.find(kv.first) != config.beat_fields.end() ||
-            config.data_fields.find(kv.first) != config.data_fields.end() ||
             (!config.data.empty() && kv.first == "data")) {
             error = "packet_stable_fields and beat_fields must not share field name: " + kv.first;
             return false;
         }
     }
-    if (config.data.empty() && config.data_fields.empty() &&
-        config.beat_fields.empty() && config.packet_stable_fields.empty()) {
-        error = "stream " + config.name + " requires data, data_fields, packet_stable_fields, or beat_fields";
+    if (config.data.empty() && config.beat_fields.empty() &&
+        config.packet_stable_fields.empty()) {
+        error = "stream " + config.name + " requires data, packet_stable_fields, or beat_fields";
         return false;
     }
     if ((config.sop.empty()) != (config.eop.empty())) {
@@ -255,10 +250,6 @@ Json stream_config_json(const StreamConfig& c) {
     if (!c.sop.empty()) j["sop"] = c.sop;
     if (!c.eop.empty()) j["eop"] = c.eop;
     if (!c.data.empty()) j["data"] = c.data;
-    if (!c.data_fields.empty()) {
-        j["data_fields"] = Json::object();
-        for (const auto& kv : c.data_fields) j["data_fields"][kv.first] = kv.second;
-    }
     if (!c.packet_stable_fields.empty()) {
         j["packet_stable_fields"] = Json::object();
         for (const auto& kv : c.packet_stable_fields) j["packet_stable_fields"][kv.first] = kv.second;

@@ -25,7 +25,6 @@ using xdebug_waveform::StreamAnalyzer;
 using xdebug_waveform::StreamConfig;
 using xdebug_waveform::StreamExporter;
 using xdebug_waveform::StreamManager;
-using xdebug_waveform::StreamMatch;
 using xdebug_waveform::StreamQueryOptions;
 
 Json stream_config_list_example() {
@@ -76,7 +75,7 @@ public:
                              {"edge", xdebug_waveform::clock_edge_kind_text(stream.clock_sample.edge)},
                              {"handshake", xdebug_waveform::stream_handshake_text(stream)},
                              {"packet", xdebug_waveform::stream_packet_enabled(stream) ? "sop/eop" : "none"},
-                             {"field_count", stream.data_fields.size() + stream.beat_fields.size() +
+                             {"field_count", stream.beat_fields.size() +
                                  stream.packet_stable_fields.size() + (stream.data.empty() ? 0 : 1)},
                              {"channel_id_valid", stream.channel_id_valid},
                              {"allow_interleaving", stream.allow_interleaving}};

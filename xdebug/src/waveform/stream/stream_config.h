@@ -23,7 +23,6 @@ struct StreamConfig {
     std::string sop;
     std::string eop;
     std::string data;
-    std::map<std::string, std::string> data_fields;
     std::map<std::string, std::string> packet_stable_fields;
     std::map<std::string, std::string> beat_fields;
     std::string channel_id;

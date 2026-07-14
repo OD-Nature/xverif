@@ -1372,16 +1372,19 @@ stream response schema 当前主要约束 envelope，具体字段以 runtime 和
 | `summary.complete_packet_count` | number | 查询窗口内同时观察到 SOP/EOP 的完整 packet 数 |
 | `summary.partial_packet_count` | number | 查询窗口边界或未完成扫描造成的半包数 |
 | `summary.packet_count_status` | string | `exact`、`not_configured` 或 `ambiguous` |
-| `summary.match_count` | number | `match_field` 命中数 |
-| `summary.field_scope` | string | `beat`、`packet_stable` 或 `any` |
+| `summary.filter_applied` | boolean | 是否应用 `args.filter` |
+| `summary.matched_transfer_count` | number | 非 packet stream 的完整过滤命中 transfer 数 |
+| `summary.matched_packet_count` | number | packet stream 按 SOP/EOP 边界过滤后的完整命中 packet 数 |
+| `summary.retained_packet_count` | number | 受 `line_limit` 约束实际保留在 response 中的命中 packet 数 |
+| `summary.unresolved_filter_count` | number | 因所选边界缺失或有效比较位含 X/Z 而无法判断的 transfer/packet 数；mask 为 0 的位不影响判断 |
 | `summary.truncated` | boolean | 是否截断 |
 | `data.query` | string | query 类型 |
-| `data.rows[]` | array | transfer/match rows |
+| `data.rows[]` | array | transfer/filter rows |
 | `data.row` | object | first/last 类 query 的单行 |
 | `data.packets[]` | array | packet window |
 | `data.packet` | object | 单个 packet |
 
-`match_field` 的 request 写法固定为 `match.field/op/value`，不要写成 `match: {"opcode": "8'h5a"}`。
+`filter.fields` 中不同字段取 AND；每个字段只能选择 exact 值队列、闭区间 range 或 value/mask。`data`、`beat_fields`、`packet_stable_fields` 只在过滤器内部统一为逐拍字段视图。packet stream 必须指定 `filter.position=sop|eop`，并按所选边界判断后返回整包。旧 `match_field`/`args.match` 已删除且不兼容。
 
 ### `stream.export`
 

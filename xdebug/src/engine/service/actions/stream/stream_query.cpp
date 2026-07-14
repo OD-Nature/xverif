@@ -6,6 +6,7 @@
 #include "waveform/stream/stream_analyzer.h"
 #include "waveform/stream/stream_exporter.h"
 #include "waveform/stream/stream_manager.h"
+#include "waveform/filter/value_filter.h"
 #include "core/npi/time_contract.h"
 
 #include "npi_fsdb.h"
@@ -13,6 +14,7 @@
 
 #include <ctime>
 #include <memory>
+#include <set>
 #include <sstream>
 #include <sys/stat.h>
 
@@ -25,8 +27,10 @@ using xdebug_waveform::StreamAnalyzer;
 using xdebug_waveform::StreamConfig;
 using xdebug_waveform::StreamExporter;
 using xdebug_waveform::StreamManager;
-using xdebug_waveform::StreamMatch;
 using xdebug_waveform::StreamQueryOptions;
+using xdebug_waveform::ValueFilter;
+using xdebug_waveform::ValueFilterError;
+using xdebug_waveform::ValueFilterParseOptions;
 
 Json err(const std::string& code, const std::string& message, const Json& details) {
     return make_handler_error(code, message, details);
@@ -78,16 +82,72 @@ Json stream_analyze_error(const std::string& message) {
                 {"next_actions", Json::array({"Call stream.show to inspect config signal aliases.",
                                                "Call stream.validate to check static and dynamic stream issues."})}});
 }
-Json stream_match_error(const std::string& stream,
-                        const std::string& query,
-                        const std::string& message) {
-    Json example = stream_query_example(stream, query);
-    example["args"]["match"] = {{"field", "opcode"}, {"op", "=="}, {"value", "8'h5a"}};
+Json stream_filter_error(const std::string& stream,
+                         const std::string& message,
+                         const std::string& invalid_arg) {
+    Json example = stream_query_example(stream, "transfer_window");
+    example["args"]["filter"] = {
+        {"fields", {{"opcode", {{"mode", "exact"},
+                                  {"values", Json::array({"8'h5a"})}}}}}};
     return err(code_for_stream_error(message, "INVALID_ARGUMENT"), message,
-               {{"invalid_arg", "args.match.value"},
-                {"expected", "match literal compatible with the selected stream field"},
+               {{"invalid_arg", invalid_arg},
+                {"expected", "non-empty filter.fields using exactly one of exact, range, or mask per configured stream field"},
                 {"correct_example", example},
-                {"example_note", "Example only; choose a field from stream.show and use a SystemVerilog-style value literal."}});
+                {"example_note", "Example only; choose fields from stream.show. Packet streams also require filter.position=sop or eop."}});
+}
+
+bool parse_stream_filter(const Json& filter_json,
+                         const StreamConfig& config,
+                         StreamQueryOptions& options,
+                         std::string& error,
+                         std::string& invalid_arg) {
+    options.filter.enabled = true;
+    options.filter.position = filter_json.value("position", std::string());
+    const bool packet_enabled = xdebug_waveform::stream_packet_enabled(config);
+    if (packet_enabled) {
+        if (options.filter.position != "sop" && options.filter.position != "eop") {
+            error = "packet stream filter requires position=sop or position=eop";
+            invalid_arg = "args.filter.position";
+            return false;
+        }
+    } else if (!options.filter.position.empty()) {
+        error = "filter.position is only valid for streams configured with sop/eop";
+        invalid_arg = "args.filter.position";
+        return false;
+    }
+
+    std::set<std::string> available;
+    if (!config.data.empty()) available.insert("data");
+    for (const auto& item : config.beat_fields) available.insert(item.first);
+    for (const auto& item : config.packet_stable_fields) available.insert(item.first);
+
+    const Json fields = filter_json.value("fields", Json::object());
+    if (!fields.is_object() || fields.empty()) {
+        error = "filter.fields must be a non-empty object";
+        invalid_arg = "args.filter.fields";
+        return false;
+    }
+    for (auto it = fields.begin(); it != fields.end(); ++it) {
+        const std::string field = it.key();
+        const std::string base = "args.filter.fields." + field;
+        if (available.find(field) == available.end()) {
+            error = "stream filter field is not configured: " + field;
+            invalid_arg = base;
+            return false;
+        }
+        const Json& spec = it.value();
+        ValueFilter parsed;
+        ValueFilterError parse_error;
+        ValueFilterParseOptions parse_options;
+        if (!xdebug_waveform::parse_value_filter(spec, base, parse_options,
+                                                 parsed, parse_error)) {
+            error = parse_error.message;
+            invalid_arg = parse_error.invalid_arg;
+            return false;
+        }
+        options.filter.fields[field] = std::move(parsed);
+    }
+    return true;
 }
 bool parse_time_arg(const std::string& text, bool allow_max, npiFsdbTime& out, std::string& error) {
     if (text.empty()) {
@@ -166,10 +226,23 @@ public:
         if (!range_from_args(args, request.value("limits", Json::object()), options, error))
             return stream_time_error(error);
         std::string query = args.value("query", std::string("summary"));
-        // Exact field matching still retains all transfer rows. Other query
-        // modes retain bounded response evidence while aggregates and
-        // first/last evidence continue across the full scan.
-        if (query == "match_field") options.retain_limit = -1;
+        if (args.contains("filter")) {
+            std::string invalid_arg;
+            if (!parse_stream_filter(args["filter"], config, options, error, invalid_arg))
+                return stream_filter_error(config.name, error, invalid_arg);
+            const bool packet_enabled = xdebug_waveform::stream_packet_enabled(config);
+            const std::set<std::string> allowed = packet_enabled
+                ? std::set<std::string>{"summary", "first_packet", "last_packet", "packet_window"}
+                : std::set<std::string>{"summary", "first_transfer", "last_transfer", "transfer_window"};
+            if (allowed.find(query) == allowed.end()) {
+                return stream_filter_error(
+                    config.name,
+                    packet_enabled
+                        ? "packet stream filters support summary, first_packet, last_packet, or packet_window"
+                        : "beat stream filters support summary, first_transfer, last_transfer, or transfer_window",
+                    "args.query");
+            }
+        }
         StreamAnalyzer analyzer;
         StreamAnalysis analysis;
         if (!analyzer.analyze(g_fsdb_file, config, options, analysis, error))
@@ -178,7 +251,29 @@ public:
         Json out;
         out["summary"] = xdebug_waveform::stream_summary_json(config, analysis);
         out["summary"]["query"] = query;
-        out["hint"] = analysis.truncated ? "use stream.export for large result" : "";
+        if (options.filter.enabled) {
+            out["summary"]["filter_applied"] = true;
+            out["summary"]["unresolved_filter_count"] = analysis.unresolved_filter_count;
+            if (xdebug_waveform::stream_packet_enabled(config))
+                out["summary"]["matched_packet_count"] = analysis.matched_packet_count;
+            else
+                out["summary"]["matched_transfer_count"] = analysis.matched_transfer_count;
+            if (xdebug_waveform::stream_packet_enabled(config)) {
+                out["summary"]["retained_packet_count"] = analysis.packets.size();
+                if (analysis.truncated)
+                    out["summary"]["truncation_scope"] = "response_packets";
+            }
+            out["filter"] = args["filter"];
+            out["notes"] = {{"unresolved_filter_count",
+                "因所选 SOP/EOP 边界未出现在查询窗口内，或被引用字段的有效比较位含 X/Z，导致无法判断是否匹配的 transfer/packet 数；mask 为 0 的位不影响判断。"}};
+        } else {
+            out["summary"]["filter_applied"] = false;
+        }
+        out["hint"] = analysis.truncated
+            ? (options.filter.enabled
+                ? "narrow filter/time_range or increase line_limit"
+                : "use stream.export for large result")
+            : "";
         if (query == "summary") return out;
         if (query == "first_transfer" || query == "last_transfer") {
             out["summary"].erase(query == "first_transfer" ? "first_transfer_time" : "last_transfer_time");
@@ -205,10 +300,16 @@ public:
             return out;
         }
         if (query == "first_packet" || query == "last_packet") {
-            out["found"] = !analysis.packets.empty();
-            if (!analysis.packets.empty()) {
+            const bool found = options.filter.enabled
+                ? analysis.has_matched_packet_evidence : !analysis.packets.empty();
+            out["found"] = found;
+            if (found) {
                 out["packet"] = xdebug_waveform::stream_packet_json(
-                    query == "first_packet" ? analysis.packets.front() : analysis.packets.back());
+                    options.filter.enabled
+                        ? (query == "first_packet" ? analysis.first_matched_packet
+                                                    : analysis.last_matched_packet)
+                        : (query == "first_packet" ? analysis.packets.front()
+                                                    : analysis.packets.back()));
             } else {
                 out["packet"] = nullptr;
             }
@@ -239,75 +340,20 @@ public:
         }
         if (query == "packet_window") {
             out["packets"] = packets_limited(analysis.packets, options.limit);
-            if (static_cast<int>(analysis.packets.size()) > options.limit) {
+            const int available_count = options.filter.enabled
+                ? analysis.matched_packet_count : static_cast<int>(analysis.packets.size());
+            if (available_count > options.limit) {
                 out["summary"]["truncated"] = true;
                 out["summary"]["truncation_scope"] = "response_packets";
             }
             return out;
         }
-        if (query == "match_field") {
-            Json m = args.value("match", Json::object());
-            StreamMatch match;
-            match.field = m.value("field", std::string());
-            match.op = m.value("op", std::string("=="));
-            match.value = m.value("value", std::string());
-            match.lo = m.value("lo", std::string());
-            match.hi = m.value("hi", std::string());
-            match.mask = m.value("mask", std::string());
-            match.field_scope = m.value("field_scope", args.value("field_scope", std::string("any")));
-            if (match.field_scope.empty()) match.field_scope = "any";
-            if (match.field_scope != "beat" && match.field_scope != "packet_stable" && match.field_scope != "any")
-                return err("INVALID_ENUM", "field_scope must be beat, packet_stable, or any",
-                           {{"invalid_arg", m.contains("field_scope") ? "args.match.field_scope" : "args.field_scope"},
-                            {"expected", "one of beat, packet_stable, any"},
-                            {"allowed_values", Json::array({"beat", "packet_stable", "any"})},
-                            {"correct_example", stream_query_example(config.name, "match_field")},
-                            {"example_note", "Example only; put field_scope under args.match for match_field queries."}});
-            if (match.field.empty()) {
-                Json example = stream_query_example(config.name, "match_field");
-                example["args"]["match"] = {{"field", "opcode"}, {"op", "=="}, {"value", "8'h5a"}};
-                return err("MISSING_FIELD", "match.field is required",
-                           {{"invalid_arg", "args.match.field"},
-                            {"expected", "field name defined by the loaded stream config"},
-                            {"correct_example", example},
-                            {"example_note", "Example only; replace opcode/value with a field from stream.show."},
-                            {"next_actions", Json::array({"Call stream.show to inspect available fields."})}});
-            }
-            if (match.field_scope == "packet_stable") {
-                Json packets = Json::array();
-                for (const auto& packet : analysis.packets) {
-                    xdebug_waveform::StreamRow pseudo;
-                    pseudo.packet_stable_fields = packet.packet_stable_fields;
-                    std::string match_error;
-                    if (analyzer.match_row(pseudo, match, match_error)) packets.push_back(xdebug_waveform::stream_packet_json(packet));
-                    else if (!match_error.empty())
-                        return stream_match_error(config.name, "match_field", match_error);
-                    if (static_cast<int>(packets.size()) >= options.limit) break;
-                }
-                out["packets"] = packets;
-                out["summary"]["match_count"] = packets.size();
-                out["summary"]["field_scope"] = match.field_scope;
-                return out;
-            }
-            Json rows = Json::array();
-            for (const auto& row : analysis.transfers) {
-                std::string match_error;
-                if (analyzer.match_row(row, match, match_error)) rows.push_back(xdebug_waveform::stream_row_json(row));
-                else if (!match_error.empty())
-                    return stream_match_error(config.name, "match_field", match_error);
-                if (static_cast<int>(rows.size()) >= options.limit) break;
-            }
-            out["rows"] = rows;
-            out["summary"]["match_count"] = rows.size();
-            out["summary"]["field_scope"] = match.field_scope;
-            return out;
-        }
         return err("INVALID_ENUM", "unsupported stream.query type: " + query,
                    {{"invalid_arg", "args.query"},
-                    {"expected", "one of summary, first_transfer, last_transfer, transfer_window, first_stall, last_stall, stall_window, first_packet, last_packet, packet_at, packet_window, match_field"},
+                    {"expected", "one of summary, first_transfer, last_transfer, transfer_window, first_stall, last_stall, stall_window, first_packet, last_packet, packet_at, packet_window"},
                     {"allowed_values", Json::array({"summary", "first_transfer", "last_transfer", "transfer_window",
                                                      "first_stall", "last_stall", "stall_window", "first_packet",
-                                                     "last_packet", "packet_at", "packet_window", "match_field"})},
+                                                     "last_packet", "packet_at", "packet_window"})},
                     {"correct_example", stream_query_example(config.name, "summary")},
                     {"example_note", "Example only; choose one query kind from allowed_values."}});
     }

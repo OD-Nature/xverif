@@ -1,6 +1,7 @@
 #pragma once
 
 #include "json.hpp"
+#include "waveform/filter/value_filter.h"
 
 #include <cstdint>
 #include <string>
@@ -32,6 +33,8 @@ struct StatisticsFilter {
     uint64_t address_mask = 0;
     bool has_ids = false;
     bool filter_applied = false;
+    xdebug_waveform::ValueFilter id_filter;
+    xdebug_waveform::ValueFilter address_filter;
 };
 
 struct StatisticsTransactionView {

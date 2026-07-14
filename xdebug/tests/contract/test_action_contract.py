@@ -1378,7 +1378,7 @@ def test_all_examples_validate_against_action_schemas(xdebug_root: Path) -> None
 
 
 @pytest.mark.contract
-def test_stream_query_match_schema_rejects_legacy_field_shorthand(
+def test_stream_query_filter_schema_is_strict_and_match_field_is_removed(
     xdebug_root: Path,
 ) -> None:
     schema = _load_json(
@@ -1390,8 +1390,15 @@ def test_stream_query_match_schema_rejects_legacy_field_shorthand(
         "action": "stream.query",
         "args": {
             "stream": "req_stream",
-            "query": "match_field",
-            "match": {"field": "opcode", "op": "==", "value": "8'h5a"},
+            "query": "packet_window",
+            "filter": {
+                "position": "sop",
+                "fields": {
+                    "opcode": {"mode": "exact", "values": ["8'h5a", "8'h5b"]},
+                    "length": {"mode": "range", "begin": "16'd1", "end": "16'd8"},
+                    "data": {"mode": "mask", "value": "128'h1200", "mask": "128'hff00"},
+                },
+            },
         },
     }
     validator.validate(valid)
@@ -1402,11 +1409,25 @@ def test_stream_query_match_schema_rejects_legacy_field_shorthand(
         "args": {
             "stream": "req_stream",
             "query": "match_field",
-            "match": {"opcode": "8'h5a"},
+            "match": {"field": "opcode", "op": "==", "value": "8'h5a"},
         },
     }
     with pytest.raises(jsonschema.ValidationError):
         validator.validate(legacy)
+
+    for invalid_filter in (
+        {"fields": {}},
+        {"fields": {"opcode": {"mode": "exact", "values": []}}},
+        {"fields": {"opcode": {"mode": "range", "begin": "0", "end": "1", "mask": "1"}}},
+        {"position": "middle", "fields": {"opcode": {"mode": "exact", "values": ["1"]}}},
+    ):
+        request = {
+            "api_version": "xdebug.v1",
+            "action": "stream.query",
+            "args": {"stream": "req_stream", "query": "summary", "filter": invalid_filter},
+        }
+        with pytest.raises(jsonschema.ValidationError):
+            validator.validate(request)
 
 
 @pytest.mark.contract
@@ -1584,6 +1605,19 @@ def test_ai_usability_high_risk_request_shapes_are_strict(
                                   "clock": "clk", "vld": "v",
                                   "stable_fields": {"opcode": "v"}}]},
         })
+    with pytest.raises(jsonschema.ValidationError):
+        stream_config.validate({
+            "api_version": "xdebug.v1", "action": "stream.config.load",
+            "args": {"streams": [{"name": "s", "signals": {"clk": "top.clk", "v": "top.v"},
+                                  "clock": "clk", "vld": "v",
+                                  "data_fields": {"payload": "v"}}]},
+        })
+    stream_config.validate({
+        "api_version": "xdebug.v1", "action": "stream.config.load",
+        "args": {"streams": [{"name": "s", "signals": {"clk": "top.clk", "v": "top.v"},
+                              "clock": "clk", "vld": "v",
+                              "beat_fields": {"payload": "v"}}]},
+    })
 
     axi = jsonschema.Draft202012Validator(schema_for("axi.query"))
     axi.validate({

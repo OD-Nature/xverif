@@ -156,6 +156,37 @@ def test_stream_v1_real_waveform_actions(
             for signal in ready_preflight["signals"]
         )
 
+        removed_data_fields_path = tmp_path / "removed-data-fields.json"
+        removed_data_fields_path.write_text(
+            json.dumps({
+                "streams": [{
+                    "name": "removed_data_fields",
+                    "signals": {
+                        "clk": "stream_v1_top.clk",
+                        "vld": "stream_v1_top.vo_vld",
+                        "payload": "stream_v1_top.vo_data",
+                    },
+                    "clock": "clk",
+                    "vld": "vld",
+                    "data_fields": {"payload": "payload"},
+                }]
+            }),
+            encoding="utf-8",
+        )
+        removed_data_fields = cli_runner.run(
+            {
+                "api_version": "xdebug.v1",
+                "action": "stream.config.load",
+                "target": target,
+                "args": {"config_path": str(removed_data_fields_path), "mode": "append"},
+            },
+            timeout_sec=120,
+        )
+        assert removed_data_fields.response is not None
+        assert removed_data_fields.response["ok"] is False
+        assert removed_data_fields.response["error"]["code"] == "INVALID_ARGUMENT"
+        assert "data_fields is not supported; use beat_fields" in removed_data_fields.response["error"]["message"]
+
         listed = _query(
             cli_runner,
             {
@@ -545,16 +576,23 @@ def test_stream_v1_real_waveform_actions(
                 "target": target,
                 "args": {
                     "stream": "ready_stream",
-                    "query": "match_field",
+                    "query": "transfer_window",
                     "time_range": {"begin": "0ns", "end": "250us"},
                     "line_limit": 8,
-                    "match": {"field": "low8", "op": "==", "value": "8'h5a"},
+                    "filter": {"fields": {
+                        "low8": {"mode": "exact", "values": ["8'h5a", "8'h5b"]},
+                        "is_wr": {"mode": "range", "begin": "1'b0", "end": "1'b1"},
+                        "data": {"mode": "mask", "value": "32'h0000005a", "mask": "32'h000000ff"},
+                    }},
                 },
             },
-            case_name="stream-v1-match-field",
+            case_name="stream-v1-filter-beat-fields",
             artifact_root=artifact_root,
         )
-        assert match["summary"]["match_count"] > 0
+        assert match["summary"]["matched_transfer_count"] > 8
+        assert match["summary"]["filter_applied"] is True
+        assert match["summary"]["unresolved_filter_count"] == 0
+        assert len(match["data"]["rows"]) == 8
         assert match["data"]["rows"][0]["fields"]["low8"]["value"] == "8'h5a"
         match_xout = _query_xout(
             cli_runner,
@@ -564,19 +602,130 @@ def test_stream_v1_real_waveform_actions(
                 "target": target,
                 "args": {
                     "stream": "ready_stream",
-                    "query": "match_field",
+                    "query": "transfer_window",
                     "time_range": {"begin": "0ns", "end": "250us"},
                     "line_limit": 2,
-                    "match": {"field": "low8", "op": "==", "value": "8'h5a"},
+                    "filter": {"fields": {
+                        "low8": {"mode": "exact", "values": ["8'h5a"]},
+                    }},
                 },
             },
-            case_name="stream-v1-match-field-xout",
+            case_name="stream-v1-filter-beat-fields-xout",
             artifact_root=artifact_root,
         )
         assert "low8=8'h5a" in match_xout
         assert "data=32'h2000015a" in match_xout
         assert "channel_id" in match_xout
         assert "bits:" not in match_xout
+        assert "unresolved_filter_count: 因所选 SOP/EOP 边界" in match_xout
+
+        scalar_data_filter = _query(
+            cli_runner,
+            {
+                "api_version": "xdebug.v1",
+                "action": "stream.query",
+                "target": target,
+                "args": {
+                    "stream": "valid_only",
+                    "query": "transfer_window",
+                    "time_range": {"begin": "0ns", "end": "250us"},
+                    "line_limit": 2,
+                    "filter": {"fields": {
+                        "data": {"mode": "exact", "values": ["32'h1000005a"]},
+                    }},
+                },
+            },
+            case_name="stream-v1-filter-scalar-data",
+            artifact_root=artifact_root,
+        )
+        assert scalar_data_filter["summary"]["matched_transfer_count"] == 1
+        assert scalar_data_filter["data"]["rows"][0]["fields"]["data"]["value"] == "32'h1000005a"
+
+        for case_name, stream_name, query, invalid_filter, invalid_arg in (
+            (
+                "packet-position-required", "ready_packet", "packet_window",
+                {"fields": {"opcode": {"mode": "exact", "values": ["8'ha0"]}}},
+                "args.filter.position",
+            ),
+            (
+                "beat-position-forbidden", "ready_stream", "transfer_window",
+                {"position": "sop", "fields": {"low8": {"mode": "exact", "values": ["8'h5a"]}}},
+                "args.filter.position",
+            ),
+            (
+                "filter-query-mismatch", "ready_stream", "stall_window",
+                {"fields": {"low8": {"mode": "exact", "values": ["8'h5a"]}}},
+                "args.query",
+            ),
+        ):
+            invalid = cli_runner.run(
+                {
+                    "api_version": "xdebug.v1",
+                    "action": "stream.query",
+                    "target": target,
+                    "args": {
+                        "stream": stream_name,
+                        "query": query,
+                        "time_range": {"begin": "0ns", "end": "250us"},
+                        "filter": invalid_filter,
+                    },
+                },
+                timeout_sec=120,
+            )
+            assert invalid.response is not None and invalid.response["ok"] is False, case_name
+            assert invalid.response["error"]["code"] == "INVALID_ARGUMENT"
+            assert invalid.response["error"]["invalid_arg"] == invalid_arg
+
+        packet_filter = _query(
+            cli_runner,
+            {
+                "api_version": "xdebug.v1",
+                "action": "stream.query",
+                "target": target,
+                "args": {
+                    "stream": "ready_packet",
+                    "query": "packet_window",
+                    "time_range": {"begin": "0ns", "end": "250us"},
+                    "line_limit": 1,
+                    "filter": {
+                        "position": "sop",
+                        "fields": {
+                            "opcode": {"mode": "exact", "values": ["8'ha3"]},
+                            "seq": {"mode": "range", "begin": "16'd12", "end": "16'd12"},
+                            "data": {"mode": "mask", "value": "32'h0c", "mask": "32'hff"},
+                        },
+                    },
+                },
+            },
+            case_name="stream-v1-filter-packet-sop",
+            artifact_root=artifact_root,
+        )
+        assert packet_filter["summary"]["matched_packet_count"] == 1
+        assert packet_filter["summary"]["unresolved_filter_count"] == 0
+        assert packet_filter["data"]["packets"][0]["packet_index"] == 3
+        assert packet_filter["data"]["packets"][0]["beat_count"] == 4
+
+        partial_filter = _query(
+            cli_runner,
+            {
+                "api_version": "xdebug.v1",
+                "action": "stream.query",
+                "target": target,
+                "args": {
+                    "stream": "ready_packet",
+                    "query": "summary",
+                    "time_range": {"begin": "65ns", "end": "75ns"},
+                    "filter": {
+                        "position": "eop",
+                        "fields": {"opcode": {"mode": "exact", "values": ["8'ha0"]}},
+                    },
+                },
+            },
+            case_name="stream-v1-filter-partial-boundary",
+            artifact_root=artifact_root,
+        )
+        assert partial_filter["summary"]["matched_packet_count"] == 0
+        assert partial_filter["summary"]["unresolved_filter_count"] == 1
 
         channel = _query(
             cli_runner,

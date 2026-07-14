@@ -2465,13 +2465,13 @@
         "stream",
         "query"
       ],
-      "description_en": "Query stream transfers, stalls, packets, and fields.",
-      "description_zh": "查询 stream transfer。",
+      "description_en": "Query and filter stream transfers, stalls, and packets.",
+      "description_zh": "查询并按多个字段过滤 stream transfer 或 packet。",
       "purposes": [
         "query"
       ],
       "use_for": [
-        "Query stream transfers, stalls, packets, and fields."
+        "Query stream transfers, stalls, or packets and apply AND-combined exact/range/mask field filters."
       ],
       "do_not_use_for": [
         "Tasks outside this action's documented contract."

@@ -70,6 +70,30 @@ bool stream_value_equal(const StreamValue& a, const StreamValue& b) {
     return a.known == b.known && a.bits == b.bits;
 }
 
+ValueFilterMatch match_filter_fields(const std::map<std::string, StreamValue>& fields,
+                                     const StreamFilter& filter) {
+    ValueFilterMatch combined = ValueFilterMatch::Yes;
+    for (const auto& item : filter.fields) {
+        auto value = fields.find(item.first);
+        if (value == fields.end()) {
+            combined = value_filter_and(combined, ValueFilterMatch::Unresolved);
+            continue;
+        }
+        LogicValue logic = logic_value_from_bits(value->second.bits,
+                                                 static_cast<int>(value->second.bits.size()));
+        const ValueFilterMatch result = match_value_filter(item.second, logic);
+        combined = value_filter_and(combined, result);
+        if (combined == ValueFilterMatch::No) return combined;
+    }
+    return combined;
+}
+
+std::map<std::string, StreamValue> filter_view(const StreamRow& row) {
+    std::map<std::string, StreamValue> fields = row.fields;
+    fields.insert(row.packet_stable_fields.begin(), row.packet_stable_fields.end());
+    return fields;
+}
+
 std::string stream_value_key(const StreamValue& value) {
     return value.bits.empty() ? "<none>" : value.bits;
 }
@@ -143,7 +167,6 @@ struct StreamAnalyzer::Compiled {
     StreamExpression eop;
     StreamExpression data;
     StreamExpression channel;
-    std::map<std::string, StreamExpression> data_fields;
     std::map<std::string, StreamExpression> packet_stable_fields;
     std::map<std::string, StreamExpression> beat_fields;
     std::set<std::string> deps;
@@ -176,11 +199,6 @@ bool StreamAnalyzer::compile(npiFsdbFileHandle file, const StreamConfig& config,
     if (!parse_one("eop", config.eop, c.eop)) return false;
     if (!parse_one("data", config.data, c.data)) return false;
     if (!parse_one("channel_id", config.channel_id, c.channel)) return false;
-    for (const auto& kv : config.data_fields) {
-        StreamExpression expr;
-        if (!parse_one("data_fields." + kv.first, kv.second, expr)) return false;
-        c.data_fields[kv.first] = std::move(expr);
-    }
     for (const auto& kv : config.packet_stable_fields) {
         StreamExpression expr;
         if (!parse_one("packet_stable_fields." + kv.first, kv.second, expr)) return false;
@@ -212,9 +230,8 @@ bool StreamAnalyzer::validate_static(npiFsdbFileHandle file, const StreamConfig&
                                      std::string& error) {
     issues.clear();
     if (!stream_name_valid(config.name)) issue(issues, "ERROR", "INVALID_NAME", "invalid stream name");
-    if (config.data.empty() && config.data_fields.empty())
-        if (config.beat_fields.empty() && config.packet_stable_fields.empty())
-            issue(issues, "ERROR", "MISSING_DATA", "stream requires data, data_fields, packet_stable_fields, or beat_fields");
+    if (config.data.empty() && config.beat_fields.empty() && config.packet_stable_fields.empty())
+        issue(issues, "ERROR", "MISSING_DATA", "stream requires data, packet_stable_fields, or beat_fields");
     if ((config.sop.empty()) != (config.eop.empty()))
         issue(issues, "ERROR", "PACKET_PAIR", "sop/eop must be configured together");
     if ((config.channel_id_valid == "sop" || config.channel_id_valid == "eop") && !stream_packet_enabled(config))
@@ -248,6 +265,16 @@ bool StreamAnalyzer::analyze(npiFsdbFileHandle file, const StreamConfig& config,
     if (!normalize_clock_sample_spec(file, clock_sample, error)) return false;
     Compiled compiled;
     if (!compile(file, config, compiled, nullptr, error)) return false;
+    bool has_channel_filter = !options.channel_filter.empty();
+    unsigned long long channel_filter_value = 0;
+    if (has_channel_filter) {
+        bool ok = false;
+        channel_filter_value = parse_user_u64(options.channel_filter, ok, error);
+        if (!ok) {
+            if (error.empty()) error = "invalid channel filter: " + options.channel_filter;
+            return false;
+        }
+    }
     std::vector<std::string> deps = sorted_signals(compiled.deps);
     std::vector<std::string> clock_deps = sorted_signals(compiled.clock.signals());
     if (clock_deps.empty()) {
@@ -341,11 +368,54 @@ bool StreamAnalyzer::analyze(npiFsdbFileHandle file, const StreamConfig& config,
         if (!state.active) return;
         state.packet.partial_end = partial_end;
         analysis.packet_stable_mismatch_count += static_cast<int>(state.packet.packet_stable_mismatches.size());
-        analysis.packets.push_back(state.packet);
         if (state.packet.partial_begin || state.packet.partial_end)
             analysis.partial_packet_count++;
         else
             analysis.complete_packet_count++;
+        bool retain = true;
+        if (options.filter.enabled) {
+            bool channel_ok = true;
+            if (has_channel_filter) {
+                unsigned long long got = 0;
+                channel_ok = value_u64(state.packet.channel, got) &&
+                             got == channel_filter_value;
+            }
+            ValueFilterMatch result = ValueFilterMatch::No;
+            const bool missing_boundary =
+                (options.filter.position == "sop" && state.packet.partial_begin) ||
+                (options.filter.position == "eop" && state.packet.partial_end);
+            if (channel_ok) {
+                if (missing_boundary) {
+                    result = ValueFilterMatch::Unresolved;
+                } else {
+                    const auto& fields = options.filter.position == "sop"
+                        ? state.packet.first_filter_fields
+                        : state.packet.last_filter_fields;
+                    result = match_filter_fields(fields, options.filter);
+                }
+            }
+            retain = result == ValueFilterMatch::Yes;
+            if (result == ValueFilterMatch::Unresolved)
+                analysis.unresolved_filter_count++;
+            if (retain) {
+                analysis.matched_packet_count++;
+                if (!analysis.has_matched_packet_evidence) {
+                    analysis.first_matched_packet = state.packet;
+                    analysis.has_matched_packet_evidence = true;
+                }
+                analysis.last_matched_packet = state.packet;
+            }
+        }
+        if (retain) {
+            const int retain_limit = options.retain_limit == 0
+                ? options.limit : options.retain_limit;
+            if (!options.filter.enabled || retain_limit <= 0 ||
+                static_cast<int>(analysis.packets.size()) < retain_limit) {
+                analysis.packets.push_back(state.packet);
+            } else {
+                analysis.truncated = true;
+            }
+        }
         state.active = false;
         state.packet = StreamPacket();
     };
@@ -374,6 +444,10 @@ bool StreamAnalyzer::analyze(npiFsdbFileHandle file, const StreamConfig& config,
         state.packet.beat_count++;
         if (state.packet.first_fields.empty()) state.packet.first_fields = row.fields;
         state.packet.last_fields = row.fields;
+        const auto fields = filter_view(row);
+        if (state.packet.first_filter_fields.empty())
+            state.packet.first_filter_fields = fields;
+        state.packet.last_filter_fields = fields;
         if (config.channel_id_valid == "eop" && row.eop) state.packet.channel = row.channel;
         if (config.channel_id_valid == "every_beat" && state.packet.channel.bits.empty()) {
             state.packet.channel = row.channel;
@@ -484,10 +558,6 @@ bool StreamAnalyzer::analyze(npiFsdbFileHandle file, const StreamConfig& config,
             row.fields["data"] = eval(compiled.data, "data");
             if (!error.empty()) return false;
         }
-        for (auto& kv : compiled.data_fields) {
-            row.fields[kv.first] = eval(kv.second, "data_fields." + kv.first);
-            if (!error.empty()) return false;
-        }
         for (auto& kv : compiled.beat_fields) {
             row.fields[kv.first] = eval(kv.second, "beat_fields." + kv.first);
             if (!error.empty()) return false;
@@ -508,17 +578,10 @@ bool StreamAnalyzer::analyze(npiFsdbFileHandle file, const StreamConfig& config,
         }
         analysis.data_xz_count += row.data_xz_count;
 
-        bool channel_ok = options.channel_filter.empty();
-        if (!options.channel_filter.empty()) {
-            bool ok = false;
-            std::string parse_error;
-            unsigned long long want = parse_user_u64(options.channel_filter, ok, parse_error);
-            if (!ok) {
-                error = parse_error.empty() ? "invalid channel filter: " + options.channel_filter : parse_error;
-                return false;
-            }
+        bool channel_ok = !has_channel_filter;
+        if (has_channel_filter) {
             unsigned long long got = 0;
-            channel_ok = value_u64(row.channel, got) && got == want;
+            channel_ok = value_u64(row.channel, got) && got == channel_filter_value;
         }
 
         if (row.stall) {
@@ -559,7 +622,17 @@ bool StreamAnalyzer::analyze(npiFsdbFileHandle file, const StreamConfig& config,
                     if (row.eop) finish_packet(*state, false);
                 }
             }
-            if (channel_ok) {
+            bool selected = channel_ok;
+            if (options.filter.enabled && !stream_packet_enabled(config)) {
+                const ValueFilterMatch result = channel_ok
+                    ? match_filter_fields(filter_view(row), options.filter)
+                    : ValueFilterMatch::No;
+                if (result == ValueFilterMatch::Unresolved)
+                    analysis.unresolved_filter_count++;
+                selected = result == ValueFilterMatch::Yes;
+                if (selected) analysis.matched_transfer_count++;
+            }
+            if (selected && (!options.filter.enabled || !stream_packet_enabled(config))) {
                 if (!analysis.has_transfer_evidence) {
                     analysis.first_transfer = row;
                     analysis.has_transfer_evidence = true;
@@ -586,60 +659,6 @@ bool StreamAnalyzer::analyze(npiFsdbFileHandle file, const StreamConfig& config,
                   return a.packet_index < b.packet_index;
               });
     return true;
-}
-
-bool StreamAnalyzer::match_row(const StreamRow& row, const StreamMatch& match, std::string& error) const {
-    const StreamValue* value_ptr = nullptr;
-    if (match.field_scope == "beat" || match.field_scope == "any" || match.field_scope.empty()) {
-        auto it = row.fields.find(match.field);
-        if (it != row.fields.end()) value_ptr = &it->second;
-    }
-    if (!value_ptr && (match.field_scope == "packet_stable" || match.field_scope == "any" || match.field_scope.empty())) {
-        auto it = row.packet_stable_fields.find(match.field);
-        if (it != row.packet_stable_fields.end()) value_ptr = &it->second;
-    }
-    if (!value_ptr) {
-        error = "match field not found: " + match.field;
-        return false;
-    }
-    unsigned long long lhs = 0;
-    if (!value_u64(*value_ptr, lhs)) return false;
-    bool ok = false;
-    std::string parse_error;
-    unsigned long long value = parse_user_u64(match.value, ok, parse_error);
-    if (!ok && match.op != "in_range") {
-        error = parse_error.empty() ? "invalid match value: " + match.value : parse_error;
-        return false;
-    }
-    if (match.op == "==") return lhs == value;
-    if (match.op == "!=") return lhs != value;
-    if (match.op == ">") return lhs > value;
-    if (match.op == ">=") return lhs >= value;
-    if (match.op == "<") return lhs < value;
-    if (match.op == "<=") return lhs <= value;
-    if (match.op == "mask_eq") {
-        bool mok = false;
-        std::string mask_error;
-        unsigned long long mask = parse_user_u64(match.mask, mok, mask_error);
-        if (!mok) {
-            error = mask_error.empty() ? "invalid match mask: " + match.mask : mask_error;
-            return false;
-        }
-        return (lhs & mask) == (value & mask);
-    }
-    if (match.op == "in_range") {
-        bool lok = false, hik = false;
-        std::string lo_error, hi_error;
-        unsigned long long lo = parse_user_u64(match.lo, lok, lo_error);
-        unsigned long long hi = parse_user_u64(match.hi, hik, hi_error);
-        if (!lok || !hik) {
-            error = !lo_error.empty() ? lo_error : !hi_error.empty() ? hi_error : "invalid in_range bounds";
-            return false;
-        }
-        return lhs >= lo && lhs <= hi;
-    }
-    error = "unsupported match op: " + match.op;
-    return false;
 }
 
 Json stream_row_json(const StreamRow& row) {

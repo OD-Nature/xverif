@@ -53,6 +53,12 @@ int main() {
     assert(user_dec.valid);
     assert(logic_value_compact_string(user_dec) == "'h22");
 
+    LogicValue wide_dec = parse_user_logic_literal(
+        "128'd340282366920938463463374607431768211455");
+    assert(wide_dec.valid);
+    assert(wide_dec.bits.size() == 128);
+    assert(wide_dec.bits.find('0') == std::string::npos);
+
     LogicValue legacy = parse_user_logic_literal("0x22");
     assert(!legacy.valid);
     assert(legacy.error.find("0x prefix is not accepted") != std::string::npos);

@@ -62,9 +62,6 @@ bool write_meta(const std::string& output_file,
     meta["summary"] = stream_summary_json(config, analysis);
     meta["fields"] = Json::array();
     if (!config.data.empty()) meta["fields"].push_back(Json{{"name", "data"}, {"expr", config.data}});
-    for (const auto& kv : config.data_fields) {
-        meta["fields"].push_back(Json{{"name", kv.first}, {"expr", kv.second}});
-    }
     for (const auto& kv : config.beat_fields) {
         meta["fields"].push_back(Json{{"name", kv.first}, {"expr", kv.second}, {"scope", "beat"}});
     }
@@ -99,7 +96,6 @@ bool StreamExporter::export_transfer_file(const std::string& output_file,
         << "vld" << sep << "rdy" << sep << "bp" << sep << "sop" << sep << "eop";
     if (!config.channel_id.empty()) out << sep << "channel_id";
     if (!config.data.empty()) out << sep << "data";
-    for (const auto& kv : config.data_fields) out << sep << kv.first;
     for (const auto& kv : config.beat_fields) out << sep << kv.first;
     for (const auto& kv : config.packet_stable_fields) out << sep << "packet_stable_" << kv.first;
     out << "\n";
@@ -110,10 +106,6 @@ bool StreamExporter::export_transfer_file(const std::string& output_file,
             << (row.sop ? 1 : 0) << sep << (row.eop ? 1 : 0);
         if (!config.channel_id.empty()) out << sep << cell(row.channel);
         if (!config.data.empty()) out << sep << cell(row.fields.at("data"));
-        for (const auto& kv : config.data_fields) {
-            auto it = row.fields.find(kv.first);
-            out << sep << (it == row.fields.end() ? "" : cell(it->second));
-        }
         for (const auto& kv : config.beat_fields) {
             auto it = row.fields.find(kv.first);
             out << sep << (it == row.fields.end() ? "" : cell(it->second));
@@ -144,7 +136,6 @@ bool StreamExporter::export_packet_file(const std::string& output_file,
         << "start_cycle" << sep << "end_cycle" << sep << "beat_count" << sep << "partial" << sep
         << "packet_stable_mismatch_count";
     for (const auto& kv : config.packet_stable_fields) out << sep << "packet_stable_" << kv.first;
-    for (const auto& kv : config.data_fields) out << sep << "first_" << kv.first << sep << "last_" << kv.first;
     for (const auto& kv : config.beat_fields) out << sep << "first_" << kv.first << sep << "last_" << kv.first;
     if (!config.data.empty()) out << sep << "first_data" << sep << "last_data";
     out << "\n";
@@ -157,12 +148,6 @@ bool StreamExporter::export_packet_file(const std::string& output_file,
         for (const auto& kv : config.packet_stable_fields) {
             auto it = packet.packet_stable_fields.find(kv.first);
             out << sep << (it == packet.packet_stable_fields.end() ? "" : cell(it->second));
-        }
-        for (const auto& kv : config.data_fields) {
-            auto f = packet.first_fields.find(kv.first);
-            auto l = packet.last_fields.find(kv.first);
-            out << sep << (f == packet.first_fields.end() ? "" : cell(f->second))
-                << sep << (l == packet.last_fields.end() ? "" : cell(l->second));
         }
         for (const auto& kv : config.beat_fields) {
             auto f = packet.first_fields.find(kv.first);
@@ -197,7 +182,6 @@ bool StreamExporter::export_packet_beats_file(const std::string& output_file,
     out << "packet_index" << sep << "channel_id" << sep << "beat_index" << sep
         << "cycle" << sep << "time";
     if (!config.data.empty()) out << sep << "data";
-    for (const auto& kv : config.data_fields) out << sep << kv.first;
     for (const auto& kv : config.beat_fields) out << sep << kv.first;
     for (const auto& kv : config.packet_stable_fields) out << sep << "packet_stable_" << kv.first;
     out << "\n";
@@ -207,10 +191,6 @@ bool StreamExporter::export_packet_beats_file(const std::string& output_file,
                 << sep << beat.beat_index << sep << beat.cycle << sep << format_time(beat.time);
             if (!config.data.empty()) {
                 auto it = beat.fields.find("data");
-                out << sep << (it == beat.fields.end() ? "" : cell(it->second));
-            }
-            for (const auto& kv : config.data_fields) {
-                auto it = beat.fields.find(kv.first);
                 out << sep << (it == beat.fields.end() ? "" : cell(it->second));
             }
             for (const auto& kv : config.beat_fields) {

@@ -37,7 +37,6 @@ ADDITIONAL_ARG_SCHEMAS: dict[str, dict[str, Any]] = {
     "dynamic": {"type": "boolean"},
     "edge": {"type": "string", "enum": ["posedge", "negedge", "dual"]},
     "events": {"type": "boolean"},
-    "field_scope": {"type": "string", "enum": ["beat", "packet_stable", "any"]},
     "group_by": {"type": "array"},
     "host": {"type": "string"},
     "include_alias_candidates": {"type": "boolean"},
@@ -59,20 +58,6 @@ ADDITIONAL_ARG_SCHEMAS: dict[str, dict[str, Any]] = {
         },
         "additionalProperties": False,
         "description": "Protocol query controls; use 1-based query.index and query.line_limit; legacy quantity fields are rejected.",
-    },
-    "match": {
-        "type": "object",
-        "properties": {
-            "field": {"type": "string"},
-            "op": {"type": "string", "enum": ["==", "!=", "<", "<=", ">", ">=", "range"]},
-            "value": {"type": "string"},
-            "lo": {"type": "string"},
-            "hi": {"type": "string"},
-            "mask": {"type": "string"},
-            "field_scope": {"type": "string", "enum": ["beat", "packet_stable", "any"]},
-        },
-        "required": ["field"],
-        "additionalProperties": False,
     },
     "max_depth": {"type": "integer"},
     "max_edges": {"type": "integer"},
@@ -202,7 +187,7 @@ EXTRA_ARGS_BY_ACTION: dict[str, set[str]] = {
     "stream.config.load": {"config", "config_path", "file", "mode"},
     "stream.config.list": {"name", "output"},
     "stream.export": {"channel", "line_limit", "output", "time_range"},
-    "stream.query": {"channel", "field_scope", "line_limit", "match", "packet_index", "time_range"},
+    "stream.query": {"channel", "filter", "line_limit", "packet_index", "time_range"},
     "stream.show": set(),
     "stream.validate": {"channel", "line_limit", "time_range"},
     "trace.active_driver": {
@@ -303,8 +288,6 @@ def collect_arg_schemas(specs: list[dict[str, Any]]) -> dict[str, dict[str, Any]
     # Keep generic channel open for stream/APB-style uses; action-specific
     # channel enums are applied in sync_schema().
     arg_schemas["channel"] = copy.deepcopy(ADDITIONAL_ARG_SCHEMAS["channel"])
-    arg_schemas["match"] = copy.deepcopy(ADDITIONAL_ARG_SCHEMAS["match"])
-    arg_schemas["field_scope"] = copy.deepcopy(ADDITIONAL_ARG_SCHEMAS["field_scope"])
     arg_schemas["output"] = copy.deepcopy(ADDITIONAL_ARG_SCHEMAS["output"])
     arg_schemas["time_range"] = copy.deepcopy(ADDITIONAL_ARG_SCHEMAS["time_range"])
 
@@ -458,6 +441,64 @@ def protocol_statistics_filter_schema(allow_ids: bool) -> dict[str, Any]:
         "description": "Completed-transaction filters; direction, IDs, and address are combined with AND.",
         "x-description-zh": "已完成事务过滤；方向、ID 和地址三类条件取 AND。",
     }
+
+
+def stream_query_filter_schema() -> dict[str, Any]:
+    literal = {
+        "type": "string",
+        "minLength": 1,
+        "description": "Known unsigned integer or SystemVerilog literal of arbitrary width; X/Z and 0x are rejected.",
+        "x-description-zh": "任意位宽的已知无符号整数或 SystemVerilog literal；不允许 X/Z 和 0x。",
+    }
+    exact = {
+        "type": "object",
+        "required": ["mode", "values"],
+        "properties": {
+            "mode": {"const": "exact"},
+            "values": {
+                "type": "array", "minItems": 1, "uniqueItems": True,
+                "items": copy.deepcopy(literal),
+            },
+        },
+        "additionalProperties": False,
+    }
+    range_filter = {
+        "type": "object",
+        "required": ["mode", "begin", "end"],
+        "properties": {
+            "mode": {"const": "range"},
+            "begin": copy.deepcopy(literal),
+            "end": copy.deepcopy(literal),
+        },
+        "additionalProperties": False,
+    }
+    mask = {
+        "type": "object",
+        "required": ["mode", "value", "mask"],
+        "properties": {
+            "mode": {"const": "mask"},
+            "value": copy.deepcopy(literal),
+            "mask": copy.deepcopy(literal),
+        },
+        "additionalProperties": False,
+    }
+    return {
+        "type": "object",
+        "required": ["fields"],
+        "properties": {
+            "position": {"type": "string", "enum": ["sop", "eop"]},
+            "fields": {
+                "type": "object",
+                "minProperties": 1,
+                "additionalProperties": {"oneOf": [exact, range_filter, mask]},
+            },
+        },
+        "additionalProperties": False,
+        "description": "AND-combined Stream field filters; each field selects exact queue, inclusive range, or value/mask.",
+        "x-description-zh": "Stream 字段间取 AND；每个字段只能选择精确值队列、闭区间或 value/mask。packet stream 必须指定 SOP/EOP position。",
+    }
+
+
 def sync_schema(schema: dict[str, Any], spec: dict[str, Any], arg_schemas: dict[str, dict[str, Any]]) -> dict[str, Any]:
     action = spec["name"]
     updated = copy.deepcopy(schema)
@@ -514,6 +555,8 @@ def sync_schema(schema: dict[str, Any], spec: dict[str, Any], arg_schemas: dict[
         selected_props["filter"] = protocol_statistics_filter_schema(
             allow_ids=action == "axi.statistics"
         )
+    if action == "stream.query":
+        selected_props["filter"] = stream_query_filter_schema()
     if action == "axi.analysis" and "analysis" in selected_props:
         selected_props["analysis"] = copy.deepcopy(ADDITIONAL_ARG_SCHEMAS["analysis"])
     if action == "apb.config.load" and "config" in selected_props:
@@ -553,7 +596,7 @@ def sync_schema(schema: dict[str, Any], spec: dict[str, Any], arg_schemas: dict[
                 "reset": {"type": "string"}, "vld": {"type": "string"},
                 "rdy": {"type": "string"}, "bp": {"type": "string"},
                 "sop": {"type": "string"}, "eop": {"type": "string"},
-                "data": {"type": "string"}, "data_fields": copy.deepcopy(field_map),
+                "data": {"type": "string"},
                 "beat_fields": copy.deepcopy(field_map),
                 "packet_stable_fields": copy.deepcopy(field_map),
                 "channel_id": {"type": "string"},

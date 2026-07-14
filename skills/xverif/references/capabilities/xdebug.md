@@ -47,10 +47,10 @@ xdebug 是 daidir/FSDB 确定性事实入口。本文件覆盖高频决策链，
 
 `stream.*` 不限 AXI/APB。任何能表示为 `clock + vld + data`，可选 `rdy/bp/sop/eop/channel_id` 的 pipeline、FIFO、command/response、descriptor、packet、credit/backpressure 或自定义 valid-ready 都优先考虑 stream。
 
-流程：确认 leaf paths → `stream.config.load` → `stream.config.list` 验证 → `stream.query` 查 transfer/stall/packet/field match → finding 时间补 `value.batch_at` → `trace.active_driver` 解释 backpressure/control → `window.verify` 证明。
+流程：确认 leaf paths → `stream.config.load` → `stream.config.list` 验证 → `stream.query` 查 transfer/stall/packet 或用 `filter.fields` 多字段过滤 → finding 时间补 `value.batch_at` → `trace.active_driver` 解释 backpressure/control → `window.verify` 证明。
 
-- packet 跨 beat 不变字段写 `packet_stable_fields`；查询 scope 使用
-  `field_scope=packet_stable`，不再使用旧 `stable_fields/stable` 名称。
+- packet 跨 beat 不变字段写 `packet_stable_fields`；过滤时它与 `data`、
+  `beat_fields` 统一从 `filter.fields` 引用，但返回结构和稳定性检查仍保持独立。
 - packet 汇总读取 `complete_packet_count`、`partial_packet_count` 和
   `packet_count_status=exact|not_configured|ambiguous`，不要从窗口内 partial packet
   推断精确总数。

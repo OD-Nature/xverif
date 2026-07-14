@@ -5,7 +5,7 @@
 This phase enhances existing `stream.*` packet semantics:
 
 - Split packet data into `packet_stable_fields` and `beat_fields`.
-- Keep legacy `data` and `data_fields` compatible by treating them as beat fields.
+- Keep scalar `data`; use `beat_fields` as the only named per-beat field map.
 - Make `channel_id` part of packet ownership semantics, not only row annotation.
 - Support non-interleaved and interleaved packet reconstruction.
 - Add `packet_at` query and `packet_beats` export.
@@ -38,10 +38,9 @@ Rules:
 
 - `packet_stable_fields` and `beat_fields` are optional maps of field name to stream
   expression.
-- `data` and `data_fields` remain valid and are interpreted as legacy beat
-  fields.
-- Explicit `beat_fields` and legacy `data/data_fields` are merged; duplicate
-  field names are errors.
+- `data_fields` is not accepted; named per-beat fields use `beat_fields` only.
+- Scalar `data` and `beat_fields` must not both define the reserved field name
+  `data`.
 - `packet_stable_fields` and `beat_fields` must not share a field name.
 - `channel_id_valid` values are `sop`, `eop`, and `every_beat`; default is
   `every_beat`.
@@ -96,12 +95,12 @@ Packet query shape:
   range, beat count, partial flags, stable fields, stable mismatches, and beat
   preview.
 
-`match_field`:
+字段过滤：
 
-- Add `field_scope`: `beat`, `packet_stable`, or `any`; default `any`.
-- `beat` returns transfer rows.
-- `stable` returns packet objects.
-- `any` may return both, each row annotated with match scope.
+- 使用 `filter.fields` 统一引用 data、beat 和 packet-stable 字段；每个字段选择
+  exact/range/mask，字段间取 AND。
+- packet stream 必须使用 `filter.position=sop|eop` 选择判断边界，命中后返回整包。
+- 旧 `match_field`、`args.match` 和 `field_scope` 已删除且不兼容。
 
 Exports:
 
@@ -122,7 +121,7 @@ Exports:
    - per-channel current packet map for interleaved streams
    - stable mismatch tracking
    - beat preview generation
-5. Extend `stream.query` for `packet_at` and `field_scope`.
+5. Extend `stream.query` for `packet_at` and boundary-aware multi-field filtering.
 6. Extend `stream.export` for `packet_beats` and updated transfer/packet files.
 7. Update schema/examples/action inventory and docs.
 8. Extend the real SV/FSDB fixture and pytest coverage.
@@ -132,7 +131,7 @@ Exports:
 
 ## Tests
 
-- Legacy `data` and `data_fields` configs still pass.
+- `data_fields` configs fail explicitly and `beat_fields` configs pass.
 - New `packet_stable_fields` and `beat_fields` config passes.
 - Duplicate stable/beat names produce validation errors.
 - Stable fields that change within a packet produce mismatch records and warning.

@@ -28,7 +28,7 @@
         "rdy": "req_rdy",
         "sop": "req_sop",
         "eop": "req_eop",
-        "data_fields": {
+        "beat_fields": {
           "opcode": "req_data[7:0]",
           "addr": "{addr_hi, addr_lo}",
           "is_wr": "req_cmd == 2'b01"

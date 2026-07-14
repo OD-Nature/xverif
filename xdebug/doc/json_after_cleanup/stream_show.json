@@ -34,7 +34,7 @@
         "reset": "!stream_v1_top.rst_n",
         "vld": "stream_v1_top.ready_vld && !stream_v1_top.ready_flush",
         "rdy": "stream_v1_top.ready_rdy",
-        "data_fields": {
+        "beat_fields": {
           "addr": "{stream_v1_top.ready_addr_hi, stream_v1_top.ready_addr_lo}",
           "data": "stream_v1_top.ready_data",
           "is_wr": "stream_v1_top.ready_cmd == 2'b01",
