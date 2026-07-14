@@ -37,24 +37,34 @@
       "type": "object",
       "properties": {
         "bind": {
-          "type": "string"
+          "type": "string",
+          "description": "args.bind 的 action-specific 参数值。",
+          "x-description-zh": "args.bind 的 action-specific 参数值。"
         },
         "bind_host": {
-          "type": "string"
+          "type": "string",
+          "description": "args.bind_host 的 action-specific 参数值。",
+          "x-description-zh": "args.bind_host 的 action-specific 参数值。"
         },
         "host": {
-          "type": "string"
+          "type": "string",
+          "description": "args.host 的 action-specific 参数值。",
+          "x-description-zh": "args.host 的 action-specific 参数值。"
         },
         "name": {
           "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。"
+          "description": "已保存配置、游标、列表或接口配置名称。",
+          "x-description-zh": "已保存配置、游标、列表或接口配置名称。"
         },
         "port": {
-          "type": "integer"
+          "type": "integer",
+          "description": "args.port 的 action-specific 参数值。",
+          "x-description-zh": "args.port 的 action-specific 参数值。"
         },
         "session_id": {
           "type": "string",
-          "description": "目标 xdebug session 标识。"
+          "description": "目标 xdebug session 标识。",
+          "x-description-zh": "目标 xdebug session 标识。"
         },
         "transport": {
           "type": "string",
@@ -62,7 +72,9 @@
             "uds",
             "tcp",
             "file"
-          ]
+          ],
+          "description": "args.transport 的 action-specific 参数值。",
+          "x-description-zh": "args.transport 的 action-specific 参数值。"
         }
       },
       "additionalProperties": false,
@@ -95,5 +107,17 @@
   "x-how_it_works": "解析 target 中的 daidir/fsdb；可选 target.run_manifest 会在启动前校验 published state、canonical path、size 与 SHA-256。",
   "x-when_to_use": "建立后续 design/waveform 查询的资源上下文。",
   "x-arg_contract_notes": "required: name",
-  "x-description-zh": "打开 design/waveform session。"
+  "x-description-zh": "打开 design/waveform session。",
+  "x-agent": {
+    "use_when": [
+      "需要执行该 action 的 catalog 所述能力。"
+    ],
+    "do_not_use_when": [
+      "任务不属于该 action 的公开合同。"
+    ],
+    "alternatives": [],
+    "constraints": [
+      "required: name"
+    ]
+  }
 }

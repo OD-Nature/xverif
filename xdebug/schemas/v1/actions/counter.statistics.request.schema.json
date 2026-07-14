@@ -38,24 +38,30 @@
       "properties": {
         "clock": {
           "type": "string",
-          "description": "采样、统计或协议检查使用的 clock 信号路径。"
+          "description": "采样、统计或协议检查使用的 clock 信号路径。",
+          "x-description-zh": "采样、统计或协议检查使用的 clock 信号路径。"
         },
         "cnt": {
           "type": "string",
-          "description": "计数器统计使用的 counter 信号路径。"
+          "description": "计数器统计使用的 counter 信号路径。",
+          "x-description-zh": "计数器统计使用的 counter 信号路径。"
         },
         "edge": {
           "type": "string",
-          "description": "clock sampling 使用的边沿：posedge、negedge 或 dual。"
+          "description": "clock sampling 使用的边沿：posedge、negedge 或 dual。",
+          "x-description-zh": "clock sampling 使用的边沿：posedge、negedge 或 dual。"
         },
         "line_limit": {
           "type": "integer",
           "minimum": 1,
-          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
+          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。",
+          "x-description-zh": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
         },
         "max_samples": {
           "type": "integer",
-          "minimum": 1
+          "minimum": 1,
+          "description": "args.max_samples 的 action-specific 参数值。",
+          "x-description-zh": "args.max_samples 的 action-specific 参数值。"
         },
         "sample_point": {
           "type": "string",
@@ -63,20 +69,26 @@
             "before",
             "after"
           ],
-          "description": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。"
+          "description": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。",
+          "x-description-zh": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。"
         },
         "time_range": {
           "type": "object",
           "properties": {
             "begin": {
-              "type": "string"
+              "type": "string",
+              "description": "args.time_range.begin 的 action-specific 参数值。",
+              "x-description-zh": "args.time_range.begin 的 action-specific 参数值。"
             },
             "end": {
-              "type": "string"
+              "type": "string",
+              "description": "args.time_range.end 的 action-specific 参数值。",
+              "x-description-zh": "args.time_range.end 的 action-specific 参数值。"
             }
           },
           "additionalProperties": false,
-          "description": "查询或分析的时间窗口。"
+          "description": "分析时间窗口；begin/end 为闭区间端点，可分别省略以使用可用波形边界。",
+          "x-description-zh": "分析时间窗口；begin/end 为闭区间端点，可分别省略以使用可用波形边界。"
         },
         "time_unit": {
           "type": "string",
@@ -88,18 +100,25 @@
             "us",
             "ms",
             "s"
-          ]
+          ],
+          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
+          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
         },
         "vld": {
           "oneOf": [
             {
-              "type": "string"
+              "type": "string",
+              "description": "args.vld 的 action-specific 参数值。",
+              "x-description-zh": "args.vld 的 action-specific 参数值。"
             },
             {
-              "type": "object"
+              "type": "object",
+              "description": "args.vld 的组合参数对象。",
+              "x-description-zh": "args.vld 的组合参数对象。"
             }
           ],
-          "description": "计数器统计使用的 valid 信号路径。"
+          "description": "计数器统计使用的 valid 信号路径。",
+          "x-description-zh": "计数器统计使用的 valid 信号路径。"
         }
       },
       "additionalProperties": false
@@ -129,5 +148,17 @@
   "x-how_it_works": "按 clock/vld/cnt 采样，分析递增、回绕、停顿和异常。",
   "x-when_to_use": "判断计数器是否符合预期。",
   "x-arg_contract_notes": "required: clock, time_range, vld, cnt",
-  "x-description-zh": "统计计数器行为。"
+  "x-description-zh": "统计计数器行为。",
+  "x-agent": {
+    "use_when": [
+      "需要执行该 action 的 catalog 所述能力。"
+    ],
+    "do_not_use_when": [
+      "任务不属于该 action 的公开合同。"
+    ],
+    "alternatives": [],
+    "constraints": [
+      "required: clock, time_range, vld, cnt"
+    ]
+  }
 }

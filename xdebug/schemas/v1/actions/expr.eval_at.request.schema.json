@@ -32,15 +32,18 @@
       "properties": {
         "clock": {
           "type": "string",
-          "description": "采样、统计或协议检查使用的 clock 信号路径。"
+          "description": "采样、统计或协议检查使用的 clock 信号路径。",
+          "x-description-zh": "采样、统计或协议检查使用的 clock 信号路径。"
         },
         "edge": {
           "type": "string",
-          "description": "clock sampling 使用的边沿：posedge、negedge 或 dual。"
+          "description": "clock sampling 使用的边沿：posedge、negedge 或 dual。",
+          "x-description-zh": "clock sampling 使用的边沿：posedge、negedge 或 dual。"
         },
         "expr": {
           "type": "string",
-          "description": "需要求值或匹配的布尔表达式。"
+          "description": "需要求值或匹配的布尔表达式。",
+          "x-description-zh": "需要求值或匹配的布尔表达式。"
         },
         "sample_point": {
           "type": "string",
@@ -48,41 +51,55 @@
             "before",
             "after"
           ],
-          "description": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。"
+          "description": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。",
+          "x-description-zh": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。"
         },
         "signals": {
           "oneOf": [
             {
               "type": "array",
               "items": {
-                "type": "string"
-              }
+                "type": "string",
+                "description": "args.signals[] 的 action-specific 参数值。",
+                "x-description-zh": "args.signals[] 的 action-specific 参数值。"
+              },
+              "description": "args.signals 的有序项目列表。",
+              "x-description-zh": "args.signals 的有序项目列表。"
             },
             {
               "type": "object",
               "additionalProperties": {
                 "type": "string"
-              }
+              },
+              "description": "args.signals 的组合参数对象。",
+              "x-description-zh": "args.signals 的组合参数对象。"
             }
           ],
-          "description": "信号列表，或 alias 到信号路径的映射。"
+          "description": "信号列表，或 alias 到信号路径的映射。",
+          "x-description-zh": "信号列表，或 alias 到信号路径的映射。"
         },
         "time": {
           "type": "string",
-          "description": "查询或验证的目标时间点。"
+          "description": "查询或验证的目标时间点。",
+          "x-description-zh": "查询或验证的目标时间点。"
         },
         "time_range": {
           "type": "object",
           "properties": {
             "begin": {
-              "type": "string"
+              "type": "string",
+              "description": "args.time_range.begin 的 action-specific 参数值。",
+              "x-description-zh": "args.time_range.begin 的 action-specific 参数值。"
             },
             "end": {
-              "type": "string"
+              "type": "string",
+              "description": "args.time_range.end 的 action-specific 参数值。",
+              "x-description-zh": "args.time_range.end 的 action-specific 参数值。"
             }
           },
           "additionalProperties": false,
-          "description": "查询或分析的时间窗口。"
+          "description": "分析时间窗口；begin/end 为闭区间端点，可分别省略以使用可用波形边界。",
+          "x-description-zh": "分析时间窗口；begin/end 为闭区间端点，可分别省略以使用可用波形边界。"
         },
         "time_unit": {
           "type": "string",
@@ -94,7 +111,9 @@
             "us",
             "ms",
             "s"
-          ]
+          ],
+          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
+          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
         }
       },
       "additionalProperties": false,
@@ -130,5 +149,17 @@
   "x-how_it_works": "把 signals alias 映射到 FSDB 信号，按 clock/time 采样后交给表达式求值器。",
   "x-when_to_use": "用自然表达式检查组合条件。",
   "x-arg_contract_notes": "required: expr, time, signals, clock",
-  "x-description-zh": "在指定时间求布尔/表达式值。"
+  "x-description-zh": "在指定时间求布尔/表达式值。",
+  "x-agent": {
+    "use_when": [
+      "需要执行该 action 的 catalog 所述能力。"
+    ],
+    "do_not_use_when": [
+      "任务不属于该 action 的公开合同。"
+    ],
+    "alternatives": [],
+    "constraints": [
+      "required: expr, time, signals, clock"
+    ]
+  }
 }

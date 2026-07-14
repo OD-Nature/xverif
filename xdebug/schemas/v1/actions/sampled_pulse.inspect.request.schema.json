@@ -32,25 +32,34 @@
       "properties": {
         "clock": {
           "type": "string",
-          "description": "采样、统计或协议检查使用的 clock 信号路径。"
+          "description": "采样、统计或协议检查使用的 clock 信号路径。",
+          "x-description-zh": "采样、统计或协议检查使用的 clock 信号路径。"
         },
         "edge": {
           "type": "string",
-          "description": "clock sampling 使用的边沿：posedge、negedge 或 dual。"
+          "description": "clock sampling 使用的边沿：posedge、negedge 或 dual。",
+          "x-description-zh": "clock sampling 使用的边沿：posedge、negedge 或 dual。"
         },
         "line_limit": {
           "type": "integer",
           "minimum": 1,
-          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
+          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。",
+          "x-description-zh": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
         },
         "payload": {
-          "type": "string"
+          "type": "string",
+          "description": "args.payload 的 action-specific 参数值。",
+          "x-description-zh": "args.payload 的 action-specific 参数值。"
         },
         "payloads": {
           "type": "array",
           "items": {
-            "type": "string"
-          }
+            "type": "string",
+            "description": "args.payloads[] 的 action-specific 参数值。",
+            "x-description-zh": "args.payloads[] 的 action-specific 参数值。"
+          },
+          "description": "args.payloads 的有序项目列表。",
+          "x-description-zh": "args.payloads 的有序项目列表。"
         },
         "rules": {
           "type": "object",
@@ -62,10 +71,14 @@
                 "summary",
                 "all"
               ],
-              "default": "summary"
+              "default": "summary",
+              "description": "args.rules.payload_changed_without_sampled_valid 的 action-specific 参数值。",
+              "x-description-zh": "args.rules.payload_changed_without_sampled_valid 的 action-specific 参数值。"
             }
           },
-          "additionalProperties": false
+          "additionalProperties": false,
+          "description": "本 action 的协议/检查规则对象；每个 rule 的默认和生效条件见嵌套字段说明。",
+          "x-description-zh": "本 action 的协议/检查规则对象；每个 rule 的默认和生效条件见嵌套字段说明。"
         },
         "sample_point": {
           "type": "string",
@@ -73,20 +86,26 @@
             "before",
             "after"
           ],
-          "description": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。"
+          "description": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。",
+          "x-description-zh": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。"
         },
         "time_range": {
           "type": "object",
           "properties": {
             "begin": {
-              "type": "string"
+              "type": "string",
+              "description": "args.time_range.begin 的 action-specific 参数值。",
+              "x-description-zh": "args.time_range.begin 的 action-specific 参数值。"
             },
             "end": {
-              "type": "string"
+              "type": "string",
+              "description": "args.time_range.end 的 action-specific 参数值。",
+              "x-description-zh": "args.time_range.end 的 action-specific 参数值。"
             }
           },
           "additionalProperties": false,
-          "description": "查询或分析的时间窗口。"
+          "description": "分析时间窗口；begin/end 为闭区间端点，可分别省略以使用可用波形边界。",
+          "x-description-zh": "分析时间窗口；begin/end 为闭区间端点，可分别省略以使用可用波形边界。"
         },
         "time_unit": {
           "type": "string",
@@ -98,11 +117,14 @@
             "us",
             "ms",
             "s"
-          ]
+          ],
+          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
+          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
         },
         "valid": {
           "type": "string",
-          "description": "valid-ready 握手或采样检查中的 valid 信号路径。"
+          "description": "valid-ready 握手或采样检查中的 valid 信号路径。",
+          "x-description-zh": "valid-ready 握手或采样检查中的 valid 信号路径。"
         }
       },
       "additionalProperties": false,
@@ -136,5 +158,17 @@
   "x-how_it_works": "按 clock 采样 valid，同时扫描 valid 原始变化；若 valid 在两个采样边沿间拉高但没有采样边沿看到高电平，则报 unsampled_valid_pulse。可选 payload/payloads 用于补风险现场。",
   "x-when_to_use": "解释仿真里“波形有脉冲但 DUT 没采到”的问题。",
   "x-arg_contract_notes": "required: clock, valid",
-  "x-description-zh": "检查未被 clock 采到的 valid 短脉冲。"
+  "x-description-zh": "检查未被 clock 采到的 valid 短脉冲。",
+  "x-agent": {
+    "use_when": [
+      "需要执行该 action 的 catalog 所述能力。"
+    ],
+    "do_not_use_when": [
+      "任务不属于该 action 的公开合同。"
+    ],
+    "alternatives": [],
+    "constraints": [
+      "required: clock, valid"
+    ]
+  }
 }

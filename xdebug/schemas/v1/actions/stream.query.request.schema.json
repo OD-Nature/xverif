@@ -32,7 +32,9 @@
       ],
       "properties": {
         "channel": {
-          "type": "string"
+          "type": "string",
+          "description": "args.channel 的 action-specific 参数值。",
+          "x-description-zh": "args.channel 的 action-specific 参数值。"
         },
         "filter": {
           "type": "object",
@@ -45,7 +47,9 @@
               "enum": [
                 "sop",
                 "eop"
-              ]
+              ],
+              "description": "args.filter.position 的 action-specific 参数值。",
+              "x-description-zh": "args.filter.position 的 action-specific 参数值。"
             },
             "fields": {
               "type": "object",
@@ -129,7 +133,9 @@
                     "additionalProperties": false
                   }
                 ]
-              }
+              },
+              "description": "args.filter.fields 的组合参数对象。",
+              "x-description-zh": "args.filter.fields 的组合参数对象。"
             }
           },
           "additionalProperties": false,
@@ -139,39 +145,55 @@
         "line_limit": {
           "type": "integer",
           "minimum": 1,
-          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
+          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。",
+          "x-description-zh": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
         },
         "packet_index": {
           "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "description": "args.packet_index 的 action-specific 参数值。",
+          "x-description-zh": "args.packet_index 的 action-specific 参数值。"
         },
         "query": {
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object"
-            }
+          "description": "查询种类。beat stream 支持 summary、first/last_transfer、transfer_window、first/last_stall、stall_window；packet stream 还支持 first/last_packet、packet_at、packet_window。启用 filter 时可用集合进一步受 packet 边界限制。",
+          "type": "string",
+          "enum": [
+            "summary",
+            "first_transfer",
+            "last_transfer",
+            "transfer_window",
+            "first_stall",
+            "last_stall",
+            "stall_window",
+            "first_packet",
+            "last_packet",
+            "packet_at",
+            "packet_window"
           ],
-          "description": "stream 查询条件。"
+          "x-description-zh": "查询种类。beat stream 支持 summary、first/last_transfer、transfer_window、first/last_stall、stall_window；packet stream 还支持 first/last_packet、packet_at、packet_window。启用 filter 时可用集合进一步受 packet 边界限制。"
         },
         "stream": {
           "type": "string",
-          "description": "已保存 stream 配置名称。"
+          "description": "已保存 stream 配置名称。",
+          "x-description-zh": "已保存 stream 配置名称。"
         },
         "time_range": {
           "type": "object",
           "properties": {
             "begin": {
-              "type": "string"
+              "type": "string",
+              "description": "args.time_range.begin 的 action-specific 参数值。",
+              "x-description-zh": "args.time_range.begin 的 action-specific 参数值。"
             },
             "end": {
-              "type": "string"
+              "type": "string",
+              "description": "args.time_range.end 的 action-specific 参数值。",
+              "x-description-zh": "args.time_range.end 的 action-specific 参数值。"
             }
           },
           "additionalProperties": false,
-          "description": "查询或分析的时间窗口。"
+          "description": "分析时间窗口；begin/end 为闭区间端点，可分别省略以使用可用波形边界。",
+          "x-description-zh": "分析时间窗口；begin/end 为闭区间端点，可分别省略以使用可用波形边界。"
         },
         "time_unit": {
           "type": "string",
@@ -183,7 +205,9 @@
             "us",
             "ms",
             "s"
-          ]
+          ],
+          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
+          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
         }
       },
       "additionalProperties": false
@@ -216,5 +240,22 @@
   "x-how_it_works": "无 sop/eop 时按 transfer 在线过滤；packet stream 必须用 filter.position=sop/eop 选择边界拍并返回整包。",
   "x-when_to_use": "按多个 data/beat/stable 字段筛选流事务。",
   "x-arg_contract_notes": "required: stream, query; filter.fields conditions AND; each mode exact/range/mask; packet filter requires position sop/eop",
-  "x-description-zh": "查询并按多个字段过滤 stream transfer 或 packet。"
+  "x-description-zh": "查询并按多个字段过滤 stream transfer 或 packet。",
+  "x-agent": {
+    "use_when": [
+      "已加载通用 stream 配置，需要查询 transfer、stall、packet 或字段。"
+    ],
+    "do_not_use_when": [
+      "接口是 AXI/APB 且需要其标准专用语义。"
+    ],
+    "alternatives": [
+      {
+        "action": "event.find",
+        "when": "只需一次性表达式找点。"
+      }
+    ],
+    "constraints": [
+      "required: stream, query; filter.fields conditions AND; each mode exact/range/mask; packet filter requires position sop/eop"
+    ]
+  }
 }

@@ -51,9 +51,19 @@ class XverifDebugAdapter:
             args["filter"] = filters
         return self._one_shot({"api_version": "xdebug.v1", "action": "actions", "args": args})
 
-    def schema(self, action: str, kind: str = "request") -> Json:
-        return self._one_shot({"api_version": "xdebug.v1", "action": "schema",
-                               "args": {"action": action, "kind": kind}})
+    def schema(self, action: str, kind: str = "request", view: str = "mcp",
+               include_examples: bool = True, language: str = "zh") -> Json:
+        from xverif_mcp.schema_projection import project
+        native = self._one_shot({"api_version": "xdebug.v1", "action": "schema",
+                                 "args": {"action": action, "kind": kind}})
+        # language currently selects the MCP-facing prose source; native JSON
+        # schema stays byte-for-byte stable for CLI/stdio users.
+        _ = language
+        # The default MCP request view has no response equivalent.  Preserve
+        # existing kind="response" discovery calls by selecting response guide
+        # when callers omit an explicit view.
+        effective_view = "response" if kind == "response" and view == "mcp" else view
+        return project(action, kind, effective_view, native, include_examples)
 
     def _one_shot(self, req: Json) -> Json:
         from xverif_mcp.runner import StatelessCliRunner

@@ -31,38 +31,52 @@
       "type": "object",
       "properties": {
         "addr": {
-          "type": "string"
+          "type": "string",
+          "description": "args.addr 的 action-specific 参数值。",
+          "x-description-zh": "args.addr 的 action-specific 参数值。"
         },
         "address": {
-          "type": "string"
+          "type": "string",
+          "description": "args.address 的 action-specific 参数值。",
+          "x-description-zh": "args.address 的 action-specific 参数值。"
         },
         "direction": {
           "type": "string",
           "enum": [
             "write",
             "read"
-          ]
+          ],
+          "description": "args.direction 的 action-specific 参数值。",
+          "x-description-zh": "args.direction 的 action-specific 参数值。"
         },
         "id": {
-          "type": "string"
+          "type": "string",
+          "description": "args.id 的 action-specific 参数值。",
+          "x-description-zh": "args.id 的 action-specific 参数值。"
         },
         "last": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "args.last 的 action-specific 参数值。",
+          "x-description-zh": "args.last 的 action-specific 参数值。"
         },
         "name": {
           "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。"
+          "description": "已保存配置、游标、列表或接口配置名称。",
+          "x-description-zh": "已保存配置、游标、列表或接口配置名称。"
         },
         "output": {
           "type": "object",
           "properties": {
             "include_data": {
               "type": "boolean",
-              "default": false
+              "default": false,
+              "description": "args.output.include_data 的 action-specific 参数值。",
+              "x-description-zh": "args.output.include_data 的 action-specific 参数值。"
             }
           },
           "additionalProperties": false,
-          "description": "AXI payload display controls; beat data is omitted unless include_data is true."
+          "description": "AXI payload display controls; beat data is omitted unless include_data is true.",
+          "x-description-zh": "AXI payload display controls; beat data is omitted unless include_data is true."
         },
         "query": {
           "oneOf": [
@@ -71,14 +85,20 @@
               "properties": {
                 "line_limit": {
                   "type": "integer",
-                  "minimum": 1
+                  "minimum": 1,
+                  "description": "args.query.line_limit 的 action-specific 参数值。",
+                  "x-description-zh": "args.query.line_limit 的 action-specific 参数值。"
                 },
                 "index": {
                   "type": "integer",
-                  "minimum": 1
+                  "minimum": 1,
+                  "description": "args.query.index 的 action-specific 参数值。",
+                  "x-description-zh": "args.query.index 的 action-specific 参数值。"
                 }
               },
-              "additionalProperties": false
+              "additionalProperties": false,
+              "description": "args.query 的组合参数对象。",
+              "x-description-zh": "args.query 的组合参数对象。"
             },
             {
               "type": "object",
@@ -95,16 +115,23 @@
                     "b",
                     "ar",
                     "r"
-                  ]
+                  ],
+                  "description": "args.query.channel 的 action-specific 参数值。",
+                  "x-description-zh": "args.query.channel 的 action-specific 参数值。"
                 },
                 "handshake_time": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "args.query.handshake_time 的 action-specific 参数值。",
+                  "x-description-zh": "args.query.handshake_time 的 action-specific 参数值。"
                 }
               },
-              "additionalProperties": false
+              "additionalProperties": false,
+              "description": "args.query 的组合参数对象。",
+              "x-description-zh": "args.query 的组合参数对象。"
             }
           ],
-          "description": "Select transactions by 1-based index/line_limit, or exactly match an AXI channel handshake time."
+          "description": "Select transactions by 1-based index/line_limit, or exactly match an AXI channel handshake time.",
+          "x-description-zh": "Select transactions by 1-based index/line_limit, or exactly match an AXI channel handshake time."
         },
         "time_unit": {
           "type": "string",
@@ -116,7 +143,9 @@
             "us",
             "ms",
             "s"
-          ]
+          ],
+          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
+          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
         }
       },
       "additionalProperties": false,
@@ -204,5 +233,17 @@
   "x-how_it_works": "第 N 个 transaction 用 1-based query.index，多条用 query.line_limit；已知锚点时用 query.channel（AW/W/B/AR/R）与精确 query.handshake_time 反查。逐 beat payload 仅由 output.include_data 展开。",
   "x-when_to_use": "抽取 AXI beat/transaction 或从握手时间反查整笔事务。",
   "x-arg_contract_notes": "required: name; channel and handshake_time must appear together; do not mix handshake query with transaction selectors",
-  "x-description-zh": "查询 AXI channel/transaction。"
+  "x-description-zh": "查询 AXI channel/transaction。",
+  "x-agent": {
+    "use_when": [
+      "需要执行该 action 的 catalog 所述能力。"
+    ],
+    "do_not_use_when": [
+      "任务不属于该 action 的公开合同。"
+    ],
+    "alternatives": [],
+    "constraints": [
+      "required: name; channel and handshake_time must appear together; do not mix handshake query with transaction selectors"
+    ]
+  }
 }

@@ -57,5 +57,17 @@
   "x-how_it_works": "检查 session 资源、路径和可访问状态。",
   "x-when_to_use": "定位 daidir/fsdb/session 绑定问题。",
   "x-arg_contract_notes": "none",
-  "x-description-zh": "诊断当前 session。"
+  "x-description-zh": "诊断当前 session。",
+  "x-agent": {
+    "use_when": [
+      "需要执行该 action 的 catalog 所述能力。"
+    ],
+    "do_not_use_when": [
+      "任务不属于该 action 的公开合同。"
+    ],
+    "alternatives": [],
+    "constraints": [
+      "none"
+    ]
+  }
 }

@@ -32,11 +32,13 @@
       "properties": {
         "name": {
           "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。"
+          "description": "已保存配置、游标、列表或接口配置名称。",
+          "x-description-zh": "已保存配置、游标、列表或接口配置名称。"
         },
         "time": {
           "type": "string",
-          "description": "查询或验证的目标时间点。"
+          "description": "查询或验证的目标时间点。",
+          "x-description-zh": "查询或验证的目标时间点。"
         },
         "time_unit": {
           "type": "string",
@@ -48,7 +50,9 @@
             "us",
             "ms",
             "s"
-          ]
+          ],
+          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
+          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
         }
       },
       "additionalProperties": false,
@@ -82,5 +86,17 @@
   "x-how_it_works": "解析 time/at 为 FSDB 时间，写入 CursorManager，可设 active。",
   "x-when_to_use": "给后续窗口、比较和人工定位复用时间点。",
   "x-arg_contract_notes": "required: name, time",
-  "x-description-zh": "保存命名时间游标。"
+  "x-description-zh": "保存命名时间游标。",
+  "x-agent": {
+    "use_when": [
+      "需要执行该 action 的 catalog 所述能力。"
+    ],
+    "do_not_use_when": [
+      "任务不属于该 action 的公开合同。"
+    ],
+    "alternatives": [],
+    "constraints": [
+      "required: name, time"
+    ]
+  }
 }

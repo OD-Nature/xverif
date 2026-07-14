@@ -110,6 +110,12 @@ std::string schema_root() {
     return "xdebug/schemas/v1/actions/";
 }
 
+std::string repo_root() {
+    std::string home = xdebug_core::env_raw_string("XVERIF_HOME");
+    if (!home.empty()) return home + "/xdebug/";
+    return "xdebug/";
+}
+
 bool read_json_file(const std::string& path, Json& out) {
     std::ifstream input(path.c_str());
     if (!input.good()) return false;
@@ -211,8 +217,19 @@ Json catalog_schema_response(const Json& request) {
         if (rel.empty() || !read_json_file(path, schema)) {
             return make_error(request, "schema", "ACTION_SCHEMA_NOT_FOUND", "schema not found for " + action + " " + kind);
         }
+        Json examples = Json::array();
+        const std::vector<std::string>& example_paths =
+            kind == "request" ? spec->request_examples : spec->response_examples;
+        for (const auto& example_rel : example_paths) {
+            Json example;
+            if (read_json_file(repo_root() + example_rel, example)) {
+                examples.push_back({{"path", example_rel}, {"value", example}});
+            }
+        }
+        Json constraints = schema.value("x-agent", Json::object()).value("constraints", Json::array());
         response["summary"] = {{"action", action}, {"kind", kind}};
-        response["data"] = {{"schema", schema}, {"schema_path", rel}};
+        response["data"] = {{"schema", schema}, {"schema_path", rel},
+                            {"examples", examples}, {"constraints", constraints}};
         return response;
     }
     response["data"] = {

@@ -33,64 +33,122 @@
         "checks": {
           "type": "array",
           "items": {
-            "type": "object",
-            "required": [
-              "type"
-            ],
-            "properties": {
-              "type": {
-                "type": "string",
-                "enum": [
-                  "unknown_xz",
-                  "glitch",
-                  "stuck"
-                ]
+            "description": "一项由 type 判别的 abnormal 检查。",
+            "oneOf": [
+              {
+                "type": "object",
+                "description": "unknown_xz 检查项。",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "const": "unknown_xz",
+                    "description": "报告区间内出现的 X/Z。",
+                    "x-description-zh": "报告区间内出现的 X/Z。"
+                  }
+                },
+                "additionalProperties": false,
+                "x-description-zh": "unknown_xz 检查项。"
               },
-              "min_pulse_width": {
-                "type": "string"
+              {
+                "type": "object",
+                "description": "glitch 检查项。",
+                "required": [
+                  "type",
+                  "min_pulse_width"
+                ],
+                "properties": {
+                  "type": {
+                    "const": "glitch",
+                    "description": "选择短脉冲检查。",
+                    "x-description-zh": "选择短脉冲检查。"
+                  },
+                  "min_pulse_width": {
+                    "type": "string",
+                    "description": "报告严格短于该 canonical duration 的脉冲。",
+                    "x-description-zh": "报告严格短于该 canonical duration 的脉冲。"
+                  }
+                },
+                "additionalProperties": false,
+                "x-description-zh": "glitch 检查项。"
               },
-              "min_duration": {
-                "type": "string"
+              {
+                "type": "object",
+                "description": "stuck 检查项。",
+                "required": [
+                  "type",
+                  "min_duration"
+                ],
+                "properties": {
+                  "type": {
+                    "const": "stuck",
+                    "description": "选择长时间不变检查。",
+                    "x-description-zh": "选择长时间不变检查。"
+                  },
+                  "min_duration": {
+                    "type": "string",
+                    "description": "报告持续至少该 canonical duration 的不变区间。",
+                    "x-description-zh": "报告持续至少该 canonical duration 的不变区间。"
+                  }
+                },
+                "additionalProperties": false,
+                "x-description-zh": "stuck 检查项。"
               }
-            },
-            "additionalProperties": false
+            ],
+            "x-description-zh": "一项由 type 判别的 abnormal 检查。"
           },
-          "description": "detect_abnormal checks. Each item must be an object with type; string shorthand is not supported."
+          "description": "要执行的 raw-waveform 检查。省略时执行运行时默认检查集合；字符串 shorthand 不被接受。",
+          "minItems": 1,
+          "x-description-zh": "要执行的 raw-waveform 检查。省略时执行运行时默认检查集合；字符串 shorthand 不被接受。"
         },
         "line_limit": {
           "type": "integer",
           "minimum": 1,
-          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
+          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。",
+          "x-description-zh": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
         },
         "signals": {
           "oneOf": [
             {
               "type": "array",
               "items": {
-                "type": "string"
-              }
+                "type": "string",
+                "description": "args.signals[] 的 action-specific 参数值。",
+                "x-description-zh": "args.signals[] 的 action-specific 参数值。"
+              },
+              "description": "args.signals 的有序项目列表。",
+              "x-description-zh": "args.signals 的有序项目列表。"
             },
             {
               "type": "object",
               "additionalProperties": {
                 "type": "string"
-              }
+              },
+              "description": "args.signals 的组合参数对象。",
+              "x-description-zh": "args.signals 的组合参数对象。"
             }
           ],
-          "description": "信号列表，或 alias 到信号路径的映射。"
+          "description": "信号列表，或 alias 到信号路径的映射。",
+          "x-description-zh": "信号列表，或 alias 到信号路径的映射。"
         },
         "time_range": {
           "type": "object",
           "properties": {
             "begin": {
-              "type": "string"
+              "type": "string",
+              "description": "args.time_range.begin 的 action-specific 参数值。",
+              "x-description-zh": "args.time_range.begin 的 action-specific 参数值。"
             },
             "end": {
-              "type": "string"
+              "type": "string",
+              "description": "args.time_range.end 的 action-specific 参数值。",
+              "x-description-zh": "args.time_range.end 的 action-specific 参数值。"
             }
           },
           "additionalProperties": false,
-          "description": "查询或分析的时间窗口。"
+          "description": "分析时间窗口；begin/end 为闭区间端点，可分别省略以使用可用波形边界。",
+          "x-description-zh": "分析时间窗口；begin/end 为闭区间端点，可分别省略以使用可用波形边界。"
         },
         "time_unit": {
           "type": "string",
@@ -102,7 +160,9 @@
             "us",
             "ms",
             "s"
-          ]
+          ],
+          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
+          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
         },
         "value_format": {
           "type": "string",
@@ -111,7 +171,8 @@
             "bin",
             "dec"
           ],
-          "description": "仅控制响应中信号值的显示格式；不影响采样、时间或导出文件格式。"
+          "description": "仅控制响应中信号值的显示格式；不影响采样、时间或导出文件格式。",
+          "x-description-zh": "仅控制响应中信号值的显示格式；不影响采样、时间或导出文件格式。"
         }
       },
       "additionalProperties": false,
@@ -144,5 +205,22 @@
   "x-how_it_works": "对 signals 执行 glitch/stuck/unknown 等检查并返回 findings；valid/ready 协议里的合法 idle/backpressure 不应只凭 stuck finding 判为 bug。",
   "x-when_to_use": "快速发现值得展开的异常窗口。",
   "x-arg_contract_notes": "required: signals",
-  "x-description-zh": "扫描常见波形异常。"
+  "x-description-zh": "扫描常见波形异常。",
+  "x-agent": {
+    "use_when": [
+      "需要在 raw waveform 中检查 X/Z、短脉冲或长时间不变。"
+    ],
+    "do_not_use_when": [
+      "需要证明 valid-ready 协议违规。"
+    ],
+    "alternatives": [
+      {
+        "action": "handshake.inspect",
+        "when": "需要协议层 stall 或稳定性结论。"
+      }
+    ],
+    "constraints": [
+      "required: signals"
+    ]
+  }
 }

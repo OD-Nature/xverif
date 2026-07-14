@@ -52,5 +52,9 @@ def test_action_schema_coverage_is_complete() -> None:
     ) == 0
 
 
+def test_request_schemas_are_agent_discoverable() -> None:
+    assert _module("audit_agent_schema_quality").main() == 0
+
+
 def test_generated_action_metadata_is_synced() -> None:
     assert _module("sync_action_metadata").main(["--check"]) == 0

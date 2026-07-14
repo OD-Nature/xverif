@@ -32,11 +32,13 @@
       "properties": {
         "config_path": {
           "type": "string",
-          "description": "输入配置文件路径。"
+          "description": "输入配置文件路径。",
+          "x-description-zh": "输入配置文件路径。"
         },
         "name": {
           "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。"
+          "description": "已保存配置、游标、列表或接口配置名称。",
+          "x-description-zh": "已保存配置、游标、列表或接口配置名称。"
         },
         "time_unit": {
           "type": "string",
@@ -48,7 +50,9 @@
             "us",
             "ms",
             "s"
-          ]
+          ],
+          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
+          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
         }
       },
       "additionalProperties": false,
@@ -81,5 +85,17 @@
   "x-how_it_works": "request args 只传 name 和可选 config_path/time_unit；clock/edge/sample_point/signals/reset 来自配置文件内容。",
   "x-when_to_use": "复用常见事件查询上下文。",
   "x-arg_contract_notes": "required: name",
-  "x-description-zh": "保存事件查询配置。"
+  "x-description-zh": "保存事件查询配置。",
+  "x-agent": {
+    "use_when": [
+      "需要执行该 action 的 catalog 所述能力。"
+    ],
+    "do_not_use_when": [
+      "任务不属于该 action 的公开合同。"
+    ],
+    "alternatives": [],
+    "constraints": [
+      "required: name"
+    ]
+  }
 }

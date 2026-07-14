@@ -57,5 +57,17 @@
   "x-how_it_works": "读取 SessionManager 中的活动 session 元数据。",
   "x-when_to_use": "确认已有 session_id 和资源类型。",
   "x-arg_contract_notes": "none",
-  "x-description-zh": "列出当前 session。"
+  "x-description-zh": "列出当前 session。",
+  "x-agent": {
+    "use_when": [
+      "需要执行该 action 的 catalog 所述能力。"
+    ],
+    "do_not_use_when": [
+      "任务不属于该 action 的公开合同。"
+    ],
+    "alternatives": [],
+    "constraints": [
+      "none"
+    ]
+  }
 }

@@ -31,34 +31,47 @@
       "type": "object",
       "properties": {
         "context_lines": {
-          "type": "integer"
+          "type": "integer",
+          "description": "args.context_lines 的 action-specific 参数值。",
+          "x-description-zh": "args.context_lines 的 action-specific 参数值。"
         },
         "file": {
           "type": "string",
-          "description": "源码文件路径。"
+          "description": "源码文件路径。",
+          "x-description-zh": "源码文件路径。"
         },
         "line": {
           "type": "integer",
-          "description": "源码行号。"
+          "description": "源码行号。",
+          "x-description-zh": "源码行号。"
         },
         "output": {
           "type": "object",
           "properties": {
             "path": {
-              "type": "string"
+              "type": "string",
+              "description": "args.output.path 的 action-specific 参数值。",
+              "x-description-zh": "args.output.path 的 action-specific 参数值。"
             },
             "file_format": {
-              "type": "string"
+              "type": "string",
+              "description": "args.output.file_format 的 action-specific 参数值。",
+              "x-description-zh": "args.output.file_format 的 action-specific 参数值。"
             },
             "verbose": {
-              "type": "boolean"
+              "type": "boolean",
+              "description": "args.output.verbose 的 action-specific 参数值。",
+              "x-description-zh": "args.output.verbose 的 action-specific 参数值。"
             }
           },
           "additionalProperties": false,
-          "description": "导出配置对象；路径统一使用 output.path。"
+          "description": "导出目标与显示控制；不同 action 对 path、file_format 和 verbose 的支持以本 action schema 为准。",
+          "x-description-zh": "导出目标与显示控制；不同 action 对 path、file_format 和 verbose 的支持以本 action schema 为准。"
         },
         "symbol": {
-          "type": "string"
+          "type": "string",
+          "description": "args.symbol 的 action-specific 参数值。",
+          "x-description-zh": "args.symbol 的 action-specific 参数值。"
         },
         "time_unit": {
           "type": "string",
@@ -70,7 +83,9 @@
             "us",
             "ms",
             "s"
-          ]
+          ],
+          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
+          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
         }
       },
       "additionalProperties": false,
@@ -104,5 +119,17 @@
   "x-how_it_works": "按 file/line 读取附近源码并尝试识别 enclosing 结构。",
   "x-when_to_use": "把查询结果锚定到可读源码位置。",
   "x-arg_contract_notes": "required: file, line",
-  "x-description-zh": "读取源码上下文。"
+  "x-description-zh": "读取源码上下文。",
+  "x-agent": {
+    "use_when": [
+      "需要执行该 action 的 catalog 所述能力。"
+    ],
+    "do_not_use_when": [
+      "任务不属于该 action 的公开合同。"
+    ],
+    "alternatives": [],
+    "constraints": [
+      "required: file, line"
+    ]
+  }
 }

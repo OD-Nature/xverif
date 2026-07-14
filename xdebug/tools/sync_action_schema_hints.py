@@ -11,6 +11,9 @@ import sys
 from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "specs"))
+from action_contracts import guidance_for
+
 
 XDEBUG_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = XDEBUG_ROOT.parent
@@ -148,9 +151,17 @@ def update_request_schema(schema: dict[str, Any], spec: dict[str, Any], hint: di
     for key in sorted(required_related_args(spec)):
         if key not in props:
             raise ValueError(f"{name}: request schema missing args.properties.{key}")
-        props[key]["description"] = PARAM_DESCRIPTIONS.get(
+        props[key].setdefault("description", PARAM_DESCRIPTIONS.get(
             key, f"{key} parameter for {name}."
-        )
+        ))
+        props[key].setdefault("x-description-zh", props[key]["description"])
+    guidance = guidance_for(name)
+    schema["x-agent"] = {
+        "use_when": guidance["use_when"],
+        "do_not_use_when": guidance["do_not_use_when"],
+        "alternatives": guidance["alternatives"],
+        "constraints": [hint.get("arg_contract_notes") or arg_contract_notes(spec)],
+    }
 
 
 def update_response_schema(schema: dict[str, Any], spec: dict[str, Any], hint: dict[str, str]) -> None:

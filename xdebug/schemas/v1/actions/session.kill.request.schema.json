@@ -42,7 +42,8 @@
       "properties": {
         "session_id": {
           "type": "string",
-          "description": "目标 xdebug session 标识。"
+          "description": "目标 xdebug session 标识。",
+          "x-description-zh": "目标 xdebug session 标识。"
         }
       },
       "additionalProperties": false,
@@ -73,5 +74,17 @@
   "x-how_it_works": "按 target.session_id 清理记录和关联资源。",
   "x-when_to_use": "处理异常残留 session。",
   "x-arg_contract_notes": "required: target.session_id",
-  "x-description-zh": "强制移除指定 session。"
+  "x-description-zh": "强制移除指定 session。",
+  "x-agent": {
+    "use_when": [
+      "需要执行该 action 的 catalog 所述能力。"
+    ],
+    "do_not_use_when": [
+      "任务不属于该 action 的公开合同。"
+    ],
+    "alternatives": [],
+    "constraints": [
+      "required: target.session_id"
+    ]
+  }
 }

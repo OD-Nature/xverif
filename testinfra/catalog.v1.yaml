@@ -233,6 +233,7 @@ suites:
         - xverif_mcp/tests/test_import_adapters.py
         - xverif_mcp/tests/test_session_capabilities.py
         - xverif_mcp/tests/test_session_errors.py
+        - xverif_mcp/tests/test_schema_projection.py
         - xverif_mcp/tests/test_shared_loop_layer.py
         - xverif_mcp/tests/test_xdebug_session_action_guard.py
     hermetic: true

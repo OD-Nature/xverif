@@ -36,7 +36,9 @@
             "wave",
             "design"
           ],
-          "default": "auto"
+          "default": "auto",
+          "description": "args.source 的 action-specific 参数值。",
+          "x-description-zh": "args.source 的 action-specific 参数值。"
         },
         "time_unit": {
           "type": "string",
@@ -48,7 +50,9 @@
             "us",
             "ms",
             "s"
-          ]
+          ],
+          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
+          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
         }
       },
       "additionalProperties": false,
@@ -79,5 +83,17 @@
   "x-how_it_works": "合并 FSDB 根和可用设计根信息。",
   "x-when_to_use": "判断 session 绑定的顶层和路径规范。",
   "x-arg_contract_notes": "none",
-  "x-description-zh": "发现 waveform/design 根。"
+  "x-description-zh": "发现 waveform/design 根。",
+  "x-agent": {
+    "use_when": [
+      "需要执行该 action 的 catalog 所述能力。"
+    ],
+    "do_not_use_when": [
+      "任务不属于该 action 的公开合同。"
+    ],
+    "alternatives": [],
+    "constraints": [
+      "none"
+    ]
+  }
 }

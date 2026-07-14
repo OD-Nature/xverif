@@ -36,20 +36,28 @@
             "scope",
             "signal"
           ],
-          "description": "只返回 scope、signal，或两者都返回。"
+          "description": "只返回 scope、signal，或两者都返回。",
+          "x-description-zh": "只返回 scope、signal，或两者都返回。"
         },
         "max_depth": {
-          "type": "integer"
+          "type": "integer",
+          "description": "args.max_depth 的 action-specific 参数值。",
+          "x-description-zh": "args.max_depth 的 action-specific 参数值。"
         },
         "name_pattern": {
-          "type": "string"
+          "type": "string",
+          "description": "args.name_pattern 的 action-specific 参数值。",
+          "x-description-zh": "args.name_pattern 的 action-specific 参数值。"
         },
         "path": {
           "type": "string",
-          "description": "Scope path to list. Empty string or '.' returns top-level scopes."
+          "description": "Scope path to list. Empty string or '.' returns top-level scopes.",
+          "x-description-zh": "Scope path to list. Empty string or '.' returns top-level scopes."
         },
         "recursive": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "args.recursive 的 action-specific 参数值。",
+          "x-description-zh": "args.recursive 的 action-specific 参数值。"
         },
         "time_unit": {
           "type": "string",
@@ -61,7 +69,9 @@
             "us",
             "ms",
             "s"
-          ]
+          ],
+          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
+          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
         }
       },
       "additionalProperties": false,
@@ -92,5 +102,17 @@
   "x-how_it_works": "从 waveform 数据库遍历 scope，按 path/recursive/max_depth 遍历或截断；无 scope 时列根层级。",
   "x-when_to_use": "帮助定位真实层次和信号路径。",
   "x-arg_contract_notes": "none",
-  "x-description-zh": "列出 FSDB scope 或信号。"
+  "x-description-zh": "列出 FSDB scope 或信号。",
+  "x-agent": {
+    "use_when": [
+      "需要执行该 action 的 catalog 所述能力。"
+    ],
+    "do_not_use_when": [
+      "任务不属于该 action 的公开合同。"
+    ],
+    "alternatives": [],
+    "constraints": [
+      "none"
+    ]
+  }
 }

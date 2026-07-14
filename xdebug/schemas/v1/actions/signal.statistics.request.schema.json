@@ -32,30 +32,40 @@
       "properties": {
         "clock": {
           "type": "string",
-          "description": "采样、统计或协议检查使用的 clock 信号路径。"
+          "description": "采样、统计或协议检查使用的 clock 信号路径。",
+          "x-description-zh": "采样、统计或协议检查使用的 clock 信号路径。"
         },
         "conditions": {
           "type": "array",
           "items": {
-            "type": "object"
+            "type": "object",
+            "description": "args.conditions[] 的组合参数对象。",
+            "x-description-zh": "args.conditions[] 的组合参数对象。"
           },
-          "description": "需要验证的条件列表。"
+          "description": "需要验证的条件列表。",
+          "x-description-zh": "需要验证的条件列表。"
         },
         "edge": {
           "type": "string",
-          "description": "clock sampling 使用的边沿：posedge、negedge 或 dual。"
+          "description": "clock sampling 使用的边沿：posedge、negedge 或 dual。",
+          "x-description-zh": "clock sampling 使用的边沿：posedge、negedge 或 dual。"
         },
         "line_limit": {
           "type": "integer",
           "minimum": 1,
-          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
+          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。",
+          "x-description-zh": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
         },
         "max_samples": {
           "type": "integer",
-          "minimum": 1
+          "minimum": 1,
+          "description": "args.max_samples 的 action-specific 参数值。",
+          "x-description-zh": "args.max_samples 的 action-specific 参数值。"
         },
         "mode": {
-          "type": "string"
+          "type": "string",
+          "description": "本 action 的处理或返回模式；合法值、默认值和与其它参数的关系由 action-specific 合同定义。",
+          "x-description-zh": "本 action 的处理或返回模式；合法值、默认值和与其它参数的关系由 action-specific 合同定义。"
         },
         "sample_point": {
           "type": "string",
@@ -63,41 +73,55 @@
             "before",
             "after"
           ],
-          "description": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。"
+          "description": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。",
+          "x-description-zh": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。"
         },
         "signal": {
           "type": "string",
-          "description": "目标信号路径。"
+          "description": "目标信号路径。",
+          "x-description-zh": "目标信号路径。"
         },
         "signals": {
           "oneOf": [
             {
               "type": "array",
               "items": {
-                "type": "string"
-              }
+                "type": "string",
+                "description": "args.signals[] 的 action-specific 参数值。",
+                "x-description-zh": "args.signals[] 的 action-specific 参数值。"
+              },
+              "description": "args.signals 的有序项目列表。",
+              "x-description-zh": "args.signals 的有序项目列表。"
             },
             {
               "type": "object",
               "additionalProperties": {
                 "type": "string"
-              }
+              },
+              "description": "args.signals 的组合参数对象。",
+              "x-description-zh": "args.signals 的组合参数对象。"
             }
           ],
-          "description": "信号列表，或 alias 到信号路径的映射。"
+          "description": "信号列表，或 alias 到信号路径的映射。",
+          "x-description-zh": "信号列表，或 alias 到信号路径的映射。"
         },
         "time_range": {
           "type": "object",
           "properties": {
             "begin": {
-              "type": "string"
+              "type": "string",
+              "description": "args.time_range.begin 的 action-specific 参数值。",
+              "x-description-zh": "args.time_range.begin 的 action-specific 参数值。"
             },
             "end": {
-              "type": "string"
+              "type": "string",
+              "description": "args.time_range.end 的 action-specific 参数值。",
+              "x-description-zh": "args.time_range.end 的 action-specific 参数值。"
             }
           },
           "additionalProperties": false,
-          "description": "查询或分析的时间窗口。"
+          "description": "分析时间窗口；begin/end 为闭区间端点，可分别省略以使用可用波形边界。",
+          "x-description-zh": "分析时间窗口；begin/end 为闭区间端点，可分别省略以使用可用波形边界。"
         },
         "time_unit": {
           "type": "string",
@@ -109,7 +133,9 @@
             "us",
             "ms",
             "s"
-          ]
+          ],
+          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
+          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
         }
       },
       "additionalProperties": false,
@@ -142,5 +168,17 @@
   "x-how_it_works": "无 clock 时统计原始变化；有 clock 时按边沿采样，统计 known/high/low/unknown。",
   "x-when_to_use": "量化活跃度、占空和采样质量。",
   "x-arg_contract_notes": "required: signal",
-  "x-description-zh": "统计信号活动。"
+  "x-description-zh": "统计信号活动。",
+  "x-agent": {
+    "use_when": [
+      "需要执行该 action 的 catalog 所述能力。"
+    ],
+    "do_not_use_when": [
+      "任务不属于该 action 的公开合同。"
+    ],
+    "alternatives": [],
+    "constraints": [
+      "required: signal"
+    ]
+  }
 }

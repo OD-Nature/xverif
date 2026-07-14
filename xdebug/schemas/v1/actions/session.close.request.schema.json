@@ -42,7 +42,8 @@
       "properties": {
         "session_id": {
           "type": "string",
-          "description": "目标 xdebug session 标识。"
+          "description": "目标 xdebug session 标识。",
+          "x-description-zh": "目标 xdebug session 标识。"
         }
       },
       "additionalProperties": false,
@@ -73,5 +74,17 @@
   "x-how_it_works": "释放该 session 的 runtime 资源并从管理器移除。",
   "x-when_to_use": "结束不再使用的调试上下文。",
   "x-arg_contract_notes": "required: target.session_id",
-  "x-description-zh": "关闭指定 session。"
+  "x-description-zh": "关闭指定 session。",
+  "x-agent": {
+    "use_when": [
+      "需要执行该 action 的 catalog 所述能力。"
+    ],
+    "do_not_use_when": [
+      "任务不属于该 action 的公开合同。"
+    ],
+    "alternatives": [],
+    "constraints": [
+      "required: target.session_id"
+    ]
+  }
 }

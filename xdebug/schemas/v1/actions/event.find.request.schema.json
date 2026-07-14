@@ -31,34 +31,64 @@
       "type": "object",
       "properties": {
         "aggregate": {
-          "type": "object"
+          "type": "object",
+          "description": "事件聚合合同。未提供时返回匹配事件；与 events/group_by 的组合以 constraints 为准。",
+          "x-description-zh": "args.aggregate 的组合参数对象。",
+          "properties": {
+            "operation": {
+              "type": "string",
+              "enum": [
+                "count"
+              ],
+              "description": "args.aggregate.operation 的 action-specific 参数值。",
+              "x-description-zh": "args.aggregate.operation 的 action-specific 参数值。"
+            }
+          },
+          "additionalProperties": false
         },
         "clock": {
           "type": "string",
-          "description": "采样、统计或协议检查使用的 clock 信号路径。"
+          "description": "采样、统计或协议检查使用的 clock 信号路径。",
+          "x-description-zh": "采样、统计或协议检查使用的 clock 信号路径。"
         },
         "edge": {
           "type": "string",
-          "description": "clock sampling 使用的边沿：posedge、negedge 或 dual。"
+          "description": "clock sampling 使用的边沿：posedge、negedge 或 dual。",
+          "x-description-zh": "clock sampling 使用的边沿：posedge、negedge 或 dual。"
         },
         "events": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "args.events 的 action-specific 参数值。",
+          "x-description-zh": "args.events 的 action-specific 参数值。"
         },
         "expr": {
           "type": "string",
-          "description": "需要求值或匹配的布尔表达式。"
+          "description": "需要求值或匹配的布尔表达式。",
+          "x-description-zh": "需要求值或匹配的布尔表达式。"
         },
         "group_by": {
-          "type": "array"
+          "type": "array",
+          "description": "按 signals alias 分组的字段名列表。每项必须引用 args.signals 中的 alias。",
+          "x-description-zh": "args.group_by 的有序项目列表。",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "args.group_by[] 的 action-specific 参数值。",
+            "x-description-zh": "args.group_by[] 的 action-specific 参数值。"
+          },
+          "uniqueItems": true
         },
         "line_limit": {
           "type": "integer",
           "minimum": 1,
-          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
+          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。",
+          "x-description-zh": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
         },
         "max_samples": {
           "type": "integer",
-          "minimum": 1
+          "minimum": 1,
+          "description": "允许检查的 clock sample 数量上限；耗尽时分析不完整，不是返回行数限制。",
+          "x-description-zh": "args.max_samples 的 action-specific 参数值。"
         },
         "mode": {
           "type": "string",
@@ -67,14 +97,20 @@
             "last",
             "all"
           ],
-          "default": "first"
+          "default": "first",
+          "description": "first/last 返回时间顺序的首/末命中；all 返回多个命中。line_limit 仅能与 all 同用。",
+          "x-description-zh": "first/last 返回时间顺序的首/末命中；all 返回多个命中。line_limit 仅能与 all 同用。"
         },
         "name": {
           "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。"
+          "description": "已保存配置、游标、列表或接口配置名称。",
+          "x-description-zh": "已保存配置、游标、列表或接口配置名称。"
         },
         "rst_n": {
-          "type": "string"
+          "type": "string",
+          "description": "低有效 reset 信号路径或 alias；reset asserted 的 sample 不参与事件匹配。",
+          "x-description-zh": "args.rst_n 的 action-specific 参数值。",
+          "minLength": 1
         },
         "sample_point": {
           "type": "string",
@@ -82,37 +118,50 @@
             "before",
             "after"
           ],
-          "description": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。"
+          "description": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。",
+          "x-description-zh": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。"
         },
         "signals": {
           "oneOf": [
             {
               "type": "array",
               "items": {
-                "type": "string"
-              }
+                "type": "string",
+                "description": "args.signals[] 的 action-specific 参数值。",
+                "x-description-zh": "args.signals[] 的 action-specific 参数值。"
+              },
+              "description": "args.signals 的有序项目列表。",
+              "x-description-zh": "args.signals 的有序项目列表。"
             },
             {
               "type": "object",
               "additionalProperties": {
                 "type": "string"
-              }
+              },
+              "description": "args.signals 的组合参数对象。",
+              "x-description-zh": "args.signals 的组合参数对象。"
             }
           ],
-          "description": "信号列表，或 alias 到信号路径的映射。"
+          "description": "信号列表，或 alias 到信号路径的映射。",
+          "x-description-zh": "信号列表，或 alias 到信号路径的映射。"
         },
         "time_range": {
           "type": "object",
           "properties": {
             "begin": {
-              "type": "string"
+              "type": "string",
+              "description": "args.time_range.begin 的 action-specific 参数值。",
+              "x-description-zh": "args.time_range.begin 的 action-specific 参数值。"
             },
             "end": {
-              "type": "string"
+              "type": "string",
+              "description": "args.time_range.end 的 action-specific 参数值。",
+              "x-description-zh": "args.time_range.end 的 action-specific 参数值。"
             }
           },
           "additionalProperties": false,
-          "description": "查询或分析的时间窗口。"
+          "description": "分析时间窗口；begin/end 为闭区间端点，可分别省略以使用可用波形边界。",
+          "x-description-zh": "分析时间窗口；begin/end 为闭区间端点，可分别省略以使用可用波形边界。"
         },
         "time_unit": {
           "type": "string",
@@ -124,7 +173,9 @@
             "us",
             "ms",
             "s"
-          ]
+          ],
+          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
+          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
         }
       },
       "additionalProperties": false,
@@ -193,5 +244,22 @@
   "x-how_it_works": "用 name 配置或 inline clock/signals 构建 EventQuery，按 clock sampling 模式扫描表达式命中；表达式支持布尔组合、相等比较和大小比较。",
   "x-when_to_use": "快速找到协议条件发生的时间。",
   "x-arg_contract_notes": "required: expr; also one of: name / clock + signals",
-  "x-description-zh": "查找满足表达式的事件样例。"
+  "x-description-zh": "查找满足表达式的事件样例。",
+  "x-agent": {
+    "use_when": [
+      "需要按 clock edge 查找满足表达式的采样事件。"
+    ],
+    "do_not_use_when": [
+      "需要原始 value-change timeline 或标准 AXI/APB transaction。"
+    ],
+    "alternatives": [
+      {
+        "action": "signal.changes",
+        "when": "需要原始跳变。"
+      }
+    ],
+    "constraints": [
+      "required: expr; also one of: name / clock + signals"
+    ]
+  }
 }

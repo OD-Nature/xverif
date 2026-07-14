@@ -36,127 +36,189 @@
           "properties": {
             "clock": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "args.config.clock 的 action-specific 参数值。",
+              "x-description-zh": "args.config.clock 的 action-specific 参数值。"
             },
             "rst_n": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "args.config.rst_n 的 action-specific 参数值。",
+              "x-description-zh": "args.config.rst_n 的 action-specific 参数值。"
             },
             "awvalid": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "args.config.awvalid 的 action-specific 参数值。",
+              "x-description-zh": "args.config.awvalid 的 action-specific 参数值。"
             },
             "awready": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "args.config.awready 的 action-specific 参数值。",
+              "x-description-zh": "args.config.awready 的 action-specific 参数值。"
             },
             "awaddr": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "args.config.awaddr 的 action-specific 参数值。",
+              "x-description-zh": "args.config.awaddr 的 action-specific 参数值。"
             },
             "awid": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "args.config.awid 的 action-specific 参数值。",
+              "x-description-zh": "args.config.awid 的 action-specific 参数值。"
             },
             "awlen": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "args.config.awlen 的 action-specific 参数值。",
+              "x-description-zh": "args.config.awlen 的 action-specific 参数值。"
             },
             "awsize": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "args.config.awsize 的 action-specific 参数值。",
+              "x-description-zh": "args.config.awsize 的 action-specific 参数值。"
             },
             "awburst": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "args.config.awburst 的 action-specific 参数值。",
+              "x-description-zh": "args.config.awburst 的 action-specific 参数值。"
             },
             "wvalid": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "args.config.wvalid 的 action-specific 参数值。",
+              "x-description-zh": "args.config.wvalid 的 action-specific 参数值。"
             },
             "wready": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "args.config.wready 的 action-specific 参数值。",
+              "x-description-zh": "args.config.wready 的 action-specific 参数值。"
             },
             "wdata": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "args.config.wdata 的 action-specific 参数值。",
+              "x-description-zh": "args.config.wdata 的 action-specific 参数值。"
             },
             "wstrb": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "args.config.wstrb 的 action-specific 参数值。",
+              "x-description-zh": "args.config.wstrb 的 action-specific 参数值。"
             },
             "wlast": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "args.config.wlast 的 action-specific 参数值。",
+              "x-description-zh": "args.config.wlast 的 action-specific 参数值。"
             },
             "bvalid": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "args.config.bvalid 的 action-specific 参数值。",
+              "x-description-zh": "args.config.bvalid 的 action-specific 参数值。"
             },
             "bready": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "args.config.bready 的 action-specific 参数值。",
+              "x-description-zh": "args.config.bready 的 action-specific 参数值。"
             },
             "bid": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "args.config.bid 的 action-specific 参数值。",
+              "x-description-zh": "args.config.bid 的 action-specific 参数值。"
             },
             "bresp": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "args.config.bresp 的 action-specific 参数值。",
+              "x-description-zh": "args.config.bresp 的 action-specific 参数值。"
             },
             "arvalid": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "args.config.arvalid 的 action-specific 参数值。",
+              "x-description-zh": "args.config.arvalid 的 action-specific 参数值。"
             },
             "arready": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "args.config.arready 的 action-specific 参数值。",
+              "x-description-zh": "args.config.arready 的 action-specific 参数值。"
             },
             "araddr": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "args.config.araddr 的 action-specific 参数值。",
+              "x-description-zh": "args.config.araddr 的 action-specific 参数值。"
             },
             "arid": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "args.config.arid 的 action-specific 参数值。",
+              "x-description-zh": "args.config.arid 的 action-specific 参数值。"
             },
             "arlen": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "args.config.arlen 的 action-specific 参数值。",
+              "x-description-zh": "args.config.arlen 的 action-specific 参数值。"
             },
             "arsize": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "args.config.arsize 的 action-specific 参数值。",
+              "x-description-zh": "args.config.arsize 的 action-specific 参数值。"
             },
             "arburst": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "args.config.arburst 的 action-specific 参数值。",
+              "x-description-zh": "args.config.arburst 的 action-specific 参数值。"
             },
             "rvalid": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "args.config.rvalid 的 action-specific 参数值。",
+              "x-description-zh": "args.config.rvalid 的 action-specific 参数值。"
             },
             "rready": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "args.config.rready 的 action-specific 参数值。",
+              "x-description-zh": "args.config.rready 的 action-specific 参数值。"
             },
             "rdata": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "args.config.rdata 的 action-specific 参数值。",
+              "x-description-zh": "args.config.rdata 的 action-specific 参数值。"
             },
             "rid": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "args.config.rid 的 action-specific 参数值。",
+              "x-description-zh": "args.config.rid 的 action-specific 参数值。"
             },
             "rresp": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "args.config.rresp 的 action-specific 参数值。",
+              "x-description-zh": "args.config.rresp 的 action-specific 参数值。"
             },
             "rlast": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "args.config.rlast 的 action-specific 参数值。",
+              "x-description-zh": "args.config.rlast 的 action-specific 参数值。"
             },
             "edge": {
               "type": "string",
@@ -164,14 +226,18 @@
                 "posedge",
                 "negedge",
                 "dual"
-              ]
+              ],
+              "description": "args.config.edge 的 action-specific 参数值。",
+              "x-description-zh": "args.config.edge 的 action-specific 参数值。"
             },
             "sample_point": {
               "type": "string",
               "enum": [
                 "before",
                 "after"
-              ]
+              ],
+              "description": "args.config.sample_point 的 action-specific 参数值。",
+              "x-description-zh": "args.config.sample_point 的 action-specific 参数值。"
             }
           },
           "required": [
@@ -207,15 +273,18 @@
             "rresp",
             "rlast"
           ],
-          "additionalProperties": false
+          "additionalProperties": false,
+          "x-description-zh": "内联配置对象。"
         },
         "config_path": {
           "type": "string",
-          "description": "输入配置文件路径。"
+          "description": "输入配置文件路径。",
+          "x-description-zh": "输入配置文件路径。"
         },
         "name": {
           "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。"
+          "description": "已保存配置、游标、列表或接口配置名称。",
+          "x-description-zh": "已保存配置、游标、列表或接口配置名称。"
         },
         "time_unit": {
           "type": "string",
@@ -227,7 +296,9 @@
             "us",
             "ms",
             "s"
-          ]
+          ],
+          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
+          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
         }
       },
       "additionalProperties": false,
@@ -272,5 +343,17 @@
   "x-how_it_works": "保存 AXI channel 信号映射。",
   "x-when_to_use": "定义后续 AXI 查询对象。",
   "x-arg_contract_notes": "required: name; also one of: config / config_path",
-  "x-description-zh": "加载 AXI 配置。"
+  "x-description-zh": "加载 AXI 配置。",
+  "x-agent": {
+    "use_when": [
+      "需要执行该 action 的 catalog 所述能力。"
+    ],
+    "do_not_use_when": [
+      "任务不属于该 action 的公开合同。"
+    ],
+    "alternatives": [],
+    "constraints": [
+      "required: name; also one of: config / config_path"
+    ]
+  }
 }

@@ -32,20 +32,26 @@
       "properties": {
         "name": {
           "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。"
+          "description": "已保存配置、游标、列表或接口配置名称。",
+          "x-description-zh": "已保存配置、游标、列表或接口配置名称。"
         },
         "time_range": {
           "type": "object",
           "properties": {
             "begin": {
-              "type": "string"
+              "type": "string",
+              "description": "args.time_range.begin 的 action-specific 参数值。",
+              "x-description-zh": "args.time_range.begin 的 action-specific 参数值。"
             },
             "end": {
-              "type": "string"
+              "type": "string",
+              "description": "args.time_range.end 的 action-specific 参数值。",
+              "x-description-zh": "args.time_range.end 的 action-specific 参数值。"
             }
           },
           "additionalProperties": false,
-          "description": "查询或分析的时间窗口。"
+          "description": "分析时间窗口；begin/end 为闭区间端点，可分别省略以使用可用波形边界。",
+          "x-description-zh": "分析时间窗口；begin/end 为闭区间端点，可分别省略以使用可用波形边界。"
         },
         "time_unit": {
           "type": "string",
@@ -57,7 +63,9 @@
             "us",
             "ms",
             "s"
-          ]
+          ],
+          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
+          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
         },
         "value_format": {
           "type": "string",
@@ -66,7 +74,8 @@
             "bin",
             "dec"
           ],
-          "description": "仅控制响应中信号值的显示格式；不影响采样、时间或导出文件格式。"
+          "description": "仅控制响应中信号值的显示格式；不影响采样、时间或导出文件格式。",
+          "x-description-zh": "仅控制响应中信号值的显示格式；不影响采样、时间或导出文件格式。"
         }
       },
       "additionalProperties": false,
@@ -100,5 +109,17 @@
   "x-how_it_works": "解析 time_range.begin/end 后扫描 list 内信号变化。",
   "x-when_to_use": "定位一组信号何时开始不同。",
   "x-arg_contract_notes": "required: name, time_range",
-  "x-description-zh": "查找 list 在时间窗口内的首次差异。"
+  "x-description-zh": "查找 list 在时间窗口内的首次差异。",
+  "x-agent": {
+    "use_when": [
+      "需要执行该 action 的 catalog 所述能力。"
+    ],
+    "do_not_use_when": [
+      "任务不属于该 action 的公开合同。"
+    ],
+    "alternatives": [],
+    "constraints": [
+      "required: name, time_range"
+    ]
+  }
 }

@@ -83,10 +83,14 @@
                         "minLength": 1,
                         "description": "Known integer, hexadecimal, or SystemVerilog literal up to 64 bits.",
                         "x-description-zh": "不含 X/Z、宽度不超过 64 bit 的整数、十六进制或 SystemVerilog literal。"
-                      }
+                      },
+                      "description": "args.filter.address.values 的有序项目列表。",
+                      "x-description-zh": "args.filter.address.values 的有序项目列表。"
                     }
                   },
-                  "additionalProperties": false
+                  "additionalProperties": false,
+                  "description": "args.filter.address 的组合参数对象。",
+                  "x-description-zh": "args.filter.address 的组合参数对象。"
                 },
                 {
                   "type": "object",
@@ -112,7 +116,9 @@
                       "x-description-zh": "不含 X/Z、宽度不超过 64 bit 的整数、十六进制或 SystemVerilog literal。"
                     }
                   },
-                  "additionalProperties": false
+                  "additionalProperties": false,
+                  "description": "args.filter.address 的组合参数对象。",
+                  "x-description-zh": "args.filter.address 的组合参数对象。"
                 },
                 {
                   "type": "object",
@@ -138,7 +144,9 @@
                       "x-description-zh": "不含 X/Z、宽度不超过 64 bit 的整数、十六进制或 SystemVerilog literal。"
                     }
                   },
-                  "additionalProperties": false
+                  "additionalProperties": false,
+                  "description": "args.filter.address 的组合参数对象。",
+                  "x-description-zh": "args.filter.address 的组合参数对象。"
                 }
               ],
               "description": "Exactly one address filtering mode: exact queue, inclusive range, or value/mask.",
@@ -151,7 +159,8 @@
         },
         "name": {
           "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。"
+          "description": "已保存配置、游标、列表或接口配置名称。",
+          "x-description-zh": "已保存配置、游标、列表或接口配置名称。"
         },
         "time_unit": {
           "type": "string",
@@ -163,7 +172,9 @@
             "us",
             "ms",
             "s"
-          ]
+          ],
+          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
+          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
         }
       },
       "additionalProperties": false
@@ -200,5 +211,17 @@
   "x-purpose": "统计已完成 APB 事务。",
   "x-how_it_works": "复用 canonical APB 缓存，按 direction 与一种 address 模式过滤并分别统计 read/write。",
   "x-when_to_use": "按方向或地址核对 APB 访问次数。",
-  "x-arg_contract_notes": "required: name; filter direction/address with AND; address mode is exact/range/mask"
+  "x-arg_contract_notes": "required: name; filter direction/address with AND; address mode is exact/range/mask",
+  "x-agent": {
+    "use_when": [
+      "需要执行该 action 的 catalog 所述能力。"
+    ],
+    "do_not_use_when": [
+      "任务不属于该 action 的公开合同。"
+    ],
+    "alternatives": [],
+    "constraints": [
+      "required: name; filter direction/address with AND; address mode is exact/range/mask"
+    ]
+  }
 }

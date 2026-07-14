@@ -44,8 +44,12 @@
                   "waveform",
                   "combined",
                   "session"
-                ]
-              }
+                ],
+                "description": "args.filter.category[] 的 action-specific 参数值。",
+                "x-description-zh": "args.filter.category[] 的 action-specific 参数值。"
+              },
+              "description": "args.filter.category 的有序项目列表。",
+              "x-description-zh": "args.filter.category 的有序项目列表。"
             },
             "requires": {
               "type": "array",
@@ -60,8 +64,12 @@
                   "combined",
                   "any",
                   "session"
-                ]
-              }
+                ],
+                "description": "args.filter.requires[] 的 action-specific 参数值。",
+                "x-description-zh": "args.filter.requires[] 的 action-specific 参数值。"
+              },
+              "description": "args.filter.requires 的有序项目列表。",
+              "x-description-zh": "args.filter.requires 的有序项目列表。"
             },
             "purposes": {
               "type": "array",
@@ -81,31 +89,46 @@
                   "manage",
                   "transform",
                   "orchestrate"
-                ]
-              }
+                ],
+                "description": "args.filter.purposes[] 的 action-specific 参数值。",
+                "x-description-zh": "args.filter.purposes[] 的 action-specific 参数值。"
+              },
+              "description": "args.filter.purposes 的有序项目列表。",
+              "x-description-zh": "args.filter.purposes 的有序项目列表。"
             },
             "keyword": {
               "type": "string",
-              "pattern": ".*\\S.*"
+              "pattern": ".*\\S.*",
+              "description": "args.filter.keyword 的 action-specific 参数值。",
+              "x-description-zh": "args.filter.keyword 的 action-specific 参数值。"
             }
           },
-          "additionalProperties": false
+          "additionalProperties": false,
+          "description": "args.filter 的组合参数对象。",
+          "x-description-zh": "args.filter 的组合参数对象。"
         },
         "output": {
           "type": "object",
           "properties": {
             "path": {
-              "type": "string"
+              "type": "string",
+              "description": "args.output.path 的 action-specific 参数值。",
+              "x-description-zh": "args.output.path 的 action-specific 参数值。"
             },
             "file_format": {
-              "type": "string"
+              "type": "string",
+              "description": "args.output.file_format 的 action-specific 参数值。",
+              "x-description-zh": "args.output.file_format 的 action-specific 参数值。"
             },
             "verbose": {
-              "type": "boolean"
+              "type": "boolean",
+              "description": "args.output.verbose 的 action-specific 参数值。",
+              "x-description-zh": "args.output.verbose 的 action-specific 参数值。"
             }
           },
           "additionalProperties": false,
-          "description": "导出配置对象；路径统一使用 output.path。"
+          "description": "导出目标与显示控制；不同 action 对 path、file_format 和 verbose 的支持以本 action schema 为准。",
+          "x-description-zh": "导出目标与显示控制；不同 action 对 path、file_format 和 verbose 的支持以本 action schema 为准。"
         }
       },
       "additionalProperties": false,
@@ -136,5 +159,17 @@
   "x-how_it_works": "默认返回 compact action names；args.output.verbose=true 时返回 descriptors，并同时返回 removed/modes。",
   "x-when_to_use": "让 agent 在调用前发现真实可用能力。",
   "x-arg_contract_notes": "no required args",
-  "x-description-zh": "列出当前运行时公开 action catalog。"
+  "x-description-zh": "列出当前运行时公开 action catalog。",
+  "x-agent": {
+    "use_when": [
+      "需要执行该 action 的 catalog 所述能力。"
+    ],
+    "do_not_use_when": [
+      "任务不属于该 action 的公开合同。"
+    ],
+    "alternatives": [],
+    "constraints": [
+      "no required args"
+    ]
+  }
 }

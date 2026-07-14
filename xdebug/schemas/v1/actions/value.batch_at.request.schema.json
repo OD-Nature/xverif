@@ -32,11 +32,13 @@
       "properties": {
         "clock": {
           "type": "string",
-          "description": "采样、统计或协议检查使用的 clock 信号路径。"
+          "description": "采样、统计或协议检查使用的 clock 信号路径。",
+          "x-description-zh": "采样、统计或协议检查使用的 clock 信号路径。"
         },
         "edge": {
           "type": "string",
-          "description": "clock sampling 使用的边沿：posedge、negedge 或 dual。"
+          "description": "clock sampling 使用的边沿：posedge、negedge 或 dual。",
+          "x-description-zh": "clock sampling 使用的边沿：posedge、negedge 或 dual。"
         },
         "format": {
           "type": "string",
@@ -54,7 +56,9 @@
             "tsv",
             "csv",
             "u64bin"
-          ]
+          ],
+          "description": "args.format 的 action-specific 参数值。",
+          "x-description-zh": "args.format 的 action-specific 参数值。"
         },
         "sample_point": {
           "type": "string",
@@ -62,21 +66,28 @@
             "before",
             "after"
           ],
-          "description": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。"
+          "description": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。",
+          "x-description-zh": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。"
         },
         "signals": {
           "type": "array",
           "items": {
-            "type": "string"
+            "type": "string",
+            "description": "args.signals[] 的 action-specific 参数值。",
+            "x-description-zh": "args.signals[] 的 action-specific 参数值。"
           },
-          "description": "信号列表，或 alias 到信号路径的映射。"
+          "description": "信号列表，或 alias 到信号路径的映射。",
+          "x-description-zh": "信号列表，或 alias 到信号路径的映射。"
         },
         "slice_hint": {
-          "type": "object"
+          "type": "object",
+          "description": "args.slice_hint 的组合参数对象。",
+          "x-description-zh": "args.slice_hint 的组合参数对象。"
         },
         "time": {
           "type": "string",
-          "description": "查询或验证的目标时间点。"
+          "description": "查询或验证的目标时间点。",
+          "x-description-zh": "查询或验证的目标时间点。"
         },
         "time_unit": {
           "type": "string",
@@ -88,7 +99,9 @@
             "us",
             "ms",
             "s"
-          ]
+          ],
+          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
+          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
         },
         "value_format": {
           "type": "string",
@@ -97,7 +110,8 @@
             "bin",
             "dec"
           ],
-          "description": "仅控制响应中信号值的显示格式；不影响采样、时间或导出文件格式。"
+          "description": "仅控制响应中信号值的显示格式；不影响采样、时间或导出文件格式。",
+          "x-description-zh": "仅控制响应中信号值的显示格式；不影响采样、时间或导出文件格式。"
         }
       },
       "additionalProperties": false,
@@ -132,5 +146,17 @@
   "x-how_it_works": "对 signals 列表按同一 clock/time 执行 FSDB 读取。",
   "x-when_to_use": "减少多信号同一时刻检查的开销。",
   "x-arg_contract_notes": "required: signals, time, clock",
-  "x-description-zh": "批量读取多个信号值。"
+  "x-description-zh": "批量读取多个信号值。",
+  "x-agent": {
+    "use_when": [
+      "需要执行该 action 的 catalog 所述能力。"
+    ],
+    "do_not_use_when": [
+      "任务不属于该 action 的公开合同。"
+    ],
+    "alternatives": [],
+    "constraints": [
+      "required: signals, time, clock"
+    ]
+  }
 }

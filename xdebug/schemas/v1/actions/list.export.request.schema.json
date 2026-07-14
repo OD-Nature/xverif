@@ -33,44 +33,57 @@
         "line_limit": {
           "type": "integer",
           "minimum": 1,
-          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
+          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。",
+          "x-description-zh": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
         },
         "name": {
           "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。"
+          "description": "已保存配置、游标、列表或接口配置名称。",
+          "x-description-zh": "已保存配置、游标、列表或接口配置名称。"
         },
         "output": {
           "type": "object",
           "properties": {
             "path": {
-              "type": "string"
+              "type": "string",
+              "description": "args.output.path 的 action-specific 参数值。",
+              "x-description-zh": "args.output.path 的 action-specific 参数值。"
             },
             "file_format": {
               "type": "string",
               "enum": [
                 "u64bin"
               ],
-              "description": "list.export file format; response manifest uses versioned format u64bin.v1."
+              "description": "list.export file format; response manifest uses versioned format u64bin.v1.",
+              "x-description-zh": "list.export file format; response manifest uses versioned format u64bin.v1."
             },
             "verbose": {
-              "type": "boolean"
+              "type": "boolean",
+              "description": "args.output.verbose 的 action-specific 参数值。",
+              "x-description-zh": "args.output.verbose 的 action-specific 参数值。"
             }
           },
           "additionalProperties": false,
-          "description": "导出配置对象；路径统一使用 output.path。"
+          "description": "导出目标与显示控制；不同 action 对 path、file_format 和 verbose 的支持以本 action schema 为准。",
+          "x-description-zh": "导出目标与显示控制；不同 action 对 path、file_format 和 verbose 的支持以本 action schema 为准。"
         },
         "time_range": {
           "type": "object",
           "properties": {
             "begin": {
-              "type": "string"
+              "type": "string",
+              "description": "args.time_range.begin 的 action-specific 参数值。",
+              "x-description-zh": "args.time_range.begin 的 action-specific 参数值。"
             },
             "end": {
-              "type": "string"
+              "type": "string",
+              "description": "args.time_range.end 的 action-specific 参数值。",
+              "x-description-zh": "args.time_range.end 的 action-specific 参数值。"
             }
           },
           "additionalProperties": false,
-          "description": "查询或分析的时间窗口。"
+          "description": "分析时间窗口；begin/end 为闭区间端点，可分别省略以使用可用波形边界。",
+          "x-description-zh": "分析时间窗口；begin/end 为闭区间端点，可分别省略以使用可用波形边界。"
         },
         "time_unit": {
           "type": "string",
@@ -82,7 +95,9 @@
             "us",
             "ms",
             "s"
-          ]
+          ],
+          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
+          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
         }
       },
       "additionalProperties": false,
@@ -144,5 +159,17 @@
   "x-how_it_works": "读取 list 信号并写出 u64bin 波形表；manifest format 为 u64bin.v1。",
   "x-when_to_use": "把窗口数据交给外部分析。",
   "x-arg_contract_notes": "required: name; format: u64bin only",
-  "x-description-zh": "导出 list 数据。"
+  "x-description-zh": "导出 list 数据。",
+  "x-agent": {
+    "use_when": [
+      "需要执行该 action 的 catalog 所述能力。"
+    ],
+    "do_not_use_when": [
+      "任务不属于该 action 的公开合同。"
+    ],
+    "alternatives": [],
+    "constraints": [
+      "required: name; format: u64bin only"
+    ]
+  }
 }

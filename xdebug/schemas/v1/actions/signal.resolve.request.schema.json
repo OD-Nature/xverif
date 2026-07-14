@@ -32,7 +32,8 @@
       "properties": {
         "signal": {
           "type": "string",
-          "description": "目标信号路径。"
+          "description": "目标信号路径。",
+          "x-description-zh": "目标信号路径。"
         },
         "time_unit": {
           "type": "string",
@@ -44,7 +45,9 @@
             "us",
             "ms",
             "s"
-          ]
+          ],
+          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
+          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
         }
       },
       "additionalProperties": false,
@@ -77,5 +80,17 @@
   "x-how_it_works": "在设计数据库里查找 signal 并返回候选/规范路径。",
   "x-when_to_use": "消除层次或别名不确定性。",
   "x-arg_contract_notes": "required: signal",
-  "x-description-zh": "解析设计信号。"
+  "x-description-zh": "解析设计信号。",
+  "x-agent": {
+    "use_when": [
+      "需要执行该 action 的 catalog 所述能力。"
+    ],
+    "do_not_use_when": [
+      "任务不属于该 action 的公开合同。"
+    ],
+    "alternatives": [],
+    "constraints": [
+      "required: signal"
+    ]
+  }
 }

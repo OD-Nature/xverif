@@ -28,23 +28,31 @@
       "properties": {
         "name": {
           "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。"
+          "description": "已保存配置、游标、列表或接口配置名称。",
+          "x-description-zh": "已保存配置、游标、列表或接口配置名称。"
         },
         "output": {
           "type": "object",
           "properties": {
             "path": {
-              "type": "string"
+              "type": "string",
+              "description": "args.output.path 的 action-specific 参数值。",
+              "x-description-zh": "args.output.path 的 action-specific 参数值。"
             },
             "file_format": {
-              "type": "string"
+              "type": "string",
+              "description": "args.output.file_format 的 action-specific 参数值。",
+              "x-description-zh": "args.output.file_format 的 action-specific 参数值。"
             },
             "verbose": {
-              "type": "boolean"
+              "type": "boolean",
+              "description": "args.output.verbose 的 action-specific 参数值。",
+              "x-description-zh": "args.output.verbose 的 action-specific 参数值。"
             }
           },
           "additionalProperties": false,
-          "description": "导出配置对象；路径统一使用 output.path。"
+          "description": "导出目标与显示控制；不同 action 对 path、file_format 和 verbose 的支持以本 action schema 为准。",
+          "x-description-zh": "导出目标与显示控制；不同 action 对 path、file_format 和 verbose 的支持以本 action schema 为准。"
         },
         "time_unit": {
           "type": "string",
@@ -56,7 +64,9 @@
             "us",
             "ms",
             "s"
-          ]
+          ],
+          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
+          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
         }
       },
       "additionalProperties": false,
@@ -90,5 +100,17 @@
   "x-how_it_works": "读取已保存 stream 定义；args:{} 列全部，args.name 显示单个配置详情。",
   "x-when_to_use": "查看可查询的 stream。",
   "x-arg_contract_notes": "args:{} list all; optional name shows one config",
-  "x-description-zh": "列出 stream 配置。"
+  "x-description-zh": "列出 stream 配置。",
+  "x-agent": {
+    "use_when": [
+      "需要执行该 action 的 catalog 所述能力。"
+    ],
+    "do_not_use_when": [
+      "任务不属于该 action 的公开合同。"
+    ],
+    "alternatives": [],
+    "constraints": [
+      "args:{} list all; optional name shows one config"
+    ]
+  }
 }

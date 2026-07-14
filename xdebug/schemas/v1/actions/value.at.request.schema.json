@@ -32,11 +32,13 @@
       "properties": {
         "clock": {
           "type": "string",
-          "description": "采样、统计或协议检查使用的 clock 信号路径。"
+          "description": "采样、统计或协议检查使用的 clock 信号路径。",
+          "x-description-zh": "采样、统计或协议检查使用的 clock 信号路径。"
         },
         "edge": {
           "type": "string",
-          "description": "clock sampling 使用的边沿：posedge、negedge 或 dual。"
+          "description": "clock sampling 使用的边沿：posedge、negedge 或 dual。",
+          "x-description-zh": "clock sampling 使用的边沿：posedge、negedge 或 dual。"
         },
         "format": {
           "type": "string",
@@ -54,7 +56,9 @@
             "tsv",
             "csv",
             "u64bin"
-          ]
+          ],
+          "description": "args.format 的 action-specific 参数值。",
+          "x-description-zh": "args.format 的 action-specific 参数值。"
         },
         "sample_point": {
           "type": "string",
@@ -62,18 +66,23 @@
             "before",
             "after"
           ],
-          "description": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。"
+          "description": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。",
+          "x-description-zh": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。"
         },
         "signal": {
           "type": "string",
-          "description": "目标信号路径。"
+          "description": "目标信号路径。",
+          "x-description-zh": "目标信号路径。"
         },
         "slice_hint": {
-          "type": "object"
+          "type": "object",
+          "description": "args.slice_hint 的组合参数对象。",
+          "x-description-zh": "args.slice_hint 的组合参数对象。"
         },
         "time": {
           "type": "string",
-          "description": "查询或验证的目标时间点。"
+          "description": "查询或验证的目标时间点。",
+          "x-description-zh": "查询或验证的目标时间点。"
         },
         "time_unit": {
           "type": "string",
@@ -85,7 +94,9 @@
             "us",
             "ms",
             "s"
-          ]
+          ],
+          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
+          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
         },
         "value_format": {
           "type": "string",
@@ -94,7 +105,8 @@
             "bin",
             "dec"
           ],
-          "description": "仅控制响应中信号值的显示格式；不影响采样、时间或导出文件格式。"
+          "description": "仅控制响应中信号值的显示格式；不影响采样、时间或导出文件格式。",
+          "x-description-zh": "仅控制响应中信号值的显示格式；不影响采样、时间或导出文件格式。"
         }
       },
       "additionalProperties": false,
@@ -129,5 +141,27 @@
   "x-how_it_works": "解析 time/clock，定位 FSDB signal handle，读取该时刻值并格式化。",
   "x-when_to_use": "回答某个时间点信号是什么。",
   "x-arg_contract_notes": "required: signal, time, clock",
-  "x-description-zh": "读取单个信号在指定时间的值。"
+  "x-description-zh": "读取单个信号在指定时间的值。",
+  "x-agent": {
+    "use_when": [
+      "需要一个最终叶子信号在单一采样时刻的值。"
+    ],
+    "do_not_use_when": [
+      "需要原始值变化时间线。",
+      "需要多信号布尔表达式求值。"
+    ],
+    "alternatives": [
+      {
+        "action": "signal.changes",
+        "when": "需要每次原始值变化。"
+      },
+      {
+        "action": "expr.eval_at",
+        "when": "需要在同一采样时刻求多信号表达式。"
+      }
+    ],
+    "constraints": [
+      "required: signal, time, clock"
+    ]
+  }
 }

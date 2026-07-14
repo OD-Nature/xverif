@@ -32,7 +32,8 @@
       "properties": {
         "clock": {
           "type": "string",
-          "description": "采样、统计或协议检查使用的 clock 信号路径。"
+          "description": "采样、统计或协议检查使用的 clock 信号路径。",
+          "x-description-zh": "采样、统计或协议检查使用的 clock 信号路径。"
         },
         "conditions": {
           "type": "array",
@@ -44,10 +45,13 @@
             "properties": {
               "expr": {
                 "type": "string",
-                "description": "Expression using aliases from args.signals."
+                "description": "Expression using aliases from args.signals.",
+                "x-description-zh": "Expression using aliases from args.signals."
               },
               "name": {
-                "type": "string"
+                "type": "string",
+                "description": "args.conditions[].name 的 action-specific 参数值。",
+                "x-description-zh": "args.conditions[].name 的 action-specific 参数值。"
               },
               "mode": {
                 "type": "string",
@@ -55,16 +59,22 @@
                   "always",
                   "eventually",
                   "never"
-                ]
+                ],
+                "description": "args.conditions[].mode 的 action-specific 参数值。",
+                "x-description-zh": "args.conditions[].mode 的 action-specific 参数值。"
               }
             },
-            "additionalProperties": false
+            "additionalProperties": false,
+            "description": "args.conditions[] 的组合参数对象。",
+            "x-description-zh": "args.conditions[] 的组合参数对象。"
           },
-          "description": "需要验证的条件列表。"
+          "description": "需要验证的条件列表。",
+          "x-description-zh": "需要验证的条件列表。"
         },
         "edge": {
           "type": "string",
-          "description": "clock sampling 使用的边沿：posedge、negedge 或 dual。"
+          "description": "clock sampling 使用的边沿：posedge、negedge 或 dual。",
+          "x-description-zh": "clock sampling 使用的边沿：posedge、negedge 或 dual。"
         },
         "sample_point": {
           "type": "string",
@@ -72,28 +82,37 @@
             "before",
             "after"
           ],
-          "description": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。"
+          "description": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。",
+          "x-description-zh": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。"
         },
         "signals": {
           "oneOf": [
             {
               "type": "array",
               "items": {
-                "type": "string"
-              }
+                "type": "string",
+                "description": "args.signals[] 的 action-specific 参数值。",
+                "x-description-zh": "args.signals[] 的 action-specific 参数值。"
+              },
+              "description": "args.signals 的有序项目列表。",
+              "x-description-zh": "args.signals 的有序项目列表。"
             },
             {
               "type": "object",
               "additionalProperties": {
                 "type": "string"
-              }
+              },
+              "description": "args.signals 的组合参数对象。",
+              "x-description-zh": "args.signals 的组合参数对象。"
             }
           ],
-          "description": "信号列表，或 alias 到信号路径的映射。"
+          "description": "信号列表，或 alias 到信号路径的映射。",
+          "x-description-zh": "信号列表，或 alias 到信号路径的映射。"
         },
         "time": {
           "type": "string",
-          "description": "查询或验证的目标时间点。"
+          "description": "查询或验证的目标时间点。",
+          "x-description-zh": "查询或验证的目标时间点。"
         },
         "time_unit": {
           "type": "string",
@@ -105,7 +124,9 @@
             "us",
             "ms",
             "s"
-          ]
+          ],
+          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
+          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
         },
         "value_format": {
           "type": "string",
@@ -114,7 +135,8 @@
             "bin",
             "dec"
           ],
-          "description": "仅控制响应中信号值的显示格式；不影响采样、时间或导出文件格式。"
+          "description": "仅控制响应中信号值的显示格式；不影响采样、时间或导出文件格式。",
+          "x-description-zh": "仅控制响应中信号值的显示格式；不影响采样、时间或导出文件格式。"
         }
       },
       "additionalProperties": false,
@@ -150,5 +172,17 @@
   "x-how_it_works": "解析 clock/time，按 args.signals 采样 alias，并对 conditions[].expr 求值。",
   "x-when_to_use": "检查某个时间点的多条件事实。",
   "x-arg_contract_notes": "required: conditions, time, clock, signals",
-  "x-description-zh": "在单个时间验证条件集合。"
+  "x-description-zh": "在单个时间验证条件集合。",
+  "x-agent": {
+    "use_when": [
+      "需要执行该 action 的 catalog 所述能力。"
+    ],
+    "do_not_use_when": [
+      "任务不属于该 action 的公开合同。"
+    ],
+    "alternatives": [],
+    "constraints": [
+      "required: conditions, time, clock, signals"
+    ]
+  }
 }

@@ -172,7 +172,9 @@ def test_mcp_direct_tools_discovery_schema_and_one_shot_actions(
         )
         assert schema["ok"] is True
         assert schema["summary"]["action"] == "value.at"
-        assert schema["data"]["schema"]["title"] == "value.at request"
+        assert schema["summary"]["view"] == "mcp"
+        assert schema["data"]["args_schema"]["properties"]["signal"]["type"] == "string"
+        assert schema["data"]["minimal_call"]["action"] == "value.at"
     finally:
         _close_loaded_server()
         _kill_native_sessions(isolated_home)

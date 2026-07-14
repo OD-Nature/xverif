@@ -39,7 +39,9 @@
             "us",
             "ms",
             "s"
-          ]
+          ],
+          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
+          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
         }
       },
       "additionalProperties": false,
@@ -70,5 +72,17 @@
   "x-how_it_works": "读取当前 session 的 cursor 存储。",
   "x-when_to_use": "查看可复用的命名时间点。",
   "x-arg_contract_notes": "none",
-  "x-description-zh": "列出游标。"
+  "x-description-zh": "列出游标。",
+  "x-agent": {
+    "use_when": [
+      "需要执行该 action 的 catalog 所述能力。"
+    ],
+    "do_not_use_when": [
+      "任务不属于该 action 的公开合同。"
+    ],
+    "alternatives": [],
+    "constraints": [
+      "none"
+    ]
+  }
 }

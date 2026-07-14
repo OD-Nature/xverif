@@ -36,40 +36,52 @@
             "write",
             "read",
             "all"
-          ]
+          ],
+          "description": "args.direction 的 action-specific 参数值。",
+          "x-description-zh": "args.direction 的 action-specific 参数值。"
         },
         "line_limit": {
           "type": "integer",
           "minimum": 1,
-          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
+          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。",
+          "x-description-zh": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
         },
         "name": {
           "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。"
+          "description": "已保存配置、游标、列表或接口配置名称。",
+          "x-description-zh": "已保存配置、游标、列表或接口配置名称。"
         },
         "output": {
           "type": "object",
           "properties": {
             "include_data": {
               "type": "boolean",
-              "default": false
+              "default": false,
+              "description": "args.output.include_data 的 action-specific 参数值。",
+              "x-description-zh": "args.output.include_data 的 action-specific 参数值。"
             }
           },
           "additionalProperties": false,
-          "description": "AXI payload display controls; beat data is omitted unless include_data is true."
+          "description": "AXI payload display controls; beat data is omitted unless include_data is true.",
+          "x-description-zh": "AXI payload display controls; beat data is omitted unless include_data is true."
         },
         "time_range": {
           "type": "object",
           "properties": {
             "begin": {
-              "type": "string"
+              "type": "string",
+              "description": "args.time_range.begin 的 action-specific 参数值。",
+              "x-description-zh": "args.time_range.begin 的 action-specific 参数值。"
             },
             "end": {
-              "type": "string"
+              "type": "string",
+              "description": "args.time_range.end 的 action-specific 参数值。",
+              "x-description-zh": "args.time_range.end 的 action-specific 参数值。"
             }
           },
           "additionalProperties": false,
-          "description": "查询或分析的时间窗口。"
+          "description": "分析时间窗口；begin/end 为闭区间端点，可分别省略以使用可用波形边界。",
+          "x-description-zh": "分析时间窗口；begin/end 为闭区间端点，可分别省略以使用可用波形边界。"
         },
         "time_unit": {
           "type": "string",
@@ -81,7 +93,9 @@
             "us",
             "ms",
             "s"
-          ]
+          ],
+          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
+          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
         }
       },
       "additionalProperties": false,
@@ -114,5 +128,17 @@
   "x-how_it_works": "用 ID/address/channel 信息把请求与响应关联。",
   "x-when_to_use": "分析 latency 和缺失响应。",
   "x-arg_contract_notes": "required: name",
-  "x-description-zh": "实验性 AXI 请求响应配对。"
+  "x-description-zh": "实验性 AXI 请求响应配对。",
+  "x-agent": {
+    "use_when": [
+      "需要执行该 action 的 catalog 所述能力。"
+    ],
+    "do_not_use_when": [
+      "任务不属于该 action 的公开合同。"
+    ],
+    "alternatives": [],
+    "constraints": [
+      "required: name"
+    ]
+  }
 }

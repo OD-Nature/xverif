@@ -31,10 +31,23 @@
     },
     "summary": {
       "type": "object",
-      "additionalProperties": true
+      "required": ["action", "kind"],
+      "properties": {
+        "action": {"type": "string", "description": "被查询 schema 的公开 action 名称。"},
+        "kind": {"type": "string", "enum": ["request", "response"], "description": "返回的 schema 类别。"}
+      },
+      "additionalProperties": false
     },
     "data": {
-      "type": "object"
+      "type": "object",
+      "required": ["schema", "schema_path", "examples", "constraints"],
+      "properties": {
+        "schema": {"type": "object", "description": "checked-in native JSON Schema；其内部字段由该 Schema 自身定义。", "x-dynamic-contract": "JSON Schema document"},
+        "schema_path": {"type": "string", "description": "仓库内 schema 的相对路径。"},
+        "examples": {"type": "array", "items": {"type": "object", "required": ["path", "value"], "properties": {"path": {"type": "string"}, "value": {"type": "object", "x-dynamic-contract": "checked-in example JSON"}}, "additionalProperties": false}, "description": "内嵌 checked-in example，不要求调用方读取路径。"},
+        "constraints": {"type": "array", "items": {"type": "string"}, "description": "从 action 合同导出的 agent-readable 约束。"}
+      },
+      "additionalProperties": false
     },
     "findings": {
       "type": "array"
@@ -47,7 +60,7 @@
       "type": "object"
     }
   },
-  "additionalProperties": true,
+  "additionalProperties": false,
   "description": "Return the request or response schema for an action.",
   "x-output_notes": "返回该 action 的 summary/data/error/meta；具体字段以 response schema 和 response example 为准。",
   "x-description-zh": "返回指定 action 的 request/response JSON schema。"

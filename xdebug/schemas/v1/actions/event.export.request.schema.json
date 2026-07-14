@@ -31,72 +31,104 @@
       "type": "object",
       "properties": {
         "aggregate": {
-          "type": "object"
+          "type": "object",
+          "description": "args.aggregate 的组合参数对象。",
+          "x-description-zh": "args.aggregate 的组合参数对象。"
         },
         "clock": {
           "type": "string",
-          "description": "采样、统计或协议检查使用的 clock 信号路径。"
+          "description": "采样、统计或协议检查使用的 clock 信号路径。",
+          "x-description-zh": "采样、统计或协议检查使用的 clock 信号路径。"
         },
         "edge": {
           "type": "string",
-          "description": "clock sampling 使用的边沿：posedge、negedge 或 dual。"
+          "description": "clock sampling 使用的边沿：posedge、negedge 或 dual。",
+          "x-description-zh": "clock sampling 使用的边沿：posedge、negedge 或 dual。"
         },
         "events": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "args.events 的 action-specific 参数值。",
+          "x-description-zh": "args.events 的 action-specific 参数值。"
         },
         "expr": {
           "type": "string",
-          "description": "需要求值或匹配的布尔表达式。"
+          "description": "需要求值或匹配的布尔表达式。",
+          "x-description-zh": "需要求值或匹配的布尔表达式。"
         },
         "group_by": {
-          "type": "array"
+          "type": "array",
+          "description": "按 signals alias 分组的字段名列表。每项必须引用 args.signals 中的 alias。",
+          "x-description-zh": "args.group_by 的有序项目列表。",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "args.group_by[] 的 action-specific 参数值。",
+            "x-description-zh": "args.group_by[] 的 action-specific 参数值。"
+          },
+          "uniqueItems": true
         },
         "line_limit": {
           "type": "integer",
           "minimum": 1,
-          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
+          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。",
+          "x-description-zh": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
         },
         "max_events": {
           "type": "integer",
-          "minimum": 1
+          "minimum": 1,
+          "description": "args.max_events 的 action-specific 参数值。",
+          "x-description-zh": "args.max_events 的 action-specific 参数值。"
         },
         "max_samples": {
           "type": "integer",
-          "minimum": 1
+          "minimum": 1,
+          "description": "args.max_samples 的 action-specific 参数值。",
+          "x-description-zh": "args.max_samples 的 action-specific 参数值。"
         },
         "mode": {
           "type": "string",
           "enum": [
             "export"
           ],
-          "default": "export"
+          "default": "export",
+          "description": "本 action 的处理或返回模式；合法值、默认值和与其它参数的关系由 action-specific 合同定义。",
+          "x-description-zh": "本 action 的处理或返回模式；合法值、默认值和与其它参数的关系由 action-specific 合同定义。"
         },
         "name": {
           "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。"
+          "description": "已保存配置、游标、列表或接口配置名称。",
+          "x-description-zh": "已保存配置、游标、列表或接口配置名称。"
         },
         "output": {
           "type": "object",
           "properties": {
             "path": {
-              "type": "string"
+              "type": "string",
+              "description": "args.output.path 的 action-specific 参数值。",
+              "x-description-zh": "args.output.path 的 action-specific 参数值。"
             },
             "file_format": {
               "type": "string",
               "enum": [
                 "json"
               ],
-              "description": "event.export file format."
+              "description": "event.export file format.",
+              "x-description-zh": "event.export file format."
             },
             "verbose": {
-              "type": "boolean"
+              "type": "boolean",
+              "description": "args.output.verbose 的 action-specific 参数值。",
+              "x-description-zh": "args.output.verbose 的 action-specific 参数值。"
             }
           },
           "additionalProperties": false,
-          "description": "导出配置对象；路径统一使用 output.path。"
+          "description": "导出目标与显示控制；不同 action 对 path、file_format 和 verbose 的支持以本 action schema 为准。",
+          "x-description-zh": "导出目标与显示控制；不同 action 对 path、file_format 和 verbose 的支持以本 action schema 为准。"
         },
         "rst_n": {
-          "type": "string"
+          "type": "string",
+          "description": "args.rst_n 的 action-specific 参数值。",
+          "x-description-zh": "args.rst_n 的 action-specific 参数值。"
         },
         "sample_point": {
           "type": "string",
@@ -104,37 +136,50 @@
             "before",
             "after"
           ],
-          "description": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。"
+          "description": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。",
+          "x-description-zh": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。"
         },
         "signals": {
           "oneOf": [
             {
               "type": "array",
               "items": {
-                "type": "string"
-              }
+                "type": "string",
+                "description": "args.signals[] 的 action-specific 参数值。",
+                "x-description-zh": "args.signals[] 的 action-specific 参数值。"
+              },
+              "description": "args.signals 的有序项目列表。",
+              "x-description-zh": "args.signals 的有序项目列表。"
             },
             {
               "type": "object",
               "additionalProperties": {
                 "type": "string"
-              }
+              },
+              "description": "args.signals 的组合参数对象。",
+              "x-description-zh": "args.signals 的组合参数对象。"
             }
           ],
-          "description": "信号列表，或 alias 到信号路径的映射。"
+          "description": "信号列表，或 alias 到信号路径的映射。",
+          "x-description-zh": "信号列表，或 alias 到信号路径的映射。"
         },
         "time_range": {
           "type": "object",
           "properties": {
             "begin": {
-              "type": "string"
+              "type": "string",
+              "description": "args.time_range.begin 的 action-specific 参数值。",
+              "x-description-zh": "args.time_range.begin 的 action-specific 参数值。"
             },
             "end": {
-              "type": "string"
+              "type": "string",
+              "description": "args.time_range.end 的 action-specific 参数值。",
+              "x-description-zh": "args.time_range.end 的 action-specific 参数值。"
             }
           },
           "additionalProperties": false,
-          "description": "查询或分析的时间窗口。"
+          "description": "分析时间窗口；begin/end 为闭区间端点，可分别省略以使用可用波形边界。",
+          "x-description-zh": "分析时间窗口；begin/end 为闭区间端点，可分别省略以使用可用波形边界。"
         },
         "time_unit": {
           "type": "string",
@@ -146,7 +191,9 @@
             "us",
             "ms",
             "s"
-          ]
+          ],
+          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
+          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
         }
       },
       "additionalProperties": false,
@@ -192,5 +239,17 @@
   "x-how_it_works": "与 event.find 同样分析，但按 export 模式返回/写出更多命中数据；表达式支持布尔组合、相等比较和大小比较。",
   "x-when_to_use": "把事件列表交给后处理或报告。",
   "x-arg_contract_notes": "required: expr; also one of: name / clock + signals",
-  "x-description-zh": "导出满足表达式的事件。"
+  "x-description-zh": "导出满足表达式的事件。",
+  "x-agent": {
+    "use_when": [
+      "需要执行该 action 的 catalog 所述能力。"
+    ],
+    "do_not_use_when": [
+      "任务不属于该 action 的公开合同。"
+    ],
+    "alternatives": [],
+    "constraints": [
+      "required: expr; also one of: name / clock + signals"
+    ]
+  }
 }

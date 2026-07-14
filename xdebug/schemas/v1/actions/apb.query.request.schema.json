@@ -31,10 +31,14 @@
       "type": "object",
       "properties": {
         "addr": {
-          "type": "string"
+          "type": "string",
+          "description": "args.addr 的 action-specific 参数值。",
+          "x-description-zh": "args.addr 的 action-specific 参数值。"
         },
         "address": {
-          "type": "string"
+          "type": "string",
+          "description": "args.address 的 action-specific 参数值。",
+          "x-description-zh": "args.address 的 action-specific 参数值。"
         },
         "direction": {
           "type": "string",
@@ -42,29 +46,39 @@
             "write",
             "read",
             "all"
-          ]
+          ],
+          "description": "args.direction 的 action-specific 参数值。",
+          "x-description-zh": "args.direction 的 action-specific 参数值。"
         },
         "last": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "args.last 的 action-specific 参数值。",
+          "x-description-zh": "args.last 的 action-specific 参数值。"
         },
         "name": {
           "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。"
+          "description": "已保存配置、游标、列表或接口配置名称。",
+          "x-description-zh": "已保存配置、游标、列表或接口配置名称。"
         },
         "query": {
           "type": "object",
           "properties": {
             "line_limit": {
               "type": "integer",
-              "minimum": 1
+              "minimum": 1,
+              "description": "args.query.line_limit 的 action-specific 参数值。",
+              "x-description-zh": "args.query.line_limit 的 action-specific 参数值。"
             },
             "index": {
               "type": "integer",
-              "minimum": 1
+              "minimum": 1,
+              "description": "args.query.index 的 action-specific 参数值。",
+              "x-description-zh": "args.query.index 的 action-specific 参数值。"
             }
           },
           "additionalProperties": false,
-          "description": "Protocol query controls; use 1-based query.index and query.line_limit; legacy quantity fields are rejected."
+          "description": "Protocol query controls; use 1-based query.index and query.line_limit; legacy quantity fields are rejected.",
+          "x-description-zh": "Protocol query controls; use 1-based query.index and query.line_limit; legacy quantity fields are rejected."
         },
         "time_unit": {
           "type": "string",
@@ -76,7 +90,9 @@
             "us",
             "ms",
             "s"
-          ]
+          ],
+          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
+          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
         }
       },
       "additionalProperties": false,
@@ -109,5 +125,17 @@
   "x-how_it_works": "按 APB 配置扫描 PSEL/PENABLE/PREADY 等握手和地址数据；第 N 个 transfer 用 1-based query.index，多条用 query.line_limit。",
   "x-when_to_use": "抽取 APB 读写访问。",
   "x-arg_contract_notes": "required: name; use query.index / query.line_limit; do not use legacy quantity fields",
-  "x-description-zh": "查询 APB transfer。"
+  "x-description-zh": "查询 APB transfer。",
+  "x-agent": {
+    "use_when": [
+      "需要执行该 action 的 catalog 所述能力。"
+    ],
+    "do_not_use_when": [
+      "任务不属于该 action 的公开合同。"
+    ],
+    "alternatives": [],
+    "constraints": [
+      "required: name; use query.index / query.line_limit; do not use legacy quantity fields"
+    ]
+  }
 }

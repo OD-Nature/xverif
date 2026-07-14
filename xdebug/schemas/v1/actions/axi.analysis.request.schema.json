@@ -36,7 +36,9 @@
             "latency",
             "osd",
             "pending"
-          ]
+          ],
+          "description": "args.analysis 的 action-specific 参数值。",
+          "x-description-zh": "args.analysis 的 action-specific 参数值。"
         },
         "direction": {
           "type": "string",
@@ -44,16 +46,20 @@
             "write",
             "read",
             "all"
-          ]
+          ],
+          "description": "args.direction 的 action-specific 参数值。",
+          "x-description-zh": "args.direction 的 action-specific 参数值。"
         },
         "line_limit": {
           "type": "integer",
           "minimum": 1,
-          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
+          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。",
+          "x-description-zh": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
         },
         "name": {
           "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。"
+          "description": "已保存配置、游标、列表或接口配置名称。",
+          "x-description-zh": "已保存配置、游标、列表或接口配置名称。"
         },
         "time_unit": {
           "type": "string",
@@ -65,7 +71,9 @@
             "us",
             "ms",
             "s"
-          ]
+          ],
+          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
+          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
         }
       },
       "additionalProperties": false,
@@ -121,5 +129,17 @@
   "x-how_it_works": "analysis 取 latency、osd 或 pending，分别统计完成事务延迟、outstanding 变化和扫描结束未闭合事务。",
   "x-when_to_use": "快速判断 AXI 接口健康度。",
   "x-arg_contract_notes": "required: name",
-  "x-description-zh": "汇总 AXI 行为。"
+  "x-description-zh": "汇总 AXI 行为。",
+  "x-agent": {
+    "use_when": [
+      "需要执行该 action 的 catalog 所述能力。"
+    ],
+    "do_not_use_when": [
+      "任务不属于该 action 的公开合同。"
+    ],
+    "alternatives": [],
+    "constraints": [
+      "required: name"
+    ]
+  }
 }

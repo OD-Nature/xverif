@@ -32,32 +32,47 @@
       "properties": {
         "aggregate_only": {
           "type": "boolean",
-          "description": "Return only counts, first/last/final values, and warnings; omit data.changes rows."
+          "description": "Return only counts, first/last/final values, and warnings; omit data.changes rows.",
+          "x-description-zh": "Return only counts, first/last/final values, and warnings; omit data.changes rows."
         },
         "line_limit": {
           "type": "integer",
           "minimum": 1,
-          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
+          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。",
+          "x-description-zh": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
         },
         "mode": {
-          "type": "string"
+          "type": "string",
+          "description": "返回模式：timeline 返回逐变化 evidence；summary 只返回聚合事实。与 aggregate_only 不同时使用。",
+          "enum": [
+            "timeline",
+            "summary"
+          ],
+          "default": "timeline",
+          "x-description-zh": "返回模式：timeline 返回逐变化 evidence；summary 只返回聚合事实。与 aggregate_only 不同时使用。"
         },
         "signal": {
           "type": "string",
-          "description": "目标信号路径。"
+          "description": "目标信号路径。",
+          "x-description-zh": "目标信号路径。"
         },
         "time_range": {
           "type": "object",
           "properties": {
             "begin": {
-              "type": "string"
+              "type": "string",
+              "description": "args.time_range.begin 的 action-specific 参数值。",
+              "x-description-zh": "args.time_range.begin 的 action-specific 参数值。"
             },
             "end": {
-              "type": "string"
+              "type": "string",
+              "description": "args.time_range.end 的 action-specific 参数值。",
+              "x-description-zh": "args.time_range.end 的 action-specific 参数值。"
             }
           },
           "additionalProperties": false,
-          "description": "查询或分析的时间窗口。"
+          "description": "分析时间窗口；begin/end 为闭区间端点，可分别省略以使用可用波形边界。",
+          "x-description-zh": "分析时间窗口；begin/end 为闭区间端点，可分别省略以使用可用波形边界。"
         },
         "time_unit": {
           "type": "string",
@@ -69,7 +84,9 @@
             "us",
             "ms",
             "s"
-          ]
+          ],
+          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
+          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
         },
         "value_format": {
           "type": "string",
@@ -78,7 +95,8 @@
             "bin",
             "dec"
           ],
-          "description": "仅控制响应中信号值的显示格式；不影响采样、时间或导出文件格式。"
+          "description": "仅控制响应中信号值的显示格式；不影响采样、时间或导出文件格式。",
+          "x-description-zh": "仅控制响应中信号值的显示格式；不影响采样、时间或导出文件格式。"
         }
       },
       "additionalProperties": false,
@@ -111,5 +129,22 @@
   "x-how_it_works": "扫描 FSDB value changes，支持窗口、line_limit 和聚合。",
   "x-when_to_use": "看信号何时跳变。",
   "x-arg_contract_notes": "required: signal",
-  "x-description-zh": "读取信号变化点。"
+  "x-description-zh": "读取信号变化点。",
+  "x-agent": {
+    "use_when": [
+      "需要一个信号的原始波形变化时间线或聚合变化统计。"
+    ],
+    "do_not_use_when": [
+      "需要按 clock edge 的协议语义采样。"
+    ],
+    "alternatives": [
+      {
+        "action": "event.find",
+        "when": "需要按 clock 对表达式采样。"
+      }
+    ],
+    "constraints": [
+      "required: signal"
+    ]
+  }
 }

@@ -36,11 +36,15 @@
           "properties": {
             "clock": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "args.config.clock 的 action-specific 参数值。",
+              "x-description-zh": "args.config.clock 的 action-specific 参数值。"
             },
             "rst_n": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "args.config.rst_n 的 action-specific 参数值。",
+              "x-description-zh": "args.config.rst_n 的 action-specific 参数值。"
             },
             "edge": {
               "type": "string",
@@ -48,46 +52,66 @@
                 "posedge",
                 "negedge",
                 "dual"
-              ]
+              ],
+              "description": "args.config.edge 的 action-specific 参数值。",
+              "x-description-zh": "args.config.edge 的 action-specific 参数值。"
             },
             "sample_point": {
               "type": "string",
               "enum": [
                 "before",
                 "after"
-              ]
+              ],
+              "description": "args.config.sample_point 的 action-specific 参数值。",
+              "x-description-zh": "args.config.sample_point 的 action-specific 参数值。"
             },
             "paddr": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "args.config.paddr 的 action-specific 参数值。",
+              "x-description-zh": "args.config.paddr 的 action-specific 参数值。"
             },
             "psel": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "args.config.psel 的 action-specific 参数值。",
+              "x-description-zh": "args.config.psel 的 action-specific 参数值。"
             },
             "penable": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "args.config.penable 的 action-specific 参数值。",
+              "x-description-zh": "args.config.penable 的 action-specific 参数值。"
             },
             "pready": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "args.config.pready 的 action-specific 参数值。",
+              "x-description-zh": "args.config.pready 的 action-specific 参数值。"
             },
             "pslverr": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "args.config.pslverr 的 action-specific 参数值。",
+              "x-description-zh": "args.config.pslverr 的 action-specific 参数值。"
             },
             "pwrite": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "args.config.pwrite 的 action-specific 参数值。",
+              "x-description-zh": "args.config.pwrite 的 action-specific 参数值。"
             },
             "pwdata": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "args.config.pwdata 的 action-specific 参数值。",
+              "x-description-zh": "args.config.pwdata 的 action-specific 参数值。"
             },
             "prdata": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "args.config.prdata 的 action-specific 参数值。",
+              "x-description-zh": "args.config.prdata 的 action-specific 参数值。"
             }
           },
           "required": [
@@ -102,15 +126,18 @@
             "pwdata",
             "prdata"
           ],
-          "additionalProperties": false
+          "additionalProperties": false,
+          "x-description-zh": "内联配置对象。"
         },
         "config_path": {
           "type": "string",
-          "description": "输入配置文件路径。"
+          "description": "输入配置文件路径。",
+          "x-description-zh": "输入配置文件路径。"
         },
         "name": {
           "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。"
+          "description": "已保存配置、游标、列表或接口配置名称。",
+          "x-description-zh": "已保存配置、游标、列表或接口配置名称。"
         },
         "time_unit": {
           "type": "string",
@@ -122,7 +149,9 @@
             "us",
             "ms",
             "s"
-          ]
+          ],
+          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
+          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
         }
       },
       "additionalProperties": false,
@@ -167,5 +196,17 @@
   "x-how_it_works": "保存 APB interface 信号映射。",
   "x-when_to_use": "定义后续 APB 查询对象。",
   "x-arg_contract_notes": "required: name; also one of: config / config_path",
-  "x-description-zh": "加载 APB 配置。"
+  "x-description-zh": "加载 APB 配置。",
+  "x-agent": {
+    "use_when": [
+      "需要执行该 action 的 catalog 所述能力。"
+    ],
+    "do_not_use_when": [
+      "任务不属于该 action 的公开合同。"
+    ],
+    "alternatives": [],
+    "constraints": [
+      "required: name; also one of: config / config_path"
+    ]
+  }
 }

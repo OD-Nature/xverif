@@ -33,21 +33,28 @@
         "index": {
           "oneOf": [
             {
-              "type": "integer"
+              "type": "integer",
+              "description": "args.index 的 action-specific 参数值。",
+              "x-description-zh": "args.index 的 action-specific 参数值。"
             },
             {
-              "type": "string"
+              "type": "string",
+              "description": "args.index 的 action-specific 参数值。",
+              "x-description-zh": "args.index 的 action-specific 参数值。"
             }
           ],
-          "description": "列表中要删除的信号序号。"
+          "description": "列表中要删除的信号序号。",
+          "x-description-zh": "列表中要删除的信号序号。"
         },
         "name": {
           "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。"
+          "description": "已保存配置、游标、列表或接口配置名称。",
+          "x-description-zh": "已保存配置、游标、列表或接口配置名称。"
         },
         "signal": {
           "type": "string",
-          "description": "目标信号路径。"
+          "description": "目标信号路径。",
+          "x-description-zh": "目标信号路径。"
         },
         "time_unit": {
           "type": "string",
@@ -59,7 +66,9 @@
             "us",
             "ms",
             "s"
-          ]
+          ],
+          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
+          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
         }
       },
       "additionalProperties": false,
@@ -104,5 +113,17 @@
   "x-how_it_works": "按 name 找 list，再用 signal 或 index 删除条目。",
   "x-when_to_use": "维护已保存观察列表。",
   "x-arg_contract_notes": "required: name; also one of: signal / index",
-  "x-description-zh": "从信号列表删除信号或 index。"
+  "x-description-zh": "从信号列表删除信号或 index。",
+  "x-agent": {
+    "use_when": [
+      "需要执行该 action 的 catalog 所述能力。"
+    ],
+    "do_not_use_when": [
+      "任务不属于该 action 的公开合同。"
+    ],
+    "alternatives": [],
+    "constraints": [
+      "required: name; also one of: signal / index"
+    ]
+  }
 }

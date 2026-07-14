@@ -1505,6 +1505,9 @@
           "examples/responses/schema.basic.json"
         ]
       },
+      "required_args": [
+        "action"
+      ],
       "description_en": "Return the request or response schema for an action.",
       "description_zh": "返回指定 action 的 request/response JSON schema。",
       "purposes": [

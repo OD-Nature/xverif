@@ -32,23 +32,31 @@
       "properties": {
         "config_path": {
           "type": "string",
-          "description": "输入配置文件路径。"
+          "description": "输入配置文件路径。",
+          "x-description-zh": "输入配置文件路径。"
         },
         "output": {
           "type": "object",
           "properties": {
             "path": {
-              "type": "string"
+              "type": "string",
+              "description": "args.output.path 的 action-specific 参数值。",
+              "x-description-zh": "args.output.path 的 action-specific 参数值。"
             },
             "file_format": {
-              "type": "string"
+              "type": "string",
+              "description": "args.output.file_format 的 action-specific 参数值。",
+              "x-description-zh": "args.output.file_format 的 action-specific 参数值。"
             },
             "verbose": {
-              "type": "boolean"
+              "type": "boolean",
+              "description": "args.output.verbose 的 action-specific 参数值。",
+              "x-description-zh": "args.output.verbose 的 action-specific 参数值。"
             }
           },
           "additionalProperties": false,
-          "description": "导出配置对象；路径统一使用 output.path。"
+          "description": "导出目标与显示控制；不同 action 对 path、file_format 和 verbose 的支持以本 action schema 为准。",
+          "x-description-zh": "导出目标与显示控制；不同 action 对 path、file_format 和 verbose 的支持以本 action schema 为准。"
         },
         "time_unit": {
           "type": "string",
@@ -60,7 +68,9 @@
             "us",
             "ms",
             "s"
-          ]
+          ],
+          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
+          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
         }
       },
       "required": [
@@ -94,5 +104,17 @@
   "x-how_it_works": "读取配置并写出 output.path，返回 group/signal 统计。",
   "x-when_to_use": "把调试信号集合导入波形工具。",
   "x-arg_contract_notes": "required: config_path, output",
-  "x-description-zh": "根据分组生成波形 rc。"
+  "x-description-zh": "根据分组生成波形 rc。",
+  "x-agent": {
+    "use_when": [
+      "需要执行该 action 的 catalog 所述能力。"
+    ],
+    "do_not_use_when": [
+      "任务不属于该 action 的公开合同。"
+    ],
+    "alternatives": [],
+    "constraints": [
+      "required: config_path, output"
+    ]
+  }
 }

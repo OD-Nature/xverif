@@ -36,11 +36,14 @@
             "write",
             "read",
             "all"
-          ]
+          ],
+          "description": "args.direction 的 action-specific 参数值。",
+          "x-description-zh": "args.direction 的 action-specific 参数值。"
         },
         "name": {
           "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。"
+          "description": "已保存配置、游标、列表或接口配置名称。",
+          "x-description-zh": "已保存配置、游标、列表或接口配置名称。"
         },
         "op": {
           "type": "string",
@@ -51,7 +54,8 @@
             "pre",
             "last"
           ],
-          "description": "游标移动或协议浏览操作。"
+          "description": "游标移动或协议浏览操作。",
+          "x-description-zh": "游标移动或协议浏览操作。"
         },
         "time_unit": {
           "type": "string",
@@ -63,7 +67,9 @@
             "us",
             "ms",
             "s"
-          ]
+          ],
+          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
+          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
         }
       },
       "additionalProperties": false,
@@ -97,5 +103,17 @@
   "x-how_it_works": "基于 AXI 查询结果按 op/direction 定位事务。",
   "x-when_to_use": "交互式浏览 AXI 事务。",
   "x-arg_contract_notes": "required: name, op",
-  "x-description-zh": "在 AXI transfer 间移动游标。"
+  "x-description-zh": "在 AXI transfer 间移动游标。",
+  "x-agent": {
+    "use_when": [
+      "需要执行该 action 的 catalog 所述能力。"
+    ],
+    "do_not_use_when": [
+      "任务不属于该 action 的公开合同。"
+    ],
+    "alternatives": [],
+    "constraints": [
+      "required: name, op"
+    ]
+  }
 }

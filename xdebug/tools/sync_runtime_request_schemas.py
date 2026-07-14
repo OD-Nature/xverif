@@ -12,6 +12,9 @@ from typing import Any
 
 from sync_action_schema_hints import PARAM_DESCRIPTIONS
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "specs"))
+from action_contracts import apply_argument_contract, complete_descriptions
+
 
 XDEBUG_ROOT = Path(__file__).resolve().parents[1]
 SPEC_PATH = XDEBUG_ROOT / "specs" / "actions" / "actions.yaml"
@@ -324,7 +327,10 @@ def collect_arg_schemas(specs: list[dict[str, Any]]) -> dict[str, dict[str, Any]
             "u64bin",
         ],
     }
-    arg_schemas["kind"] = {"type": "string"}
+    arg_schemas["kind"] = {
+        "type": "string", "enum": ["request", "response"], "default": "request",
+        "description": "schema action 要返回的 JSON Schema 类别：request 或 response。",
+    }
     string_filter = lambda values: {
         "type": "array", "minItems": 1, "uniqueItems": True,
         "items": {"type": "string", "enum": values},
@@ -544,7 +550,7 @@ def sync_schema(schema: dict[str, Any], spec: dict[str, Any], arg_schemas: dict[
     for key in sorted(allowed_args_for_spec(spec)):
         if key not in arg_schemas:
             raise ValueError(f"{action}: missing schema template for args.{key}")
-        selected_props[key] = copy.deepcopy(arg_schemas[key])
+        selected_props[key] = apply_argument_contract(action, key, arg_schemas[key])
         if key in PARAM_DESCRIPTIONS:
             selected_props[key].setdefault("description", PARAM_DESCRIPTIONS[key])
     if action in ("apb.query", "axi.query") and "query" in selected_props:
@@ -761,6 +767,10 @@ def sync_schema(schema: dict[str, Any], spec: dict[str, Any], arg_schemas: dict[
         }
     if action == "event.export":
         selected_props["mode"] = {"type": "string", "enum": ["export"], "default": "export"}
+    for key, value in list(selected_props.items()):
+        selected_props[key] = complete_descriptions(
+            apply_argument_contract(action, key, value), f"args.{key}"
+        )
     args["properties"] = selected_props
     args["additionalProperties"] = False
     groups = spec.get("required_arg_groups", [])

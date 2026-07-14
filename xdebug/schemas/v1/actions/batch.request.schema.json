@@ -31,14 +31,19 @@
       "type": "object",
       "properties": {
         "mode": {
-          "type": "string"
+          "type": "string",
+          "description": "本 action 的处理或返回模式；合法值、默认值和与其它参数的关系由 action-specific 合同定义。",
+          "x-description-zh": "本 action 的处理或返回模式；合法值、默认值和与其它参数的关系由 action-specific 合同定义。"
         },
         "requests": {
           "type": "array",
           "items": {
-            "type": "object"
+            "type": "object",
+            "description": "args.requests[] 的组合参数对象。",
+            "x-description-zh": "args.requests[] 的组合参数对象。"
           },
-          "description": "batch action 中按顺序执行的 request 列表。"
+          "description": "batch action 中按顺序执行的 request 列表。",
+          "x-description-zh": "batch action 中按顺序执行的 request 列表。"
         }
       },
       "additionalProperties": false,
@@ -71,5 +76,17 @@
   "x-how_it_works": "按 requests 顺序复用同一入口逐条调度，汇总每条响应。",
   "x-when_to_use": "减少多轮 IPC 和保持一组查询的上下文一致。",
   "x-arg_contract_notes": "required: requests",
-  "x-description-zh": "批量执行多个 xdebug request。"
+  "x-description-zh": "批量执行多个 xdebug request。",
+  "x-agent": {
+    "use_when": [
+      "需要执行该 action 的 catalog 所述能力。"
+    ],
+    "do_not_use_when": [
+      "任务不属于该 action 的公开合同。"
+    ],
+    "alternatives": [],
+    "constraints": [
+      "required: requests"
+    ]
+  }
 }

@@ -32,22 +32,29 @@
       "properties": {
         "expr": {
           "type": "string",
-          "description": "需要求值或匹配的布尔表达式。"
+          "description": "需要求值或匹配的布尔表达式。",
+          "x-description-zh": "需要求值或匹配的布尔表达式。"
         },
         "line_limit": {
           "type": "integer",
           "minimum": 1,
-          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
+          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。",
+          "x-description-zh": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
         },
         "no_statement_only": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "args.no_statement_only 的 action-specific 参数值。",
+          "x-description-zh": "args.no_statement_only 的 action-specific 参数值。"
         },
         "role": {
-          "type": "string"
+          "type": "string",
+          "description": "args.role 的 action-specific 参数值。",
+          "x-description-zh": "args.role 的 action-specific 参数值。"
         },
         "signal": {
           "type": "string",
-          "description": "目标信号路径。"
+          "description": "目标信号路径。",
+          "x-description-zh": "目标信号路径。"
         },
         "time_unit": {
           "type": "string",
@@ -59,7 +66,9 @@
             "us",
             "ms",
             "s"
-          ]
+          ],
+          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
+          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
         }
       },
       "additionalProperties": false,
@@ -110,5 +119,17 @@
   "x-how_it_works": "无 design 时做字符串级规范化；有 design/signal 时可结合设计赋值信息。",
   "x-when_to_use": "把表达式转成 agent 更易处理的结构。",
   "x-arg_contract_notes": "required: expr",
-  "x-description-zh": "规范化表达式。"
+  "x-description-zh": "规范化表达式。",
+  "x-agent": {
+    "use_when": [
+      "需要执行该 action 的 catalog 所述能力。"
+    ],
+    "do_not_use_when": [
+      "任务不属于该 action 的公开合同。"
+    ],
+    "alternatives": [],
+    "constraints": [
+      "required: expr"
+    ]
+  }
 }

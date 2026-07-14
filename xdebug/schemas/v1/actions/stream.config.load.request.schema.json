@@ -45,7 +45,9 @@
                 ],
                 "properties": {
                   "name": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "args.config.streams[].name 的 action-specific 参数值。",
+                    "x-description-zh": "args.config.streams[].name 的 action-specific 参数值。"
                   },
                   "signals": {
                     "type": "object",
@@ -53,10 +55,14 @@
                     "additionalProperties": {
                       "type": "string",
                       "minLength": 1
-                    }
+                    },
+                    "description": "args.config.streams[].signals 的组合参数对象。",
+                    "x-description-zh": "args.config.streams[].signals 的组合参数对象。"
                   },
                   "clock": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "args.config.streams[].clock 的 action-specific 参数值。",
+                    "x-description-zh": "args.config.streams[].clock 的 action-specific 参数值。"
                   },
                   "edge": {
                     "type": "string",
@@ -64,50 +70,74 @@
                       "posedge",
                       "negedge",
                       "dual"
-                    ]
+                    ],
+                    "description": "args.config.streams[].edge 的 action-specific 参数值。",
+                    "x-description-zh": "args.config.streams[].edge 的 action-specific 参数值。"
                   },
                   "sample_point": {
                     "type": "string",
                     "enum": [
                       "before",
                       "after"
-                    ]
+                    ],
+                    "description": "args.config.streams[].sample_point 的 action-specific 参数值。",
+                    "x-description-zh": "args.config.streams[].sample_point 的 action-specific 参数值。"
                   },
                   "reset": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "args.config.streams[].reset 的 action-specific 参数值。",
+                    "x-description-zh": "args.config.streams[].reset 的 action-specific 参数值。"
                   },
                   "vld": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "args.config.streams[].vld 的 action-specific 参数值。",
+                    "x-description-zh": "args.config.streams[].vld 的 action-specific 参数值。"
                   },
                   "rdy": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "args.config.streams[].rdy 的 action-specific 参数值。",
+                    "x-description-zh": "args.config.streams[].rdy 的 action-specific 参数值。"
                   },
                   "bp": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "args.config.streams[].bp 的 action-specific 参数值。",
+                    "x-description-zh": "args.config.streams[].bp 的 action-specific 参数值。"
                   },
                   "sop": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "args.config.streams[].sop 的 action-specific 参数值。",
+                    "x-description-zh": "args.config.streams[].sop 的 action-specific 参数值。"
                   },
                   "eop": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "args.config.streams[].eop 的 action-specific 参数值。",
+                    "x-description-zh": "args.config.streams[].eop 的 action-specific 参数值。"
                   },
                   "data": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "args.config.streams[].data 的 action-specific 参数值。",
+                    "x-description-zh": "args.config.streams[].data 的 action-specific 参数值。"
                   },
                   "beat_fields": {
                     "type": "object",
                     "additionalProperties": {
                       "type": "string"
-                    }
+                    },
+                    "description": "args.config.streams[].beat_fields 的组合参数对象。",
+                    "x-description-zh": "args.config.streams[].beat_fields 的组合参数对象。"
                   },
                   "packet_stable_fields": {
                     "type": "object",
                     "additionalProperties": {
                       "type": "string"
-                    }
+                    },
+                    "description": "args.config.streams[].packet_stable_fields 的组合参数对象。",
+                    "x-description-zh": "args.config.streams[].packet_stable_fields 的组合参数对象。"
                   },
                   "channel_id": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "args.config.streams[].channel_id 的 action-specific 参数值。",
+                    "x-description-zh": "args.config.streams[].channel_id 的 action-specific 参数值。"
                   },
                   "channel_id_valid": {
                     "type": "string",
@@ -115,37 +145,51 @@
                       "sop",
                       "eop",
                       "every_beat"
-                    ]
+                    ],
+                    "description": "args.config.streams[].channel_id_valid 的 action-specific 参数值。",
+                    "x-description-zh": "args.config.streams[].channel_id_valid 的 action-specific 参数值。"
                   },
                   "allow_interleaving": {
-                    "type": "boolean"
+                    "type": "boolean",
+                    "description": "args.config.streams[].allow_interleaving 的 action-specific 参数值。",
+                    "x-description-zh": "args.config.streams[].allow_interleaving 的 action-specific 参数值。"
                   },
                   "description": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "args.config.streams[].description 的 action-specific 参数值。",
+                    "x-description-zh": "args.config.streams[].description 的 action-specific 参数值。"
                   }
                 },
-                "additionalProperties": false
+                "additionalProperties": false,
+                "description": "args.config.streams[] 的组合参数对象。",
+                "x-description-zh": "args.config.streams[] 的组合参数对象。"
               },
-              "description": "需要加载的 stream 配置列表。"
+              "description": "需要加载的 stream 配置列表。",
+              "x-description-zh": "需要加载的 stream 配置列表。"
             }
           },
           "additionalProperties": false,
-          "description": "内联配置对象。"
+          "description": "内联配置对象。",
+          "x-description-zh": "内联配置对象。"
         },
         "config_path": {
           "type": "string",
-          "description": "输入配置文件路径。"
+          "description": "输入配置文件路径。",
+          "x-description-zh": "输入配置文件路径。"
         },
         "file": {
           "type": "string",
-          "description": "源码文件路径。"
+          "description": "源码文件路径。",
+          "x-description-zh": "源码文件路径。"
         },
         "mode": {
           "type": "string",
           "enum": [
             "replace",
             "append"
-          ]
+          ],
+          "description": "本 action 的处理或返回模式；合法值、默认值和与其它参数的关系由 action-specific 合同定义。",
+          "x-description-zh": "本 action 的处理或返回模式；合法值、默认值和与其它参数的关系由 action-specific 合同定义。"
         },
         "streams": {
           "type": "array",
@@ -160,7 +204,9 @@
             ],
             "properties": {
               "name": {
-                "type": "string"
+                "type": "string",
+                "description": "args.streams[].name 的 action-specific 参数值。",
+                "x-description-zh": "args.streams[].name 的 action-specific 参数值。"
               },
               "signals": {
                 "type": "object",
@@ -168,10 +214,14 @@
                 "additionalProperties": {
                   "type": "string",
                   "minLength": 1
-                }
+                },
+                "description": "args.streams[].signals 的组合参数对象。",
+                "x-description-zh": "args.streams[].signals 的组合参数对象。"
               },
               "clock": {
-                "type": "string"
+                "type": "string",
+                "description": "args.streams[].clock 的 action-specific 参数值。",
+                "x-description-zh": "args.streams[].clock 的 action-specific 参数值。"
               },
               "edge": {
                 "type": "string",
@@ -179,50 +229,74 @@
                   "posedge",
                   "negedge",
                   "dual"
-                ]
+                ],
+                "description": "args.streams[].edge 的 action-specific 参数值。",
+                "x-description-zh": "args.streams[].edge 的 action-specific 参数值。"
               },
               "sample_point": {
                 "type": "string",
                 "enum": [
                   "before",
                   "after"
-                ]
+                ],
+                "description": "args.streams[].sample_point 的 action-specific 参数值。",
+                "x-description-zh": "args.streams[].sample_point 的 action-specific 参数值。"
               },
               "reset": {
-                "type": "string"
+                "type": "string",
+                "description": "args.streams[].reset 的 action-specific 参数值。",
+                "x-description-zh": "args.streams[].reset 的 action-specific 参数值。"
               },
               "vld": {
-                "type": "string"
+                "type": "string",
+                "description": "args.streams[].vld 的 action-specific 参数值。",
+                "x-description-zh": "args.streams[].vld 的 action-specific 参数值。"
               },
               "rdy": {
-                "type": "string"
+                "type": "string",
+                "description": "args.streams[].rdy 的 action-specific 参数值。",
+                "x-description-zh": "args.streams[].rdy 的 action-specific 参数值。"
               },
               "bp": {
-                "type": "string"
+                "type": "string",
+                "description": "args.streams[].bp 的 action-specific 参数值。",
+                "x-description-zh": "args.streams[].bp 的 action-specific 参数值。"
               },
               "sop": {
-                "type": "string"
+                "type": "string",
+                "description": "args.streams[].sop 的 action-specific 参数值。",
+                "x-description-zh": "args.streams[].sop 的 action-specific 参数值。"
               },
               "eop": {
-                "type": "string"
+                "type": "string",
+                "description": "args.streams[].eop 的 action-specific 参数值。",
+                "x-description-zh": "args.streams[].eop 的 action-specific 参数值。"
               },
               "data": {
-                "type": "string"
+                "type": "string",
+                "description": "args.streams[].data 的 action-specific 参数值。",
+                "x-description-zh": "args.streams[].data 的 action-specific 参数值。"
               },
               "beat_fields": {
                 "type": "object",
                 "additionalProperties": {
                   "type": "string"
-                }
+                },
+                "description": "args.streams[].beat_fields 的组合参数对象。",
+                "x-description-zh": "args.streams[].beat_fields 的组合参数对象。"
               },
               "packet_stable_fields": {
                 "type": "object",
                 "additionalProperties": {
                   "type": "string"
-                }
+                },
+                "description": "args.streams[].packet_stable_fields 的组合参数对象。",
+                "x-description-zh": "args.streams[].packet_stable_fields 的组合参数对象。"
               },
               "channel_id": {
-                "type": "string"
+                "type": "string",
+                "description": "args.streams[].channel_id 的 action-specific 参数值。",
+                "x-description-zh": "args.streams[].channel_id 的 action-specific 参数值。"
               },
               "channel_id_valid": {
                 "type": "string",
@@ -230,18 +304,27 @@
                   "sop",
                   "eop",
                   "every_beat"
-                ]
+                ],
+                "description": "args.streams[].channel_id_valid 的 action-specific 参数值。",
+                "x-description-zh": "args.streams[].channel_id_valid 的 action-specific 参数值。"
               },
               "allow_interleaving": {
-                "type": "boolean"
+                "type": "boolean",
+                "description": "args.streams[].allow_interleaving 的 action-specific 参数值。",
+                "x-description-zh": "args.streams[].allow_interleaving 的 action-specific 参数值。"
               },
               "description": {
-                "type": "string"
+                "type": "string",
+                "description": "args.streams[].description 的 action-specific 参数值。",
+                "x-description-zh": "args.streams[].description 的 action-specific 参数值。"
               }
             },
-            "additionalProperties": false
+            "additionalProperties": false,
+            "description": "args.streams[] 的组合参数对象。",
+            "x-description-zh": "args.streams[] 的组合参数对象。"
           },
-          "description": "需要加载的 stream 配置列表。"
+          "description": "需要加载的 stream 配置列表。",
+          "x-description-zh": "需要加载的 stream 配置列表。"
         },
         "time_unit": {
           "type": "string",
@@ -253,7 +336,9 @@
             "us",
             "ms",
             "s"
-          ]
+          ],
+          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
+          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
         }
       },
       "additionalProperties": false,
@@ -309,5 +394,17 @@
   "x-how_it_works": "把 stream 定义写入 stream manager。",
   "x-when_to_use": "定义 valid/ready/data 类流接口。",
   "x-arg_contract_notes": "also one of: streams / config / config_path / file",
-  "x-description-zh": "加载 stream 配置。"
+  "x-description-zh": "加载 stream 配置。",
+  "x-agent": {
+    "use_when": [
+      "需要执行该 action 的 catalog 所述能力。"
+    ],
+    "do_not_use_when": [
+      "任务不属于该 action 的公开合同。"
+    ],
+    "alternatives": [],
+    "constraints": [
+      "also one of: streams / config / config_path / file"
+    ]
+  }
 }

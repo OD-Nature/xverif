@@ -32,47 +32,66 @@
       "properties": {
         "clock": {
           "type": "string",
-          "description": "采样、统计或协议检查使用的 clock 信号路径。"
+          "description": "采样、统计或协议检查使用的 clock 信号路径。",
+          "x-description-zh": "采样、统计或协议检查使用的 clock 信号路径。"
         },
         "data": {
           "oneOf": [
             {
-              "type": "string"
+              "type": "string",
+              "description": "args.data 的 action-specific 参数值。",
+              "x-description-zh": "args.data 的 action-specific 参数值。"
             },
             {
               "type": "array",
               "items": {
-                "type": "string"
-              }
+                "type": "string",
+                "description": "args.data[] 的 action-specific 参数值。",
+                "x-description-zh": "args.data[] 的 action-specific 参数值。"
+              },
+              "description": "args.data 的有序项目列表。",
+              "x-description-zh": "args.data 的有序项目列表。"
             }
-          ]
+          ],
+          "description": "可选 payload 信号路径或路径列表；仅提供时才可检查 stalled-data stability。",
+          "x-description-zh": "可选 payload 信号路径或路径列表；仅提供时才可检查 stalled-data stability。"
         },
         "edge": {
           "type": "string",
-          "description": "clock sampling 使用的边沿：posedge、negedge 或 dual。"
+          "description": "clock sampling 使用的边沿：posedge、negedge 或 dual。",
+          "x-description-zh": "clock sampling 使用的边沿：posedge、negedge 或 dual。"
         },
         "line_limit": {
           "type": "integer",
           "minimum": 1,
-          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
+          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。",
+          "x-description-zh": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
         },
         "ready": {
           "type": "string",
-          "description": "valid-ready 握手中的 ready 信号路径。"
+          "description": "valid-ready 握手中的 ready 信号路径。",
+          "x-description-zh": "valid-ready 握手中的 ready 信号路径。"
         },
         "rules": {
           "type": "object",
           "properties": {
             "max_wait_cycles": {
               "type": "integer",
-              "minimum": 0
+              "minimum": 0,
+              "description": "从 valid 被采样为 1 到 handshake 前允许的最大连续等待 cycle 数。",
+              "x-description-zh": "从 valid 被采样为 1 到 handshake 前允许的最大连续等待 cycle 数。"
             },
             "check_data_stable_when_stalled": {
-              "type": "boolean"
+              "type": "boolean",
+              "default": false,
+              "description": "仅提供 data 时有效；检查 valid=1、ready=0 期间 data 是否改变。",
+              "x-description-zh": "仅提供 data 时有效；检查 valid=1、ready=0 期间 data 是否改变。"
             },
             "require_valid_hold_until_handshake": {
               "type": "boolean",
-              "default": true
+              "default": true,
+              "description": "检查 valid 在首次断言后是否保持到 valid&&ready handshake。",
+              "x-description-zh": "检查 valid 在首次断言后是否保持到 valid&&ready handshake。"
             },
             "ready_without_valid": {
               "type": "string",
@@ -81,10 +100,14 @@
                 "intervals",
                 "all"
               ],
-              "default": "summary"
+              "default": "summary",
+              "description": "ready=1 且 valid=0 的返回粒度；这是活动统计，不单独等于协议错误。",
+              "x-description-zh": "ready=1 且 valid=0 的返回粒度；这是活动统计，不单独等于协议错误。"
             }
           },
-          "additionalProperties": false
+          "additionalProperties": false,
+          "description": "valid-ready 检查规则；未提供字段使用各自 schema default。",
+          "x-description-zh": "valid-ready 检查规则；未提供字段使用各自 schema default。"
         },
         "sample_point": {
           "type": "string",
@@ -92,20 +115,26 @@
             "before",
             "after"
           ],
-          "description": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。"
+          "description": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。",
+          "x-description-zh": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。"
         },
         "time_range": {
           "type": "object",
           "properties": {
             "begin": {
-              "type": "string"
+              "type": "string",
+              "description": "args.time_range.begin 的 action-specific 参数值。",
+              "x-description-zh": "args.time_range.begin 的 action-specific 参数值。"
             },
             "end": {
-              "type": "string"
+              "type": "string",
+              "description": "args.time_range.end 的 action-specific 参数值。",
+              "x-description-zh": "args.time_range.end 的 action-specific 参数值。"
             }
           },
           "additionalProperties": false,
-          "description": "查询或分析的时间窗口。"
+          "description": "分析时间窗口；begin/end 为闭区间端点，可分别省略以使用可用波形边界。",
+          "x-description-zh": "分析时间窗口；begin/end 为闭区间端点，可分别省略以使用可用波形边界。"
         },
         "time_unit": {
           "type": "string",
@@ -117,11 +146,14 @@
             "us",
             "ms",
             "s"
-          ]
+          ],
+          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
+          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
         },
         "valid": {
           "type": "string",
-          "description": "valid-ready 握手或采样检查中的 valid 信号路径。"
+          "description": "valid-ready 握手或采样检查中的 valid 信号路径。",
+          "x-description-zh": "valid-ready 握手或采样检查中的 valid 信号路径。"
         }
       },
       "additionalProperties": false,
@@ -156,5 +188,22 @@
   "x-how_it_works": "按 clock 采样 valid/ready/data，统计 stall、transfer 和数据稳定性违规。",
   "x-when_to_use": "定位握手停顿和协议风险。",
   "x-arg_contract_notes": "required: clock, valid, ready",
-  "x-description-zh": "检查 valid/ready 握手。"
+  "x-description-zh": "检查 valid/ready 握手。",
+  "x-agent": {
+    "use_when": [
+      "需要检查通用 valid-ready transfer、stall 或数据稳定性。"
+    ],
+    "do_not_use_when": [
+      "需要 AXI/APB 专用 transaction 关联。"
+    ],
+    "alternatives": [
+      {
+        "action": "axi.query",
+        "when": "接口是标准 AXI。"
+      }
+    ],
+    "constraints": [
+      "required: clock, valid, ready"
+    ]
+  }
 }

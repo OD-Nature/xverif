@@ -42,15 +42,19 @@
       "type": "object",
       "properties": {
         "limits": {
-          "type": "object"
+          "type": "object",
+          "description": "执行资源限制；只使用本 action 的顶层 limits properties，不能写入 args.limits。",
+          "x-description-zh": "执行资源限制；只使用本 action 的顶层 limits properties，不能写入 args.limits。"
         },
         "signal": {
           "type": "string",
-          "description": "目标信号路径。"
+          "description": "目标信号路径。",
+          "x-description-zh": "目标信号路径。"
         },
         "time": {
           "type": "string",
-          "description": "查询或验证的目标时间点。"
+          "description": "查询或验证的目标时间点。",
+          "x-description-zh": "查询或验证的目标时间点。"
         },
         "time_unit": {
           "type": "string",
@@ -62,7 +66,9 @@
             "us",
             "ms",
             "s"
-          ]
+          ],
+          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
+          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
         }
       },
       "additionalProperties": false,
@@ -120,5 +126,17 @@
   "x-how_it_works": "结合 waveform 当前值和 design 依赖，定位 time 的有效驱动证据。",
   "x-when_to_use": "回答“此刻是谁真正驱动了它”。",
   "x-arg_contract_notes": "required: signal, time",
-  "x-description-zh": "在指定时间找 active driver。"
+  "x-description-zh": "在指定时间找 active driver。",
+  "x-agent": {
+    "use_when": [
+      "需要执行该 action 的 catalog 所述能力。"
+    ],
+    "do_not_use_when": [
+      "任务不属于该 action 的公开合同。"
+    ],
+    "alternatives": [],
+    "constraints": [
+      "required: signal, time"
+    ]
+  }
 }
