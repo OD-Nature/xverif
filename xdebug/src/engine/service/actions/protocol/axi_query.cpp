@@ -8,6 +8,7 @@
 #include "waveform/axi/axi_manager.h"
 #include "waveform/axi/axi_analyzer.h"
 #include "waveform/axi/axi_exporter.h"
+#include "waveform/axi/axi_transaction_json.h"
 #include "waveform/common/xdebug_waveform_paths.h"
 #include "waveform/value/logic_value.h"
 #include "core/npi/time_contract.h"
@@ -54,33 +55,6 @@ static bool parse_user_uint64_literal(const std::string& text,
     }
     return true;
 }
-static Json axi_transaction_json(const xdebug_waveform::AxiTransaction& txn, bool verbose) {
-    Json tj;
-    tj["time"] = xdebug_core::format_time(xdebug_waveform::g_fsdb_file, txn.addr_time);
-    tj["response_time"] = xdebug_core::format_time(xdebug_waveform::g_fsdb_file, txn.resp_time);
-    tj["latency"] = xdebug_core::format_duration(
-        xdebug_waveform::g_fsdb_file,
-        txn.resp_time >= txn.addr_time ? txn.resp_time - txn.addr_time : 0);
-    tj["addr"] = txn.addr;
-    tj["id"] = txn.id;
-    tj["len"] = txn.len;
-    tj["size"] = txn.size;
-    tj["burst"] = txn.burst;
-    tj["is_write"] = txn.is_write;
-    tj["first_data_time"] = xdebug_core::format_time(xdebug_waveform::g_fsdb_file, txn.first_data_time);
-    tj["last_data_time"] = xdebug_core::format_time(xdebug_waveform::g_fsdb_file, txn.last_data_time);
-    tj["beat_count"] = txn.data.size();
-    tj["expected_beat_count"] = txn.expected_beat_count;
-    tj["phase_order"] = txn.phase_order;
-    tj["response_dependency_violation"] = txn.response_dependency_violation;
-    if (verbose && !txn.data.empty()) {
-        Json da = Json::array();
-        for (const auto& d : txn.data) da.push_back(d);
-        tj["data"] = da;
-    }
-    return tj;
-}
-
 class AxiQueryHandler : public EngineActionHandler {
 public:
     const char* action_name() const override { return "axi.query"; }
@@ -89,7 +63,7 @@ public:
     Json run(const Json& r, EngineActionContext& ctx) const override {
         using namespace xdebug_waveform;
         Json a = r.value("args", Json::object());
-        const bool verbose = a.value("output", Json::object()).value("verbose", false);
+        const bool include_data = a.value("output", Json::object()).value("include_data", false);
         std::string name = a.value("name", "");
         if (name.empty()) return protocol_missing_name_error(action_name(), "axi");
 
@@ -104,9 +78,45 @@ public:
         std::string addr_str = a.value("address", a.value("addr", ""));
         std::string id_str = a.value("id", "");
         Json query = a.value("query", Json::object());
+        const std::string channel = query.value("channel", std::string());
+        const std::string handshake_time_text = query.value("handshake_time", std::string());
         int num = query.value("index", -1);
         int limit = query.value("line_limit", -1);
         bool last = a.value("last", false);
+
+        if (!channel.empty() || !handshake_time_text.empty()) {
+            if (channel.empty() || handshake_time_text.empty())
+                return protocol_invalid_arg_error(
+                    action_name(), "args.query",
+                    "query.channel and query.handshake_time must be provided together",
+                    "channel plus canonical time string");
+            if (a.contains("direction") || a.contains("address") || a.contains("addr") ||
+                a.contains("id") || a.contains("last") || query.contains("index") ||
+                query.contains("line_limit"))
+                return protocol_invalid_arg_error(
+                    action_name(), "args.query",
+                    "handshake query cannot be combined with transaction selectors",
+                    "only query.channel, query.handshake_time, and optional output.include_data");
+            npiFsdbTime handshake_time = 0;
+            std::string time_error;
+            if (!parse_user_time(handshake_time_text.c_str(), false, handshake_time, time_error))
+                return protocol_invalid_arg_error(action_name(), "args.query.handshake_time",
+                                                  time_error, "canonical time string such as 120ns");
+            AxiHandshakeMatch match;
+            const bool found = g_axi_analyzer.get_by_handshake(name, channel, handshake_time, match);
+            Json out;
+            out["summary"] = { {"name", name}, {"query_mode", "handshake"}, {"found", found} };
+            out["match"] = {
+                {"channel", channel},
+                {"handshake_time", xdebug_core::format_time(g_fsdb_file, handshake_time)},
+            };
+            if (found && match.txn)
+                out["match"]["direction"] = match.txn->is_write ? "write" : "read";
+            if (found && match.beat_index > 0) out["match"]["beat_index"] = match.beat_index;
+            if (found && match.txn)
+                out["transaction"] = axi_transaction_to_json(g_fsdb_file, *match.txn, include_data);
+            return out;
+        }
 
         const AxiTransaction* txn = nullptr;
         bool found = false;
@@ -136,7 +146,7 @@ public:
                         bool ok = is_write ? g_axi_analyzer.get_write_by_addr_num(name, addr, id_str.c_str(), (size_t)i, item)
                                            : g_axi_analyzer.get_read_by_addr_num(name, addr, id_str.c_str(), (size_t)i, item);
                         if (!ok || !item) break;
-                        transactions.push_back(axi_transaction_json(*item, verbose));
+                        transactions.push_back(axi_transaction_to_json(g_fsdb_file, *item, include_data));
                     }
                     Json out;
                     out["summary"] = {{"name",name},{"direction",dir},{"count",(int)transactions.size()}};
@@ -160,7 +170,7 @@ public:
                         bool ok = is_write ? g_axi_analyzer.get_write_by_addr_num(name, addr, (size_t)i, item)
                                            : g_axi_analyzer.get_read_by_addr_num(name, addr, (size_t)i, item);
                         if (!ok || !item) break;
-                        transactions.push_back(axi_transaction_json(*item, verbose));
+                        transactions.push_back(axi_transaction_to_json(g_fsdb_file, *item, include_data));
                     }
                     Json out;
                     out["summary"] = {{"name",name},{"direction",dir},{"count",(int)transactions.size()}};
@@ -185,7 +195,7 @@ public:
                     bool ok = is_write ? g_axi_analyzer.get_write_by_num(name, id_str.c_str(), (size_t)i, item)
                                        : g_axi_analyzer.get_read_by_num(name, id_str.c_str(), (size_t)i, item);
                     if (!ok || !item) break;
-                    transactions.push_back(axi_transaction_json(*item, verbose));
+                    transactions.push_back(axi_transaction_to_json(g_fsdb_file, *item, include_data));
                 }
                 Json out;
                 out["summary"] = {{"name",name},{"direction",dir},{"count",(int)transactions.size()}};
@@ -205,7 +215,7 @@ public:
                 bool ok = is_write ? g_axi_analyzer.get_write_by_num(name, (size_t)i, item)
                                    : g_axi_analyzer.get_read_by_num(name, (size_t)i, item);
                 if (!ok || !item) break;
-                transactions.push_back(axi_transaction_json(*item, verbose));
+                transactions.push_back(axi_transaction_to_json(g_fsdb_file, *item, include_data));
             }
             Json out;
             out["summary"] = {{"name",name},{"direction",dir},{"count",(int)transactions.size()}};
@@ -225,7 +235,7 @@ public:
         Json out;
         out["summary"] = {{"name",name},{"direction",dir},{"found",found}};
         if (found && txn) {
-            out["transaction"] = axi_transaction_json(*txn, verbose);
+            out["transaction"] = axi_transaction_to_json(g_fsdb_file, *txn, include_data);
         }
         return out;
     }

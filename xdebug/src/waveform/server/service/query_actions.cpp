@@ -92,7 +92,7 @@ Json ai_axi_transactions_window(const Json& args, std::string& error) {
     if (!ensure_axi_analyzed_for_ai(name, error)) return Json();
     std::vector<xdebug_waveform::AxiContextTransaction> txns;
     int filter = direction_filter(args);
-    const bool verbose = args.value("output", Json::object()).value("verbose", false);
+    const bool include_data = args.value("output", Json::object()).value("include_data", false);
     int limit = args.value("line_limit", 1000);
     if (!g_axi_analyzer.get_transactions_in_range(name, begin, end, txns, -1)) {
         error = "AXI config not analyzed: " + name;
@@ -110,7 +110,7 @@ Json ai_axi_transactions_window(const Json& args, std::string& error) {
             truncated = true;
             continue;
         }
-        Json txn = axi_txn_to_json(item.txn, verbose);
+        Json txn = axi_txn_to_json(item.txn, include_data);
         txn["match_time"] = format_time(item.match_time);
         txn["latency"] = format_duration(
             item.txn->resp_time >= item.txn->addr_time ? item.txn->resp_time - item.txn->addr_time : 0);
@@ -132,8 +132,9 @@ Json ai_axi_transactions_window(const Json& args, std::string& error) {
                        {"orphan_r_beat_count", diag.orphan_r_beat_count},
                        {"response_dependency_violation_count", diag.response_dependency_violation_count}};
     }
-    return Json{{"name", name}, {"begin", range.first}, {"end", range.second},
-                {"transaction_count", arr.size()}, {"matched_transaction_count", matched_count},
+    return Json{{"summary", {{"name", name}, {"begin", range.first}, {"end", range.second},
+                             {"transaction_count", matched_count}}},
+                {"matched_transaction_count", matched_count},
                 {"returned_transaction_count", arr.size()},
                 {"pairing_rule", {{"write_data", "AXI4 W bursts bind in AW acceptance order"},
                                   {"write_response", "BID binds to the oldest data-complete AW with the same ID"},
@@ -189,7 +190,7 @@ Json ai_axi_latency_outlier(const Json& args, std::string& error) {
     }
     Json out = Json::array();
     size_t matched_outlier_count = 0;
-    const bool verbose = args.value("output", Json::object()).value("verbose", false);
+    const bool include_data = args.value("output", Json::object()).value("include_data", false);
     for (size_t i = 0; i < candidates.size(); ++i) {
         const bool selected = method == "threshold"
             ? latency_key(candidates[i]) > threshold
@@ -197,7 +198,7 @@ Json ai_axi_latency_outlier(const Json& args, std::string& error) {
         if (!selected) continue;
         ++matched_outlier_count;
         if (static_cast<int>(out.size()) < line_limit) {
-            Json txn = axi_txn_to_json(candidates[i].txn, verbose);
+            Json txn = axi_txn_to_json(candidates[i].txn, include_data);
             txn["match_time"] = format_time(candidates[i].match_time);
             txn["latency"] = format_duration(latency_key(candidates[i]));
             out.push_back(std::move(txn));
@@ -205,7 +206,8 @@ Json ai_axi_latency_outlier(const Json& args, std::string& error) {
     }
     const size_t returned_outlier_count = out.size();
     auto range = format_time_range(begin, end);
-    Json data = {{"name", name}, {"begin", range.first}, {"end", range.second}};
+    Json data = {{"summary", {{"name", name}, {"begin", range.first}, {"end", range.second},
+                              {"transaction_count", candidates.size()}}}};
     data["outliers"] = std::move(out);
     data["outlier_count"] = returned_outlier_count;
     data["matched_outlier_count"] = matched_outlier_count;

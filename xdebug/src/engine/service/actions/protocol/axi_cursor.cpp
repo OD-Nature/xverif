@@ -8,6 +8,7 @@
 #include "waveform/axi/axi_manager.h"
 #include "waveform/axi/axi_analyzer.h"
 #include "waveform/axi/axi_exporter.h"
+#include "waveform/axi/axi_transaction_json.h"
 #include "waveform/common/xdebug_waveform_paths.h"
 #include "waveform/value/logic_value.h"
 #include "core/npi/time_contract.h"
@@ -77,14 +78,7 @@ public:
                           {"total_count", total}, {"at_begin", ok && index == 1},
                           {"at_end", ok && index == total}};
         if (ok && txn) {
-            Json tj;
-            tj["time"] = xdebug_core::format_time(g_fsdb_file, txn->addr_time);
-            tj["response_time"] = xdebug_core::format_time(g_fsdb_file, txn->resp_time);
-            tj["latency"] = xdebug_core::format_duration(
-                g_fsdb_file, txn->resp_time >= txn->addr_time ? txn->resp_time - txn->addr_time : 0);
-            tj["addr"] = txn->addr; tj["id"] = txn->id;
-            tj["len"] = txn->len; tj["is_write"] = txn->is_write;
-            out["transaction"] = tj;
+            out["transaction"] = axi_transaction_to_json(g_fsdb_file, *txn, false);
         }
         return out;
     }

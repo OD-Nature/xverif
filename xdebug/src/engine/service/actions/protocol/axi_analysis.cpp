@@ -8,6 +8,7 @@
 #include "waveform/axi/axi_manager.h"
 #include "waveform/axi/axi_analyzer.h"
 #include "waveform/axi/axi_exporter.h"
+#include "waveform/axi/axi_transaction_json.h"
 #include "waveform/common/xdebug_waveform_paths.h"
 #include "waveform/value/logic_value.h"
 #include "core/npi/time_contract.h"
@@ -148,13 +149,8 @@ public:
             }
             out["latency"]["write_phase_order_counts"] = phase_counts;
             if (selected.max_txn) {
-                out["slowest"] = {{"time", xdebug_core::format_time(g_fsdb_file, selected.max_txn->addr_time)},
-                    {"response_time", xdebug_core::format_time(g_fsdb_file, selected.max_txn->resp_time)},
-                    {"first_data_time", xdebug_core::format_time(g_fsdb_file, selected.max_txn->first_data_time)},
-                    {"last_data_time", xdebug_core::format_time(g_fsdb_file, selected.max_txn->last_data_time)},
-                    {"addr", selected.max_txn->addr}, {"id", selected.max_txn->id},
-                    {"is_write", selected.max_txn->is_write},
-                    {"phase_order", selected.max_txn->phase_order}};
+                out["slowest"] = axi_transaction_to_json(
+                    g_fsdb_file, *selected.max_txn, false);
             }
         } else if (analysis == "osd") {
             AxiStatResult selected, read, write;
@@ -171,7 +167,7 @@ public:
                           {"final_write", diag.final_write_outstanding},
                           {"definitions", {{"read", "increment on AR handshake, decrement on RLAST handshake"},
                                            {"write", "increment on AW handshake, decrement on B handshake"}}}};
-        } else {
+        } else if (analysis == "pending") {
             int line_limit = a.value("line_limit", 20);
             Json transactions = Json::array();
             size_t matching_count = 0;
@@ -185,12 +181,16 @@ public:
             };
             append_pending(canonical->pending_writes, 1);
             append_pending(canonical->pending_reads, 2);
-            out["summary"]["outstanding_count"] = matching_count;
-            out["summary"]["returned_outstanding_count"] = transactions.size();
+            out["summary"]["pending_count"] = matching_count;
+            out["summary"]["returned_pending_count"] = transactions.size();
             out["summary"]["truncated"] = transactions.size() < matching_count;
             out["summary"]["truncation_scope"] = transactions.size() < matching_count
                 ? Json("response_transactions") : Json(nullptr);
-            out["outstanding"] = transactions;
+            out["pending_transactions"] = transactions;
+        } else {
+            return protocol_invalid_enum_error(
+                action_name(), "args.analysis", "analysis must be latency, osd, or pending",
+                Json::array({"latency", "osd", "pending"}));
         }
         return out;
     }

@@ -1,5 +1,6 @@
 #include "../server_internal.h"
 #include "../../export/waveform_exporter.h"
+#include "../../axi/axi_transaction_json.h"
 
 namespace xdebug_waveform {
 
@@ -517,29 +518,9 @@ std::string format_axi_txn(const xdebug_waveform::AxiTransaction* txn) {
     return out;
 }
 
-Json axi_txn_to_json(const xdebug_waveform::AxiTransaction* txn, bool verbose) {
-    Json j;
-    if (!txn) return j;
-    j["addr_time"] = format_time(txn->addr_time);
-    j["type"] = txn->is_write ? "WR" : "RD";
-    j["id"] = "'h" + txn->id;
-    j["addr"] = "'h" + txn->addr;
-    j["len"] = "'h" + txn->len;
-    j["size"] = "'h" + txn->size;
-    j["burst"] = "'h" + txn->burst;
-    j["beats"] = txn->data.size();
-    j["first_data_time"] = format_time(txn->first_data_time);
-    j["last_data_time"] = format_time(txn->last_data_time);
-    j["resp_time"] = format_time(txn->resp_time);
-    j["resp"] = "'h" + txn->resp;
-    j["expected_beats"] = txn->expected_beat_count;
-    j["phase_order"] = txn->phase_order;
-    j["response_dependency_violation"] = txn->response_dependency_violation;
-    if (verbose) {
-        j["data"] = json_array_hex(txn->data);
-        j["wstrb"] = json_array_hex(txn->wstrb);
-    }
-    return j;
+Json axi_txn_to_json(const xdebug_waveform::AxiTransaction* txn, bool include_data) {
+    if (!txn) return Json();
+    return axi_transaction_to_json(g_fsdb_file, *txn, include_data);
 }
 
 std::string format_axi_txn_json(const xdebug_waveform::AxiTransaction* txn) {
