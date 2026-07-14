@@ -75,6 +75,9 @@ struct StreamStallWindow {
 
 struct StreamAnalysis {
     std::vector<StreamRow> transfers;
+    StreamRow first_transfer;
+    StreamRow last_transfer;
+    bool has_transfer_evidence = false;
     std::vector<StreamStallWindow> stalls;
     std::vector<StreamPacket> packets;
     int clock_edges = 0;
@@ -105,6 +108,8 @@ struct StreamQueryOptions {
     npiFsdbTime begin = 0;
     npiFsdbTime end = 0;
     int limit = 32;
+    // 0 follows limit, -1 retains all transfer rows for exact post-scan work.
+    int retain_limit = 0;
     bool include_fields = true;
     std::string channel_filter;
 };

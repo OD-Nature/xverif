@@ -14,12 +14,23 @@ struct EventRecord {
     std::map<std::string, std::string> fields;
 };
 
+struct EventScanStats {
+    int sample_count = 0;
+    int matched_count = 0;
+    npiFsdbTime first_match_time = 0;
+    npiFsdbTime last_match_time = 0;
+    bool sample_budget_exhausted = false;
+};
+
 struct EventQuery {
     std::string expr;
     npiFsdbTime begin = 0;
     npiFsdbTime end = 0xFFFFFFFFFFFFFFFFULL;
     int limit = -1;
+    int max_samples = -1;
     bool fast_find = false;
+    bool retain_last_only = false;
+    EventScanStats* stats = nullptr;
 };
 
 class EventAnalyzer {

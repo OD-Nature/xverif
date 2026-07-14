@@ -802,6 +802,11 @@ def run_nonaxi(xdebug, fsdb):
         require("summary" not in validated["data"], "list.validate generated nested data.summary")
         diff = r.query("list.diff", args={"name": "basic", "time_range": {"begin": "0ns", "end": "120ns"}})
         require("ns" in diff["summary"]["diff_time"] or "ps" in diff["summary"]["diff_time"], "list.diff did not return time")
+        require(diff["summary"]["changed_signal_count"] >= 1,
+                "list.diff must report signals that actually changed at diff_time")
+        require(all(item["before"]["value"] != item["after"]["value"]
+                    for item in diff["data"]["changed_signals"]),
+                "list.diff must not report unchanged signals")
         require("time" not in diff["data"], "list.diff generated redundant data.time")
         list_export_dir = tempfile.mkdtemp(prefix="xdebug_list_export_")
         list_export = r.query("list.export", args={
@@ -875,6 +880,22 @@ def run_nonaxi(xdebug, fsdb):
         r.query("event.config.list", args={"name": "evt0"})
         found = r.query("event.find", args={"name": "evt0", "expr": "vld && !rdy && payload_lo != 0", "time_range": {"begin": "0ns", "end": "200ns"}})
         require(len(found["data"]["events"]) == 1, "event.find did not return one event")
+        all_limited = r.query("event.find", args={
+            "name": "evt0", "expr": "vld", "mode": "all",
+            "time_range": {"begin": "0ns", "end": "200ns"}, "line_limit": 1,
+        })
+        require(all_limited["summary"]["event_count"] >
+                all_limited["summary"]["returned_event_count"] == 1,
+                "event.find all must report full match count with limited response")
+        require(all_limited["summary"]["analysis_complete"] is True and
+                all_limited["summary"]["response_truncated"] is True,
+                "event.find response truncation must not imply incomplete analysis")
+        last_event = r.query("event.find", args={
+            "name": "evt0", "expr": "vld", "mode": "last",
+            "time_range": {"begin": "0ns", "end": "200ns"},
+        })
+        require(last_event["data"]["events"][0]["time"] == all_limited["summary"]["last"],
+                "event.find last must return the true last match")
         require_clock_summary(found, "posedge")
         require("examples" not in found["data"], "event.find generated redundant data.examples")
         ge_threshold = r.query("event.find", args={"name": "evt0", "expr": "vld && !rdy && payload_lo >= 10", "time_range": {"begin": "0ns", "end": "200ns"}})
@@ -1046,6 +1067,19 @@ def run_nonaxi(xdebug, fsdb):
             "conditions": [{"expr": "valid && !ready", "mode": "always"}],
         })
         require(win["summary"]["all_passed"] is True, "window.verify expected pass")
+        limited_window = r.query("window.verify", args={
+            "clock": "ai_complex_top.clk",
+            "signals": {"a": "ai_complex_top.sig_a"},
+            "conditions": [{"expr": "a == 8'hff", "mode": "eventually"}],
+            "time_range": {"begin": "0ns", "end": "120ns"},
+            "line_limit": 1,
+        })
+        require(limited_window["summary"]["sample_count"] > 1 and
+                limited_window["summary"]["scan_complete"] is True,
+                "window.verify line_limit must not cap sampled analysis")
+        require(limited_window["summary"]["returned_finding_count"] == 1 and
+                limited_window["summary"]["response_truncated"] is True,
+                "window.verify response evidence limit mismatch")
         require_clock_summary(win, "posedge", "after")
         offset_win = r.query("window.verify", args={
             "clock": "ai_complex_top.clk",
@@ -1121,6 +1155,11 @@ def run_nonaxi(xdebug, fsdb):
                 "sampled_pulse line_limit must only limit returned findings")
         require(sampled_pulse["summary"]["risk_count"] >= sampled_pulse["summary"]["returned_finding_count"],
                 "sampled_pulse risk_count must count all analyzed findings")
+        require(sampled_pulse["summary"]["payload_changed_without_sampled_valid_reporting"] == "summary",
+                "sampled_pulse payload risk reporting must default to summary")
+        require(not any(item.get("type") == "payload_changed_without_sampled_valid"
+                        for item in sampled_pulse["data"]["findings"]),
+                "sampled_pulse summary mode must not expand payload-risk findings")
         finding = sampled_pulse["data"]["findings"][0]
         raw_begin = time_ns(finding["raw_begin"])
         raw_end = time_ns(finding["raw_end"])
@@ -1168,8 +1207,21 @@ def run_nonaxi(xdebug, fsdb):
         require_clock_summary(hs, "negedge")
         require(hs["summary"]["ready_without_valid_reporting"] == "summary",
                 "handshake default ready-without-valid reporting must be summary")
+        require(hs["summary"]["require_valid_hold_until_handshake"] is True,
+                "handshake must enable valid-hold checking by default")
         require(not any(item.get("type") == "ready_without_valid" for item in hs["data"]["findings"]),
                 "summary reporting must not emit one finding per ready-without-valid cycle")
+        hs_valid_drop = r.query("handshake.inspect", args={
+            "clock": "ai_complex_top.clk",
+            "valid": "ai_complex_top.event_vld",
+            "ready": "ai_complex_top.event_rdy",
+            "time_range": {"begin": "0ns", "end": "200ns"},
+        })
+        require(hs_valid_drop["summary"]["valid_hold_violations"] >= 1,
+                "handshake must detect valid deassertion before handshake")
+        require(any(item.get("type") == "valid_dropped_before_handshake"
+                    for item in hs_valid_drop["data"]["findings"]),
+                "handshake valid-hold violation evidence missing")
         hs_intervals = r.query("handshake.inspect", args={
             "clock": "ai_complex_top.clk",
             "valid": "ai_complex_top.hs_valid",

@@ -837,6 +837,7 @@ def test_event_handler_errors_include_current_entry_examples(
                 "CONFIG_NOT_FOUND",
                 "args.name",
                 "event.find",
+                "handler",
             ),
             (
                 {
@@ -852,6 +853,7 @@ def test_event_handler_errors_include_current_entry_examples(
                 "INVALID_ARGUMENT",
                 "args.expr",
                 "event.find",
+                "handler",
             ),
             (
                 {
@@ -865,20 +867,22 @@ def test_event_handler_errors_include_current_entry_examples(
                         "mode": "middle",
                     },
                 },
-                "INVALID_ENUM",
+                "INVALID_REQUEST",
                 "args.mode",
                 "event.find",
+                "schema",
             ),
         ]
-        for request, code, invalid_arg, example_action in cases:
+        for request, code, invalid_arg, example_action, error_layer in cases:
             result = cli_runner.run(request, output_format="json", timeout_sec=120)
             assert not result.ok, result.stdout_raw + result.stderr_raw
             error = result.response["error"]
             assert error["code"] == code
-            assert error["error_layer"] == "handler"
+            assert error["error_layer"] == error_layer
             assert error["invalid_arg"] == invalid_arg
             assert "expected" in error
-            assert "example_note" in error
+            if error_layer == "handler":
+                assert "example_note" in error
             assert error["correct_example"]["action"] == example_action
     finally:
         cli_runner.run(
@@ -1285,6 +1289,85 @@ def test_stream_query_match_schema_rejects_legacy_field_shorthand(
     }
     with pytest.raises(jsonschema.ValidationError):
         validator.validate(legacy)
+
+
+@pytest.mark.contract
+def test_line_limit_and_scan_budget_request_contracts_are_strict(
+    xdebug_root: Path,
+) -> None:
+    def validator(action: str) -> jsonschema.Draft202012Validator:
+        return jsonschema.Draft202012Validator(_load_json(
+            xdebug_root / "schemas" / "v1" / "actions" /
+            ("%s.request.schema.json" % action)
+        ))
+
+    event_find = validator("event.find")
+    base_event = {
+        "api_version": "xdebug.v1",
+        "action": "event.find",
+        "args": {"name": "evt", "expr": "valid"},
+    }
+    event_find.validate({
+        **base_event,
+        "args": {**base_event["args"], "mode": "all", "line_limit": 4,
+                 "max_samples": 100},
+    })
+    for mode in ("first", "last"):
+        with pytest.raises(jsonschema.ValidationError):
+            event_find.validate({
+                **base_event,
+                "args": {**base_event["args"], "mode": mode, "line_limit": 4},
+            })
+
+    event_export = validator("event.export")
+    event_export.validate({
+        "api_version": "xdebug.v1",
+        "action": "event.export",
+        "args": {"name": "evt", "expr": "valid", "line_limit": 4,
+                 "max_events": 1000, "max_samples": 10000},
+    })
+
+    handshake = validator("handshake.inspect")
+    handshake.validate({
+        "api_version": "xdebug.v1",
+        "action": "handshake.inspect",
+        "args": {"clock": "top.clk", "valid": "top.valid", "ready": "top.ready",
+                 "rules": {"require_valid_hold_until_handshake": True}},
+    })
+    with pytest.raises(jsonschema.ValidationError):
+        handshake.validate({
+            "api_version": "xdebug.v1",
+            "action": "handshake.inspect",
+            "args": {"clock": "top.clk", "valid": "top.valid", "ready": "top.ready",
+                     "rules": {"unknown_rule": True}},
+        })
+
+    sampled = validator("sampled_pulse.inspect")
+    sampled.validate({
+        "api_version": "xdebug.v1",
+        "action": "sampled_pulse.inspect",
+        "args": {"clock": "top.clk", "valid": "top.valid",
+                 "rules": {"payload_changed_without_sampled_valid": "summary"}},
+    })
+
+    scope = validator("scope.list")
+    scope.validate({
+        "api_version": "xdebug.v1",
+        "action": "scope.list",
+        "args": {"name_pattern": "top.u_*", "kind": "signal"},
+    })
+
+    for action in ("expr.eval_at", "signal.stability"):
+        assert "line_limit" not in (
+            validator(action).schema["properties"]["args"]["properties"]
+        )
+
+    axi_analysis = validator("axi.analysis")
+    with pytest.raises(jsonschema.ValidationError):
+        axi_analysis.validate({
+            "api_version": "xdebug.v1", "action": "axi.analysis",
+            "args": {"name": "axi0", "analysis": "latency", "line_limit": 8},
+        })
 
 
 @pytest.mark.contract

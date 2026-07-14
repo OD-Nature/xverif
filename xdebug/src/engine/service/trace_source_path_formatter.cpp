@@ -436,7 +436,8 @@ Json simplify_active_driver_payload(const Json& raw,
                                     int max_results) {
     Json paths = Json::array();
     std::set<std::string> seen;
-    std::string active_time = raw.value("summary", Json::object()).value("active_time", std::string());
+    Json raw_summary = raw.value("summary", Json::object());
+    std::string active_time = raw_summary.value("active_time", std::string());
     Json trace_nodes = raw.value("trace", Json::object()).value("nodes", Json::array());
     if (trace_nodes.is_array()) {
         for (const auto& node : trace_nodes) {
@@ -476,6 +477,9 @@ Json simplify_active_driver_payload(const Json& raw,
         {"signal", signal},
         {"time", requested_time},
         {"active_time", active_time},
+        {"termination", raw_summary.value("termination", std::string("unresolved"))},
+        {"termination_detail", raw_summary.value(
+            "termination_detail", raw_summary.value("termination", std::string("unresolved")))},
         {"path_count", static_cast<int>(paths.size())},
         {"truncated", truncated}
     };
@@ -522,6 +526,9 @@ Json simplify_active_driver_chain_payload(const Json& raw,
         {"time", start_time},
         {"hop_count", static_cast<int>(hops.size())},
         {"termination", summary.value("termination", raw.value("termination", std::string("unresolved")))},
+        {"termination_detail", summary.value(
+            "termination_detail",
+            summary.value("termination", raw.value("termination", std::string("unresolved"))))},
         {"truncated", truncated}
     };
     add_limit_hint(out["summary"], limit_truncated, max_results);

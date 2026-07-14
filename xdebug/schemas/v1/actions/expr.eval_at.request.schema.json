@@ -42,11 +42,6 @@
           "type": "string",
           "description": "需要求值或匹配的布尔表达式。"
         },
-        "line_limit": {
-          "type": "integer",
-          "minimum": 1,
-          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
-        },
         "sample_point": {
           "type": "string",
           "enum": [
@@ -54,10 +49,6 @@
             "after"
           ],
           "description": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。"
-        },
-        "value_format": {
-          "type": "string", "enum": ["hex", "bin", "dec"],
-          "description": "仅控制响应中信号值的显示格式；不影响采样、时间或导出文件格式。"
         },
         "signals": {
           "oneOf": [

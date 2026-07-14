@@ -27,6 +27,7 @@
 #include <map>
 #include <sstream>
 #include <vector>
+#include <fnmatch.h>
 
 namespace xdebug_design {
 namespace {
@@ -41,6 +42,13 @@ public:
         std::string path = args.value("path", std::string(""));
         bool recursive = args.value("recursive", true);
         int max_depth = args.value("max_depth", 3);
+        std::string name_pattern = args.value("name_pattern", std::string("*"));
+        std::string kind = args.value("kind", std::string("all"));
+        if (kind != "all" && kind != "scope" && kind != "signal") {
+            return make_handler_error("INVALID_REQUEST", "scope.list args.kind must be all, scope, or signal",
+                                      {{"invalid_arg", "args.kind"},
+                                       {"allowed_values", Json::array({"all", "scope", "signal"})}});
+        }
         Json limits = request.value("limits", Json::object());
         int max_rows = limits.value("max_rows", -1);
 
@@ -69,6 +77,10 @@ public:
 
         Json scopes = Json::array();
         Json signals = Json::array();
+        size_t scanned_row_count = 0;
+        size_t matched_row_count = 0;
+        size_t matched_scope_count = 0;
+        size_t matched_signal_count = 0;
         char line[4096];
         while (fgets(line, sizeof(line), fp)) {
             size_t len = strlen(line);
@@ -78,25 +90,39 @@ public:
             bool is_scope = s.find("(scope)") != std::string::npos;
             size_t pos = s.find("  (");
             std::string name = (pos != std::string::npos) ? s.substr(0, pos) : s;
-            if (is_scope) scopes.push_back(name);
-            else signals.push_back(name);
+            ++scanned_row_count;
+            bool kind_matches = kind == "all" || (kind == "scope" && is_scope) ||
+                                (kind == "signal" && !is_scope);
+            if (!kind_matches || fnmatch(name_pattern.c_str(), name.c_str(), 0) != 0) continue;
+            ++matched_row_count;
+            if (is_scope) ++matched_scope_count; else ++matched_signal_count;
+            if (max_rows >= 0 && static_cast<int>(scopes.size() + signals.size()) >= max_rows) continue;
+            if (is_scope) scopes.push_back(name); else signals.push_back(name);
         }
         fclose(fp);
 
-        const size_t total_signals = signals.size();
-        bool truncated = max_rows >= 0 && signals.size() > static_cast<size_t>(max_rows);
-        if (truncated) {
-            Json limited = Json::array();
-            for (int i = 0; i < max_rows; ++i) limited.push_back(signals[i]);
-            signals = limited;
-        }
+        const size_t returned_row_count = scopes.size() + signals.size();
+        bool truncated = returned_row_count < matched_row_count;
+        const size_t default_xout_rows = 20;
         Json out;
         out["summary"] = {
             {"path", path},
             {"recursive", recursive},
+            {"name_pattern", name_pattern},
+            {"kind", kind},
+            {"scan_complete", true},
+            {"scanned_row_count", static_cast<int>(scanned_row_count)},
+            {"matched_row_count", static_cast<int>(matched_row_count)},
+            {"returned_row_count", static_cast<int>(returned_row_count)},
+            {"returned_scope_count", static_cast<int>(scopes.size())},
             {"returned_signal_count", static_cast<int>(signals.size())},
-            {"total_signal_count", static_cast<int>(total_signals)},
-            {"truncated", truncated}
+            {"total_scope_count", static_cast<int>(matched_scope_count)},
+            {"total_signal_count", static_cast<int>(matched_signal_count)},
+            {"response_truncated", truncated},
+            {"rendered_row_count", static_cast<int>(std::min(returned_row_count, default_xout_rows))},
+            {"render_truncated", returned_row_count > default_xout_rows},
+            {"truncated", truncated},
+            {"truncation_scopes", truncated ? Json::array({"response_rows"}) : Json::array()}
         };
         out["scopes"] = scopes;
         out["signals"] = signals;

@@ -61,6 +61,9 @@
         "termination": {
           "type": "string"
         },
+        "termination_detail": {
+          "type": "string"
+        },
         "truncated": {
           "type": "boolean"
         },

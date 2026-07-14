@@ -166,6 +166,11 @@ public:
                         {"correct_example", stream_export_example(config.name)},
                         {"example_note", "Example only; output.file_format controls exported file content, not MCP output_format."}});
         std::string output = output_arg.value("path", std::string());
+        if (!output.empty() && args.contains("line_limit"))
+            return err("INVALID_REQUEST",
+                       "stream.export args.line_limit only controls preview rows and is not valid for file export",
+                       {{"invalid_arg", "args.line_limit"},
+                        {"expected", "omit line_limit when args.output.path is present"}});
         size_t row_count = row_count_for_kind(analysis, kind);
         Json summary = xdebug_waveform::stream_summary_json(config, analysis);
         summary["status"] = output.empty() ? "preview" : "written";

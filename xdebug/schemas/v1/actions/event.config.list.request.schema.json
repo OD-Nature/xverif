@@ -52,7 +52,17 @@
         }
       },
       "additionalProperties": false,
-      "required": []
+      "required": [],
+      "allOf": [
+        {
+          "not": {
+            "required": [
+              "name",
+              "line_limit"
+            ]
+          }
+        }
+      ]
     },
     "limits": {
       "type": "object"

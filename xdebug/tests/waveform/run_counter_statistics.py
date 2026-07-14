@@ -37,6 +37,33 @@ def run_counter_statistics(xdebug, fsdb):
         require(direct["data"]["min_count"] == 1 and direct["data"]["max_count"] == 1, "counter.statistics min/max count mismatch")
         require("ns" in direct["data"]["min_first_time"], "counter.statistics missing min_first_time")
 
+        limited = r.query("counter.statistics", args={
+            "clock": "ai_complex_top.clk",
+            "edge": "posedge",
+            "time_range": {"begin": "55ns", "end": "95ns"},
+            "vld": "ai_complex_top.rst_n",
+            "cnt": "ai_complex_top.counter_inc",
+            "line_limit": 1,
+        })
+        require(limited["summary"]["valid_count"] == direct["summary"]["valid_count"],
+                "counter.statistics line_limit must not reduce analyzed samples")
+        require(limited["summary"]["analysis_complete"] is True,
+                "counter.statistics line_limit must only truncate response evidence")
+        require(limited["summary"]["returned_evidence_count"] == 1 and
+                limited["summary"]["response_truncated"] is True,
+                "counter.statistics limited evidence contract mismatch")
+
+        budgeted = r.query("counter.statistics", args={
+            "clock": "ai_complex_top.clk",
+            "edge": "posedge",
+            "time_range": {"begin": "55ns", "end": "95ns"},
+            "vld": "ai_complex_top.rst_n",
+            "cnt": "ai_complex_top.counter_inc",
+            "max_samples": 2,
+        })
+        require(budgeted["summary"]["analysis_complete"] is False,
+                "counter.statistics max_samples must report incomplete analysis")
+
         expr = r.query("counter.statistics", args={
             "clock": "ai_complex_top.clk",
             "edge": "posedge",

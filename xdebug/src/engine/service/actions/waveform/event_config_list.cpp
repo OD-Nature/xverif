@@ -44,10 +44,19 @@ public:
         if (name.empty()) {
             auto names = em.list_events(g_session_id, g_fsdb_file_path);
             Json arr = Json::array();
-            for (size_t i = 0; i < names.size(); i++) arr.push_back(names[i]);
-            return Json({{"summary", {{"event_count", static_cast<int>(arr.size())}}},
+            const int line_limit = args.value("line_limit", 100);
+            for (size_t i = 0; i < names.size() &&
+                 (line_limit < 0 || static_cast<int>(i) < line_limit); i++) arr.push_back(names[i]);
+            return Json({{"summary", {{"event_count", static_cast<int>(names.size())},
+                                       {"returned_event_count", static_cast<int>(arr.size())},
+                                       {"response_truncated", arr.size() < names.size()},
+                                       {"truncated", arr.size() < names.size()}}},
                          {"events", arr}});
         }
+        if (args.contains("line_limit"))
+            return event_invalid_arg_error(action_name(), "args.line_limit",
+                                           "line_limit is only valid when listing all event configs",
+                                           "omit line_limit when args.name is present");
         EventConfig cfg;
         if (!em.get_event(g_session_id, g_fsdb_file_path, name, cfg))
             return event_config_not_found_error("event.config.list", name);

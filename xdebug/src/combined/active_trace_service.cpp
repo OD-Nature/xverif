@@ -204,6 +204,7 @@ struct TraceBuildResult {
     int active_check_count = 0;
     bool truncated = false;
     std::string termination = "unresolved";
+    std::string termination_detail;
     int node_count = 0;
 };
 
@@ -756,6 +757,7 @@ TraceBuildResult build_active_trace(
         if (current.depth > limits.max_depth) {
             result.truncated = true;
             result.termination = "limit";
+            result.termination_detail = "max_depth";
             result.limitations.push_back("trace truncated by limits.max_depth at signal " + current.signal);
             break;
         }
@@ -764,6 +766,7 @@ TraceBuildResult build_active_trace(
         if (result.node_count >= limits.max_nodes) {
             result.truncated = true;
             result.termination = "limit";
+            result.termination_detail = "max_nodes";
             result.limitations.push_back("trace truncated by limits.max_nodes");
             break;
         }
@@ -774,6 +777,8 @@ TraceBuildResult build_active_trace(
             result.limitations.push_back("SIGNAL_NOT_FOUND: " + current.signal);
             if (result.node_count == 0) {
                 result.termination = "unresolved";
+                result.termination_detail = current.signal.find('[') != std::string::npos
+                    ? "dynamic_index_boundary" : "signal_missing";
                 break;
             }
             continue;
@@ -796,6 +801,7 @@ TraceBuildResult build_active_trace(
         }
         if (resolved.ambiguous) {
             result.termination = "ambiguous";
+            result.termination_detail = "multiple_active_candidates";
             break;
         }
 
@@ -1249,6 +1255,10 @@ nlohmann::ordered_json build_active_driver_payload(const Json& request,
             {"active_time", "compatibility alias of driver_last_change_time"}
         }},
         {"driver_status", driver_status},
+        {"termination", trace_result.termination},
+        {"termination_detail", trace_result.termination_detail.empty()
+            ? nlohmann::ordered_json(trace_result.termination)
+            : nlohmann::ordered_json(trace_result.termination_detail)},
         {"evidence_source", trace_result.evidence_source.empty()
             ? nlohmann::ordered_json(nullptr) : nlohmann::ordered_json(trace_result.evidence_source)},
         {"static_candidate_count", trace_result.static_candidate_count},
@@ -1273,7 +1283,10 @@ nlohmann::ordered_json build_active_driver_payload(const Json& request,
         resp["trace"] = {{"nodes", nodes_to_json(trace_result.nodes)},
                          {"edges", edges_to_json(trace_result.edges)},
                          {"selected_path", strings_to_json(trace_result.selected_path)},
-                         {"termination", trace_result.termination}};
+                         {"termination", trace_result.termination},
+                         {"termination_detail", trace_result.termination_detail.empty()
+                             ? nlohmann::ordered_json(trace_result.termination)
+                             : nlohmann::ordered_json(trace_result.termination_detail)}};
     }
     resp["truncated"] = trace_result.truncated;
     append_common_blocks_to_payload(resp);

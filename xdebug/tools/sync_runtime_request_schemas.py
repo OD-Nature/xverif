@@ -76,7 +76,10 @@ ADDITIONAL_ARG_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "max_depth": {"type": "integer"},
     "max_edges": {"type": "integer"},
+    "max_events": {"type": "integer", "minimum": 1},
     "max_rows": {"type": "integer"},
+    "max_samples": {"type": "integer", "minimum": 1},
+    "name_pattern": {"type": "string"},
     "no_statement_only": {"type": "boolean"},
     "note": {"type": "string"},
     "origin": {"type": "string"},
@@ -110,6 +113,11 @@ ADDITIONAL_ARG_SCHEMAS: dict[str, dict[str, Any]] = {
     "top_n": {"type": "integer", "minimum": 1},
     "transport": {"type": "string", "enum": ["uds", "tcp", "file"]},
     "verbose": {"type": "boolean"},
+    "value_format": {
+        "type": "string",
+        "enum": ["hex", "bin", "dec"],
+        "description": "仅控制响应中信号值的显示格式；不影响采样、时间或导出文件格式。",
+    },
 }
 
 
@@ -131,8 +139,8 @@ EXTRA_ARGS_BY_ACTION: dict[str, set[str]] = {
     "axi.query": {"direction", "address", "addr", "id", "query", "last", "output"},
     "axi.request_response_pair": {"direction", "line_limit", "time_range", "output"},
     "batch": {"mode"},
-    "counter.statistics": {"edge", "line_limit", "sample_point"},
-    "detect_abnormal": {"line_limit", "time_range"},
+    "counter.statistics": {"edge", "line_limit", "max_samples", "sample_point"},
+    "detect_abnormal": {"line_limit", "time_range", "value_format"},
     "event.config.list": {"line_limit", "name"},
     "event.config.load": {"config_path"},
     "event.export": {
@@ -141,6 +149,8 @@ EXTRA_ARGS_BY_ACTION: dict[str, set[str]] = {
         "edge",
         "group_by",
         "line_limit",
+        "max_events",
+        "max_samples",
         "mode",
         "name",
         "output",
@@ -154,35 +164,38 @@ EXTRA_ARGS_BY_ACTION: dict[str, set[str]] = {
         "edge",
         "group_by",
         "line_limit",
+        "max_samples",
         "mode",
         "name",
         "rst_n",
         "sample_point",
         "time_range",
     },
-    "expr.eval_at": {"edge", "line_limit", "sample_point", "time_range"},
+    "expr.eval_at": {"edge", "sample_point", "time_range"},
     "expr.normalize": {"line_limit", "no_statement_only", "role", "signal"},
     "handshake.inspect": {"data", "edge", "line_limit", "rules", "sample_point", "time_range"},
     "list.delete": {"index"},
+    "list.diff": {"value_format"},
     "list.export": {"line_limit", "output", "time_range"},
     "list.show": {"name"},
     "sampled_pulse.inspect": {
         "edge",
         "line_limit",
         "payloads",
+        "rules",
         "sample_point",
         "time_range",
     },
-    "scope.list": {"max_depth", "recursive"},
+    "scope.list": {"kind", "max_depth", "name_pattern", "recursive"},
     "session.close": set(),
     "session.doctor": set(),
     "session.gc": set(),
     "session.kill": set(),
     "session.list": set(),
     "session.open": {"bind", "bind_host", "host", "port", "session_id", "transport"},
-    "signal.changes": {"aggregate_only", "line_limit", "mode", "time_range"},
-    "signal.stability": {"conditions", "line_limit", "mode", "signals", "time_range"},
-    "signal.statistics": {"clock", "conditions", "edge", "line_limit", "mode", "sample_point", "signals", "time_range"},
+    "signal.changes": {"aggregate_only", "line_limit", "mode", "time_range", "value_format"},
+    "signal.stability": {"conditions", "mode", "signals", "time_range"},
+    "signal.statistics": {"clock", "conditions", "edge", "line_limit", "max_samples", "mode", "sample_point", "signals", "time_range"},
     "source.context": {"context_lines", "symbol", "output"},
     "stream.config.load": {"config", "config_path", "file", "mode"},
     "stream.config.list": {"name", "output"},
@@ -196,11 +209,11 @@ EXTRA_ARGS_BY_ACTION: dict[str, set[str]] = {
     "trace.active_driver_chain": set(),
     "trace.driver": {"line_limit", "no_statement_only", "role"},
     "trace.load": {"line_limit", "no_statement_only", "role"},
-    "value.at": {"edge", "sample_point", "slice_hint"},
-    "value.batch_at": {"edge", "sample_point", "slice_hint"},
-    "list.value_at": {"edge", "format", "sample_point"},
-    "verify.conditions": {"edge", "sample_point", "signals"},
-    "window.verify": {"edge", "line_limit", "sample_point", "signals", "time_range"},
+    "value.at": {"edge", "sample_point", "slice_hint", "value_format"},
+    "value.batch_at": {"edge", "sample_point", "slice_hint", "value_format"},
+    "list.value_at": {"edge", "format", "sample_point", "value_format"},
+    "verify.conditions": {"edge", "sample_point", "signals", "value_format"},
+    "window.verify": {"edge", "line_limit", "max_samples", "sample_point", "signals", "time_range"},
 }
 
 
@@ -488,6 +501,47 @@ def sync_schema(schema: dict[str, Any], spec: dict[str, Any], arg_schemas: dict[
             "enum": ["aw", "w", "b", "ar", "r"],
             "description": "AXI channel to inspect.",
         }
+    if action == "scope.list":
+        selected_props["kind"] = {
+            "type": "string",
+            "enum": ["all", "scope", "signal"],
+            "description": "只返回 scope、signal，或两者都返回。",
+        }
+    if action == "handshake.inspect":
+        selected_props["rules"] = {
+            "type": "object",
+            "properties": {
+                "max_wait_cycles": {"type": "integer", "minimum": 0},
+                "check_data_stable_when_stalled": {"type": "boolean"},
+                "require_valid_hold_until_handshake": {"type": "boolean", "default": True},
+                "ready_without_valid": {
+                    "type": "string",
+                    "enum": ["summary", "intervals", "all"],
+                    "default": "summary",
+                },
+            },
+            "additionalProperties": False,
+        }
+    if action == "sampled_pulse.inspect":
+        selected_props["rules"] = {
+            "type": "object",
+            "properties": {
+                "payload_changed_without_sampled_valid": {
+                    "type": "string",
+                    "enum": ["off", "summary", "all"],
+                    "default": "summary",
+                }
+            },
+            "additionalProperties": False,
+        }
+    if action == "event.find":
+        selected_props["mode"] = {
+            "type": "string",
+            "enum": ["first", "last", "all"],
+            "default": "first",
+        }
+    if action == "event.export":
+        selected_props["mode"] = {"type": "string", "enum": ["export"], "default": "export"}
     args["properties"] = selected_props
     args["additionalProperties"] = False
     groups = spec.get("required_arg_groups", [])
@@ -525,6 +579,47 @@ def sync_schema(schema: dict[str, Any], spec: dict[str, Any], arg_schemas: dict[
             {"not": {"required": ["address", "addr"]}},
         ]
         args["allOf"] = list(args.get("allOf", [])) + query_constraints
+    if action == "event.find":
+        args["allOf"] = list(args.get("allOf", [])) + [
+            {
+                "anyOf": [
+                    {"required": ["mode"], "properties": {"mode": {"const": "all"}}},
+                    {"not": {"required": ["line_limit"]}},
+                ]
+            }
+        ]
+    if action == "event.config.list":
+        args["allOf"] = list(args.get("allOf", [])) + [
+            {"not": {"required": ["name", "line_limit"]}}
+        ]
+    if action == "expr.normalize":
+        args["allOf"] = list(args.get("allOf", [])) + [
+            {"anyOf": [{"required": ["signal"]}, {"not": {"required": ["line_limit"]}}]}
+        ]
+    if action in {"list.export", "stream.export"}:
+        args["allOf"] = list(args.get("allOf", [])) + [
+            {
+                "if": {
+                    "required": ["output"],
+                    "properties": {
+                        "output": {
+                            "required": ["path"],
+                            "properties": {"path": {"type": "string", "minLength": 1}},
+                        }
+                    },
+                },
+                "then": {"not": {"required": ["line_limit"]}},
+            }
+        ]
+    if action == "axi.analysis":
+        args["allOf"] = list(args.get("allOf", [])) + [
+            {
+                "anyOf": [
+                    {"required": ["analysis"], "properties": {"analysis": {"const": "pending"}}},
+                    {"not": {"required": ["line_limit"]}},
+                ]
+            }
+        ]
     updated.pop("anyOf", None)
     updated.pop("allOf", None)
     updated.pop("oneOf", None)

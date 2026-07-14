@@ -71,6 +71,29 @@
       "additionalProperties": false,
       "required": [
         "name"
+      ],
+      "allOf": [
+        {
+          "anyOf": [
+            {
+              "required": [
+                "analysis"
+              ],
+              "properties": {
+                "analysis": {
+                  "const": "pending"
+                }
+              }
+            },
+            {
+              "not": {
+                "required": [
+                  "line_limit"
+                ]
+              }
+            }
+          ]
+        }
       ]
     },
     "limits": {

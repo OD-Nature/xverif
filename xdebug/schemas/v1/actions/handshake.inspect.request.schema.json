@@ -61,22 +61,30 @@
           "description": "valid-ready 握手中的 ready 信号路径。"
         },
         "rules": {
-          "oneOf": [
-            {
-              "type": "array"
+          "type": "object",
+          "properties": {
+            "max_wait_cycles": {
+              "type": "integer",
+              "minimum": 0
             },
-            {
-              "type": "object",
-              "properties": {
-                "ready_without_valid": {
-                  "type": "string",
-                  "enum": ["summary", "intervals", "all"],
-                  "description": "合法 ready-without-valid 的返回策略；默认 summary。"
-                }
-              },
-              "additionalProperties": true
+            "check_data_stable_when_stalled": {
+              "type": "boolean"
+            },
+            "require_valid_hold_until_handshake": {
+              "type": "boolean",
+              "default": true
+            },
+            "ready_without_valid": {
+              "type": "string",
+              "enum": [
+                "summary",
+                "intervals",
+                "all"
+              ],
+              "default": "summary"
             }
-          ]
+          },
+          "additionalProperties": false
         },
         "sample_point": {
           "type": "string",
@@ -85,10 +93,6 @@
             "after"
           ],
           "description": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。"
-        },
-        "value_format": {
-          "type": "string", "enum": ["hex", "bin", "dec"],
-          "description": "仅控制响应中信号值的显示格式；不影响采样、时间或导出文件格式。"
         },
         "time_range": {
           "type": "object",

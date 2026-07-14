@@ -256,7 +256,7 @@ async def test_with_signal(session: ClientSession, cfg: dict, signal: str) -> tu
         "trace.driver": {"signal": signal},
         "trace.active_driver": {"signal": signal, "time": "1ns"},
         "expr.eval_at": {"expr": "sig == 1", "time": "1ns", "signals": {"sig": signal}, "clock": clk},
-        "event.find": {"expr": "clk == 1", "clock": clk, "signals": {"clk": clk}, "line_limit": 3},
+        "event.find": {"expr": "clk == 1", "clock": clk, "signals": {"clk": clk}, "mode": "all", "line_limit": 3},
         "window.verify": {"conditions": [
             {"expr": "sig == 1"}
         ], "signals": {"sig": signal}, "time_range": {"begin": "0ns", "end": "1us"}, "clock": clk},

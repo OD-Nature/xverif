@@ -95,6 +95,8 @@
 - handler 接收已校验 request，但仍要检查业务语义，例如 signal 不存在、时间窗口为空、资源不匹配。
 - 错误返回使用稳定 error code，不用自由文本当机器合同。
 - 大数据默认摘要化，详细数据通过 action-specific `line_limit`、schema 明确声明的 `args.output` 参数或 export action 控制；AXI transaction 使用 `output.include_data`，其它 action 不得照抄该参数或新增裸 `limit`。
+- `line_limit` 只控制 response/XOUT 证据缓存；扫描预算使用 `max_samples`，文件/聚合事件预算按 action 使用 `max_events`。实现不得把 `line_limit` 直接传入 clock scanner。
+- 完整扫描的大结果要在线累计 summary，并有界保留 first/last/前 N 条证据；不得为 compact response 无界缓存所有 transfer/finding。
 
 ## 更新 docs 和 skill
 

@@ -134,7 +134,7 @@ MCP tool 参数壳请使用 `xverif-mcp`。
       "end": "100us"
     },
     "rules": {
-      "max_stall_cycles": 16
+      "max_wait_cycles": 16
     }
   }
 }

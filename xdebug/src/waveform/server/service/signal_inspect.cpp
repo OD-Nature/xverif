@@ -129,6 +129,14 @@ Json ai_sampled_pulse_inspect(const Json& args, std::string& error) {
     }
 
     int max_findings = args.value("line_limit", 100);
+    Json rules = args.value("rules", Json::object());
+    std::string payload_reporting = rules.value(
+        "payload_changed_without_sampled_valid", std::string("summary"));
+    if (payload_reporting != "off" && payload_reporting != "summary" &&
+        payload_reporting != "all") {
+        error = "sampled_pulse.inspect rules.payload_changed_without_sampled_valid must be off, summary, or all";
+        return Json();
+    }
     npiFsdbValType fmt = json_value_format(args);
     char value_prefix = json_value_prefix(fmt);
 
@@ -174,6 +182,8 @@ Json ai_sampled_pulse_inspect(const Json& args, std::string& error) {
     Json findings = Json::array();
     bool findings_truncated = false;
     int risk_count = 0;
+    int unsampled_pulse_count = 0;
+    int payload_risk_count = 0;
     auto push_finding = [&](const Json& item) {
         ++risk_count;
         if (max_findings >= 0 && static_cast<int>(findings.size()) >= max_findings) {
@@ -210,6 +220,7 @@ Json ai_sampled_pulse_inspect(const Json& args, std::string& error) {
         item["sampled_valid"] = sampled_valid_json(edges, near);
         item["sampled_payloads"] = sampled_payloads_json(edges, near, payload_aliases);
         item["reason"] = "valid was high between sample edges but not high at any sampled edge";
+        ++unsampled_pulse_count;
         push_finding(item);
     };
 
@@ -228,7 +239,7 @@ Json ai_sampled_pulse_inspect(const Json& args, std::string& error) {
 
     int payload_transition_count = 0;
     bool payload_truncated = false;
-    for (const auto& p : payload_aliases) {
+    if (payload_reporting != "off") for (const auto& p : payload_aliases) {
         std::string alias = p.value("alias", std::string());
         std::string signal = p.value("signal", std::string());
         fsdbTimeValPairVec_t changes;
@@ -259,7 +270,12 @@ Json ai_sampled_pulse_inspect(const Json& args, std::string& error) {
             item["reason"] = sampled_valid == ExprTri::Unknown
                 ? "payload changed but sampled valid was unknown"
                 : "payload changed but valid was not sampled high by the DUT clock";
-            push_finding(item);
+            ++payload_risk_count;
+            ++risk_count;
+            if (payload_reporting == "all") {
+                --risk_count;
+                push_finding(item);
+            }
         }
     }
 
@@ -273,6 +289,9 @@ Json ai_sampled_pulse_inspect(const Json& args, std::string& error) {
         {"sample_count", sample_count},
         {"sampled_high_cycles", sampled_high},
         {"risk_count", risk_count},
+        {"unsampled_valid_pulse_count", unsampled_pulse_count},
+        {"payload_risk_count", payload_risk_count},
+        {"payload_changed_without_sampled_valid_reporting", payload_reporting},
         {"returned_finding_count", findings.size()},
         {"analysis_complete", analysis_complete},
         {"truncated", findings_truncated},
@@ -321,13 +340,17 @@ Json ai_handshake_inspect(const Json& args, std::string& error) {
     Json rules = args.value("rules", Json::object());
     int max_wait = rules.value("max_wait_cycles", 100);
     bool check_data = rules.value("check_data_stable_when_stalled", false);
+    bool require_valid_hold = rules.value("require_valid_hold_until_handshake", true);
     std::string ready_reporting = rules.value("ready_without_valid", std::string("summary"));
     if (ready_reporting != "summary" && ready_reporting != "intervals" && ready_reporting != "all") {
         error = "handshake.inspect rules.ready_without_valid must be summary, intervals, or all";
         return Json();
     }
     int samples = 0, transfers = 0, stall_cycles = 0, max_stall = 0, ready_only = 0, data_violations = 0;
+    int valid_hold_violations = 0;
     bool in_stall = false, scan_truncated = false;
+    bool awaiting_handshake = false;
+    npiFsdbTime valid_wait_begin = 0;
     npiFsdbTime stall_begin = 0;
     std::map<std::string, std::string> stall_data;
     Json findings = Json::array();
@@ -370,6 +393,26 @@ Json ai_handshake_inspect(const Json& args, std::string& error) {
             bool transfer = v == ExprTri::True && r == ExprTri::True;
             bool stall = v == ExprTri::True && r == ExprTri::False;
             if (transfer) transfers++;
+            if (require_valid_hold && awaiting_handshake) {
+                if (transfer) {
+                    awaiting_handshake = false;
+                } else if (v != ExprTri::True) {
+                    ++valid_hold_violations;
+                    add_finding({{"type", "valid_dropped_before_handshake"},
+                                 {"severity", "error"},
+                                 {"begin", format_time(valid_wait_begin)},
+                                 {"time", format_time(t)},
+                                 {"observed_valid", wave_value_json(values.at("valid"), 'b')},
+                                 {"reason", v == ExprTri::Unknown
+                                     ? "valid became unknown before a handshake"
+                                     : "valid deasserted before a handshake"}});
+                    awaiting_handshake = false;
+                }
+            }
+            if (require_valid_hold && stall && !awaiting_handshake) {
+                awaiting_handshake = true;
+                valid_wait_begin = t;
+            }
             if (r == ExprTri::True && v == ExprTri::False) {
                 ready_only++;
                 if (!in_ready_only) { in_ready_only = true; ready_only_begin = t; }
@@ -432,6 +475,9 @@ Json ai_handshake_inspect(const Json& args, std::string& error) {
         {"ready_without_valid_reporting", ready_reporting},
         {"ready_without_valid_interval_count", ready_only_interval_count},
         {"data_stability_violations", data_violations},
+        {"require_valid_hold_until_handshake", require_valid_hold},
+        {"valid_hold_violations", valid_hold_violations},
+        {"valid_wait_open_at_window_end", awaiting_handshake},
         {"finding_count", finding_count},
         {"returned_finding_count", findings.size()},
         {"analysis_complete", !scan_truncated},

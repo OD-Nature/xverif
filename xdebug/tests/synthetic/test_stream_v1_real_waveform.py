@@ -243,6 +243,8 @@ def test_stream_v1_real_waveform_actions(
             )["summary"]
             assert summary["transfer_count"] == counts["transfer_count"]
             assert summary["transfer_count"] >= 10000
+            assert summary["retained_transfer_count"] == 64
+            assert summary["response_truncated"] is True
             if "stall_cycles" in counts:
                 assert summary["stall_cycles"] == counts["stall_cycles"]
                 assert summary["stall_windows"] > 0
@@ -288,6 +290,7 @@ def test_stream_v1_real_waveform_actions(
                 artifact_root=artifact_root,
             )
             assert last["data"]["row"]["transfer"] is True
+            assert last["data"]["row"]["time"] == summary["last_transfer_time"]
 
             window = _query(
                 cli_runner,

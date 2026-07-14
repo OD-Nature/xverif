@@ -99,7 +99,36 @@
           ]
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "output"
+            ],
+            "properties": {
+              "output": {
+                "required": [
+                  "path"
+                ],
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "line_limit"
+              ]
+            }
+          }
+        }
+      ]
     },
     "limits": {
       "type": "object"

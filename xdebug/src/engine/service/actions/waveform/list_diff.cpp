@@ -63,29 +63,22 @@ public:
                  {"expected", "time_range.begin/end strings such as 0ns and 500ns"},
                  {"correct_example", list_action_example("list.diff")}});
         npiFsdbTime dt = 0;
-        bool found = xdebug_waveform::find_list_diff(
-            xdebug_waveform::g_fsdb_file, lst.signals, bt, et, dt);
+        std::vector<xdebug_waveform::ListDiffChange> diff_changes;
+        bool found = xdebug_waveform::find_first_list_changes(
+            xdebug_waveform::g_fsdb_file, lst.signals, bt, et, dt, diff_changes);
         Json out;
         if (found) {
             std::string formatted = xdebug_core::format_time(xdebug_waveform::g_fsdb_file, dt);
             out["summary"] = {{"name", n}, {"diff_found", true}, {"diff_time", formatted}};
             Json changed = Json::array();
-            for (const auto& signal : lst.signals) {
-                std::string before_raw;
-                std::string after_raw;
-                const npiFsdbTime before_time = dt == 0 ? 0 : dt - 1;
-                if (!npi_fsdb_sig_value_at(xdebug_waveform::g_fsdb_file, signal.c_str(),
-                                           before_time, before_raw, npiFsdbHexStrVal) ||
-                    !npi_fsdb_sig_value_at(xdebug_waveform::g_fsdb_file, signal.c_str(),
-                                           dt, after_raw, npiFsdbHexStrVal) ||
-                    before_raw == after_raw) {
-                    continue;
-                }
-                changed.push_back({{"signal", signal},
+            for (const auto& change : diff_changes) {
+                changed.push_back({{"signal", change.signal},
+                                   {"before_time", xdebug_core::format_time(xdebug_waveform::g_fsdb_file, bt)},
+                                   {"change_time", formatted},
                                    {"before", xdebug_waveform::logic_value_json(
-                                       xdebug_waveform::logic_value_from_fsdb_raw(before_raw, 'h'))},
+                                       xdebug_waveform::logic_value_from_fsdb_raw(change.before, 'h'))},
                                    {"after", xdebug_waveform::logic_value_json(
-                                       xdebug_waveform::logic_value_from_fsdb_raw(after_raw, 'h'))}});
+                                       xdebug_waveform::logic_value_from_fsdb_raw(change.after, 'h'))}});
             }
             out["summary"]["changed_signal_count"] = changed.size();
             out["changed_signals"] = changed;

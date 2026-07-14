@@ -37,11 +37,6 @@
           },
           "description": "需要验证的条件列表。"
         },
-        "line_limit": {
-          "type": "integer",
-          "minimum": 1,
-          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
-        },
         "mode": {
           "type": "string"
         },
@@ -78,10 +73,6 @@
           },
           "additionalProperties": false,
           "description": "查询或分析的时间窗口。"
-        },
-        "value_format": {
-          "type": "string", "enum": ["hex", "bin", "dec"],
-          "description": "仅控制响应中信号值的显示格式；不影响查询时间。"
         },
         "time_unit": {
           "type": "string",

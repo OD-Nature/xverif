@@ -92,7 +92,7 @@
   "additionalProperties": false,
   "description": "session.open: 打开 design/waveform session。",
   "x-purpose": "打开 design/waveform session。",
-  "x-how_it_works": "解析 target 中的 daidir/fsdb，初始化统一 engine session 和底层资源。",
+  "x-how_it_works": "解析 target 中的 daidir/fsdb；可选 target.run_manifest 会在启动前校验 published state、canonical path、size 与 SHA-256。",
   "x-when_to_use": "建立后续 design/waveform 查询的资源上下文。",
   "x-arg_contract_notes": "required: name"
 }

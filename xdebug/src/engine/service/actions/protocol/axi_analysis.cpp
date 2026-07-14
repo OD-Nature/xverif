@@ -98,6 +98,11 @@ public:
                 : protocol_analyze_error(action_name(), "axi", name, err);
 
         std::string analysis = a.value("analysis", "latency");
+        if (analysis != "pending" && a.contains("line_limit"))
+            return protocol_invalid_arg_error(
+                action_name(), "args.line_limit",
+                "line_limit is only valid for analysis=pending",
+                "omit line_limit or set analysis to pending");
         std::string dir = a.value("direction", "all");
         int filter = (dir == "write") ? 1 : (dir == "read") ? 2 : 0;
         const AxiResult* canonical = g_axi_analyzer.get_result(name);

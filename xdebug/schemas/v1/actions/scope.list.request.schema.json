@@ -29,8 +29,20 @@
     "args": {
       "type": "object",
       "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "all",
+            "scope",
+            "signal"
+          ],
+          "description": "只返回 scope、signal，或两者都返回。"
+        },
         "max_depth": {
           "type": "integer"
+        },
+        "name_pattern": {
+          "type": "string"
         },
         "path": {
           "type": "string",

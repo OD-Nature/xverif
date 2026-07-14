@@ -572,7 +572,8 @@ Json ai_window_verify(const Json& args, std::string& error) {
     }
     npiFsdbTime begin = 0, end = 0;
     if (!json_time_range(args, begin, end, error)) return Json();
-    int max_samples = args.value("line_limit", 1000000);
+    const int evidence_limit = args.value("line_limit", 100);
+    const int max_samples = args.value("max_samples", -1);
 
     if (!args.contains("signals") || !args["signals"].is_object()) {
         error = "window.verify requires args.signals as alias-to-signal-path object";
@@ -607,6 +608,8 @@ Json ai_window_verify(const Json& args, std::string& error) {
     int samples = 0;
     bool truncated = false;
     bool decisive_proof = false;
+    Json findings = Json::array();
+    int finding_count = 0;
     bool have_sample = false;
     npiFsdbTime first_sample_time = 0;
     npiFsdbTime last_sample_time = 0;
@@ -635,6 +638,15 @@ Json ai_window_verify(const Json& args, std::string& error) {
                 if (r == ExprTri::Unknown) st.unknown++;
                 else if (pass) st.pass++;
                 else st.fail++;
+                if (r == ExprTri::Unknown || !pass) {
+                    ++finding_count;
+                    if (evidence_limit < 0 || static_cast<int>(findings.size()) < evidence_limit) {
+                        findings.push_back({{"time", format_time(sample.time)},
+                                            {"expr", st.expr}, {"mode", st.mode},
+                                            {"status", r == ExprTri::Unknown ? "unknown" : "fail"},
+                                            {"signals", values}});
+                    }
+                }
                 if (st.mode == "eventually") {
                     has_eventually = true;
                     if (st.pass == 0) all_eventually_seen = false;
@@ -664,7 +676,9 @@ Json ai_window_verify(const Json& args, std::string& error) {
         conds.push_back({{"expr", st.expr}, {"mode", st.mode}, {"passed", passed},
                          {"pass_samples", st.pass}, {"failed_samples", st.fail}, {"unknown_samples", st.unknown}});
     }
-    const bool validation_complete = decisive_proof || !truncated;
+    const bool scan_complete = !truncated;
+    const bool validation_complete = decisive_proof || scan_complete;
+    const bool response_truncated = evidence_limit >= 0 && finding_count > evidence_limit;
     const std::string verdict = !validation_complete ? "inconclusive" :
                                 all_passed ? "pass" : "fail";
     Json data;
@@ -675,21 +689,30 @@ Json ai_window_verify(const Json& args, std::string& error) {
         {"sample_count", samples},
         {"failed_samples", failed_samples},
         {"unknown_samples", unknown_samples},
-        {"truncated", truncated},
+        {"scan_complete", scan_complete},
+        {"response_truncated", response_truncated},
+        {"truncated", truncated || response_truncated},
         {"validation_complete", validation_complete},
         {"proof_begin", format_time(begin)},
         {"proof_end", format_time(end)},
         {"scanned_range", {{"begin", have_sample ? Json(format_time(first_sample_time)) : Json(nullptr)},
                             {"end", have_sample ? Json(format_time(last_sample_time)) : Json(nullptr)}}},
-        {"truncation_scope", truncated ? Json("analysis_samples") : Json(nullptr)},
+        {"truncation_scopes", Json::array()},
+        {"stop_reason", decisive_proof ? Json("decisive_result") :
+                         truncated ? Json("max_samples") : Json("window_end")},
         {"sampling_mode", "clock_edge"},
         {"clock", clock_sample.clock},
         {"edge", clock_edge_kind_text(clock_sample.edge)},
         {"sample_time_semantics", "time is sample_time"}
     };
+    if (truncated) data["summary"]["truncation_scopes"].push_back("analysis_samples");
+    if (response_truncated) data["summary"]["truncation_scopes"].push_back("response_findings");
     if (clock_sample.edge != ClockEdgeKind::Negedge)
         data["summary"]["sample_point"] = clock_sample_point_text(clock_sample.sample_point);
     data["conditions"] = conds;
+    data["findings"] = findings;
+    data["summary"]["finding_count"] = finding_count;
+    data["summary"]["returned_finding_count"] = findings.size();
     return data;
 }
 
@@ -706,6 +729,7 @@ Json ai_signal_statistics(const Json& args, std::string& error) {
     if (!json_time_range(args, begin, end, error)) return Json();
 
     if (clock.empty()) {
+        const int evidence_limit = args.value("line_limit", 100);
         npiFsdbValType fmt = json_value_format(args);
         fsdbTimeValPairVec_t changes;
         bool truncated = false;
@@ -746,6 +770,23 @@ Json ai_signal_statistics(const Json& args, std::string& error) {
             data["first_change_time"] = format_time(changes.front().first);
             data["last_change_time"] = format_time(changes.back().first);
         }
+        Json evidence = Json::array();
+        for (size_t i = 0; i < changes.size() &&
+             (evidence_limit < 0 || static_cast<int>(i) < evidence_limit); ++i) {
+            evidence.push_back({{"time", format_time(changes[i].first)},
+                                {"kind", i == 0 ? "initial" : "value_change"},
+                                {"value", wave_value_json(changes[i].second, json_value_prefix(fmt))}});
+        }
+        const bool response_truncated = evidence_limit >= 0 && changes.size() > static_cast<size_t>(evidence_limit);
+        data["summary"]["scan_complete"] = !truncated;
+        data["summary"]["response_truncated"] = response_truncated;
+        data["summary"]["truncated"] = truncated || response_truncated;
+        data["summary"]["truncation_scopes"] = Json::array();
+        if (truncated) data["summary"]["truncation_scopes"].push_back("analysis_rows");
+        if (response_truncated) data["summary"]["truncation_scopes"].push_back("response_evidence");
+        data["summary"]["evidence_count"] = changes.size();
+        data["summary"]["returned_evidence_count"] = evidence.size();
+        data["evidence"] = evidence;
         return data;
     }
 
@@ -758,7 +799,8 @@ Json ai_signal_statistics(const Json& args, std::string& error) {
         sample_signals.push_back({aliases[i], paths[i], handles[i]});
     }
 
-    int max_samples = args.value("line_limit", 1000000);
+    const int evidence_limit = args.value("line_limit", 100);
+    const int max_samples = args.value("max_samples", -1);
     int samples = 0, known = 0, unknown = 0;
     int high_cycles = 0, low_cycles = 0;
     int high_bursts = 0, current_high = 0, max_high_cycles = 0;
@@ -769,6 +811,14 @@ Json ai_signal_statistics(const Json& args, std::string& error) {
     npiFsdbTime first_change_time = 0, last_change_time = 0;
     npiFsdbTime first_high_time = 0, last_high_time = 0, last_fall_time = 0;
     bool prev_high = false;
+    Json evidence = Json::array();
+    int evidence_count = 0;
+    auto add_evidence = [&](npiFsdbTime time, const std::string& kind, const std::string& value) {
+        ++evidence_count;
+        if (evidence_limit < 0 || static_cast<int>(evidence.size()) < evidence_limit)
+            evidence.push_back({{"time", format_time(time)}, {"kind", kind},
+                                {"value", wave_value_json(value, 'b')}});
+    };
 
     ClockSampleScanner scanner(g_fsdb_file, clock_sample);
     if (!scanner.scan(sample_signals, begin, end, npiFsdbBinStrVal, 'b', max_samples,
@@ -778,6 +828,7 @@ Json ai_signal_statistics(const Json& args, std::string& error) {
             auto it = values.find("sig");
             if (it == values.end() || contains_xz_value(it->second)) {
                 unknown++;
+                add_evidence(t, "unknown", it == values.end() ? std::string("'bx") : it->second);
                 if (prev_high) {
                     if (current_high > max_high_cycles) max_high_cycles = current_high;
                     current_high = 0;
@@ -816,6 +867,7 @@ Json ai_signal_statistics(const Json& args, std::string& error) {
             } else {
                 if (compare_bit_strings(bits, prev_bits) != 0) {
                     transitions++;
+                    add_evidence(t, "value_change", it->second);
                     if (first_change_time == 0) first_change_time = t;
                     last_change_time = t;
                 }
@@ -839,10 +891,18 @@ Json ai_signal_statistics(const Json& args, std::string& error) {
         {"unknown_count", unknown},
         {"begin", format_time(begin)},
         {"end", format_time(end)},
+        {"scan_complete", !truncated},
         {"analysis_complete", !truncated},
-        {"truncated", truncated},
-        {"truncation_scope", truncated ? Json("analysis_samples") : Json(nullptr)}
+        {"response_truncated", evidence_limit >= 0 && evidence_count > evidence_limit},
+        {"truncated", truncated || (evidence_limit >= 0 && evidence_count > evidence_limit)},
+        {"truncation_scopes", Json::array()}
     };
+    if (truncated) data["summary"]["truncation_scopes"].push_back("analysis_samples");
+    if (evidence_limit >= 0 && evidence_count > evidence_limit)
+        data["summary"]["truncation_scopes"].push_back("response_evidence");
+    data["summary"]["evidence_count"] = evidence_count;
+    data["summary"]["returned_evidence_count"] = evidence.size();
+    data["evidence"] = evidence;
     if (clock_sample.edge != ClockEdgeKind::Negedge)
         data["summary"]["sample_point"] = clock_sample_point_text(clock_sample.sample_point);
     data["transition_count"] = transitions;
@@ -897,7 +957,8 @@ Json ai_counter_statistics(const Json& args, std::string& error) {
         sample_signals.push_back({aliases[i], paths[i], handles[i]});
     }
 
-    int max_samples = args.value("line_limit", 1000000);
+    const int evidence_limit = args.value("line_limit", 100);
+    const int max_samples = args.value("max_samples", -1);
     int samples = 0;
     bool truncated = false;
     int valid_count = 0, valid_false_count = 0, unknown_count = 0;
@@ -906,6 +967,15 @@ Json ai_counter_statistics(const Json& args, std::string& error) {
     int min_count = 0, max_count = 0;
     npiFsdbTime min_first_time = 0, max_first_time = 0;
     long double sum = 0.0;
+    Json evidence = Json::array();
+    int evidence_count = 0;
+    bool have_previous_value = false;
+    uint64_t previous_value = 0;
+    auto add_evidence = [&](npiFsdbTime time, const std::string& kind, const Json& value) {
+        ++evidence_count;
+        if (evidence_limit < 0 || static_cast<int>(evidence.size()) < evidence_limit)
+            evidence.push_back({{"time", format_time(time)}, {"kind", kind}, {"value", value}});
+    };
 
     ClockSampleScanner scanner(g_fsdb_file, clock_sample);
     if (!scanner.scan(sample_signals, begin, end, npiFsdbBinStrVal, 'b', max_samples,
@@ -924,6 +994,7 @@ Json ai_counter_statistics(const Json& args, std::string& error) {
             }
             if (valid == ExprTri::Unknown) {
                 unknown_count++;
+                add_evidence(t, "unknown_valid", nullptr);
                 return true;
             }
 
@@ -936,7 +1007,14 @@ Json ai_counter_statistics(const Json& args, std::string& error) {
                     return false;
                 }
                 unknown_count++;
+                add_evidence(t, "unknown_counter", nullptr);
                 return true;
+            }
+
+            if (!have_previous_value || value != previous_value) {
+                add_evidence(t, have_previous_value ? "value_change" : "initial", u64_to_decimal(value));
+                previous_value = value;
+                have_previous_value = true;
             }
 
             valid_count++;
@@ -980,7 +1058,17 @@ Json ai_counter_statistics(const Json& args, std::string& error) {
     data["end"] = format_time(end);
     data["valid_false_count"] = valid_false_count;
     data["unknown_count"] = unknown_count;
-    data["truncated"] = truncated;
+    const bool response_truncated = evidence_limit >= 0 && evidence_count > evidence_limit;
+    data["summary"]["scan_complete"] = !truncated;
+    data["summary"]["analysis_complete"] = !truncated;
+    data["summary"]["response_truncated"] = response_truncated;
+    data["summary"]["truncated"] = truncated || response_truncated;
+    data["summary"]["truncation_scopes"] = Json::array();
+    if (truncated) data["summary"]["truncation_scopes"].push_back("analysis_samples");
+    if (response_truncated) data["summary"]["truncation_scopes"].push_back("response_evidence");
+    data["evidence"] = evidence;
+    data["summary"]["evidence_count"] = evidence_count;
+    data["summary"]["returned_evidence_count"] = evidence.size();
     data["cnt"] = args["cnt"];
     data["vld"] = args["vld"];
     if (have_value) {

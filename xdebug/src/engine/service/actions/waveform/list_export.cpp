@@ -91,6 +91,12 @@ public:
                  {"allowed_values", Json::array({"u64bin"})},
                  {"correct_example", list_action_example("list.export")}});
         std::string output_dir = output.value("path", std::string());
+        if (!output_dir.empty() && a.contains("line_limit"))
+            return make_handler_error(
+                "INVALID_REQUEST",
+                "list.export args.line_limit only controls preview rows and is not valid for file export",
+                {{"invalid_arg", "args.line_limit"},
+                 {"expected", "omit line_limit when args.output.path is present"}});
         if (output_dir.empty()) {
             Json signal_preview = Json::array();
             int line_limit = a.value("line_limit", 16);

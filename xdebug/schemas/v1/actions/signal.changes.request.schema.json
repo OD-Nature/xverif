@@ -59,10 +59,6 @@
           "additionalProperties": false,
           "description": "查询或分析的时间窗口。"
         },
-        "value_format": {
-          "type": "string", "enum": ["hex", "bin", "dec"],
-          "description": "仅控制响应中信号值的显示格式；不影响查询时间。"
-        },
         "time_unit": {
           "type": "string",
           "enum": [
@@ -74,6 +70,15 @@
             "ms",
             "s"
           ]
+        },
+        "value_format": {
+          "type": "string",
+          "enum": [
+            "hex",
+            "bin",
+            "dec"
+          ],
+          "description": "仅控制响应中信号值的显示格式；不影响采样、时间或导出文件格式。"
         }
       },
       "additionalProperties": false,

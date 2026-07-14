@@ -146,7 +146,9 @@ public:
         if (!expr_error.is_null()) return expr_error;
         query.begin = tbegin;
         query.end = tend;
-        Json limits = request.value("limits", Json::object());
+        query.max_samples = args.value("max_samples", -1);
+        EventScanStats scan_stats;
+        query.stats = &scan_stats;
         std::string mode = args.value("mode", export_mode_ ? "export" : "first");
         if (mode == "head") mode = "first";
         if (mode == "tail") mode = "last";
@@ -157,8 +159,8 @@ public:
         }
 
         if (export_mode_) {
-            int limit = args.value("line_limit", 1000);
-            query.limit = limit > 0 ? limit : 1000;
+            int max_events = args.value("max_events", -1);
+            query.limit = max_events > 0 ? max_events + 1 : -1;
         } else if (mode == "first") {
             query.limit = 1;
             // The candidate-change fast path can skip a match when a sampled
@@ -182,6 +184,12 @@ public:
             records.assign(1, last);
         }
 
+        const int max_events = args.value("max_events", -1);
+        const bool event_budget_exhausted = max_events > 0 &&
+            static_cast<int>(records.size()) > max_events;
+        if (event_budget_exhausted) records.resize(max_events);
+        const size_t matched_count = records.size();
+        const int response_limit = args.value("line_limit", 1000);
         Json arr = Json::array();
         for (auto& rec : records) {
             Json je;
@@ -196,6 +204,10 @@ public:
             je["fields"] = field_values;
             arr.push_back(je);
         }
+        Json preview_arr = Json::array();
+        for (size_t i = 0; i < arr.size() &&
+             (response_limit < 0 || static_cast<int>(i) < response_limit); ++i)
+            preview_arr.push_back(arr[i]);
         Json out;
         bool include_events = true;
         if (export_mode_ && args.contains("aggregate") && args["aggregate"].is_object()) {
@@ -225,10 +237,14 @@ public:
             include_events = aggregate_args.value("events", true);
         }
         if (include_events) {
-            out["events"] = arr;
+            out["events"] = preview_arr;
         }
         out["summary"] = {
-            {"event_count", static_cast<int>(arr.size())},
+            {"event_count", static_cast<int>(matched_count)},
+            {"returned_event_count", static_cast<int>(preview_arr.size())},
+            {"response_truncated", preview_arr.size() < matched_count},
+            {"scan_complete", !event_budget_exhausted && !scan_stats.sample_budget_exhausted},
+            {"sample_count", scan_stats.sample_count},
             {"mode", mode},
             {"inline", name.empty()},
             {"sampling_mode", "clock_edge"},
@@ -255,8 +271,13 @@ public:
         out["summary"]["status"] = output_path.empty() ? "preview" : "written";
         out["summary"]["output_written"] = !output_path.empty();
         out["summary"]["row_count"] = static_cast<int>(arr.size());
-        out["summary"]["line_limit"] = query.limit;
-        out["summary"]["truncated"] = false;
+        out["summary"]["line_limit"] = response_limit;
+        out["summary"]["truncated"] = event_budget_exhausted || scan_stats.sample_budget_exhausted || preview_arr.size() < matched_count;
+        out["summary"]["analysis_complete"] = !event_budget_exhausted && !scan_stats.sample_budget_exhausted;
+        out["summary"]["truncation_scopes"] = Json::array();
+        if (event_budget_exhausted) out["summary"]["truncation_scopes"].push_back("analysis_events");
+        if (scan_stats.sample_budget_exhausted) out["summary"]["truncation_scopes"].push_back("analysis_samples");
+        if (preview_arr.size() < matched_count) out["summary"]["truncation_scopes"].push_back("response_events");
         if (!output_path.empty()) {
             std::string write_error;
             Json artifact = out;

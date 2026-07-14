@@ -62,6 +62,11 @@ public:
             return out;
         }
         std::string expr = args.value("expr", "");
+        if (!expr.empty() && args.contains("line_limit"))
+            return make_handler_error("INVALID_REQUEST",
+                                      "expr.normalize args.line_limit is only valid with args.signal",
+                                      {{"invalid_arg", "args.line_limit"},
+                                       {"expected", "omit line_limit for direct expression parsing"}});
         if (expr.empty()) return make_handler_error(
             "MISSING_FIELD",
             "args.expr or args.signal is required",

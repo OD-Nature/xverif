@@ -1,4 +1,6 @@
 #include "fsdb_value_reader.h"
+
+#include <algorithm>
 #include "npi_fsdb.h"
 #include "npi_L1.h"
 #include "fsdb_scan_utils.h"
@@ -151,6 +153,60 @@ bool find_list_diff(npiFsdbFileHandle file,
     }
 
     return found;
+}
+
+bool find_first_list_changes(npiFsdbFileHandle file,
+                             const std::vector<std::string>& signals,
+                             npiFsdbTime begin_time,
+                             npiFsdbTime end_time,
+                             npiFsdbTime& diff_time,
+                             std::vector<ListDiffChange>& changes) {
+    changes.clear();
+    if (signals.empty()) return false;
+    std::vector<npiFsdbSigHandle> handles;
+    for (const auto& path : signals) {
+        npiFsdbSigHandle sig = npi_fsdb_sig_by_name(file, path.c_str(), NULL);
+        if (!sig) return false;
+        handles.push_back(sig);
+    }
+    std::vector<std::string> current;
+    if (!read_sig_vec_value_at(file, signals, begin_time, 'H', current)) return false;
+
+    TimeBasedVcIterGuard guard;
+    npiFsdbTimeBasedVcIter& iter = guard.iter();
+    for (auto sig : handles) iter.add(sig);
+    guard.start(begin_time, end_time);
+    npiFsdbTime t = 0;
+    npiFsdbSigHandle changed = nullptr;
+    bool found = false;
+    while (iter.iter_next(t, changed) > 0) {
+        int index = -1;
+        for (size_t i = 0; i < handles.size(); ++i) {
+            if (handles[i] == changed) { index = static_cast<int>(i); break; }
+        }
+        if (index < 0) continue;
+        npiFsdbValue val;
+        val.format = npiFsdbHexStrVal;
+        if (!iter.get_value(val) || !val.value.str) continue;
+        std::string next = val.value.str;
+        if (!found) {
+            if (next == current[index]) continue;
+            found = true;
+            diff_time = t;
+        } else if (t != diff_time) {
+            break;
+        }
+        if (next != current[index]) {
+            auto existing = std::find_if(changes.begin(), changes.end(),
+                [&](const ListDiffChange& item) { return item.signal == signals[index]; });
+            if (existing == changes.end())
+                changes.push_back({signals[index], current[index], next});
+            else
+                existing->after = next;
+            current[index] = next;
+        }
+    }
+    return found && !changes.empty();
 }
 
 } // namespace xdebug_waveform

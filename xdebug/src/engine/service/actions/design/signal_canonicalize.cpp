@@ -10,6 +10,7 @@
 #include "design/trace/trace_engine.h"
 #include "design/signal/signal_finder.h"
 #include "design/service/action_support.h"
+#include "combined/active_trace_common.h"
 
 #include "npi.h"
 #include "npi_fsdb.h"
@@ -43,16 +44,32 @@ public:
         Json failure;
         if (!resolve_design_signal(action_name(), query, result, failure)) return failure;
         const SignalMatch& match = result.matches.front();
-        const std::string canonical = match.signal;
+        const std::string resolved_signal = match.signal;
+        xdebug::PortConnectionInfo port = xdebug::resolve_input_port_connection(resolved_signal);
+        const std::string canonical = !port.target_signal.empty() ? port.target_signal : resolved_signal;
         const size_t dot = canonical.rfind('.');
         const std::string scope = dot == std::string::npos ? std::string() : canonical.substr(0, dot);
         const std::string leaf = dot == std::string::npos ? canonical : canonical.substr(dot + 1);
+        Json aliases = Json::array();
+        if (canonical != resolved_signal) aliases.push_back(resolved_signal);
+        if (query != resolved_signal && query != canonical) aliases.push_back(query);
+        Json port_mappings = Json::array();
+        if (port.found_port) {
+            port_mappings.push_back({{"instance", port.instance_path},
+                                     {"port", port.port_name},
+                                     {"direction", port.is_input_like ? "input_or_inout" : "output"},
+                                     {"port_signal", resolved_signal},
+                                     {"connected_signal", port.target_signal.empty()
+                                         ? Json(nullptr) : Json(port.target_signal)},
+                                     {"evidence", "npi_static_port_connection"}});
+        }
         return Json{{"summary", {{"status", "found"}, {"query", query},
-                                  {"ambiguous", result.matches.size() > 1}}},
+                                  {"ambiguous", result.matches.size() > 1},
+                                  {"canonicalization_scope", "static_design_connectivity"}}},
                     {"canonical", canonical}, {"rtl_path", canonical},
                     {"leaf", leaf}, {"scope", scope}, {"base_signal", canonical},
-                    {"select", nullptr}, {"aliases", Json::array()},
-                    {"fsdb_candidates", Json::array()}, {"port_mappings", Json::array()}};
+                    {"select", nullptr}, {"aliases", aliases},
+                    {"fsdb_candidates", Json::array()}, {"port_mappings", port_mappings}};
     }
 };
 

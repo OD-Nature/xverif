@@ -292,6 +292,7 @@ def test_active_trace_semantic_branches_and_gates(
         assert "chain" not in chain["data"]
         assert chain["summary"]["hop_count"] == 4
         assert chain["summary"]["termination"] == "primary_input"
+        assert chain["summary"]["termination_detail"] == "primary_input"
         hops = chain["data"]["hops"]
         assert [hop["index"] for hop in hops] == [0, 1, 2, 3]
         assert [_active_lines(hop)[0] for hop in hops] == [
@@ -322,6 +323,8 @@ def test_active_trace_semantic_branches_and_gates(
         assert "\nsource: " in chain_xout
         assert "\nactive_signals:\n" in chain_xout
         assert "hop  line  signal_path" in chain_xout
+        assert "termination       : primary_input" in chain_xout
+        assert "termination_detail: primary_input" in chain_xout
         assert "\n>" in chain_xout
         for removed_section in ("\nchain:\n", "\nstats:\n", "\nchain_path:\n"):
             assert removed_section not in chain_xout
@@ -341,7 +344,23 @@ def test_active_trace_semantic_branches_and_gates(
             limits={"max_depth": 8, "max_nodes": 1},
         )
         assert chain_limited["summary"]["termination"] == "limit"
+        assert chain_limited["summary"]["termination_detail"] == "max_nodes"
         assert chain_limited["meta"]["truncated"] is True
+
+        canonical = _query(
+            cli_runner,
+            {
+                "api_version": "xdebug.v1",
+                "action": "signal.canonicalize",
+                "target": {"session_id": session_id},
+                "args": {"signal": "active_semantics_tb.u_dut.chain_src"},
+            },
+            case_name="active-semantics-canonical-port",
+            artifact_root=artifact_root,
+        )
+        assert canonical["data"]["canonical"] == "active_semantics_tb.chain_src"
+        assert canonical["data"]["port_mappings"]
+        assert canonical["data"]["port_mappings"][0]["evidence"] == "npi_static_port_connection"
     finally:
         cli_runner.run(
             {

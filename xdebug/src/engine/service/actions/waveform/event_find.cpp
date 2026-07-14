@@ -146,7 +146,9 @@ public:
         if (!expr_error.is_null()) return expr_error;
         query.begin = tbegin;
         query.end = tend;
-        Json limits = request.value("limits", Json::object());
+        query.max_samples = args.value("max_samples", -1);
+        EventScanStats scan_stats;
+        query.stats = &scan_stats;
         std::string mode = args.value("mode", export_mode_ ? "export" : "first");
         if (mode == "head") mode = "first";
         if (mode == "tail") mode = "last";
@@ -160,17 +162,24 @@ public:
             int limit = args.value("line_limit", 1000);
             query.limit = limit > 0 ? limit : 1000;
         } else if (mode == "first") {
+            if (args.contains("line_limit"))
+                return event_invalid_enum_error(action_name(), "args.line_limit",
+                                                "line_limit is only valid with mode=all",
+                                                Json::array({"omit line_limit"}));
             query.limit = 1;
             // The candidate-change fast path can skip a match when a sampled
             // signal changes on the same timestamp as the clock edge. Use the
             // full clock-edge scan here so "first" is semantically exact.
             query.fast_find = false;
         } else if (mode == "last") {
-            int limit = args.value("line_limit", 10000);
-            query.limit = limit > 0 ? limit : 10000;
+            if (args.contains("line_limit"))
+                return event_invalid_enum_error(action_name(), "args.line_limit",
+                                                "line_limit is only valid with mode=all",
+                                                Json::array({"omit line_limit"}));
+            query.limit = -1;
+            query.retain_last_only = true;
         } else {
-            int limit = args.value("line_limit", 1000);
-            query.limit = limit > 0 ? limit : 1000;
+            query.limit = -1;
         }
 
         std::vector<EventRecord> records;
@@ -182,8 +191,13 @@ public:
             records.assign(1, last);
         }
 
+        const size_t matched_count = static_cast<size_t>(scan_stats.matched_count);
+        const int response_limit = args.value("line_limit", 1000);
         Json arr = Json::array();
+        size_t response_count = 0;
         for (auto& rec : records) {
+            if (!export_mode_ && mode == "all" && response_limit >= 0 &&
+                static_cast<int>(response_count) >= response_limit) break;
             Json je;
             je["time"] = xdebug_core::format_time(g_fsdb_file, rec.time);
             Json signal_values = Json::object();
@@ -195,6 +209,7 @@ public:
             je["signals"] = signal_values;
             je["fields"] = field_values;
             arr.push_back(je);
+            ++response_count;
         }
         Json out;
         bool include_events = true;
@@ -228,7 +243,11 @@ public:
             out["events"] = arr;
         }
         out["summary"] = {
-            {"event_count", static_cast<int>(arr.size())},
+            {"event_count", static_cast<int>(matched_count)},
+            {"returned_event_count", static_cast<int>(arr.size())},
+            {"response_truncated", mode == "all" && arr.size() < matched_count},
+            {"scan_complete", !scan_stats.sample_budget_exhausted},
+            {"sample_count", scan_stats.sample_count},
             {"mode", mode},
             {"inline", name.empty()},
             {"sampling_mode", "clock_edge"},
@@ -236,11 +255,19 @@ public:
             {"edge", clock_edge_kind_text(config.clock_sample.edge)},
             {"sample_time_semantics", "time is sample_time"}
         };
+        out["summary"]["analysis_complete"] = !scan_stats.sample_budget_exhausted;
+        const bool response_truncated = mode == "all" && arr.size() < matched_count;
+        out["summary"]["truncated"] = scan_stats.sample_budget_exhausted || response_truncated;
+        out["summary"]["truncation_scopes"] = Json::array();
+        if (scan_stats.sample_budget_exhausted)
+            out["summary"]["truncation_scopes"].push_back("analysis_samples");
+        if (response_truncated)
+            out["summary"]["truncation_scopes"].push_back("response_events");
         if (config.clock_sample.edge != ClockEdgeKind::Negedge)
             out["summary"]["sample_point"] = clock_sample_point_text(config.clock_sample.sample_point);
-        if (!arr.empty()) {
-            out["summary"]["first"] = arr[0]["time"];
-            out["summary"]["last"] = arr[arr.size()-1]["time"];
+        if (scan_stats.matched_count > 0) {
+            out["summary"]["first"] = xdebug_core::format_time(g_fsdb_file, scan_stats.first_match_time);
+            out["summary"]["last"] = xdebug_core::format_time(g_fsdb_file, scan_stats.last_match_time);
         }
         auto formatted_range = xdebug_core::format_time_range(g_fsdb_file, tbegin, tend);
         out["summary"]["begin"] = formatted_range.first;

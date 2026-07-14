@@ -165,12 +165,16 @@ public:
         std::string error;
         if (!range_from_args(args, request.value("limits", Json::object()), options, error))
             return stream_time_error(error);
+        std::string query = args.value("query", std::string("summary"));
+        // Exact field matching still retains all transfer rows. Other query
+        // modes retain bounded response evidence while aggregates and
+        // first/last evidence continue across the full scan.
+        if (query == "match_field") options.retain_limit = -1;
         StreamAnalyzer analyzer;
         StreamAnalysis analysis;
         if (!analyzer.analyze(g_fsdb_file, config, options, analysis, error))
             return stream_analyze_error(error);
 
-        std::string query = args.value("query", std::string("summary"));
         Json out;
         out["summary"] = xdebug_waveform::stream_summary_json(config, analysis);
         out["summary"]["query"] = query;
@@ -178,9 +182,9 @@ public:
         if (query == "summary") return out;
         if (query == "first_transfer" || query == "last_transfer") {
             out["summary"].erase(query == "first_transfer" ? "first_transfer_time" : "last_transfer_time");
-            if (!analysis.transfers.empty()) {
+            if (analysis.has_transfer_evidence) {
                 out["row"] = xdebug_waveform::stream_row_json(
-                    query == "first_transfer" ? analysis.transfers.front() : analysis.transfers.back());
+                    query == "first_transfer" ? analysis.first_transfer : analysis.last_transfer);
             }
             return out;
         }

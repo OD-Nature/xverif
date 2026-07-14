@@ -40,4 +40,17 @@ bool find_list_diff(npiFsdbFileHandle file,
                     npiFsdbTime end_time,
                     npiFsdbTime& diff_time);
 
+struct ListDiffChange {
+    std::string signal;
+    std::string before;
+    std::string after;
+};
+
+bool find_first_list_changes(npiFsdbFileHandle file,
+                             const std::vector<std::string>& signals,
+                             npiFsdbTime begin_time,
+                             npiFsdbTime end_time,
+                             npiFsdbTime& diff_time,
+                             std::vector<ListDiffChange>& changes);
+
 } // namespace xdebug_waveform

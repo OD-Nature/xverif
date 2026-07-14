@@ -52,6 +52,21 @@
             "type": "string"
           }
         },
+        "rules": {
+          "type": "object",
+          "properties": {
+            "payload_changed_without_sampled_valid": {
+              "type": "string",
+              "enum": [
+                "off",
+                "summary",
+                "all"
+              ],
+              "default": "summary"
+            }
+          },
+          "additionalProperties": false
+        },
         "sample_point": {
           "type": "string",
           "enum": [
@@ -59,10 +74,6 @@
             "after"
           ],
           "description": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。"
-        },
-        "value_format": {
-          "type": "string", "enum": ["hex", "bin", "dec"],
-          "description": "仅控制响应中信号值的显示格式；不影响采样、时间或导出文件格式。"
         },
         "time_range": {
           "type": "object",

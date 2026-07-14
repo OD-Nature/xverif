@@ -61,6 +61,8 @@
         "driver_last_change_time": {"type": "string"},
         "time_semantics": {"type": "object"},
         "driver_status": {"type": "string"},
+        "termination": {"type": "string"},
+        "termination_detail": {"type": "string"},
         "evidence_scope": {"type": "string"},
         "evidence_status": {"type": "string"},
         "evidence_source": {"type": ["string", "null"]},

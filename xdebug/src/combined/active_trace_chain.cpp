@@ -49,6 +49,7 @@ struct ChainResult {
     std::vector<BranchEvidence> branch_evidence;
     std::vector<std::string> limitations;
     std::string termination = "unresolved";
+    std::string termination_detail;
     std::string evidence_source;
     int static_candidate_count = 0;
     int active_check_count = 0;
@@ -162,6 +163,8 @@ ChainResult build_chain(npiFsdbFileHandle fsdb,
         NpiHandleGuard hdl(npi_handle_by_name(cur_sig.c_str(), nullptr));
         if (!hdl) {
             result.termination = "signal_not_found";
+            result.termination_detail = cur_sig.find('[') != std::string::npos
+                ? "dynamic_index_boundary" : "signal_missing";
             result.limitations.push_back("signal not found: " + cur_sig);
             break;
         }
@@ -182,6 +185,7 @@ ChainResult build_chain(npiFsdbFileHandle fsdb,
         }
         if (resolved.ambiguous) {
             result.termination = "ambiguous";
+            result.termination_detail = "multiple_active_candidates";
             break;
         }
 
@@ -328,6 +332,7 @@ ChainResult build_chain(npiFsdbFileHandle fsdb,
         && (depth > max_depth || static_cast<int>(result.chain.size()) >= max_nodes)) {
         result.truncated = true;
         result.termination = "limit";
+        result.termination_detail = depth > max_depth ? "max_depth" : "max_nodes";
         result.limitations.push_back("trace limit reached");
     }
     return result;
@@ -415,6 +420,9 @@ nlohmann::ordered_json build_active_driver_chain_payload(const Json& request,
         {"requested_time", req_time},
         {"chain_length", static_cast<int>(result.chain.size())},
         {"termination", result.termination},
+        {"termination_detail", result.termination_detail.empty()
+            ? nlohmann::ordered_json(result.termination)
+            : nlohmann::ordered_json(result.termination_detail)},
         {"evidence_source", result.evidence_source.empty()
             ? nlohmann::ordered_json(nullptr) : nlohmann::ordered_json(result.evidence_source)},
         {"static_candidate_count", result.static_candidate_count},

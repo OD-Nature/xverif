@@ -556,10 +556,17 @@ bool StreamAnalyzer::analyze(npiFsdbFileHandle file, const StreamConfig& config,
                 }
             }
             if (channel_ok) {
-                analysis.transfers.push_back(row);
-                if (options.limit > 0 && static_cast<int>(analysis.transfers.size()) > options.limit) {
-                    analysis.truncated = true;
+                if (!analysis.has_transfer_evidence) {
+                    analysis.first_transfer = row;
+                    analysis.has_transfer_evidence = true;
                 }
+                analysis.last_transfer = row;
+                const int retain_limit = options.retain_limit == 0
+                    ? options.limit : options.retain_limit;
+                if (retain_limit <= 0 || static_cast<int>(analysis.transfers.size()) < retain_limit)
+                    analysis.transfers.push_back(row);
+                else
+                    analysis.truncated = true;
             }
         }
 
@@ -694,6 +701,8 @@ Json stream_summary_json(const StreamConfig& config, const StreamAnalysis& analy
     j["ready_bp_conflict_count"] = analysis.ready_bp_conflict_count;
     j["stable_mismatch_count"] = analysis.stable_mismatch_count;
     j["truncated"] = analysis.truncated;
+    j["response_truncated"] = analysis.truncated;
+    j["retained_transfer_count"] = analysis.transfers.size();
     j["analysis_complete"] = analysis.analysis_complete;
     j["truncation_scope"] = analysis.truncated ? Json("response_rows") : Json(nullptr);
     j["requested_range"] = {{"begin", format_time(analysis.requested_begin)},
@@ -702,9 +711,9 @@ Json stream_summary_json(const StreamConfig& config, const StreamAnalysis& analy
         ? Json(format_time(analysis.scanned_begin)) : Json(nullptr)},
                            {"end", analysis.has_scanned_samples
         ? Json(format_time(analysis.scanned_end)) : Json(nullptr)}};
-    if (!analysis.transfers.empty()) {
-        j["first_transfer_time"] = format_time(analysis.transfers.front().time);
-        j["last_transfer_time"] = format_time(analysis.transfers.back().time);
+    if (analysis.has_transfer_evidence) {
+        j["first_transfer_time"] = format_time(analysis.first_transfer.time);
+        j["last_transfer_time"] = format_time(analysis.last_transfer.time);
     }
     if (!analysis.stalls.empty()) {
         j["first_stall_time"] = format_time(analysis.stalls.front().start_time);

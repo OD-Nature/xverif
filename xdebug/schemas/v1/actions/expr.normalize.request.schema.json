@@ -65,6 +65,24 @@
       "additionalProperties": false,
       "required": [
         "expr"
+      ],
+      "allOf": [
+        {
+          "anyOf": [
+            {
+              "required": [
+                "signal"
+              ]
+            },
+            {
+              "not": {
+                "required": [
+                  "line_limit"
+                ]
+              }
+            }
+          ]
+        }
       ]
     },
     "limits": {
