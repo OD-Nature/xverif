@@ -16,7 +16,6 @@ xdebug public API 以 action-specific schema 为 source of truth。任何文档�
 
 - `xdebug/tools/sync_runtime_request_schemas.py`
 - `xdebug/tools/sync_action_schema_hints.py`
-- `xdebug/tools/sync_response_contracts.py`
 - `xdebug/tools/audit_runtime_schema_compatibility.py`
 - `xdebug/tools/validate_schema.py`
 - `xdebug/tools/validate_examples.py`

@@ -4,15 +4,10 @@
   "action": "value.at",
   "summary": {
     "signal": "top.clk",
-    "time": "10ns",
-    "known": true,
-    "status": "ok"
+    "time": "10ns"
   },
   "data": {
-    "value": {
-      "value": "'h1",
-      "known": true
-    },
-    "clock_context": {}
+    "value": "'h1",
+    "known": true
   }
 }

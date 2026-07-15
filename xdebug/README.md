@@ -246,11 +246,10 @@ MCP client 配置示例（direct 模式）：
 - `xverif_debug_list_actions` / `xverif_debug_get_schema`：查询 action catalog 和 schema。
 - action 统一通过 `xverif_debug_query(session_id, action, args, limits, output_format)` 调用，不暴露快捷别名。
 
-`xverif_debug_get_schema` 默认返回 MCP 投影，不返回 native request envelope：结果中的
+`xverif_debug_get_schema` 默认返回 MCP 投影：结果中的
 `args_schema` 和 `limits_schema` 可直接对应 query tool 的内层同名参数；`parameter_guide`
 递归解释字段，`constraints` 展平条件关系，`minimal_call`/`common_examples` 可直接复制。
-同一默认响应中的 `response_guide.primary_fields` 已给出成功响应、空结果和完整性字段；
-无需再查询一次 response schema。需要 CLI/stdio envelope 时显式请求 `view="native"`；
+无需再查询一次 response schema；
 只查看完整 response schema 时使用 `kind="response", view="response"`。
 
 xcov 提供对称的 `xverif_cov_session_open/list/doctor/close/kill/gc`。debug/cov query 都禁止 native lifecycle action。xdebug dead loop 只使用固定 native admin path 精确 doctor/kill；xcov backend 随 loop 退出，kill 不虚构 native kill。清理部分失败会保留 tombstone，不切换 transport/backend。

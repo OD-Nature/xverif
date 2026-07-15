@@ -34,10 +34,6 @@ def test_protocol_statistics_response_schemas_are_generated_and_synced() -> None
     assert _module("sync_protocol_statistics_response_schemas").main(["--check"]) == 0
 
 
-def test_response_contracts_are_closed_from_compact_examples() -> None:
-    assert _module("sync_response_contracts").main(["--check"]) == 0
-
-
 def test_clock_sampling_is_consolidated() -> None:
     assert _module("check_clock_sampling_consolidation").main() == 0
 

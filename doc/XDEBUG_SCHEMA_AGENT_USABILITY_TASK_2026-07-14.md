@@ -16,8 +16,8 @@ xdebug 已具备 action catalog、action-specific request schema、examples 和 
 | REQ-04/05 | stream definition 的 alias/表达式/互依赖与 stream query 的 selector/match 未建模 | StreamDefinition、stream query 判别 schema、constraints 与 examples |
 | REQ-06/07/08 | event aggregate/group_by/reset/预算、mode-line_limit 关系、export destination 不清 | event contracts、预算 completeness guide、文件/response 目的地分支 |
 | REQ-09--12 | AXI/APB mapping、input source、session transport 语义不足 | protocol config/transport action contracts 和 action-specific examples |
-| RSP-01--06 | 多数 response 开放、截断位置漂移、finding/evidence/统计/summary-data 边界不足 | 本轮不全量重写 response schema；get-schema response guide 必须公布 primary fields、completeness、finding/evidence 与 response 边界，后续全量 response 任务以该表为基线 |
-| AXI-01--05 | AXI statistics、valid_begin_time、pairing/stall、response field dictionary 漂移 | response guide 写入 canonical AXI 语义；同步修正 skill field dictionary 的已确认路径漂移，严格 AXI schema 改动仅在生成器 source 中进行 |
+| RSP-01--06 | 多数 response 开放、截断位置漂移、finding/evidence/统计/summary-data 边界不足 | 后续全量 response 任务以本表为基线。 |
+| AXI-01--05 | AXI statistics、valid_begin_time、pairing/stall、response field dictionary 漂移 | 同步修正 skill field dictionary 的已确认路径漂移，严格 AXI schema 改动仅在生成器 source 中进行。 |
 
 ## 2. 目标与成功标准
 
@@ -35,7 +35,7 @@ xdebug 已具备 action catalog、action-specific request schema、examples 和 
 
 ### 3.1 本轮范围
 
-- 建立独立结构化 `ActionContract`，作为 stable action 的 request 字段语义、action boundary、examples、constraints 与 primary response guide 的 canonical source。
+- 建立独立结构化 `ActionContract`，作为 stable action 的 request 字段语义、action boundary、examples 与 constraints 的 canonical source。
 - 从合同生成/校验 request schema、get-schema MCP projection、action reference、catalog agent hints 和 skill MCP 示例。
 - 修改 native `schema` action 的 request/response 合同；扩展 MCP `xverif_debug_get_schema`。
 - 收紧全量 stable request schema；优先实现 `stream.query/config.load`、`event.find/export`、`handshake.inspect`、`detect_abnormal`、`signal.changes`、协议 config、session transport 和 trace limits 的嵌套/条件语义。
@@ -43,13 +43,13 @@ xdebug 已具备 action catalog、action-specific request schema、examples 和 
 
 ### 3.2 非目标
 
-- 不在本轮把全部 stable action response JSON Schema 改造成闭合业务模型；仅为 schema discovery action 建立严格 response，并为所有 action 提供 `response_guide`。
+- 不在本轮把全部 stable action response JSON Schema 改造成闭合业务模型；仅为 schema discovery action 建立严格 response。
 - 不增加新的 xdebug query action、运行时 fallback、transport fallback、输入源优先级或静默 alias 兼容。
 - 不改变已经确认的 action handler 业务语义；发现 schema 与 handler 不一致时，先以测试和明确错误收紧，不能在 schema 中猜测行为。
 
 ### 3.3 兼容规则
 
-- `xverif_debug_get_schema` 默认切换至 `view="mcp"`，这是已确认的公开 MCP 合同变化；旧完整 native envelope 通过显式 `view="native"` 提供。
+- `xverif_debug_get_schema` 默认使用 `view="mcp"`，只提供 MCP 调用投影。
 - 原生 CLI/stdio 的 `schema` action 仍返回 native schema；MCP projection 只发生在 MCP server/adaptor 层。
 - 不接受后静默忽略参数。多输入源只有在 handler 已实现且合同明确的情况下才可共存；否则 request schema 使用 `oneOf` 拒绝混用。
 
@@ -64,7 +64,6 @@ xdebug 已具备 action catalog、action-specific request schema、examples 和 
 | arguments | action-specific args/limits schema、双语 description、default、effective default、recommended value、单位、表达式/路径语法、dynamic contract |
 | constraints | 从 JSON Schema 条件展开的自然语言规则；包括 required group、互斥、条件必填、预算作用域、输入源选择和错误恢复提示 |
 | examples | minimal MCP call、common legal calls、invalid call + corrected call；示例是内嵌 JSON，不是仓库路径 |
-| response guide | primary fields、时间/LogicValue 表示、empty-result 形态、partial/completeness 读取规则 |
 
 真正跨 action 同义的时间、采样、signal path、line limit、logic value 等才能抽成 reusable `$defs`；即使字段同名，只要语义不同，必须在 ActionContract 中有 action-specific override。
 
@@ -112,7 +111,7 @@ xverif_debug_get_schema(
 | `mcp`（默认） | 返回适用于 `xverif_debug_query` 的 args/limits schema、完整 agent guide 和 examples；不含 native target/envelope。 |
 | `args` | 只返回 action-specific args schema、constraints、parameter guide 和 examples。 |
 | `native` | 返回当前 CLI/stdio 完整 request/response JSON Schema。 |
-| `response` | 返回 response schema 与 response guide；当 kind 不是 response 时返回 `INVALID_ARGUMENT`。 |
+| `response` | 返回 response schema；当 kind 不是 response 时返回 `INVALID_ARGUMENT`。 |
 
 `include_examples=false` 仍返回 minimal call 与 parameter guide，只隐藏 common/invalid examples。`language` 默认 `zh`，只切换人类可读说明；machine schema 和枚举不因语言变化。未知 action、未知 kind/view、kind-view 冲突必须返回稳定 `INVALID_ARGUMENT` 或 `UNKNOWN_ACTION`，并带 suggested action/correct example。
 
@@ -137,7 +136,6 @@ xverif_debug_get_schema(
   "minimal_call": {},
   "common_examples": [],
   "invalid_examples": [],
-  "response_guide": {}
 }
 ```
 
@@ -180,5 +178,5 @@ xverif_debug_get_schema(
 ## 10. 2026-07-15 全量收口补充
 
 - request runtime 使用 embedded third-party Draft-7 validator。checked-in JSON 文件仍声明 Draft 2020-12，但 72 个 request schema 只能使用已验证的 Draft-7 兼容子集；不得引入 `$dynamicRef`、`unevaluatedProperties`、`prefixItems`、`dependentSchemas` 等后期关键字。此约束由独立 audit 与真实 C++ validator 共同验证，不生成第二份 schema 或静默降级。
-- `get_schema(view="mcp")` 必须在一次响应中同时给出 request parameter guide 和 response primary fields；`kind="response"` 不再隐式改写为 response view。
+- `get_schema(view="mcp")` 返回 request parameter guide；`kind="response"` 不再隐式改写为 response view。
 - response compact 主路径从 canonical basic example 生成闭合 `summary/data/meta` 结构；无法在 compact example 中稳定枚举的诊断 payload 必须保留为带 `x-dynamic-contract` 的显式扩展点，而非裸开放 object。

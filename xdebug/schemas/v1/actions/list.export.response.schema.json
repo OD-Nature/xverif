@@ -30,408 +30,90 @@
       ]
     },
     "summary": {
-      "anyOf": [
-        {
-          "type": "object",
-          "description": "summary 的 action-specific response 对象。",
-          "x-description-zh": "summary 的 action-specific response 对象。",
-          "x-dynamic-contract": "在 ActionContract 明确闭合前，字段由该 action handler 的稳定业务结果定义。",
-          "additionalProperties": true
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
         },
-        {
+        "signal_count": {
+          "type": "integer"
+        },
+        "row_count": {
+          "type": "integer"
+        },
+        "format": {
+          "type": "string",
+          "enum": [
+            "u64bin.v1"
+          ]
+        },
+        "output": {
           "type": "object",
           "properties": {
-            "status": {
-              "const": "error",
-              "description": "固定错误状态。",
-              "x-description-zh": "固定错误状态。"
+            "path": {
+              "type": "string"
             },
-            "error_code": {
-              "type": "string",
-              "description": "与 error.code 相同的摘要错误码。",
-              "x-description-zh": "与 error.code 相同的摘要错误码。"
+            "manifest_path": {
+              "type": "string"
             }
           },
-          "additionalProperties": false,
-          "required": [
-            "status",
-            "error_code"
-          ]
+          "additionalProperties": true
         }
+      },
+      "required": [
+        "name",
+        "signal_count",
+        "row_count",
+        "format"
       ],
-      "description": "成功摘要或统一错误摘要。",
-      "x-description-zh": "成功摘要或统一错误摘要。"
+      "additionalProperties": true
     },
     "data": {
-      "anyOf": [
-        {
-          "type": "object",
-          "description": "data 的 action-specific response 对象。",
-          "x-description-zh": "data 的 action-specific response 对象。",
-          "x-dynamic-contract": "在 ActionContract 明确闭合前，字段由该 action handler 的稳定业务结果定义。",
-          "additionalProperties": true
-        },
-        {
-          "type": "null",
-          "description": "错误响应没有业务 data。",
-          "x-description-zh": "错误响应没有业务 data。"
-        }
-      ],
-      "description": "成功业务 data 或错误 null。",
-      "x-description-zh": "成功业务 data 或错误 null。"
-    },
-    "warnings": {
-      "type": "array",
-      "description": "warnings 诊断列表。",
-      "x-description-zh": "warnings 诊断列表。",
-      "items": {
-        "type": "object",
-        "description": "warnings 的动态诊断条目。",
-        "x-description-zh": "warnings 的动态诊断条目。",
-        "x-dynamic-contract": "每个条目由 finding/warning type 决定；调用方必须读取 type、severity、message 和 evidence。",
-        "additionalProperties": true
-      }
-    },
-    "error": {
-      "anyOf": [
-        {
-          "type": "null",
-          "description": "成功响应没有 error。",
-          "x-description-zh": "成功响应没有 error。"
-        },
-        {
+      "type": "object",
+      "properties": {
+        "output": {
           "type": "object",
           "properties": {
-            "code": {
-              "type": "string",
-              "description": "稳定机器错误码。",
-              "x-description-zh": "稳定机器错误码。"
+            "path": {
+              "type": "string"
             },
-            "message": {
-              "type": "string",
-              "description": "人类可读错误说明。",
-              "x-description-zh": "人类可读错误说明。"
-            },
-            "recoverable": {
-              "type": "boolean",
-              "description": "修正请求或环境后是否可重试。",
-              "x-description-zh": "修正请求或环境后是否可重试。"
-            },
-            "error_layer": {
-              "type": "string",
-              "enum": [
-                "schema",
-                "handler",
-                "internal",
-                "transport"
-              ],
-              "description": "产生错误的合同层。",
-              "x-description-zh": "产生错误的合同层。"
-            },
-            "invalid_arg": {
-              "type": "string",
-              "description": "可修正的参数路径。",
-              "x-description-zh": "可修正的参数路径。"
-            },
-            "expected": {
-              "type": "string",
-              "description": "期望的类型或语义。",
-              "x-description-zh": "期望的类型或语义。"
-            },
-            "received_type": {
-              "type": "string",
-              "description": "实际输入 JSON 类型。",
-              "x-description-zh": "实际输入 JSON 类型。"
-            },
-            "allowed_values": {
-              "type": "array",
-              "description": "合法候选值。",
-              "x-description-zh": "合法候选值。",
-              "items": {}
-            },
-            "did_you_mean": {
-              "type": "string",
-              "description": "建议改用的字段或 action。",
-              "x-description-zh": "建议改用的字段或 action。"
-            },
-            "required_any_of": {
-              "type": "array",
-              "description": "至少需要提供的一组参数。",
-              "x-description-zh": "至少需要提供的一组参数。",
-              "items": {}
-            },
-            "correct_example": {
-              "type": "object",
-              "description": "可直接修正的最小请求。",
-              "x-description-zh": "可直接修正的最小请求。",
-              "x-dynamic-contract": "该对象是对应 action 的 native request example。",
-              "additionalProperties": true
+            "manifest_path": {
+              "type": "string"
             }
           },
-          "additionalProperties": false,
           "required": [
-            "code",
-            "message",
-            "recoverable",
-            "error_layer"
-          ]
+            "path",
+            "manifest_path"
+          ],
+          "additionalProperties": true
+        },
+        "signals": {
+          "type": "array"
+        },
+        "begin": {
+          "type": "string"
+        },
+        "end": {
+          "type": "string"
         }
+      },
+      "required": [
+        "signals",
+        "begin",
+        "end"
       ],
-      "description": "统一错误对象。",
-      "x-description-zh": "统一错误对象。"
+      "additionalProperties": true
     },
+    "warnings": {
+      "type": "array"
+    },
+    "error": {},
     "meta": {
       "type": "object"
-    },
-    "tool": {
-      "type": "object",
-      "description": "生成响应的工具元数据。",
-      "x-description-zh": "生成响应的工具元数据。",
-      "x-dynamic-contract": "build metadata 由工具版本定义。",
-      "additionalProperties": true
-    },
-    "session": {
-      "type": [
-        "object",
-        "null"
-      ],
-      "description": "本响应关联的 session 元数据。",
-      "x-description-zh": "本响应关联的 session 元数据。",
-      "x-dynamic-contract": "session transport metadata 由 session contract 定义。",
-      "additionalProperties": true
-    },
-    "schema_version": {
-      "type": "string",
-      "description": "生成该响应的 schema 版本路径。",
-      "x-description-zh": "生成该响应的 schema 版本路径。"
-    },
-    "text": {
-      "type": "string",
-      "description": "可选的人类可读渲染文本。",
-      "x-description-zh": "可选的人类可读渲染文本。"
-    },
-    "suggested_next_actions": {
-      "type": "array",
-      "description": "建议的后续 action。",
-      "x-description-zh": "建议的后续 action。",
-      "items": {
-        "type": "object",
-        "description": "suggested_next_actions 的动态诊断条目。",
-        "x-description-zh": "suggested_next_actions 的动态诊断条目。",
-        "x-dynamic-contract": "每个条目由 finding/warning type 决定；调用方必须读取 type、severity、message 和 evidence。",
-        "additionalProperties": true
-      }
     }
   },
-  "additionalProperties": false,
+  "additionalProperties": true,
   "description": "Export waveform-list data.",
   "x-output_notes": "返回该 action 的 summary/data/error/meta；具体字段以 response schema 和 response example 为准。",
-  "x-description-zh": "导出 list 数据。",
-  "allOf": [
-    {
-      "x-response-branch-contract": "generated",
-      "if": {
-        "properties": {
-          "ok": {
-            "const": true
-          }
-        },
-        "required": [
-          "ok"
-        ]
-      },
-      "then": {
-        "properties": {
-          "summary": {
-            "type": "object",
-            "description": "summary 的 action-specific response 对象。",
-            "x-description-zh": "summary 的 action-specific response 对象。",
-            "x-dynamic-contract": "在 ActionContract 明确闭合前，字段由该 action handler 的稳定业务结果定义。",
-            "additionalProperties": true
-          },
-          "data": {
-            "type": "object",
-            "description": "data 的 action-specific response 对象。",
-            "x-description-zh": "data 的 action-specific response 对象。",
-            "x-dynamic-contract": "在 ActionContract 明确闭合前，字段由该 action handler 的稳定业务结果定义。",
-            "additionalProperties": true
-          },
-          "error": {
-            "type": "null"
-          }
-        }
-      },
-      "else": {
-        "properties": {
-          "summary": {
-            "type": "object",
-            "properties": {
-              "status": {
-                "const": "error",
-                "description": "固定错误状态。",
-                "x-description-zh": "固定错误状态。"
-              },
-              "error_code": {
-                "type": "string",
-                "description": "与 error.code 相同的摘要错误码。",
-                "x-description-zh": "与 error.code 相同的摘要错误码。"
-              }
-            },
-            "additionalProperties": false,
-            "required": [
-              "status",
-              "error_code"
-            ]
-          },
-          "data": {
-            "type": "null"
-          },
-          "error": {
-            "type": "object",
-            "properties": {
-              "code": {
-                "type": "string",
-                "description": "稳定机器错误码。",
-                "x-description-zh": "稳定机器错误码。"
-              },
-              "message": {
-                "type": "string",
-                "description": "人类可读错误说明。",
-                "x-description-zh": "人类可读错误说明。"
-              },
-              "recoverable": {
-                "type": "boolean",
-                "description": "修正请求或环境后是否可重试。",
-                "x-description-zh": "修正请求或环境后是否可重试。"
-              },
-              "error_layer": {
-                "type": "string",
-                "enum": [
-                  "schema",
-                  "handler",
-                  "internal",
-                  "transport",
-                  "wrapper",
-                  "session_manager"
-                ],
-                "description": "产生错误的合同层。",
-                "x-description-zh": "产生错误的合同层。"
-              },
-              "invalid_arg": {
-                "type": "string",
-                "description": "可修正的参数路径。",
-                "x-description-zh": "可修正的参数路径。"
-              },
-              "expected": {
-                "type": "string",
-                "description": "期望的类型或语义。",
-                "x-description-zh": "期望的类型或语义。"
-              },
-              "received_type": {
-                "type": "string",
-                "description": "实际输入 JSON 类型。",
-                "x-description-zh": "实际输入 JSON 类型。"
-              },
-              "received": {
-                "description": "实际收到的 JSON 值。",
-                "x-description-zh": "实际收到的 JSON 值。"
-              },
-              "allowed_values": {
-                "type": "array",
-                "description": "合法候选值。",
-                "x-description-zh": "合法候选值。",
-                "items": {}
-              },
-              "available_values": {
-                "type": "array",
-                "description": "当前资源中可用的候选值。",
-                "x-description-zh": "当前资源中可用的候选值。",
-                "items": {}
-              },
-              "candidates": {
-                "type": "array",
-                "description": "相近候选项。",
-                "x-description-zh": "相近候选项。",
-                "items": {}
-              },
-              "suggested_actions": {
-                "type": "array",
-                "description": "建议的替代 action。",
-                "x-description-zh": "建议的替代 action。",
-                "items": {}
-              },
-              "supported": {
-                "type": "array",
-                "description": "实现支持的候选能力。",
-                "x-description-zh": "实现支持的候选能力。",
-                "items": {}
-              },
-              "reason": {
-                "type": "string",
-                "description": "该值或请求不被支持的原因。",
-                "x-description-zh": "该值或请求不被支持的原因。"
-              },
-              "did_you_mean": {
-                "type": "string",
-                "description": "建议改用的字段或 action。",
-                "x-description-zh": "建议改用的字段或 action。"
-              },
-              "required_any_of": {
-                "type": "array",
-                "description": "至少需要提供的一组参数。",
-                "x-description-zh": "至少需要提供的一组参数。",
-                "items": {}
-              },
-              "schema_path": {
-                "type": "string",
-                "description": "用于校验的 request schema 路径。",
-                "x-description-zh": "用于校验的 request schema 路径。"
-              },
-              "missing_name": {
-                "type": "string",
-                "description": "缺失的命名资源。",
-                "x-description-zh": "缺失的命名资源。"
-              },
-              "missing_resource": {
-                "type": "string",
-                "description": "缺失的设计或波形资源。",
-                "x-description-zh": "缺失的设计或波形资源。"
-              },
-              "next_actions": {
-                "type": "array",
-                "description": "可继续执行的恢复 action。",
-                "x-description-zh": "可继续执行的恢复 action。",
-                "items": {}
-              },
-              "example_note": {
-                "type": "string",
-                "description": "correct_example 的使用说明。",
-                "x-description-zh": "correct_example 的使用说明。"
-              },
-              "cause_code": {
-                "type": "string",
-                "description": "底层原因错误码。",
-                "x-description-zh": "底层原因错误码。"
-              },
-              "correct_example": {
-                "type": "object",
-                "description": "可直接修正的最小请求。",
-                "x-description-zh": "可直接修正的最小请求。",
-                "x-dynamic-contract": "该对象是对应 action 的 native request example。",
-                "additionalProperties": true
-              }
-            },
-            "additionalProperties": false,
-            "required": [
-              "code",
-              "message",
-              "recoverable",
-              "error_layer"
-            ]
-          }
-        }
-      }
-    }
-  ],
-  "x-response-branches": "ok=true uses success summary/data and error=null; ok=false uses the common diagnostic response."
+  "x-description-zh": "导出 list 数据。"
 }

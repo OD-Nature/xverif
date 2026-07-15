@@ -42,13 +42,6 @@ def test_response_view_requires_response_kind() -> None:
     assert result["error"]["code"] == "INVALID_ARGUMENT"
 
 
-def test_default_mcp_view_includes_response_primary_fields() -> None:
-    result = project("value.at", "request", "mcp", _native_request())
-    guide = result["data"]["response_guide"]
-    assert "primary_fields" in guide
-    assert any(item["path"] == "response.summary" for item in guide["primary_fields"])
-
-
 def test_response_kind_does_not_implicitly_change_view() -> None:
     result = project("value.at", "response", "mcp", _native_request())
     assert result["ok"] is False

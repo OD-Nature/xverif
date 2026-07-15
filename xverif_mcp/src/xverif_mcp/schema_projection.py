@@ -12,10 +12,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 _SESSION_TOOL_CONTRACTS: dict[str, Json] = {
-    "session.open": {"tool": "xverif_debug_session_open", "required": ["name"], "response": [
-        {"path": "response.summary", "meaning": "Opened session identity and lifecycle summary."},
-        {"path": "response.data.session_id", "meaning": "Identifier to pass to xverif_debug_query."},
-    ], "properties": {
+    "session.open": {"tool": "xverif_debug_session_open", "required": ["name"], "properties": {
         "name": {"type": "string", "description": "Stable name for the new managed session."},
         "daidir": {"type": "string", "description": "Optional simulation daidir path."},
         "fsdb": {"type": "string", "description": "Optional waveform FSDB path."},
@@ -23,36 +20,24 @@ _SESSION_TOOL_CONTRACTS: dict[str, Json] = {
         "queue": {"type": "string", "description": "Optional backend queue selection."},
         "resource": {"type": "string", "description": "Optional backend resource request."},
     }},
-    "session.list": {"tool": "xverif_debug_session_list", "response": [
-        {"path": "response.data.sessions[]", "meaning": "Managed session records; empty means no matching live session."},
-    ], "properties": {
+    "session.list": {"tool": "xverif_debug_session_list", "properties": {
         "include_tombstones": {"type": "boolean", "default": False, "description": "Include terminal tombstone records."},
         "verbose": {"type": "boolean", "default": False, "description": "Include detailed session metadata."},
     }},
-    "session.doctor": {"tool": "xverif_debug_session_doctor", "any_of": [["name"], ["session_id"]], "response": [
-        {"path": "response.summary", "meaning": "Health verdict for the requested session."},
-        {"path": "response.data", "meaning": "Detailed lifecycle and backend diagnostics."},
-    ], "properties": {
+    "session.doctor": {"tool": "xverif_debug_session_doctor", "any_of": [["name"], ["session_id"]], "properties": {
         "name": {"type": "string", "description": "Managed session name."},
         "session_id": {"type": "string", "description": "Managed session identifier."},
         "verbose": {"type": "boolean", "default": False, "description": "Include detailed health diagnostics."},
     }},
-    "session.close": {"tool": "xverif_debug_session_close", "any_of": [["name"], ["session_id"]], "response": [
-        {"path": "response.summary", "meaning": "Close and cleanup outcome."},
-    ], "properties": {
+    "session.close": {"tool": "xverif_debug_session_close", "any_of": [["name"], ["session_id"]], "properties": {
         "name": {"type": "string", "description": "Managed session name to close."},
         "session_id": {"type": "string", "description": "Managed session identifier to close."},
     }},
-    "session.kill": {"tool": "xverif_debug_session_kill", "any_of": [["name"], ["session_id"]], "response": [
-        {"path": "response.summary", "meaning": "Forced-cleanup outcome for one exact session."},
-    ], "properties": {
+    "session.kill": {"tool": "xverif_debug_session_kill", "any_of": [["name"], ["session_id"]], "properties": {
         "name": {"type": "string", "description": "One exact managed session name to force-clean."},
         "session_id": {"type": "string", "description": "One exact managed session identifier to force-clean."},
     }},
-    "session.gc": {"tool": "xverif_debug_session_gc", "response": [
-        {"path": "response.summary", "meaning": "Garbage-collection counts and whether cleanup is complete."},
-        {"path": "response.data.unresolved_sessions[]", "meaning": "Sessions not removed; empty means no unresolved cleanup work."},
-    ], "properties": {
+    "session.gc": {"tool": "xverif_debug_session_gc", "properties": {
         "verbose": {"type": "boolean", "default": False, "description": "Include unresolved-session detail in the cleanup report."},
     }},
 }
@@ -101,14 +86,6 @@ def _repair_examples(minimal: Json | None, args_schema: Json) -> tuple[list[Json
             [{"description": "Corrected minimal call.", "call": minimal}])
 
 
-def _response_example(action: str) -> Json | None:
-    path = _REPO_ROOT / "xdebug" / "examples" / "responses" / f"{action}.basic.json"
-    if not path.is_file():
-        return None
-    value = json.loads(path.read_text(encoding="utf-8"))
-    return value if isinstance(value, dict) else None
-
-
 def _meaning(value: Json) -> str:
     return value.get("description") or "Meaning is defined by the action contract."
 
@@ -152,22 +129,6 @@ def _guide(schema: Json, path: str, required: set[str] | None = None,
                 item_example = example[name][0]
             guide.extend(_guide(items, item["path"] + "[]", set(items.get("required", [])), item_example))
     return guide
-
-
-def _response_guide(action: str, schema: Json) -> Json:
-    example = _response_example(action)
-    primary = _guide(schema, "response", set(schema.get("required", [])), example)
-    for branch in schema.get("allOf", []):
-        if not isinstance(branch, dict):
-            continue
-        for key in ("then", "else"):
-            child = branch.get(key)
-            if isinstance(child, dict):
-                primary.extend(_guide(child, "response", set(child.get("required", [])), example))
-    return {"primary_fields": primary,
-            "empty_result": "空数组或空 data 只表示当前查询没有返回 evidence；必须结合 completeness 判断扫描是否完整。",
-            "completeness": "优先读取 scan_complete、analysis_complete、response_truncated、render_truncated、file_complete；旧 action 的 truncated 仅是兼容摘要。",
-            "response_example": example}
 
 
 def _constraints(action: str, args_schema: Json) -> list[str]:
@@ -234,11 +195,7 @@ def _session_projection(action: str, descriptions: Json, guidance: Json, include
         "required_session": False, "fixed_arguments": {}, "args_schema": args_schema,
         "limits_schema": {"type": "object", "properties": {}, "additionalProperties": False},
         "constraints": constraints, "parameter_guide": _guide(args_schema, "arguments", set(args_schema.get("required", []))),
-        "minimal_call": minimal, "response_guide": {
-            "primary_fields": contract["response"], "empty_result": "An empty result list means no managed session matched the query.",
-            "completeness": "For cleanup operations, inspect unresolved sessions and partial-failure fields before treating cleanup as complete.",
-            "response_example": _response_example(action),
-        },
+        "minimal_call": minimal,
     }
     if include_examples:
         payload["invalid_examples"] = invalid_examples
@@ -252,14 +209,11 @@ def project(action: str, kind: str, view: str, native: Json, include_examples: b
         return native
     data = native.get("data", {})
     schema = data.get("schema", {}) if isinstance(data, dict) else {}
-    if view == "native":
-        return native
     if view == "response":
         if kind != "response":
             return {"ok": False, "error": {"code": "INVALID_ARGUMENT", "message": "view=response requires kind=response"}}
         return {"ok": True, "action": "schema", "summary": {"action": action, "kind": kind, "view": view},
-                "data": {"schema": schema, "schema_path": data.get("schema_path"),
-                         "response_guide": _response_guide(action, schema)}}
+                "data": {"schema": schema, "schema_path": data.get("schema_path")}}
     if kind != "request":
         return {"ok": False, "error": {"code": "INVALID_ARGUMENT", "message": "request MCP projections require kind=request; use view=response"}}
     root = schema.get("properties", {})
@@ -283,23 +237,15 @@ def project(action: str, kind: str, view: str, native: Json, include_examples: b
         "constraints": _constraints(action, args_schema),
         "parameter_guide": _guide(args_schema, "args", set(args_schema.get("required", []))) + _guide(limits_schema, "limits", set(limits_schema.get("required", []))),
         "minimal_call": minimal,
-        "response_guide": _response_guide(action, _response_schema(action)),
     }
     if include_examples:
         payload["common_examples"] = common
         payload["invalid_examples"] = invalid_examples
         payload["corrected_examples"] = corrected_examples
     if view == "args":
-        payload = {key: payload[key] for key in ("action", "kind", "view", "args_schema", "constraints", "parameter_guide", "minimal_call", "response_guide")}
+        payload = {key: payload[key] for key in ("action", "kind", "view", "args_schema", "constraints", "parameter_guide", "minimal_call")}
         if include_examples:
             payload["common_examples"] = common
             payload["invalid_examples"] = invalid_examples
             payload["corrected_examples"] = corrected_examples
     return {"ok": True, "action": "schema", "summary": {"action": action, "kind": kind, "view": view}, "data": payload}
-
-
-def _response_schema(action: str) -> Json:
-    path = _REPO_ROOT / "xdebug" / "schemas" / "v1" / "actions" / f"{action}.response.schema.json"
-    if not path.is_file():
-        return {"type": "object", "properties": {}}
-    return json.loads(path.read_text(encoding="utf-8"))
