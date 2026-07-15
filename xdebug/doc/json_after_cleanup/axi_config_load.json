@@ -32,7 +32,7 @@
       "rvalid": "axi_vip_fixture_top.axi_vip_if.master_if[0].rvalid",
       "rready": "axi_vip_fixture_top.axi_vip_if.master_if[0].rready",
       "clk": "axi_vip_fixture_top.clk",
-      "rst_n": "axi_vip_fixture_top.rst_n",
+      "reset": {"signal": "axi_vip_fixture_top.rst_n", "polarity": "active_low"},
       "edge": "posedge"
     }
   },
@@ -53,7 +53,7 @@
       "config": {
         "name": "if0",
         "clk": "axi_vip_fixture_top.clk",
-        "rst_n": "axi_vip_fixture_top.rst_n"
+        "reset": {"signal": "axi_vip_fixture_top.rst_n", "polarity": "active_low"}
       }
     },
     "error": null

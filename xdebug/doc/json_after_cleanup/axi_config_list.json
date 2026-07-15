@@ -14,7 +14,7 @@
     "summary": {
       "name": "if0",
       "clk": "axi_vip_fixture_top.clk",
-      "rst_n": "axi_vip_fixture_top.rst_n"
+      "reset": {"signal": "axi_vip_fixture_top.rst_n", "polarity": "active_low"}
     },
     "data": {},
     "error": null

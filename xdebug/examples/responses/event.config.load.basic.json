@@ -3,5 +3,5 @@
   "ok": true,
   "action": "event.config.load",
   "summary": {"name": "evt0", "status": "loaded"},
-  "data": {"config": {"name": "evt0", "clock": "top.clk", "edge": "negedge", "signals": {"vld": "top.valid", "payload": "top.payload"}}}
+  "data": {"config": {"name": "evt0", "clock": "top.clk", "reset": {"signal": "top.rst_n", "polarity": "active_low"}, "edge": "negedge", "signals": {"vld": "top.valid", "payload": "top.payload"}}}
 }

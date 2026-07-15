@@ -93,9 +93,8 @@ FIELD_DESCRIPTIONS = {
     "query": "本 action 的查询选择器；不要混用其它 action 的 index、channel 或 filter 形态。",
     "ready": "valid-ready 握手中的 ready 信号路径。",
     "recursive": "为 true 时递归列出子 scope；max_depth 仍然限制展开深度。",
-    "reset": "reset 信号及极性定义；reset asserted 的 sample 不参加协议或事件判断。",
+    "reset": "Reset signal and polarity. Samples while reset is asserted do not participate in protocol or event analysis.",
     "role": "设计 trace 中节点的语义角色过滤。",
-    "rst_n": "低有效 reset 信号路径；asserted 期间的 sample 不参与匹配。",
     "rules": "该 action 的检查规则；省略字段采用对应 schema default，未公开字段不会被接受。",
     "sample_point": "posedge 或 dual 采样的沿前/沿后观察点；不会改变 raw 波形时间范围。",
     "session_id": "目标 xdebug session 标识；MCP 调用使用外层 session_id，而非 native target。",
@@ -198,9 +197,8 @@ ACTION_ARG_OVERRIDES: dict[tuple[str, str], Json] = {
         "description": "Maximum number of clock samples to inspect. Exhaustion makes analysis incomplete; it is not a response-row limit.",
         "type": "integer", "minimum": 1,
     },
-    ("event.find", "rst_n"): {
-        "description": "Active-low reset signal path or alias. Samples while reset is asserted do not participate in event matching.",
-        "type": "string", "minLength": 1,
+    ("event.find", "reset"): {
+        "description": "Optional reset signal. Samples while reset is asserted do not participate in event matching.",
     },
     ("handshake.inspect", "rules"): {
         "description": "Valid-ready inspection rules. Omitted fields use their declared schema defaults.",
@@ -244,6 +242,25 @@ ACTION_ARG_OVERRIDES: dict[tuple[str, str], Json] = {
         "type": "string", "enum": ["summary", "first_transfer", "last_transfer", "transfer_window", "first_stall", "last_stall", "stall_window", "first_packet", "last_packet", "packet_at", "packet_window"],
     },
 }
+
+
+def reset_schema() -> Json:
+    return {
+        "type": "object",
+        "required": ["signal", "polarity"],
+        "properties": {
+            "signal": {
+                "type": "string", "minLength": 1,
+                "description": "One-bit final waveform signal path used as reset.",
+            },
+            "polarity": {
+                "type": "string", "enum": ["active_low", "active_high"],
+                "description": "Level that asserts reset. X, Z, and unavailable samples are conservatively treated as asserted.",
+            },
+        },
+        "additionalProperties": False,
+        "description": "Reset definition. Both signal and polarity are required when reset is supplied.",
+    }
 
 
 def guidance_for(action: str) -> Json:

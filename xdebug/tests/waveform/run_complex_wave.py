@@ -621,7 +621,7 @@ def make_axi_config(prefix, top="axi_vip_fixture_top", edge="posedge", sample_po
         "rvalid": prefix + ".rvalid",
         "rready": prefix + ".rready",
         "clock": top + ".clk",
-        "rst_n": top + ".rst_n",
+        "reset": {"signal": top + ".rst_n", "polarity": "active_low"},
     }
     if edge is not None:
         config["edge"] = edge
@@ -857,7 +857,7 @@ def run_nonaxi(xdebug, fsdb):
             "expr": "vld && !rdy",
             "clock": "ai_complex_top.clk",
             "edge": "posedge",
-            "rst_n": "ai_complex_top.rst_n",
+            "reset": {"signal": "ai_complex_top.rst_n", "polarity": "active_low"},
             "signals": {
                 "vld": "ai_complex_top.event_vld",
                 "rdy": "ai_complex_top.event_rdy"
@@ -873,7 +873,7 @@ def run_nonaxi(xdebug, fsdb):
             "clock": "ai_complex_top.clk",
             "edge": "posedge",
             "sample_point": "before",
-            "rst_n": "ai_complex_top.rst_n",
+            "reset": {"signal": "ai_complex_top.rst_n", "polarity": "active_low"},
             "signals": {
                 "vld": "ai_complex_top.event_vld",
                 "race": "ai_complex_top.event_race"
@@ -888,7 +888,7 @@ def run_nonaxi(xdebug, fsdb):
             "clock": "ai_complex_top.clk",
             "edge": "posedge",
             "sample_point": "after",
-            "rst_n": "ai_complex_top.rst_n",
+            "reset": {"signal": "ai_complex_top.rst_n", "polarity": "active_low"},
             "signals": {
                 "vld": "ai_complex_top.event_vld",
                 "race": "ai_complex_top.event_race"
@@ -903,7 +903,6 @@ def run_nonaxi(xdebug, fsdb):
                 "name": "race_before_stream",
                 "signals": {
                     "clk": "ai_complex_top.clk",
-                    "rst_n": "ai_complex_top.rst_n",
                     "vld": "ai_complex_top.event_vld",
                     "rdy": "ai_complex_top.event_race",
                     "payload": "ai_complex_top.event_payload",
@@ -911,7 +910,7 @@ def run_nonaxi(xdebug, fsdb):
                 "clock": "clk",
                 "edge": "posedge",
                 "sample_point": "before",
-                "reset": "!rst_n",
+                "reset": {"signal": "ai_complex_top.rst_n", "polarity": "active_low"},
                 "vld": "vld",
                 "rdy": "rdy",
                 "data": "payload",
@@ -920,7 +919,6 @@ def run_nonaxi(xdebug, fsdb):
                 "name": "race_after_stream",
                 "signals": {
                     "clk": "ai_complex_top.clk",
-                    "rst_n": "ai_complex_top.rst_n",
                     "vld": "ai_complex_top.event_vld",
                     "rdy": "ai_complex_top.event_race",
                     "payload": "ai_complex_top.event_payload",
@@ -928,7 +926,7 @@ def run_nonaxi(xdebug, fsdb):
                 "clock": "clk",
                 "edge": "posedge",
                 "sample_point": "after",
-                "reset": "!rst_n",
+                "reset": {"signal": "ai_complex_top.rst_n", "polarity": "active_low"},
                 "vld": "vld",
                 "rdy": "rdy",
                 "data": "payload",

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../common/clock_sampling.h"
+#include "../common/reset_config.h"
 
 #include "json.hpp"
 
@@ -16,7 +17,8 @@ struct StreamConfig {
     std::string name;
     std::map<std::string, std::string> signals;
     ClockSampleSpec clock_sample;
-    std::string reset;
+    bool has_reset = false;
+    ResetConfig reset;
     std::string vld;
     std::string rdy;
     std::string bp;

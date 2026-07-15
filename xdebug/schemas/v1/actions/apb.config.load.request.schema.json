@@ -39,11 +39,6 @@
               "minLength": 1,
               "description": "Action-specific clock input. Its type and accepted values are defined by this schema."
             },
-            "rst_n": {
-              "type": "string",
-              "minLength": 1,
-              "description": "Action-specific rst_n input. Its type and accepted values are defined by this schema."
-            },
             "edge": {
               "type": "string",
               "enum": [
@@ -100,11 +95,34 @@
               "type": "string",
               "minLength": 1,
               "description": "Action-specific prdata input. Its type and accepted values are defined by this schema."
+            },
+            "reset": {
+              "type": "object",
+              "required": [
+                "signal",
+                "polarity"
+              ],
+              "properties": {
+                "signal": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "One-bit final waveform signal path used as reset."
+                },
+                "polarity": {
+                  "type": "string",
+                  "enum": [
+                    "active_low",
+                    "active_high"
+                  ],
+                  "description": "Level that asserts reset. X, Z, and unavailable samples are conservatively treated as asserted."
+                }
+              },
+              "additionalProperties": false,
+              "description": "Reset definition. Both signal and polarity are required when reset is supplied."
             }
           },
           "required": [
             "clock",
-            "rst_n",
             "paddr",
             "psel",
             "penable",
@@ -112,7 +130,8 @@
             "pslverr",
             "pwrite",
             "pwdata",
-            "prdata"
+            "prdata",
+            "reset"
           ],
           "additionalProperties": false
         },

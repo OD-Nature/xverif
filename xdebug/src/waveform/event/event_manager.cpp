@@ -29,7 +29,7 @@ static Json config_to_json(const std::string& fsdb_file, const EventConfig& conf
     j["fsdb_file"] = fsdb_file;
     j["name"] = config.name;
     j["clock"] = config.clock_sample.clock;
-    j["rst_n"] = config.rst_n;
+    if (config.has_reset) j["reset"] = reset_config_json(config.reset);
     j["edge"] = clock_edge_kind_text(config.clock_sample.edge);
     if (config.clock_sample.edge != ClockEdgeKind::Negedge)
         j["sample_point"] = clock_sample_point_text(config.clock_sample.sample_point);
@@ -46,8 +46,9 @@ static bool json_to_config(const Json& j, std::string& fsdb_file, EventConfig& c
     fsdb_file = j.value("fsdb_file", "");
     config.name = j.value("name", "");
     config.clock_sample.clock = j.value("clock", "");
-    config.rst_n = j.value("rst_n", "");
     std::string edge_error;
+    config.has_reset = j.contains("reset");
+    if (config.has_reset && !parse_reset_config(j["reset"], config.reset, edge_error)) return false;
     if (!parse_clock_edge_kind(j.value("edge", "negedge"), config.clock_sample.edge, edge_error)) {
         return false;
     }

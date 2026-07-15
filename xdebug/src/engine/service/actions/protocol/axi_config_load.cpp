@@ -33,7 +33,7 @@ bool validate_axi_signals(npiFsdbFileHandle fsdb,
                           const xdebug_waveform::ClockSampleSpec& clock_sample,
                           Json& validation,
                           std::string& error) {
-    const char* fields[] = {"clock", "rst_n",
+    const char* fields[] = {"clock", "reset",
         "awvalid", "awready", "awaddr", "awid", "awlen", "awsize", "awburst",
         "wvalid", "wready", "wdata", "wstrb", "wlast",
         "bvalid", "bready", "bid", "bresp",
@@ -45,7 +45,8 @@ bool validate_axi_signals(npiFsdbFileHandle fsdb,
     for (int i = 0; fields[i]; ++i) {
         SignalValidation item;
         item.field = fields[i];
-        item.requested_path = cfg_j[fields[i]].get<std::string>();
+        item.requested_path = std::string(fields[i]) == "reset"
+            ? cfg_j["reset"].value("signal", "") : cfg_j[fields[i]].get<std::string>();
         npiFsdbSigHandle handle = npi_fsdb_sig_by_name(fsdb, item.requested_path.c_str(), nullptr);
         if (!handle) {
             validation["signals"].push_back({{"field", item.field},
@@ -82,7 +83,7 @@ bool validate_axi_signals(npiFsdbFileHandle fsdb,
         }
         return true;
     };
-    const char* one_bit[] = {"clock", "rst_n", "awvalid", "awready", "wvalid",
+    const char* one_bit[] = {"clock", "reset", "awvalid", "awready", "wvalid",
                              "wready", "wlast", "bvalid", "bready", "arvalid",
                              "arready", "rvalid", "rready", "rlast", nullptr};
     for (int i = 0; one_bit[i]; ++i) {
@@ -151,7 +152,7 @@ public:
         }
 
         // Validate required AXI fields
-        const char* reqs[] = {"clock","rst_n",
+        const char* reqs[] = {"clock",
             "awvalid","awready","awaddr","awid","awlen","awsize","awburst",
             "wvalid","wready","wdata","wstrb","wlast",
             "bvalid","bready","bid","bresp",
@@ -168,6 +169,9 @@ public:
         }
 
         AxiConfig cfg; cfg.name = name;
+        if (!cfg_j.contains("reset") || !parse_reset_config(cfg_j["reset"], cfg.reset, err))
+            return protocol_invalid_arg_error(action_name(), "config.reset", err,
+                                              "reset object with signal and polarity");
         cfg.clock_sample.clock = cfg_j["clock"].get<std::string>();
         if (!parse_clock_edge_kind(cfg_j.value("edge", std::string("negedge")),
                                    cfg.clock_sample.edge,
@@ -197,7 +201,6 @@ public:
                 "config.sample_point",
                 "config.sample_point is only valid with edge:posedge or edge:dual",
                 "omit sample_point for negedge, or set config.edge to posedge/dual");
-        cfg.rst_n = cfg_j["rst_n"].get<std::string>();
         cfg.awvalid=cfg_j["awvalid"]; cfg.awready=cfg_j["awready"];
         cfg.awaddr=cfg_j["awaddr"]; cfg.awid=cfg_j["awid"];
         cfg.awlen=cfg_j["awlen"]; cfg.awsize=cfg_j["awsize"]; cfg.awburst=cfg_j["awburst"];

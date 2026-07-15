@@ -275,7 +275,7 @@ APB 示例（10 信号）：
     "name": "apb0",
     "config": {
       "clock": "top.pclk",
-      "rst_n": "top.presetn",
+      "reset": {"signal": "top.presetn", "polarity": "active_low"},
       "paddr": "top.u_dut.paddr",
       "psel": "top.u_dut.psel",
       "penable": "top.u_dut.penable",
@@ -289,7 +289,7 @@ APB 示例（10 信号）：
 }
 ```
 
-AXI 示例（26 信号，5 通道各需 valid/ready + data/addr/id/last/strobe + clk + rst_n）：
+AXI 示例（26 信号，5 通道各需 valid/ready + data/addr/id/last/strobe + clk + reset）：
 
 ```json
 {
@@ -300,7 +300,7 @@ AXI 示例（26 信号，5 通道各需 valid/ready + data/addr/id/last/strobe +
     "name": "axi0",
     "config": {
       "clock": "top.aclk",
-      "rst_n": "top.aresetn",
+      "reset": {"signal": "top.aresetn", "polarity": "active_low"},
       "awvalid": "top.u_dut.awvalid",
       "awready": "top.u_dut.awready",
       "awaddr": "top.u_dut.awaddr",

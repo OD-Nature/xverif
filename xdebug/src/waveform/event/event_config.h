@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../common/clock_sampling.h"
+#include "../common/reset_config.h"
 
 #include <map>
 #include <string>
@@ -16,7 +17,8 @@ struct EventField {
 struct EventConfig {
     std::string name;
     ClockSampleSpec clock_sample;
-    std::string rst_n;
+    bool has_reset = false;
+    ResetConfig reset;
     std::map<std::string, std::string> signals;
     std::map<std::string, EventField> fields;
 };

@@ -55,8 +55,8 @@ Optional fields:
 - `packet_stable_fields`
 - `description`
 
-`reset` is reset-active. A low-active reset should be written as an expression,
-for example `"!top.rst_n"`.
+`reset` is an explicit object containing a one-bit signal and its polarity,
+for example `{"signal":"top.rst_n","polarity":"active_low"}`.
 
 Data field names must match `[A-Za-z_][A-Za-z0-9_]*` and must not use reserved
 names: `time`, `cycle`, `vld`, `rdy`, `bp`, `sop`, `eop`, `transfer`, `stall`,
@@ -167,7 +167,7 @@ The fixture must also cover:
 - posedge sampling
 - negedge sampling
 - gated valid expression
-- reset expression
+- reset signal and polarity
 - part select data field
 - concat data field
 - compare-derived data field

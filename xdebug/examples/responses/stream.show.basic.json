@@ -11,6 +11,7 @@
     "config": {
       "name": "req_stream",
       "clock": "top.clk",
+      "reset": {"signal": "top.rst_n", "polarity": "active_low"},
       "edge": "posedge",
       "vld": "top.req_vld",
       "rdy": "top.req_rdy"

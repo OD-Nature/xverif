@@ -81,8 +81,28 @@
                     "description": "Before/after observation point for posedge or dual sampling; it does not change the raw waveform range."
                   },
                   "reset": {
-                    "type": "string",
-                    "description": "Action-specific reset input. Its type and accepted values are defined by this schema."
+                    "type": "object",
+                    "required": [
+                      "signal",
+                      "polarity"
+                    ],
+                    "properties": {
+                      "signal": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "One-bit final waveform signal path used as reset."
+                      },
+                      "polarity": {
+                        "type": "string",
+                        "enum": [
+                          "active_low",
+                          "active_high"
+                        ],
+                        "description": "Level that asserts reset. X, Z, and unavailable samples are conservatively treated as asserted."
+                      }
+                    },
+                    "additionalProperties": false,
+                    "description": "Reset definition. Both signal and polarity are required when reset is supplied."
                   },
                   "vld": {
                     "type": "string",
@@ -222,8 +242,28 @@
                 "description": "Before/after observation point for posedge or dual sampling; it does not change the raw waveform range."
               },
               "reset": {
-                "type": "string",
-                "description": "Action-specific reset input. Its type and accepted values are defined by this schema."
+                "type": "object",
+                "required": [
+                  "signal",
+                  "polarity"
+                ],
+                "properties": {
+                  "signal": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "One-bit final waveform signal path used as reset."
+                  },
+                  "polarity": {
+                    "type": "string",
+                    "enum": [
+                      "active_low",
+                      "active_high"
+                    ],
+                    "description": "Level that asserts reset. X, Z, and unavailable samples are conservatively treated as asserted."
+                  }
+                },
+                "additionalProperties": false,
+                "description": "Reset definition. Both signal and polarity are required when reset is supplied."
               },
               "vld": {
                 "type": "string",

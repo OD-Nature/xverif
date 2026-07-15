@@ -47,7 +47,7 @@ bool ApbAnalyzer::analyze(const std::string& name, npiFsdbFileHandle file, const
     if (!normalize_clock_sample_spec(file, clock_sample, normalize_error)) return false;
 
     std::vector<std::string> signals = {
-        config.rst_n, config.psel, config.penable,
+        config.reset.signal, config.psel, config.penable,
         config.pwrite, config.paddr, config.pwdata, config.prdata,
         config.pready, config.pslverr
     };
@@ -71,7 +71,7 @@ bool ApbAnalyzer::analyze(const std::string& name, npiFsdbFileHandle file, const
     auto process_edge = [&](npiFsdbTime t, const std::vector<std::string>& values) {
         if (values.size() < 9) return;
 
-        const std::string& rst_n_val = values[0];
+        const std::string& reset_value = values[0];
         const std::string& psel_val = values[1];
         const std::string& penable_val = values[2];
         const std::string& pwrite_val = values[3];
@@ -79,8 +79,7 @@ bool ApbAnalyzer::analyze(const std::string& name, npiFsdbFileHandle file, const
         const std::string& pwdata_val = values[5];
         const std::string& prdata_val = values[6];
 
-        // Check rst_n == 1
-        if (rst_n_val.empty() || rst_n_val == "0" || rst_n_val == "X" || rst_n_val == "Z") {
+        if (reset_is_active(config.reset, reset_value)) {
             completion_seen = false;
             return;
         }

@@ -1554,10 +1554,11 @@ def test_ai_usability_high_risk_request_shapes_are_strict(
     required_apb = {
         key: "top." + key
         for key in (
-            "clock", "rst_n", "paddr", "psel", "penable", "pready",
+            "clock", "paddr", "psel", "penable", "pready",
             "pslverr", "pwrite", "pwdata", "prdata",
         )
     }
+    required_apb["reset"] = {"signal": "top.rst_n", "polarity": "active_low"}
     apb_load.validate({
         "api_version": "xdebug.v1", "action": "apb.config.load",
         "args": {"name": "apb0", "config": required_apb},

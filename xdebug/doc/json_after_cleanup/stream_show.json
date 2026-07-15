@@ -31,7 +31,7 @@
         "name": "ready_stream",
         "clock": "stream_v1_top.clk",
         "clock_edge": "posedge",
-        "reset": "!stream_v1_top.rst_n",
+        "reset": {"signal": "stream_v1_top.rst_n", "polarity": "active_low"},
         "vld": "stream_v1_top.ready_vld && !stream_v1_top.ready_flush",
         "rdy": "stream_v1_top.ready_rdy",
         "beat_fields": {

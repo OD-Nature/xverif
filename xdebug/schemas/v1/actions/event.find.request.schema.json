@@ -66,10 +66,29 @@
           "type": "string",
           "description": "Saved-object name in this action namespace; do not assume names are shared by cursors, lists, and protocol configs."
         },
-        "rst_n": {
-          "type": "string",
-          "description": "Active-low reset signal path or alias. Samples while reset is asserted do not participate in event matching.",
-          "minLength": 1
+        "reset": {
+          "type": "object",
+          "required": [
+            "signal",
+            "polarity"
+          ],
+          "properties": {
+            "signal": {
+              "type": "string",
+              "minLength": 1,
+              "description": "One-bit final waveform signal path used as reset."
+            },
+            "polarity": {
+              "type": "string",
+              "enum": [
+                "active_low",
+                "active_high"
+              ],
+              "description": "Level that asserts reset. X, Z, and unavailable samples are conservatively treated as asserted."
+            }
+          },
+          "additionalProperties": false,
+          "description": "Optional reset signal. Samples while reset is asserted do not participate in event matching."
         },
         "sample_point": {
           "type": "string",
@@ -168,6 +187,42 @@
               }
             }
           ]
+        },
+        {
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "name",
+                  "clock"
+                ]
+              },
+              {
+                "required": [
+                  "name",
+                  "signals"
+                ]
+              },
+              {
+                "required": [
+                  "name",
+                  "edge"
+                ]
+              },
+              {
+                "required": [
+                  "name",
+                  "sample_point"
+                ]
+              },
+              {
+                "required": [
+                  "name",
+                  "reset"
+                ]
+              }
+            ]
+          }
         }
       ]
     },

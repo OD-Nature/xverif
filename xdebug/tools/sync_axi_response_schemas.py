@@ -194,7 +194,10 @@ def config() -> dict[str, Any]:
             "sampling_mode": STRING,
             "clock": STRING,
             "edge": {"enum": ["posedge", "negedge", "dual"]},
-            "rst_n": STRING,
+            "reset": closed({
+                "signal": STRING,
+                "polarity": {"enum": ["active_low", "active_high"]},
+            }, ["signal", "polarity"]),
             "sample_point": STRING,
             "channels": channels,
         },

@@ -37,7 +37,7 @@ static Json axi_to_json(const AxiConfig& c) {
         {"araddr", c.araddr}, {"arid", c.arid}, {"arlen", c.arlen}, {"arsize", c.arsize}, {"arburst", c.arburst},
         {"arvalid", c.arvalid}, {"arready", c.arready},
         {"rid", c.rid}, {"rdata", c.rdata}, {"rresp", c.rresp}, {"rlast", c.rlast}, {"rvalid", c.rvalid}, {"rready", c.rready},
-        {"clock", c.clock_sample.clock}, {"rst_n", c.rst_n},
+        {"clock", c.clock_sample.clock}, {"reset", reset_config_json(c.reset)},
         {"edge", clock_edge_kind_text(c.clock_sample.edge)}
     };
     if (c.clock_sample.edge != ClockEdgeKind::Negedge)
@@ -57,8 +57,8 @@ static bool json_to_axi(const Json& j, AxiConfig& c) {
     c.arvalid = j.value("arvalid", ""); c.arready = j.value("arready", "");
     c.rid = j.value("rid", ""); c.rdata = j.value("rdata", ""); c.rresp = j.value("rresp", ""); c.rlast = j.value("rlast", ""); c.rvalid = j.value("rvalid", ""); c.rready = j.value("rready", "");
     c.clock_sample.clock = j.value("clock", "");
-    c.rst_n = j.value("rst_n", "");
     std::string edge_error;
+    if (!j.contains("reset") || !parse_reset_config(j["reset"], c.reset, edge_error)) return false;
     if (!parse_clock_edge_kind(j.value("edge", "negedge"), c.clock_sample.edge, edge_error)) {
         return false;
     }
@@ -120,7 +120,8 @@ bool AxiManager::parse_legacy_line(const char* line, AxiConfig& config, int& ses
     config.rvalid    = fields[29];
     config.rready    = fields[30];
     config.clock_sample.clock = fields[31];
-    config.rst_n     = fields[32];
+    config.reset.signal = fields[32];
+    config.reset.polarity = ResetPolarity::ActiveLow;
     config.clock_sample.edge = (fields[33] == "posedge")
         ? ClockEdgeKind::Posedge : ClockEdgeKind::Negedge;
     return true;

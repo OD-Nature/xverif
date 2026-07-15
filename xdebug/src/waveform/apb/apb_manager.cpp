@@ -39,7 +39,7 @@ static Json apb_to_json(const ApbConfig& c) {
         {"pready", c.pready},
         {"pslverr", c.pslverr},
         {"clock", c.clock_sample.clock},
-        {"rst_n", c.rst_n},
+        {"reset", reset_config_json(c.reset)},
         {"edge", clock_edge_kind_text(c.clock_sample.edge)}
     };
     if (c.clock_sample.edge != ClockEdgeKind::Negedge)
@@ -60,8 +60,8 @@ static bool json_to_apb(const Json& j, ApbConfig& c) {
     c.pready = j.value("pready", "");
     c.pslverr = j.value("pslverr", "");
     c.clock_sample.clock = j.value("clock", "");
-    c.rst_n = j.value("rst_n", "");
     std::string edge_error;
+    if (!j.contains("reset") || !parse_reset_config(j["reset"], c.reset, edge_error)) return false;
     if (!parse_clock_edge_kind(j.value("edge", "negedge"), c.clock_sample.edge, edge_error)) {
         return false;
     }
@@ -92,7 +92,8 @@ bool ApbManager::parse_legacy_line(const char* line, ApbConfig& config, int& ses
     config.penable = buf[5];
     config.psel    = buf[6];
     config.clock_sample.clock = buf[7];
-    config.rst_n   = buf[8];
+    config.reset.signal = buf[8];
+    config.reset.polarity = ResetPolarity::ActiveLow;
     config.clock_sample.edge = (strcmp(buf[9], "posedge") == 0)
         ? ClockEdgeKind::Posedge : ClockEdgeKind::Negedge;
     return true;

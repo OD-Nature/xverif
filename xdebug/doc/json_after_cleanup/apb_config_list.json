@@ -24,7 +24,7 @@
     "summary": {
       "name": "apb0",
       "clk": "ai_complex_top.clk",
-      "rst_n": "ai_complex_top.rst_n"
+      "reset": {"signal": "ai_complex_top.rst_n", "polarity": "active_low"}
     },
     "data": {},
     "error": null

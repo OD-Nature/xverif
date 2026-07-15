@@ -30,7 +30,7 @@
       "config": {
         "name": "evt0",
         "clk": "ai_complex_top.clk",
-        "rst_n": "ai_complex_top.rst_n",
+        "reset": {"signal": "ai_complex_top.rst_n", "polarity": "active_low"},
         "edge": "posedge",
         "signals": {
           "payload": "ai_complex_top.event_payload",

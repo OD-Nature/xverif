@@ -63,10 +63,10 @@ bool parse_apb_config(const Json& j, ApbConfig& c, std::string& err) {
     c.psel = get("psel");
     c.pready = get("pready");
     c.pslverr = get("pslverr");
-    c.rst_n = get("rst_n");
+    if (!j.contains("reset") || !parse_reset_config(j["reset"], c.reset, err)) return false;
     if (!parse_clock_sample_config(j, "APB", c.clock_sample, err)) return false;
     if (c.paddr.empty() || c.pwdata.empty() || c.prdata.empty() || c.pwrite.empty() ||
-        c.penable.empty() || c.psel.empty() || c.clock_sample.clock.empty() || c.rst_n.empty()) {
+        c.penable.empty() || c.psel.empty() || c.clock_sample.clock.empty()) {
         err = "missing required APB config field";
         return false;
     }
@@ -77,7 +77,7 @@ Json apb_config_json(const ApbConfig& c) {
     Json j = {
         {"name", c.name}, {"paddr", c.paddr}, {"pwdata", c.pwdata}, {"prdata", c.prdata},
         {"pwrite", c.pwrite}, {"penable", c.penable}, {"psel", c.psel},
-        {"clock", c.clock_sample.clock}, {"rst_n", c.rst_n},
+        {"clock", c.clock_sample.clock}, {"reset", reset_config_json(c.reset)},
         {"edge", clock_edge_kind_text(c.clock_sample.edge)}
     };
     if (c.clock_sample.edge != ClockEdgeKind::Negedge)
@@ -101,7 +101,8 @@ bool parse_axi_config(const Json& j, AxiConfig& c, std::string& err) {
     c.arsize = get("arsize"); c.arburst = get("arburst"); c.arvalid = get("arvalid");
     c.arready = get("arready"); c.rid = get("rid"); c.rdata = get("rdata");
     c.rresp = get("rresp"); c.rlast = get("rlast"); c.rvalid = get("rvalid");
-    c.rready = get("rready"); c.rst_n = get("rst_n");
+    c.rready = get("rready");
+    if (!j.contains("reset") || !parse_reset_config(j["reset"], c.reset, err)) return false;
     if (!parse_clock_sample_config(j, "AXI", c.clock_sample, err)) return false;
     if (c.awaddr.empty() || c.awid.empty() || c.awlen.empty() || c.awsize.empty() ||
         c.awburst.empty() || c.awvalid.empty() || c.awready.empty() || c.wdata.empty() ||
@@ -110,7 +111,7 @@ bool parse_axi_config(const Json& j, AxiConfig& c, std::string& err) {
         c.araddr.empty() || c.arid.empty() || c.arlen.empty() || c.arsize.empty() ||
         c.arburst.empty() || c.arvalid.empty() || c.arready.empty() || c.rid.empty() ||
         c.rdata.empty() || c.rresp.empty() || c.rlast.empty() || c.rvalid.empty() ||
-        c.rready.empty() || c.clock_sample.clock.empty() || c.rst_n.empty()) {
+        c.rready.empty() || c.clock_sample.clock.empty()) {
         err = "missing required AXI config field";
         return false;
     }
@@ -131,7 +132,7 @@ Json axi_config_json(const AxiConfig& c) {
     j["rresp"] = c.rresp; j["rlast"] = c.rlast; j["rvalid"] = c.rvalid;
     j["rready"] = c.rready;
     j["clock"] = c.clock_sample.clock;
-    j["rst_n"] = c.rst_n;
+    j["reset"] = reset_config_json(c.reset);
     j["edge"] = clock_edge_kind_text(c.clock_sample.edge);
     if (c.clock_sample.edge != ClockEdgeKind::Negedge)
         j["sample_point"] = clock_sample_point_text(c.clock_sample.sample_point);
@@ -165,7 +166,12 @@ bool parse_field_ref(const std::string& text, EventField& field) {
 
 bool parse_event_config(const Json& j, EventConfig& c, std::string& err) {
     if (!parse_clock_sample_config(j, "event", c.clock_sample, err)) return false;
-    get_string(j, "rst_n", c.rst_n);
+    if (j.contains("rst_n")) {
+        err = "event config field rst_n is not supported; use reset.signal and reset.polarity";
+        return false;
+    }
+    c.has_reset = j.contains("reset");
+    if (c.has_reset && !parse_reset_config(j["reset"], c.reset, err)) return false;
     auto sig_it = j.find("signals");
     if (sig_it == j.end() || !sig_it->is_object() || sig_it->empty()) {
         err = "event config requires non-empty signals object";
@@ -219,7 +225,7 @@ Json event_config_json(const EventConfig& c) {
     Json j;
     j["name"] = c.name;
     j["clock"] = c.clock_sample.clock;
-    if (!c.rst_n.empty()) j["rst_n"] = c.rst_n;
+    if (c.has_reset) j["reset"] = reset_config_json(c.reset);
     j["edge"] = clock_edge_kind_text(c.clock_sample.edge);
     if (c.clock_sample.edge != ClockEdgeKind::Negedge)
         j["sample_point"] = clock_sample_point_text(c.clock_sample.sample_point);

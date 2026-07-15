@@ -1,6 +1,6 @@
 {
   "clock": "apb_vip_fixture_top.clk",
-  "rst_n": "apb_vip_fixture_top.rst_n",
+  "reset": {"signal": "apb_vip_fixture_top.rst_n", "polarity": "active_low"},
   "edge": "posedge",
   "paddr": "apb_vip_fixture_top.apb_if.paddr",
   "psel": "apb_vip_fixture_top.apb_if.psel[0]",

@@ -10,7 +10,7 @@ inline Json apb_config_json(const xdebug_waveform::ApbConfig& cfg) {
     Json out = {{"name", cfg.name}, {"sampling_mode", "clock_edge"},
                 {"clock", cfg.clock_sample.clock},
                 {"edge", xdebug_waveform::clock_edge_kind_text(cfg.clock_sample.edge)},
-                {"rst_n", cfg.rst_n}, {"paddr", cfg.paddr}, {"psel", cfg.psel},
+                {"reset", xdebug_waveform::reset_config_json(cfg.reset)}, {"paddr", cfg.paddr}, {"psel", cfg.psel},
                 {"penable", cfg.penable}, {"pwrite", cfg.pwrite},
                 {"pwdata", cfg.pwdata}, {"prdata", cfg.prdata}};
     if (cfg.clock_sample.edge != xdebug_waveform::ClockEdgeKind::Negedge)
@@ -24,7 +24,7 @@ inline Json axi_config_json(const xdebug_waveform::AxiConfig& cfg) {
     Json out = {{"name", cfg.name}, {"sampling_mode", "clock_edge"},
                 {"clock", cfg.clock_sample.clock},
                 {"edge", xdebug_waveform::clock_edge_kind_text(cfg.clock_sample.edge)},
-                {"rst_n", cfg.rst_n}};
+                {"reset", xdebug_waveform::reset_config_json(cfg.reset)}};
     if (cfg.clock_sample.edge != xdebug_waveform::ClockEdgeKind::Negedge)
         out["sample_point"] = xdebug_waveform::clock_sample_point_text(cfg.clock_sample.sample_point);
     out["channels"] = {
@@ -48,7 +48,7 @@ inline Json protocol_example_args(const std::string& action) {
     if (action == "axi.config.load") {
         return Json{{"name", "axi0"},
                     {"config", {{"clock", "top.u.clk"},
-                                {"rst_n", "top.u.rst_n"},
+                                {"reset", {{"signal", "top.u.rst_n"}, {"polarity", "active_low"}}},
                                 {"awvalid", "top.u.awvalid"},
                                 {"awready", "top.u.awready"},
                                 {"awaddr", "top.u.awaddr"},
@@ -82,7 +82,7 @@ inline Json protocol_example_args(const std::string& action) {
     if (action == "apb.config.load") {
         return Json{{"name", "apb0"},
                     {"config", {{"clock", "top.u.clk"},
-                                {"rst_n", "top.u.rst_n"},
+                                {"reset", {{"signal", "top.u.rst_n"}, {"polarity", "active_low"}}},
                                 {"paddr", "top.u.paddr"},
                                 {"psel", "top.u.psel"},
                                 {"penable", "top.u.penable"},

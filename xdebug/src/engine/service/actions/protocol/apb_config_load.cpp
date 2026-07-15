@@ -11,6 +11,8 @@
 #include "waveform/common/xdebug_waveform_paths.h"
 #include "waveform/value/logic_value.h"
 
+#include "npi_fsdb.h"
+
 #include <fstream>
 #include <memory>
 #include <ctime>
@@ -46,7 +48,7 @@ public:
                     {{"did_you_mean", Json::array({"config.clock", "config.edge", "config.sample_point"})}});
             }
         }
-        const char* reqs[] = {"clock","rst_n","paddr","psel","penable","pready",
+        const char* reqs[] = {"clock","paddr","psel","penable","pready",
                               "pslverr","pwrite","pwdata","prdata",nullptr};
         for (int i = 0; reqs[i]; ++i) {
             if (!cfg_j.contains(reqs[i]) || !cfg_j[reqs[i]].is_string() ||
@@ -57,9 +59,17 @@ public:
                     std::string("missing or empty field: ") + reqs[i],
                     "non-empty APB signal path");
         }
-
         ApbConfig cfg;
         cfg.name = name;
+        if (!cfg_j.contains("reset") || !parse_reset_config(cfg_j["reset"], cfg.reset, err_str))
+            return protocol_invalid_arg_error(action_name(), "config.reset", err_str,
+                                              "reset object with signal and polarity");
+        npiFsdbSigHandle reset_handle = npi_fsdb_sig_by_name(g_fsdb_file, cfg.reset.signal.c_str(), nullptr);
+        NPI_INT32 reset_width = 0;
+        if (!reset_handle || !npi_fsdb_sig_property(npiFsdbSigRangeSize, reset_handle, &reset_width) || reset_width != 1)
+            return protocol_invalid_arg_error(action_name(), "config.reset.signal",
+                                              "APB reset signal must resolve to one bit",
+                                              "one-bit waveform signal path");
         cfg.clock_sample.clock = cfg_j["clock"].get<std::string>();
         if (!parse_clock_edge_kind(cfg_j.value("edge", std::string("negedge")),
                                    cfg.clock_sample.edge,
@@ -89,7 +99,6 @@ public:
                 "config.sample_point",
                 "config.sample_point is only valid with edge:posedge or edge:dual",
                 "omit sample_point for negedge, or set config.edge to posedge/dual");
-        cfg.rst_n = cfg_j["rst_n"].get<std::string>();
         cfg.paddr = cfg_j["paddr"].get<std::string>();
         cfg.psel = cfg_j["psel"].get<std::string>();
         cfg.penable = cfg_j["penable"].get<std::string>();

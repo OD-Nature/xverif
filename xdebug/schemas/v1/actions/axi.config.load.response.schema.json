@@ -219,8 +219,24 @@
                     "dual"
                   ]
                 },
-                "rst_n": {
-                  "type": "string"
+                "reset": {
+                  "type": "object",
+                  "properties": {
+                    "signal": {
+                      "type": "string"
+                    },
+                    "polarity": {
+                      "enum": [
+                        "active_low",
+                        "active_high"
+                      ]
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "signal",
+                    "polarity"
+                  ]
                 },
                 "sample_point": {
                   "type": "string"

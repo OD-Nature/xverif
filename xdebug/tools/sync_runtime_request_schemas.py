@@ -13,7 +13,7 @@ from typing import Any
 from sync_action_schema_hints import PARAM_DESCRIPTIONS
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "specs"))
-from action_contracts import apply_argument_contract, complete_descriptions
+from action_contracts import apply_argument_contract, complete_descriptions, reset_schema
 
 
 XDEBUG_ROOT = Path(__file__).resolve().parents[1]
@@ -84,6 +84,7 @@ ADDITIONAL_ARG_SCHEMAS: dict[str, dict[str, Any]] = {
     "path": {"type": "string"},
     "role": {"type": "string"},
     "rules": {"oneOf": [{"type": "array"}, {"type": "object"}]},
+    "reset": reset_schema(),
     "sample_point": {"type": "string", "enum": ["before", "after"]},
     "slice_hint": {"type": "object"},
     "source": {"type": "string"},
@@ -142,7 +143,7 @@ EXTRA_ARGS_BY_ACTION: dict[str, set[str]] = {
         "mode",
         "name",
         "output",
-        "rst_n",
+        "reset",
         "sample_point",
         "time_range",
     },
@@ -152,7 +153,7 @@ EXTRA_ARGS_BY_ACTION: dict[str, set[str]] = {
         "max_samples",
         "mode",
         "name",
-        "rst_n",
+        "reset",
         "sample_point",
         "time_range",
     },
@@ -362,17 +363,18 @@ def protocol_config_schema(required_signals: list[str], description: str) -> dic
     properties: dict[str, Any] = {}
     for signal in required_signals:
         properties[signal] = {"type": "string", "minLength": 1}
-        if signal == "rst_n" and "paddr" in required_signals:
+        if signal == "clock" and "paddr" in required_signals:
             properties["edge"] = {"type": "string", "enum": ["posedge", "negedge", "dual"]}
             properties["sample_point"] = {"type": "string", "enum": ["before", "after"]}
     if "edge" not in properties:
         properties["edge"] = {"type": "string", "enum": ["posedge", "negedge", "dual"]}
         properties["sample_point"] = {"type": "string", "enum": ["before", "after"]}
+    properties["reset"] = reset_schema()
     return {
         "type": "object",
         "description": description,
         "properties": properties,
-        "required": required_signals,
+        "required": required_signals + ["reset"],
         "additionalProperties": False,
     }
 
@@ -563,7 +565,7 @@ def sync_schema(schema: dict[str, Any], spec: dict[str, Any], arg_schemas: dict[
     if action == "apb.config.load" and "config" in selected_props:
         selected_props["config"] = protocol_config_schema(
             [
-                "clock", "rst_n", "paddr", "psel", "penable", "pready",
+                "clock", "paddr", "psel", "penable", "pready",
                 "pslverr", "pwrite", "pwdata", "prdata",
             ],
             PARAM_DESCRIPTIONS["config"],
@@ -571,7 +573,7 @@ def sync_schema(schema: dict[str, Any], spec: dict[str, Any], arg_schemas: dict[
     if action == "axi.config.load" and "config" in selected_props:
         selected_props["config"] = protocol_config_schema(
             [
-                "clock", "rst_n",
+                "clock",
                 "awvalid", "awready", "awaddr", "awid", "awlen", "awsize", "awburst",
                 "wvalid", "wready", "wdata", "wstrb", "wlast",
                 "bvalid", "bready", "bid", "bresp",
@@ -594,7 +596,7 @@ def sync_schema(schema: dict[str, Any], spec: dict[str, Any], arg_schemas: dict[
                 "clock": {"type": "string"},
                 "edge": {"type": "string", "enum": ["posedge", "negedge", "dual"]},
                 "sample_point": {"type": "string", "enum": ["before", "after"]},
-                "reset": {"type": "string"}, "vld": {"type": "string"},
+                "reset": reset_schema(), "vld": {"type": "string"},
                 "rdy": {"type": "string"}, "bp": {"type": "string"},
                 "sop": {"type": "string"}, "eop": {"type": "string"},
                 "data": {"type": "string"},
@@ -810,8 +812,19 @@ def sync_schema(schema: dict[str, Any], spec: dict[str, Any], arg_schemas: dict[
                     {"required": ["mode"], "properties": {"mode": {"const": "all"}}},
                     {"not": {"required": ["line_limit"]}},
                 ]
-            }
+            },
+            {"not": {"anyOf": [
+                {"required": ["name", "clock"]}, {"required": ["name", "signals"]},
+                {"required": ["name", "edge"]}, {"required": ["name", "sample_point"]},
+                {"required": ["name", "reset"]},
+            ]}},
         ]
+    if action == "event.export":
+        args["allOf"] = list(args.get("allOf", [])) + [{"not": {"anyOf": [
+            {"required": ["name", "clock"]}, {"required": ["name", "signals"]},
+            {"required": ["name", "edge"]}, {"required": ["name", "sample_point"]},
+            {"required": ["name", "reset"]},
+        ]}}]
     if action == "event.config.list":
         args["allOf"] = list(args.get("allOf", [])) + [
             {"not": {"required": ["name", "line_limit"]}}
@@ -891,3 +904,4 @@ def main(argv: list[str]) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main(sys.argv[1:]))
+    properties["reset"] = reset_schema()

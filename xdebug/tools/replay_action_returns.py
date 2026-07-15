@@ -330,7 +330,7 @@ def _normalize_seed_request(
 def _synthetic_axi_config() -> dict[str, Any]:
     return {
         "clock": "ai_complex_top.clk",
-        "rst_n": "ai_complex_top.rst_n",
+        "reset": {"signal": "ai_complex_top.rst_n", "polarity": "active_low"},
         "edge": "posedge",
         "awaddr": "ai_complex_top.paddr",
         "awid": "ai_complex_top.sig_a",

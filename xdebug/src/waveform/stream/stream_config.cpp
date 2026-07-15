@@ -135,7 +135,11 @@ bool parse_stream_config_json(const Json& item, StreamConfig& config, std::strin
     }
     if (!parse_signal_map(item, config.name, config.signals, error)) return false;
     get_string(item, "clock", config.clock_sample.clock);
-    get_string(item, "reset", config.reset);
+    config.has_reset = item.contains("reset");
+    if (config.has_reset && !parse_reset_config(item["reset"], config.reset, error)) {
+        error = "invalid stream reset for " + config.name + ": " + error;
+        return false;
+    }
     get_string(item, "vld", config.vld);
     get_string(item, "rdy", config.rdy);
     get_string(item, "bp", config.bp);
@@ -243,7 +247,7 @@ Json stream_config_json(const StreamConfig& c) {
     j["edge"] = clock_edge_kind_text(c.clock_sample.edge);
     if (c.clock_sample.edge != ClockEdgeKind::Negedge)
         j["sample_point"] = clock_sample_point_text(c.clock_sample.sample_point);
-    if (!c.reset.empty()) j["reset"] = c.reset;
+    if (c.has_reset) j["reset"] = reset_config_json(c.reset);
     j["vld"] = c.vld;
     if (!c.rdy.empty()) j["rdy"] = c.rdy;
     if (!c.bp.empty()) j["bp"] = c.bp;

@@ -3,5 +3,5 @@
   "ok": true,
   "action": "axi.config.list",
   "summary": {"count": 1},
-  "data": {"configs": [{"name": "if0", "clock": "top.clk", "edge": "negedge"}]}
+  "data": {"configs": [{"name": "if0", "clock": "top.clk", "reset": {"signal": "top.rst_n", "polarity": "active_low"}, "edge": "negedge"}]}
 }

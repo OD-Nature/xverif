@@ -32,19 +32,6 @@ static std::string bits_only(const std::string& value) {
     return out;
 }
 
-static bool is_true_value(const std::string& value) {
-    std::string bits = bits_only(value);
-    if (bits.empty()) {
-        std::string raw = strip_value_prefix(value);
-        return raw == "1";
-    }
-    for (char c : bits) {
-        if (c == 'x' || c == 'z') return false;
-        if (c == '1') return true;
-    }
-    return false;
-}
-
 enum class TriValue {
     False,
     True,
@@ -387,8 +374,8 @@ bool EventAnalyzer::validate_config(npiFsdbFileHandle file,
         error = "Clock signal not found: " + config.clock_sample.clock;
         return false;
     }
-    if (!config.rst_n.empty() && !npi_fsdb_sig_by_name(file, config.rst_n.c_str(), NULL)) {
-        error = "Reset signal not found: " + config.rst_n;
+    if (config.has_reset && !npi_fsdb_sig_by_name(file, config.reset.signal.c_str(), NULL)) {
+        error = "Reset signal not found: " + config.reset.signal;
         return false;
     }
     for (const auto& kv : config.signals) {
@@ -432,10 +419,15 @@ bool EventAnalyzer::analyze(npiFsdbFileHandle file,
     if (!validator.eval(ignored, error)) return false;
 
     npiFsdbSigHandle rst = nullptr;
-    if (!config.rst_n.empty()) {
-        rst = npi_fsdb_sig_by_name(file, config.rst_n.c_str(), NULL);
+    if (config.has_reset) {
+        rst = npi_fsdb_sig_by_name(file, config.reset.signal.c_str(), NULL);
         if (!rst) {
-            error = "Reset signal not found: " + config.rst_n;
+            error = "Reset signal not found: " + config.reset.signal;
+            return false;
+        }
+        NPI_INT32 reset_width = 0;
+        if (!npi_fsdb_sig_property(npiFsdbSigRangeSize, rst, &reset_width) || reset_width != 1) {
+            error = "Reset signal must be one bit: " + config.reset.signal;
             return false;
         }
     }
@@ -450,7 +442,7 @@ bool EventAnalyzer::analyze(npiFsdbFileHandle file,
         signal_handles.push_back(sig);
     }
     std::vector<ClockSampleSignal> sample_signals;
-    if (rst) sample_signals.push_back({"__rst_n", config.rst_n, rst});
+    if (rst) sample_signals.push_back({"__reset", config.reset.signal, rst});
     for (size_t i = 0; i < aliases.size(); ++i) {
         sample_signals.push_back({aliases[i], paths[i], signal_handles[i]});
     }
@@ -464,8 +456,8 @@ bool EventAnalyzer::analyze(npiFsdbFileHandle file,
                             std::string& process_error) -> bool {
         if (t < query.begin || t > query.end) return true;
 
-        if (!config.rst_n.empty()) {
-            if (!is_true_value(sampled_rst_value)) return true;
+        if (config.has_reset) {
+            if (reset_is_active(config.reset, sampled_rst_value)) return true;
         }
 
         std::map<std::string, std::string> value_map;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../common/clock_sampling.h"
+#include "../common/reset_config.h"
 
 #include <string>
 
@@ -22,7 +23,7 @@ struct AxiConfig {
     std::string rid, rdata, rresp, rlast, rvalid, rready;
     // Common
     ClockSampleSpec clock_sample;
-    std::string rst_n;
+    ResetConfig reset;
 };
 
 } // namespace xdebug_waveform

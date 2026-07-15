@@ -1146,7 +1146,9 @@ timeout_sec: 600
 
 signals:
   clock: top.clk
-  reset: top.rst_n
+  reset:
+    signal: top.rst_n
+    polarity: active_low
   probes: []
 
 interfaces:

@@ -130,7 +130,7 @@ def test_apb_vip_real_wait_state_and_error_actions(
         "pready": prefix + ".pready[0]",
         "pslverr": prefix + ".pslverr[0]",
         "clock": manifest["top"] + ".clk",
-        "rst_n": manifest["top"] + ".rst_n",
+        "reset": {"signal": manifest["top"] + ".rst_n", "polarity": "active_low"},
         "edge": "posedge",
     }
 

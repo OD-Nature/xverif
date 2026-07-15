@@ -91,8 +91,11 @@ public:
             if (clock.empty())
                 return event_missing_field_error(action_name(), "args.clock", "clock alias or signal path for inline event config");
             config.clock_sample.clock = clock;
-            config.rst_n = args.value("rst_n", "");
             std::string edge_error;
+            config.has_reset = args.contains("reset");
+            if (config.has_reset && !parse_reset_config(args["reset"], config.reset, edge_error))
+                return event_invalid_arg_error(action_name(), "args.reset", edge_error,
+                                               "reset object with signal and polarity");
             if (!parse_clock_edge_kind(args.value("edge", std::string("negedge")),
                                        config.clock_sample.edge,
                                        edge_error)) {

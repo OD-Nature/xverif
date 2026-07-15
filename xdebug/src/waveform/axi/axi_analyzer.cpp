@@ -53,7 +53,7 @@ AxiCursor* AxiAnalyzer::get_cursor_mut(const std::string& name) {
 }
 
 struct SigIdx {
-    int rst_n = -1;
+    int reset = -1;
     int awaddr = -1, awid = -1, awlen = -1, awsize = -1, awburst = -1, awvalid = -1, awready = -1;
     int wdata = -1, wstrb = -1, wlast = -1, wvalid = -1, wready = -1;
     int bid = -1, bresp = -1, bvalid = -1, bready = -1;
@@ -87,7 +87,7 @@ bool AxiAnalyzer::analyze(const std::string& name, npiFsdbFileHandle file, const
     std::vector<std::string> signals;
     signals.reserve(30);
     SigIdx idx;
-    add_sig(config.rst_n,   idx.rst_n,   signals);
+    add_sig(config.reset.signal, idx.reset, signals);
     add_sig(config.awaddr,  idx.awaddr,  signals);
     add_sig(config.awid,    idx.awid,    signals);
     add_sig(config.awlen,   idx.awlen,   signals);
@@ -137,9 +137,8 @@ bool AxiAnalyzer::analyze(const std::string& name, npiFsdbFileHandle file, const
         if (values.size() != signals.size()) return;
         AxiSample sample;
         sample.time = t;
-        if (idx.rst_n >= 0) {
-            const std::string& rst = values[idx.rst_n];
-            sample.reset_active = rst.empty() || rst == "0" || rst == "X" || rst == "Z";
+        if (idx.reset >= 0) {
+            sample.reset_active = reset_is_active(config.reset, values[idx.reset]);
         }
         sample.aw_valid = idx.awvalid >= 0 && is_active(values[idx.awvalid]);
         sample.w_valid = idx.wvalid >= 0 && is_active(values[idx.wvalid]);

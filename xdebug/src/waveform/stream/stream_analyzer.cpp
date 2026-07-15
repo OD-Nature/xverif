@@ -159,7 +159,6 @@ Json beat_preview_json(const std::vector<StreamBeat>& beats) {
 
 struct StreamAnalyzer::Compiled {
     StreamExpression clock;
-    StreamExpression reset;
     StreamExpression vld;
     StreamExpression rdy;
     StreamExpression bp;
@@ -172,6 +171,8 @@ struct StreamAnalyzer::Compiled {
     std::set<std::string> deps;
     std::map<std::string, std::string> dep_paths;
 };
+
+constexpr const char* kResetDependency = "__xdebug_reset";
 
 bool StreamAnalyzer::compile(npiFsdbFileHandle file, const StreamConfig& config, Compiled& c,
                              std::vector<StreamValidationIssue>* issues, std::string& error) {
@@ -191,7 +192,10 @@ bool StreamAnalyzer::compile(npiFsdbFileHandle file, const StreamConfig& config,
         if (issues) issue(*issues, "WARNING", "CLOCK_COMPLEX",
             "clock expression is not a plain signal; edge detection uses expression dependency changes");
     }
-    if (!parse_one("reset", config.reset, c.reset)) return false;
+    if (config.has_reset) {
+        c.deps.insert(kResetDependency);
+        c.dep_paths[kResetDependency] = config.reset.signal;
+    }
     if (!parse_one("vld", config.vld, c.vld)) return false;
     if (!parse_one("rdy", config.rdy, c.rdy)) return false;
     if (!parse_one("bp", config.bp, c.bp)) return false;
@@ -211,6 +215,19 @@ bool StreamAnalyzer::compile(npiFsdbFileHandle file, const StreamConfig& config,
     }
 
     for (const auto& sig : c.deps) {
+        if (sig == kResetDependency) {
+            npiFsdbSigHandle reset = npi_fsdb_sig_by_name(file, config.reset.signal.c_str(), NULL);
+            NPI_INT32 reset_width = 0;
+            if (!reset) {
+                error = "reset signal not found: " + config.reset.signal;
+                return false;
+            }
+            if (!npi_fsdb_sig_property(npiFsdbSigRangeSize, reset, &reset_width) || reset_width != 1) {
+                error = "reset signal must resolve to exactly one bit: " + config.reset.signal;
+                return false;
+            }
+            continue;
+        }
         auto alias = config.signals.find(sig);
         if (alias == config.signals.end()) {
             error = "stream " + config.name + " expression references unknown signal alias: " + sig;
@@ -503,8 +520,8 @@ bool StreamAnalyzer::analyze(npiFsdbFileHandle file, const StreamConfig& config,
             return out;
         };
 
-        StreamValue reset_v = config.reset.empty() ? StreamValue{"0", true} : eval(compiled.reset, "reset");
-        if (!error.empty()) return false;
+        StreamValue reset_v{"0", true};
+        if (config.has_reset) reset_v = values[kResetDependency];
         StreamValue vld_v = eval(compiled.vld, "vld");
         if (!error.empty()) return false;
         StreamValue rdy_v = config.rdy.empty() ? StreamValue{"1", true} : eval(compiled.rdy, "rdy");
@@ -519,7 +536,7 @@ bool StreamAnalyzer::analyze(npiFsdbFileHandle file, const StreamConfig& config,
         StreamRow row;
         row.cycle = cycle;
         row.time = t;
-        row.reset = stream_value_truthy(reset_v, true);
+        row.reset = config.has_reset && reset_is_active(config.reset, reset_v.bits);
         row.vld = stream_value_truthy(vld_v, false);
         row.rdy = stream_value_truthy(rdy_v, false);
         row.bp = stream_value_truthy(bp_v, true);

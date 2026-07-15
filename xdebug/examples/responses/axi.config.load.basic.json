@@ -4,7 +4,7 @@
   "action": "axi.config.load",
   "summary": {"name": "if0", "status": "loaded"},
   "data": {
-    "config": {"name": "if0", "clock": "top.clk", "edge": "negedge"},
+    "config": {"name": "if0", "clock": "top.clk", "reset": {"signal": "top.rst_n", "polarity": "active_low"}, "edge": "negedge"},
     "validation": {
       "status": "ok",
       "clock": {"status": "ok", "edge": "negedge", "first_edge": 5000},
