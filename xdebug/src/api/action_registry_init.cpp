@@ -73,6 +73,7 @@ void apply_arg_contract(ActionSpec& spec) {
         size_t count;
     };
     const RequiredEntry required[] = {
+        {"schema", {"action"}, 1},
         {"apb.config.load", {"name"}, 1},
         {"apb.cursor", {"name", "op"}, 2},
         {"apb.query", {"name"}, 1},

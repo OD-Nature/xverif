@@ -648,12 +648,10 @@ def test_schema_handler_enum_error_uses_diagnostic_error(cli_runner: CliRunner) 
     )
     assert not result.ok
     error = result.response["error"]
-    assert error["code"] == "INVALID_ENUM"
-    assert error["error_layer"] == "handler"
+    assert error["code"] == "INVALID_REQUEST"
+    assert error["error_layer"] == "schema"
     assert error["invalid_arg"] == "args.kind"
     assert error["allowed_values"] == ["request", "response"]
-    assert error["received"] == "bad_kind"
-    assert "example_note" in error
     assert error["correct_example"]["args"]["kind"] == "request"
     assert "data" not in result.response or result.response["data"] is None
 

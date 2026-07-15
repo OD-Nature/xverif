@@ -38,41 +38,41 @@
         "line_limit": {
           "type": "integer",
           "minimum": 1,
-          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。",
-          "x-description-zh": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
+          "description": "Limits returned evidence rows only, not scanning, aggregation, or the verdict; read completeness fields as well.",
+          "x-description-zh": "Limits returned evidence rows only, not scanning, aggregation, or the verdict; read completeness fields as well."
         },
         "mode": {
           "type": "string",
-          "description": "返回模式：timeline 返回逐变化 evidence；summary 只返回聚合事实。与 aggregate_only 不同时使用。",
+          "description": "Return mode: timeline emits each change evidence, while summary emits aggregate facts only. Do not combine it with aggregate_only.",
           "enum": [
             "timeline",
             "summary"
           ],
           "default": "timeline",
-          "x-description-zh": "返回模式：timeline 返回逐变化 evidence；summary 只返回聚合事实。与 aggregate_only 不同时使用。"
+          "x-description-zh": "Return mode: timeline emits each change evidence, while summary emits aggregate facts only. Do not combine it with aggregate_only."
         },
         "signal": {
           "type": "string",
-          "description": "目标信号路径。",
-          "x-description-zh": "目标信号路径。"
+          "description": "Final leaf signal path. Aggregate, array, and struct roots are not expanded automatically.",
+          "x-description-zh": "Final leaf signal path. Aggregate, array, and struct roots are not expanded automatically."
         },
         "time_range": {
           "type": "object",
           "properties": {
             "begin": {
               "type": "string",
-              "description": "args.time_range.begin 的 action-specific 参数值。",
-              "x-description-zh": "args.time_range.begin 的 action-specific 参数值。"
+              "description": "Action-specific begin input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific begin input. Its type and accepted values are defined by this schema."
             },
             "end": {
               "type": "string",
-              "description": "args.time_range.end 的 action-specific 参数值。",
-              "x-description-zh": "args.time_range.end 的 action-specific 参数值。"
+              "description": "Action-specific end input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific end input. Its type and accepted values are defined by this schema."
             }
           },
           "additionalProperties": false,
-          "description": "分析时间窗口；begin/end 为闭区间端点，可分别省略以使用可用波形边界。",
-          "x-description-zh": "分析时间窗口；begin/end 为闭区间端点，可分别省略以使用可用波形边界。"
+          "description": "Closed analysis interval. begin and end may be omitted independently to use the available waveform bounds.",
+          "x-description-zh": "Closed analysis interval. begin and end may be omitted independently to use the available waveform bounds."
         },
         "time_unit": {
           "type": "string",
@@ -85,8 +85,8 @@
             "ms",
             "s"
           ],
-          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
-          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
+          "description": "Interprets only unitless time numbers; it never overrides a time string that already has a unit.",
+          "x-description-zh": "Interprets only unitless time numbers; it never overrides a time string that already has a unit."
         },
         "value_format": {
           "type": "string",
@@ -95,8 +95,8 @@
             "bin",
             "dec"
           ],
-          "description": "仅控制响应中信号值的显示格式；不影响采样、时间或导出文件格式。",
-          "x-description-zh": "仅控制响应中信号值的显示格式；不影响采样、时间或导出文件格式。"
+          "description": "Action-specific value_format input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific value_format input. Its type and accepted values are defined by this schema."
         }
       },
       "additionalProperties": false,

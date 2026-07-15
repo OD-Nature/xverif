@@ -32,31 +32,31 @@
       "properties": {
         "config_path": {
           "type": "string",
-          "description": "输入配置文件路径。",
-          "x-description-zh": "输入配置文件路径。"
+          "description": "Action-specific config_path input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific config_path input. Its type and accepted values are defined by this schema."
         },
         "output": {
           "type": "object",
           "properties": {
             "path": {
               "type": "string",
-              "description": "args.output.path 的 action-specific 参数值。",
-              "x-description-zh": "args.output.path 的 action-specific 参数值。"
+              "description": "Action-specific path input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific path input. Its type and accepted values are defined by this schema."
             },
             "file_format": {
               "type": "string",
-              "description": "args.output.file_format 的 action-specific 参数值。",
-              "x-description-zh": "args.output.file_format 的 action-specific 参数值。"
+              "description": "Action-specific file_format input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific file_format input. Its type and accepted values are defined by this schema."
             },
             "verbose": {
               "type": "boolean",
-              "description": "args.output.verbose 的 action-specific 参数值。",
-              "x-description-zh": "args.output.verbose 的 action-specific 参数值。"
+              "description": "Action-specific verbose input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific verbose input. Its type and accepted values are defined by this schema."
             }
           },
           "additionalProperties": false,
-          "description": "导出目标与显示控制；不同 action 对 path、file_format 和 verbose 的支持以本 action schema 为准。",
-          "x-description-zh": "导出目标与显示控制；不同 action 对 path、file_format 和 verbose 的支持以本 action schema 为准。"
+          "description": "Export destination and rendering controls. path, file_format, and verbose are supported only where this action declares them.",
+          "x-description-zh": "Export destination and rendering controls. path, file_format, and verbose are supported only where this action declares them."
         },
         "time_unit": {
           "type": "string",
@@ -69,8 +69,8 @@
             "ms",
             "s"
           ],
-          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
-          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
+          "description": "Interprets only unitless time numbers; it never overrides a time string that already has a unit.",
+          "x-description-zh": "Interprets only unitless time numbers; it never overrides a time string that already has a unit."
         }
       },
       "required": [
@@ -107,12 +107,17 @@
   "x-description-zh": "根据分组生成波形 rc。",
   "x-agent": {
     "use_when": [
-      "需要执行该 action 的 catalog 所述能力。"
+      "需要从分组信号生成可复用 waveform rc 配置。"
     ],
     "do_not_use_when": [
-      "任务不属于该 action 的公开合同。"
+      "需要直接导出当前 waveform evidence 或查询一个信号。"
     ],
-    "alternatives": [],
+    "alternatives": [
+      {
+        "action": "list.export",
+        "when": "需要导出 list 的当前数据。"
+      }
+    ],
     "constraints": [
       "required: config_path, output"
     ]

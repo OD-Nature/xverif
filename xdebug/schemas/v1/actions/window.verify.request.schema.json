@@ -32,8 +32,8 @@
       "properties": {
         "clock": {
           "type": "string",
-          "description": "采样、统计或协议检查使用的 clock 信号路径。",
-          "x-description-zh": "采样、统计或协议检查使用的 clock 信号路径。"
+          "description": "Action-specific clock input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific clock input. Its type and accepted values are defined by this schema."
         },
         "conditions": {
           "type": "array",
@@ -50,8 +50,8 @@
               },
               "name": {
                 "type": "string",
-                "description": "args.conditions[].name 的 action-specific 参数值。",
-                "x-description-zh": "args.conditions[].name 的 action-specific 参数值。"
+                "description": "Saved-object name in this action namespace; do not assume names are shared by cursors, lists, and protocol configs.",
+                "x-description-zh": "Saved-object name in this action namespace; do not assume names are shared by cursors, lists, and protocol configs."
               },
               "mode": {
                 "type": "string",
@@ -60,33 +60,33 @@
                   "eventually",
                   "never"
                 ],
-                "description": "args.conditions[].mode 的 action-specific 参数值。",
-                "x-description-zh": "args.conditions[].mode 的 action-specific 参数值。"
+                "description": "Action processing or return mode. Its legal values, default, and interactions are action-specific.",
+                "x-description-zh": "Action processing or return mode. Its legal values, default, and interactions are action-specific."
               }
             },
             "additionalProperties": false,
-            "description": "args.conditions[] 的组合参数对象。",
-            "x-description-zh": "args.conditions[] 的组合参数对象。"
+            "description": "Structured conditions configuration. Only the declared properties are accepted.",
+            "x-description-zh": "Structured conditions configuration. Only the declared properties are accepted."
           },
-          "description": "需要验证的条件列表。",
-          "x-description-zh": "需要验证的条件列表。"
+          "description": "Ordered conditions entries. Each item must satisfy the declared item contract.",
+          "x-description-zh": "Ordered conditions entries. Each item must satisfy the declared item contract."
         },
         "edge": {
           "type": "string",
-          "description": "clock sampling 使用的边沿：posedge、negedge 或 dual。",
-          "x-description-zh": "clock sampling 使用的边沿：posedge、negedge 或 dual。"
+          "description": "Clock sampling edge. The schema default is authoritative; negedge often matches monitor semantics.",
+          "x-description-zh": "Clock sampling edge. The schema default is authoritative; negedge often matches monitor semantics."
         },
         "line_limit": {
           "type": "integer",
           "minimum": 1,
-          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。",
-          "x-description-zh": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
+          "description": "Limits returned evidence rows only, not scanning, aggregation, or the verdict; read completeness fields as well.",
+          "x-description-zh": "Limits returned evidence rows only, not scanning, aggregation, or the verdict; read completeness fields as well."
         },
         "max_samples": {
           "type": "integer",
           "minimum": 1,
-          "description": "args.max_samples 的 action-specific 参数值。",
-          "x-description-zh": "args.max_samples 的 action-specific 参数值。"
+          "description": "Action-specific max_samples input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific max_samples input. Its type and accepted values are defined by this schema."
         },
         "sample_point": {
           "type": "string",
@@ -94,8 +94,8 @@
             "before",
             "after"
           ],
-          "description": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。",
-          "x-description-zh": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。"
+          "description": "Before/after observation point for posedge or dual sampling; it does not change the raw waveform range.",
+          "x-description-zh": "Before/after observation point for posedge or dual sampling; it does not change the raw waveform range."
         },
         "signals": {
           "oneOf": [
@@ -103,41 +103,44 @@
               "type": "array",
               "items": {
                 "type": "string",
-                "description": "args.signals[] 的 action-specific 参数值。",
-                "x-description-zh": "args.signals[] 的 action-specific 参数值。"
+                "description": "Signal-path list or alias-to-path/expression map. Expressions must reference aliases rather than nested paths.",
+                "x-description-zh": "Signal-path list or alias-to-path/expression map. Expressions must reference aliases rather than nested paths."
               },
-              "description": "args.signals 的有序项目列表。",
-              "x-description-zh": "args.signals 的有序项目列表。"
+              "description": "Signal-path list or alias-to-path/expression map. Expressions must reference aliases rather than nested paths.",
+              "x-description-zh": "Signal-path list or alias-to-path/expression map. Expressions must reference aliases rather than nested paths."
             },
             {
               "type": "object",
               "additionalProperties": {
-                "type": "string"
+                "type": "string",
+                "description": "Value for a caller-defined signal alias key. Supply the real signal path or the action-supported expression for that alias.",
+                "x-dynamic-contract": "Each property key is an alias referenced by this action; each value resolves that alias to a signal path or supported expression.",
+                "x-description-zh": "Value for a caller-defined signal alias key. Supply the real signal path or the action-supported expression for that alias."
               },
-              "description": "args.signals 的组合参数对象。",
-              "x-description-zh": "args.signals 的组合参数对象。"
+              "description": "Signal-path list or alias-to-path/expression map. Expressions must reference aliases rather than nested paths.",
+              "x-description-zh": "Signal-path list or alias-to-path/expression map. Expressions must reference aliases rather than nested paths."
             }
           ],
-          "description": "信号列表，或 alias 到信号路径的映射。",
-          "x-description-zh": "信号列表，或 alias 到信号路径的映射。"
+          "description": "Signal-path list or alias-to-path/expression map. Expressions must reference aliases rather than nested paths.",
+          "x-description-zh": "Signal-path list or alias-to-path/expression map. Expressions must reference aliases rather than nested paths."
         },
         "time_range": {
           "type": "object",
           "properties": {
             "begin": {
               "type": "string",
-              "description": "args.time_range.begin 的 action-specific 参数值。",
-              "x-description-zh": "args.time_range.begin 的 action-specific 参数值。"
+              "description": "Action-specific begin input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific begin input. Its type and accepted values are defined by this schema."
             },
             "end": {
               "type": "string",
-              "description": "args.time_range.end 的 action-specific 参数值。",
-              "x-description-zh": "args.time_range.end 的 action-specific 参数值。"
+              "description": "Action-specific end input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific end input. Its type and accepted values are defined by this schema."
             }
           },
           "additionalProperties": false,
-          "description": "分析时间窗口；begin/end 为闭区间端点，可分别省略以使用可用波形边界。",
-          "x-description-zh": "分析时间窗口；begin/end 为闭区间端点，可分别省略以使用可用波形边界。"
+          "description": "Closed analysis interval. begin and end may be omitted independently to use the available waveform bounds.",
+          "x-description-zh": "Closed analysis interval. begin and end may be omitted independently to use the available waveform bounds."
         },
         "time_unit": {
           "type": "string",
@@ -150,8 +153,8 @@
             "ms",
             "s"
           ],
-          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
-          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
+          "description": "Interprets only unitless time numbers; it never overrides a time string that already has a unit.",
+          "x-description-zh": "Interprets only unitless time numbers; it never overrides a time string that already has a unit."
         }
       },
       "additionalProperties": false,
@@ -189,12 +192,21 @@
   "x-description-zh": "按 clock 在窗口内验证条件。",
   "x-agent": {
     "use_when": [
-      "需要执行该 action 的 catalog 所述能力。"
+      "需要在时间窗口内按 clock sample 验证多个条件。"
     ],
     "do_not_use_when": [
-      "任务不属于该 action 的公开合同。"
+      "只需要单个采样时刻的条件结果或单个信号稳定性。"
     ],
-    "alternatives": [],
+    "alternatives": [
+      {
+        "action": "verify.conditions",
+        "when": "需要单个时刻的条件验证。"
+      },
+      {
+        "action": "signal.stability",
+        "when": "需要单信号稳定性检查。"
+      }
+    ],
     "constraints": [
       "required: clock, conditions, signals"
     ]

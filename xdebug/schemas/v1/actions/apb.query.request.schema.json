@@ -32,13 +32,13 @@
       "properties": {
         "addr": {
           "type": "string",
-          "description": "args.addr 的 action-specific 参数值。",
-          "x-description-zh": "args.addr 的 action-specific 参数值。"
+          "description": "Action-specific addr input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific addr input. Its type and accepted values are defined by this schema."
         },
         "address": {
           "type": "string",
-          "description": "args.address 的 action-specific 参数值。",
-          "x-description-zh": "args.address 的 action-specific 参数值。"
+          "description": "Action-specific address input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific address input. Its type and accepted values are defined by this schema."
         },
         "direction": {
           "type": "string",
@@ -47,18 +47,18 @@
             "read",
             "all"
           ],
-          "description": "args.direction 的 action-specific 参数值。",
-          "x-description-zh": "args.direction 的 action-specific 参数值。"
+          "description": "Action-specific direction input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific direction input. Its type and accepted values are defined by this schema."
         },
         "last": {
           "type": "boolean",
-          "description": "args.last 的 action-specific 参数值。",
-          "x-description-zh": "args.last 的 action-specific 参数值。"
+          "description": "Action-specific last input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific last input. Its type and accepted values are defined by this schema."
         },
         "name": {
           "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。",
-          "x-description-zh": "已保存配置、游标、列表或接口配置名称。"
+          "description": "Saved-object name in this action namespace; do not assume names are shared by cursors, lists, and protocol configs.",
+          "x-description-zh": "Saved-object name in this action namespace; do not assume names are shared by cursors, lists, and protocol configs."
         },
         "query": {
           "type": "object",
@@ -66,19 +66,19 @@
             "line_limit": {
               "type": "integer",
               "minimum": 1,
-              "description": "args.query.line_limit 的 action-specific 参数值。",
-              "x-description-zh": "args.query.line_limit 的 action-specific 参数值。"
+              "description": "Limits returned evidence rows only, not scanning, aggregation, or the verdict; read completeness fields as well.",
+              "x-description-zh": "Limits returned evidence rows only, not scanning, aggregation, or the verdict; read completeness fields as well."
             },
             "index": {
               "type": "integer",
               "minimum": 1,
-              "description": "args.query.index 的 action-specific 参数值。",
-              "x-description-zh": "args.query.index 的 action-specific 参数值。"
+              "description": "One-based query, cursor, or list position; the action schema defines its exact reference set.",
+              "x-description-zh": "One-based query, cursor, or list position; the action schema defines its exact reference set."
             }
           },
           "additionalProperties": false,
-          "description": "Protocol query controls; use 1-based query.index and query.line_limit; legacy quantity fields are rejected.",
-          "x-description-zh": "Protocol query controls; use 1-based query.index and query.line_limit; legacy quantity fields are rejected."
+          "description": "Action-specific query selector. Do not copy index, channel, or filter forms from another action.",
+          "x-description-zh": "Action-specific query selector. Do not copy index, channel, or filter forms from another action."
         },
         "time_unit": {
           "type": "string",
@@ -91,8 +91,8 @@
             "ms",
             "s"
           ],
-          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
-          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
+          "description": "Interprets only unitless time numbers; it never overrides a time string that already has a unit.",
+          "x-description-zh": "Interprets only unitless time numbers; it never overrides a time string that already has a unit."
         }
       },
       "additionalProperties": false,
@@ -128,12 +128,21 @@
   "x-description-zh": "查询 APB transfer。",
   "x-agent": {
     "use_when": [
-      "需要执行该 action 的 catalog 所述能力。"
+      "查询 APB transfer。"
     ],
     "do_not_use_when": [
-      "任务不属于该 action 的公开合同。"
+      "不要把本 action 用于 apb.config.list、apb.config.load 的业务目标；请改用列出的同域 action。"
     ],
-    "alternatives": [],
+    "alternatives": [
+      {
+        "action": "apb.config.list",
+        "when": "列出 APB 配置。"
+      },
+      {
+        "action": "apb.config.load",
+        "when": "加载 APB 配置。"
+      }
+    ],
     "constraints": [
       "required: name; use query.index / query.line_limit; do not use legacy quantity fields"
     ]

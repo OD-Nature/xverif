@@ -11,6 +11,8 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
+from jsonschema import Draft7Validator, Draft202012Validator, ValidationError as JsonSchemaValidationError
+
 
 class ValidationError(Exception):
     pass
@@ -106,15 +108,17 @@ def validate_file(path: Path, schemas: Path) -> None:
     doc = load_json(path)
     if path.parent.name == "errors":
         schema_path = schemas / "xdebug.error.schema.json"
+        kind = "response"
     else:
         if not isinstance(doc, dict) or not isinstance(doc.get("action"), str):
             fail(f"{path}: example must contain string action")
         kind = "request" if path.parent.name == "requests" else "response"
         schema_path = action_schema_path(schemas, doc["action"], kind)
     schema = load_json(schema_path)
+    validator = Draft7Validator(schema) if kind == "request" else Draft202012Validator(schema)
     try:
-        validate(doc, schema)
-    except ValidationError as exc:
+        validator.validate(doc)
+    except JsonSchemaValidationError as exc:
         fail(f"{path}: does not match {schema_path}: {exc}")
 
 

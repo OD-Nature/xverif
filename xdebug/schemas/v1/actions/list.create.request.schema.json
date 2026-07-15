@@ -32,8 +32,8 @@
       "properties": {
         "name": {
           "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。",
-          "x-description-zh": "已保存配置、游标、列表或接口配置名称。"
+          "description": "Saved-object name in this action namespace; do not assume names are shared by cursors, lists, and protocol configs.",
+          "x-description-zh": "Saved-object name in this action namespace; do not assume names are shared by cursors, lists, and protocol configs."
         },
         "signals": {
           "oneOf": [
@@ -41,23 +41,26 @@
               "type": "array",
               "items": {
                 "type": "string",
-                "description": "args.signals[] 的 action-specific 参数值。",
-                "x-description-zh": "args.signals[] 的 action-specific 参数值。"
+                "description": "Signal-path list or alias-to-path/expression map. Expressions must reference aliases rather than nested paths.",
+                "x-description-zh": "Signal-path list or alias-to-path/expression map. Expressions must reference aliases rather than nested paths."
               },
-              "description": "args.signals 的有序项目列表。",
-              "x-description-zh": "args.signals 的有序项目列表。"
+              "description": "Signal-path list or alias-to-path/expression map. Expressions must reference aliases rather than nested paths.",
+              "x-description-zh": "Signal-path list or alias-to-path/expression map. Expressions must reference aliases rather than nested paths."
             },
             {
               "type": "object",
               "additionalProperties": {
-                "type": "string"
+                "type": "string",
+                "description": "Value for a caller-defined signal alias key. Supply the real signal path or the action-supported expression for that alias.",
+                "x-dynamic-contract": "Each property key is an alias referenced by this action; each value resolves that alias to a signal path or supported expression.",
+                "x-description-zh": "Value for a caller-defined signal alias key. Supply the real signal path or the action-supported expression for that alias."
               },
-              "description": "args.signals 的组合参数对象。",
-              "x-description-zh": "args.signals 的组合参数对象。"
+              "description": "Signal-path list or alias-to-path/expression map. Expressions must reference aliases rather than nested paths.",
+              "x-description-zh": "Signal-path list or alias-to-path/expression map. Expressions must reference aliases rather than nested paths."
             }
           ],
-          "description": "信号列表，或 alias 到信号路径的映射。",
-          "x-description-zh": "信号列表，或 alias 到信号路径的映射。"
+          "description": "Signal-path list or alias-to-path/expression map. Expressions must reference aliases rather than nested paths.",
+          "x-description-zh": "Signal-path list or alias-to-path/expression map. Expressions must reference aliases rather than nested paths."
         },
         "time_unit": {
           "type": "string",
@@ -70,8 +73,8 @@
             "ms",
             "s"
           ],
-          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
-          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
+          "description": "Interprets only unitless time numbers; it never overrides a time string that already has a unit.",
+          "x-description-zh": "Interprets only unitless time numbers; it never overrides a time string that already has a unit."
         }
       },
       "additionalProperties": false,
@@ -107,12 +110,21 @@
   "x-description-zh": "创建命名信号列表。",
   "x-agent": {
     "use_when": [
-      "需要执行该 action 的 catalog 所述能力。"
+      "创建命名信号列表。"
     ],
     "do_not_use_when": [
-      "任务不属于该 action 的公开合同。"
+      "不要把本 action 用于 list.add、list.delete 的业务目标；请改用列出的同域 action。"
     ],
-    "alternatives": [],
+    "alternatives": [
+      {
+        "action": "list.add",
+        "when": "向信号列表追加一个信号。"
+      },
+      {
+        "action": "list.delete",
+        "when": "从信号列表删除信号或 index。"
+      }
+    ],
     "constraints": [
       "required: name"
     ]

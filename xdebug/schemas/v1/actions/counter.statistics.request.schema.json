@@ -38,30 +38,30 @@
       "properties": {
         "clock": {
           "type": "string",
-          "description": "采样、统计或协议检查使用的 clock 信号路径。",
-          "x-description-zh": "采样、统计或协议检查使用的 clock 信号路径。"
+          "description": "Action-specific clock input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific clock input. Its type and accepted values are defined by this schema."
         },
         "cnt": {
           "type": "string",
-          "description": "计数器统计使用的 counter 信号路径。",
-          "x-description-zh": "计数器统计使用的 counter 信号路径。"
+          "description": "Action-specific cnt input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific cnt input. Its type and accepted values are defined by this schema."
         },
         "edge": {
           "type": "string",
-          "description": "clock sampling 使用的边沿：posedge、negedge 或 dual。",
-          "x-description-zh": "clock sampling 使用的边沿：posedge、negedge 或 dual。"
+          "description": "Clock sampling edge. The schema default is authoritative; negedge often matches monitor semantics.",
+          "x-description-zh": "Clock sampling edge. The schema default is authoritative; negedge often matches monitor semantics."
         },
         "line_limit": {
           "type": "integer",
           "minimum": 1,
-          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。",
-          "x-description-zh": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
+          "description": "Limits returned evidence rows only, not scanning, aggregation, or the verdict; read completeness fields as well.",
+          "x-description-zh": "Limits returned evidence rows only, not scanning, aggregation, or the verdict; read completeness fields as well."
         },
         "max_samples": {
           "type": "integer",
           "minimum": 1,
-          "description": "args.max_samples 的 action-specific 参数值。",
-          "x-description-zh": "args.max_samples 的 action-specific 参数值。"
+          "description": "Action-specific max_samples input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific max_samples input. Its type and accepted values are defined by this schema."
         },
         "sample_point": {
           "type": "string",
@@ -69,26 +69,26 @@
             "before",
             "after"
           ],
-          "description": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。",
-          "x-description-zh": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。"
+          "description": "Before/after observation point for posedge or dual sampling; it does not change the raw waveform range.",
+          "x-description-zh": "Before/after observation point for posedge or dual sampling; it does not change the raw waveform range."
         },
         "time_range": {
           "type": "object",
           "properties": {
             "begin": {
               "type": "string",
-              "description": "args.time_range.begin 的 action-specific 参数值。",
-              "x-description-zh": "args.time_range.begin 的 action-specific 参数值。"
+              "description": "Action-specific begin input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific begin input. Its type and accepted values are defined by this schema."
             },
             "end": {
               "type": "string",
-              "description": "args.time_range.end 的 action-specific 参数值。",
-              "x-description-zh": "args.time_range.end 的 action-specific 参数值。"
+              "description": "Action-specific end input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific end input. Its type and accepted values are defined by this schema."
             }
           },
           "additionalProperties": false,
-          "description": "分析时间窗口；begin/end 为闭区间端点，可分别省略以使用可用波形边界。",
-          "x-description-zh": "分析时间窗口；begin/end 为闭区间端点，可分别省略以使用可用波形边界。"
+          "description": "Closed analysis interval. begin and end may be omitted independently to use the available waveform bounds.",
+          "x-description-zh": "Closed analysis interval. begin and end may be omitted independently to use the available waveform bounds."
         },
         "time_unit": {
           "type": "string",
@@ -101,24 +101,24 @@
             "ms",
             "s"
           ],
-          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
-          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
+          "description": "Interprets only unitless time numbers; it never overrides a time string that already has a unit.",
+          "x-description-zh": "Interprets only unitless time numbers; it never overrides a time string that already has a unit."
         },
         "vld": {
           "oneOf": [
             {
               "type": "string",
-              "description": "args.vld 的 action-specific 参数值。",
-              "x-description-zh": "args.vld 的 action-specific 参数值。"
+              "description": "Signal path or expression defining the valid sampling condition for counter statistics.",
+              "x-description-zh": "Signal path or expression defining the valid sampling condition for counter statistics."
             },
             {
               "type": "object",
-              "description": "args.vld 的组合参数对象。",
-              "x-description-zh": "args.vld 的组合参数对象。"
+              "description": "Signal path or expression defining the valid sampling condition for counter statistics.",
+              "x-description-zh": "Signal path or expression defining the valid sampling condition for counter statistics."
             }
           ],
-          "description": "计数器统计使用的 valid 信号路径。",
-          "x-description-zh": "计数器统计使用的 valid 信号路径。"
+          "description": "Signal path or expression defining the valid sampling condition for counter statistics.",
+          "x-description-zh": "Signal path or expression defining the valid sampling condition for counter statistics."
         }
       },
       "additionalProperties": false
@@ -151,12 +151,17 @@
   "x-description-zh": "统计计数器行为。",
   "x-agent": {
     "use_when": [
-      "需要执行该 action 的 catalog 所述能力。"
+      "需要按采样 clock 统计一个 counter 的增量、回绕或活动。"
     ],
     "do_not_use_when": [
-      "任务不属于该 action 的公开合同。"
+      "需要多个一般信号的活动统计或原始变化列表。"
     ],
-    "alternatives": [],
+    "alternatives": [
+      {
+        "action": "signal.statistics",
+        "when": "需要一般信号而非 counter 语义的统计。"
+      }
+    ],
     "constraints": [
       "required: clock, time_range, vld, cnt"
     ]

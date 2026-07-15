@@ -5,7 +5,10 @@
     "requests": [
       {
         "api_version": "xdebug.v1",
-        "action": "schema"
+        "action": "schema",
+        "args": {
+          "action": "value.at"
+        }
       }
     ]
   }

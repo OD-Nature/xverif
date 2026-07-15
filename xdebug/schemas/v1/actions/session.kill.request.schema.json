@@ -42,8 +42,8 @@
       "properties": {
         "session_id": {
           "type": "string",
-          "description": "目标 xdebug session 标识。",
-          "x-description-zh": "目标 xdebug session 标识。"
+          "description": "Action-specific session_id input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific session_id input. Its type and accepted values are defined by this schema."
         }
       },
       "additionalProperties": false,
@@ -77,12 +77,21 @@
   "x-description-zh": "强制移除指定 session。",
   "x-agent": {
     "use_when": [
-      "需要执行该 action 的 catalog 所述能力。"
+      "强制移除指定 session。"
     ],
     "do_not_use_when": [
-      "任务不属于该 action 的公开合同。"
+      "不要把本 action 用于 session.close、session.doctor 的业务目标；请改用列出的同域 action。"
     ],
-    "alternatives": [],
+    "alternatives": [
+      {
+        "action": "session.close",
+        "when": "关闭指定 session。"
+      },
+      {
+        "action": "session.doctor",
+        "when": "诊断当前 session。"
+      }
+    ],
     "constraints": [
       "required: target.session_id"
     ]

@@ -60,7 +60,7 @@
               ],
               "default": "all",
               "description": "Transaction direction filter.",
-              "x-description-zh": "事务方向过滤；默认 all。"
+              "x-description-zh": "Transaction direction filter."
             },
             "address": {
               "oneOf": [
@@ -72,7 +72,9 @@
                   ],
                   "properties": {
                     "mode": {
-                      "const": "exact"
+                      "const": "exact",
+                      "description": "Action processing or return mode. Its legal values, default, and interactions are action-specific.",
+                      "x-description-zh": "Action processing or return mode. Its legal values, default, and interactions are action-specific."
                     },
                     "values": {
                       "type": "array",
@@ -82,15 +84,15 @@
                         "type": "string",
                         "minLength": 1,
                         "description": "Known integer, hexadecimal, or SystemVerilog literal up to 64 bits.",
-                        "x-description-zh": "不含 X/Z、宽度不超过 64 bit 的整数、十六进制或 SystemVerilog literal。"
+                        "x-description-zh": "Known integer, hexadecimal, or SystemVerilog literal up to 64 bits."
                       },
-                      "description": "args.filter.address.values 的有序项目列表。",
-                      "x-description-zh": "args.filter.address.values 的有序项目列表。"
+                      "description": "Ordered values entries. Each item must satisfy the declared item contract.",
+                      "x-description-zh": "Ordered values entries. Each item must satisfy the declared item contract."
                     }
                   },
                   "additionalProperties": false,
-                  "description": "args.filter.address 的组合参数对象。",
-                  "x-description-zh": "args.filter.address 的组合参数对象。"
+                  "description": "Structured address configuration. Only the declared properties are accepted.",
+                  "x-description-zh": "Structured address configuration. Only the declared properties are accepted."
                 },
                 {
                   "type": "object",
@@ -101,24 +103,26 @@
                   ],
                   "properties": {
                     "mode": {
-                      "const": "range"
+                      "const": "range",
+                      "description": "Action processing or return mode. Its legal values, default, and interactions are action-specific.",
+                      "x-description-zh": "Action processing or return mode. Its legal values, default, and interactions are action-specific."
                     },
                     "begin": {
                       "type": "string",
                       "minLength": 1,
                       "description": "Known integer, hexadecimal, or SystemVerilog literal up to 64 bits.",
-                      "x-description-zh": "不含 X/Z、宽度不超过 64 bit 的整数、十六进制或 SystemVerilog literal。"
+                      "x-description-zh": "Known integer, hexadecimal, or SystemVerilog literal up to 64 bits."
                     },
                     "end": {
                       "type": "string",
                       "minLength": 1,
                       "description": "Known integer, hexadecimal, or SystemVerilog literal up to 64 bits.",
-                      "x-description-zh": "不含 X/Z、宽度不超过 64 bit 的整数、十六进制或 SystemVerilog literal。"
+                      "x-description-zh": "Known integer, hexadecimal, or SystemVerilog literal up to 64 bits."
                     }
                   },
                   "additionalProperties": false,
-                  "description": "args.filter.address 的组合参数对象。",
-                  "x-description-zh": "args.filter.address 的组合参数对象。"
+                  "description": "Structured address configuration. Only the declared properties are accepted.",
+                  "x-description-zh": "Structured address configuration. Only the declared properties are accepted."
                 },
                 {
                   "type": "object",
@@ -129,28 +133,30 @@
                   ],
                   "properties": {
                     "mode": {
-                      "const": "mask"
+                      "const": "mask",
+                      "description": "Action processing or return mode. Its legal values, default, and interactions are action-specific.",
+                      "x-description-zh": "Action processing or return mode. Its legal values, default, and interactions are action-specific."
                     },
                     "value": {
                       "type": "string",
                       "minLength": 1,
                       "description": "Known integer, hexadecimal, or SystemVerilog literal up to 64 bits.",
-                      "x-description-zh": "不含 X/Z、宽度不超过 64 bit 的整数、十六进制或 SystemVerilog literal。"
+                      "x-description-zh": "Known integer, hexadecimal, or SystemVerilog literal up to 64 bits."
                     },
                     "mask": {
                       "type": "string",
                       "minLength": 1,
                       "description": "Known integer, hexadecimal, or SystemVerilog literal up to 64 bits.",
-                      "x-description-zh": "不含 X/Z、宽度不超过 64 bit 的整数、十六进制或 SystemVerilog literal。"
+                      "x-description-zh": "Known integer, hexadecimal, or SystemVerilog literal up to 64 bits."
                     }
                   },
                   "additionalProperties": false,
-                  "description": "args.filter.address 的组合参数对象。",
-                  "x-description-zh": "args.filter.address 的组合参数对象。"
+                  "description": "Structured address configuration. Only the declared properties are accepted.",
+                  "x-description-zh": "Structured address configuration. Only the declared properties are accepted."
                 }
               ],
               "description": "Exactly one address filtering mode: exact queue, inclusive range, or value/mask.",
-              "x-description-zh": "地址只能选择精确值队列、闭区间或 value/mask 三种模式之一。"
+              "x-description-zh": "Exactly one address filtering mode: exact queue, inclusive range, or value/mask."
             },
             "ids": {
               "type": "array",
@@ -160,20 +166,20 @@
                 "type": "string",
                 "minLength": 1,
                 "description": "Known integer, hexadecimal, or SystemVerilog literal up to 64 bits.",
-                "x-description-zh": "不含 X/Z、宽度不超过 64 bit 的整数、十六进制或 SystemVerilog literal。"
+                "x-description-zh": "Known integer, hexadecimal, or SystemVerilog literal up to 64 bits."
               },
               "description": "AXI transaction ID queue; values are ORed within the queue.",
-              "x-description-zh": "AXI ID 队列，队列内部取 OR。"
+              "x-description-zh": "AXI transaction ID queue; values are ORed within the queue."
             }
           },
           "additionalProperties": false,
           "description": "Completed-transaction filters; direction, IDs, and address are combined with AND.",
-          "x-description-zh": "已完成事务过滤；方向、ID 和地址三类条件取 AND。"
+          "x-description-zh": "Completed-transaction filters; direction, IDs, and address are combined with AND."
         },
         "name": {
           "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。",
-          "x-description-zh": "已保存配置、游标、列表或接口配置名称。"
+          "description": "Saved-object name in this action namespace; do not assume names are shared by cursors, lists, and protocol configs.",
+          "x-description-zh": "Saved-object name in this action namespace; do not assume names are shared by cursors, lists, and protocol configs."
         },
         "time_unit": {
           "type": "string",
@@ -186,8 +192,8 @@
             "ms",
             "s"
           ],
-          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
-          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
+          "description": "Interprets only unitless time numbers; it never overrides a time string that already has a unit.",
+          "x-description-zh": "Interprets only unitless time numbers; it never overrides a time string that already has a unit."
         }
       },
       "additionalProperties": false
@@ -227,12 +233,21 @@
   "x-arg_contract_notes": "required: name; filter direction/ids/address with AND; address mode is exact/range/mask",
   "x-agent": {
     "use_when": [
-      "需要执行该 action 的 catalog 所述能力。"
+      "按方向、ID 和地址过滤统计已完成 AXI 事务。"
     ],
     "do_not_use_when": [
-      "任务不属于该 action 的公开合同。"
+      "不要把本 action 用于 axi.analysis、axi.export 的业务目标；请改用列出的同域 action。"
     ],
-    "alternatives": [],
+    "alternatives": [
+      {
+        "action": "axi.analysis",
+        "when": "汇总 AXI 行为。"
+      },
+      {
+        "action": "axi.export",
+        "when": "导出 AXI 数据。"
+      }
+    ],
     "constraints": [
       "required: name; filter direction/ids/address with AND; address mode is exact/range/mask"
     ]

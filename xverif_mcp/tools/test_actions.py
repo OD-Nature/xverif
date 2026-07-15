@@ -192,8 +192,11 @@ async def test_all_schemas(session) -> tuple[int, int]:
 
     for kind in ["request", "response"]:
         for action in actions:
+            request = {"action": action, "kind": kind}
+            if kind == "response":
+                request["view"] = "response"
             result = await session.call_tool("xverif_debug_get_schema", {
-                "action": action, "kind": kind,
+                **request,
             })
             data = json.loads(result.content[0].text)
 

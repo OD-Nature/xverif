@@ -28,31 +28,31 @@
       "properties": {
         "name": {
           "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。",
-          "x-description-zh": "已保存配置、游标、列表或接口配置名称。"
+          "description": "Saved-object name in this action namespace; do not assume names are shared by cursors, lists, and protocol configs.",
+          "x-description-zh": "Saved-object name in this action namespace; do not assume names are shared by cursors, lists, and protocol configs."
         },
         "output": {
           "type": "object",
           "properties": {
             "path": {
               "type": "string",
-              "description": "args.output.path 的 action-specific 参数值。",
-              "x-description-zh": "args.output.path 的 action-specific 参数值。"
+              "description": "Action-specific path input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific path input. Its type and accepted values are defined by this schema."
             },
             "file_format": {
               "type": "string",
-              "description": "args.output.file_format 的 action-specific 参数值。",
-              "x-description-zh": "args.output.file_format 的 action-specific 参数值。"
+              "description": "Action-specific file_format input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific file_format input. Its type and accepted values are defined by this schema."
             },
             "verbose": {
               "type": "boolean",
-              "description": "args.output.verbose 的 action-specific 参数值。",
-              "x-description-zh": "args.output.verbose 的 action-specific 参数值。"
+              "description": "Action-specific verbose input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific verbose input. Its type and accepted values are defined by this schema."
             }
           },
           "additionalProperties": false,
-          "description": "导出目标与显示控制；不同 action 对 path、file_format 和 verbose 的支持以本 action schema 为准。",
-          "x-description-zh": "导出目标与显示控制；不同 action 对 path、file_format 和 verbose 的支持以本 action schema 为准。"
+          "description": "Export destination and rendering controls. path, file_format, and verbose are supported only where this action declares them.",
+          "x-description-zh": "Export destination and rendering controls. path, file_format, and verbose are supported only where this action declares them."
         },
         "time_unit": {
           "type": "string",
@@ -65,8 +65,8 @@
             "ms",
             "s"
           ],
-          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
-          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
+          "description": "Interprets only unitless time numbers; it never overrides a time string that already has a unit.",
+          "x-description-zh": "Interprets only unitless time numbers; it never overrides a time string that already has a unit."
         }
       },
       "additionalProperties": false,
@@ -103,12 +103,21 @@
   "x-description-zh": "列出 stream 配置。",
   "x-agent": {
     "use_when": [
-      "需要执行该 action 的 catalog 所述能力。"
+      "列出 stream 配置。"
     ],
     "do_not_use_when": [
-      "任务不属于该 action 的公开合同。"
+      "不要把本 action 用于 stream.config.load、stream.show 的业务目标；请改用列出的同域 action。"
     ],
-    "alternatives": [],
+    "alternatives": [
+      {
+        "action": "stream.config.load",
+        "when": "加载 stream 配置。"
+      },
+      {
+        "action": "stream.show",
+        "when": "显示 stream 定义和摘要。"
+      }
+    ],
     "constraints": [
       "args:{} list all; optional name shows one config"
     ]

@@ -45,11 +45,11 @@
                   "combined",
                   "session"
                 ],
-                "description": "args.filter.category[] 的 action-specific 参数值。",
-                "x-description-zh": "args.filter.category[] 的 action-specific 参数值。"
+                "description": "Action-specific category input. Its type and accepted values are defined by this schema.",
+                "x-description-zh": "Action-specific category input. Its type and accepted values are defined by this schema."
               },
-              "description": "args.filter.category 的有序项目列表。",
-              "x-description-zh": "args.filter.category 的有序项目列表。"
+              "description": "Ordered category entries. Each item must satisfy the declared item contract.",
+              "x-description-zh": "Ordered category entries. Each item must satisfy the declared item contract."
             },
             "requires": {
               "type": "array",
@@ -65,11 +65,11 @@
                   "any",
                   "session"
                 ],
-                "description": "args.filter.requires[] 的 action-specific 参数值。",
-                "x-description-zh": "args.filter.requires[] 的 action-specific 参数值。"
+                "description": "Action-specific requires input. Its type and accepted values are defined by this schema.",
+                "x-description-zh": "Action-specific requires input. Its type and accepted values are defined by this schema."
               },
-              "description": "args.filter.requires 的有序项目列表。",
-              "x-description-zh": "args.filter.requires 的有序项目列表。"
+              "description": "Ordered requires entries. Each item must satisfy the declared item contract.",
+              "x-description-zh": "Ordered requires entries. Each item must satisfy the declared item contract."
             },
             "purposes": {
               "type": "array",
@@ -90,45 +90,45 @@
                   "transform",
                   "orchestrate"
                 ],
-                "description": "args.filter.purposes[] 的 action-specific 参数值。",
-                "x-description-zh": "args.filter.purposes[] 的 action-specific 参数值。"
+                "description": "Action-specific purposes input. Its type and accepted values are defined by this schema.",
+                "x-description-zh": "Action-specific purposes input. Its type and accepted values are defined by this schema."
               },
-              "description": "args.filter.purposes 的有序项目列表。",
-              "x-description-zh": "args.filter.purposes 的有序项目列表。"
+              "description": "Ordered purposes entries. Each item must satisfy the declared item contract.",
+              "x-description-zh": "Ordered purposes entries. Each item must satisfy the declared item contract."
             },
             "keyword": {
               "type": "string",
               "pattern": ".*\\S.*",
-              "description": "args.filter.keyword 的 action-specific 参数值。",
-              "x-description-zh": "args.filter.keyword 的 action-specific 参数值。"
+              "description": "Action-specific keyword input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific keyword input. Its type and accepted values are defined by this schema."
             }
           },
           "additionalProperties": false,
-          "description": "args.filter 的组合参数对象。",
-          "x-description-zh": "args.filter 的组合参数对象。"
+          "description": "Structured filter configuration. Only the declared properties are accepted.",
+          "x-description-zh": "Structured filter configuration. Only the declared properties are accepted."
         },
         "output": {
           "type": "object",
           "properties": {
             "path": {
               "type": "string",
-              "description": "args.output.path 的 action-specific 参数值。",
-              "x-description-zh": "args.output.path 的 action-specific 参数值。"
+              "description": "Action-specific path input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific path input. Its type and accepted values are defined by this schema."
             },
             "file_format": {
               "type": "string",
-              "description": "args.output.file_format 的 action-specific 参数值。",
-              "x-description-zh": "args.output.file_format 的 action-specific 参数值。"
+              "description": "Action-specific file_format input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific file_format input. Its type and accepted values are defined by this schema."
             },
             "verbose": {
               "type": "boolean",
-              "description": "args.output.verbose 的 action-specific 参数值。",
-              "x-description-zh": "args.output.verbose 的 action-specific 参数值。"
+              "description": "Action-specific verbose input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific verbose input. Its type and accepted values are defined by this schema."
             }
           },
           "additionalProperties": false,
-          "description": "导出目标与显示控制；不同 action 对 path、file_format 和 verbose 的支持以本 action schema 为准。",
-          "x-description-zh": "导出目标与显示控制；不同 action 对 path、file_format 和 verbose 的支持以本 action schema 为准。"
+          "description": "Export destination and rendering controls. path, file_format, and verbose are supported only where this action declares them.",
+          "x-description-zh": "Export destination and rendering controls. path, file_format, and verbose are supported only where this action declares them."
         }
       },
       "additionalProperties": false,
@@ -162,12 +162,17 @@
   "x-description-zh": "列出当前运行时公开 action catalog。",
   "x-agent": {
     "use_when": [
-      "需要执行该 action 的 catalog 所述能力。"
+      "需要发现当前 runtime 公开的 action、状态和适用资源。"
     ],
     "do_not_use_when": [
-      "任务不属于该 action 的公开合同。"
+      "已经知道 action 且需要它的字段、枚举或 response 合同。"
     ],
-    "alternatives": [],
+    "alternatives": [
+      {
+        "action": "schema",
+        "when": "需要一个已知 action 的完整调用合同。"
+      }
+    ],
     "constraints": [
       "no required args"
     ]

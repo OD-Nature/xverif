@@ -32,193 +32,193 @@
       "properties": {
         "config": {
           "type": "object",
-          "description": "内联配置对象。",
+          "description": "Structured config configuration. Only the declared properties are accepted.",
           "properties": {
             "clock": {
               "type": "string",
               "minLength": 1,
-              "description": "args.config.clock 的 action-specific 参数值。",
-              "x-description-zh": "args.config.clock 的 action-specific 参数值。"
+              "description": "Action-specific clock input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific clock input. Its type and accepted values are defined by this schema."
             },
             "rst_n": {
               "type": "string",
               "minLength": 1,
-              "description": "args.config.rst_n 的 action-specific 参数值。",
-              "x-description-zh": "args.config.rst_n 的 action-specific 参数值。"
+              "description": "Action-specific rst_n input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific rst_n input. Its type and accepted values are defined by this schema."
             },
             "awvalid": {
               "type": "string",
               "minLength": 1,
-              "description": "args.config.awvalid 的 action-specific 参数值。",
-              "x-description-zh": "args.config.awvalid 的 action-specific 参数值。"
+              "description": "Action-specific awvalid input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific awvalid input. Its type and accepted values are defined by this schema."
             },
             "awready": {
               "type": "string",
               "minLength": 1,
-              "description": "args.config.awready 的 action-specific 参数值。",
-              "x-description-zh": "args.config.awready 的 action-specific 参数值。"
+              "description": "Action-specific awready input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific awready input. Its type and accepted values are defined by this schema."
             },
             "awaddr": {
               "type": "string",
               "minLength": 1,
-              "description": "args.config.awaddr 的 action-specific 参数值。",
-              "x-description-zh": "args.config.awaddr 的 action-specific 参数值。"
+              "description": "Action-specific awaddr input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific awaddr input. Its type and accepted values are defined by this schema."
             },
             "awid": {
               "type": "string",
               "minLength": 1,
-              "description": "args.config.awid 的 action-specific 参数值。",
-              "x-description-zh": "args.config.awid 的 action-specific 参数值。"
+              "description": "Action-specific awid input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific awid input. Its type and accepted values are defined by this schema."
             },
             "awlen": {
               "type": "string",
               "minLength": 1,
-              "description": "args.config.awlen 的 action-specific 参数值。",
-              "x-description-zh": "args.config.awlen 的 action-specific 参数值。"
+              "description": "Action-specific awlen input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific awlen input. Its type and accepted values are defined by this schema."
             },
             "awsize": {
               "type": "string",
               "minLength": 1,
-              "description": "args.config.awsize 的 action-specific 参数值。",
-              "x-description-zh": "args.config.awsize 的 action-specific 参数值。"
+              "description": "Action-specific awsize input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific awsize input. Its type and accepted values are defined by this schema."
             },
             "awburst": {
               "type": "string",
               "minLength": 1,
-              "description": "args.config.awburst 的 action-specific 参数值。",
-              "x-description-zh": "args.config.awburst 的 action-specific 参数值。"
+              "description": "Action-specific awburst input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific awburst input. Its type and accepted values are defined by this schema."
             },
             "wvalid": {
               "type": "string",
               "minLength": 1,
-              "description": "args.config.wvalid 的 action-specific 参数值。",
-              "x-description-zh": "args.config.wvalid 的 action-specific 参数值。"
+              "description": "Action-specific wvalid input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific wvalid input. Its type and accepted values are defined by this schema."
             },
             "wready": {
               "type": "string",
               "minLength": 1,
-              "description": "args.config.wready 的 action-specific 参数值。",
-              "x-description-zh": "args.config.wready 的 action-specific 参数值。"
+              "description": "Action-specific wready input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific wready input. Its type and accepted values are defined by this schema."
             },
             "wdata": {
               "type": "string",
               "minLength": 1,
-              "description": "args.config.wdata 的 action-specific 参数值。",
-              "x-description-zh": "args.config.wdata 的 action-specific 参数值。"
+              "description": "Action-specific wdata input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific wdata input. Its type and accepted values are defined by this schema."
             },
             "wstrb": {
               "type": "string",
               "minLength": 1,
-              "description": "args.config.wstrb 的 action-specific 参数值。",
-              "x-description-zh": "args.config.wstrb 的 action-specific 参数值。"
+              "description": "Action-specific wstrb input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific wstrb input. Its type and accepted values are defined by this schema."
             },
             "wlast": {
               "type": "string",
               "minLength": 1,
-              "description": "args.config.wlast 的 action-specific 参数值。",
-              "x-description-zh": "args.config.wlast 的 action-specific 参数值。"
+              "description": "Action-specific wlast input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific wlast input. Its type and accepted values are defined by this schema."
             },
             "bvalid": {
               "type": "string",
               "minLength": 1,
-              "description": "args.config.bvalid 的 action-specific 参数值。",
-              "x-description-zh": "args.config.bvalid 的 action-specific 参数值。"
+              "description": "Action-specific bvalid input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific bvalid input. Its type and accepted values are defined by this schema."
             },
             "bready": {
               "type": "string",
               "minLength": 1,
-              "description": "args.config.bready 的 action-specific 参数值。",
-              "x-description-zh": "args.config.bready 的 action-specific 参数值。"
+              "description": "Action-specific bready input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific bready input. Its type and accepted values are defined by this schema."
             },
             "bid": {
               "type": "string",
               "minLength": 1,
-              "description": "args.config.bid 的 action-specific 参数值。",
-              "x-description-zh": "args.config.bid 的 action-specific 参数值。"
+              "description": "Action-specific bid input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific bid input. Its type and accepted values are defined by this schema."
             },
             "bresp": {
               "type": "string",
               "minLength": 1,
-              "description": "args.config.bresp 的 action-specific 参数值。",
-              "x-description-zh": "args.config.bresp 的 action-specific 参数值。"
+              "description": "Action-specific bresp input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific bresp input. Its type and accepted values are defined by this schema."
             },
             "arvalid": {
               "type": "string",
               "minLength": 1,
-              "description": "args.config.arvalid 的 action-specific 参数值。",
-              "x-description-zh": "args.config.arvalid 的 action-specific 参数值。"
+              "description": "Action-specific arvalid input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific arvalid input. Its type and accepted values are defined by this schema."
             },
             "arready": {
               "type": "string",
               "minLength": 1,
-              "description": "args.config.arready 的 action-specific 参数值。",
-              "x-description-zh": "args.config.arready 的 action-specific 参数值。"
+              "description": "Action-specific arready input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific arready input. Its type and accepted values are defined by this schema."
             },
             "araddr": {
               "type": "string",
               "minLength": 1,
-              "description": "args.config.araddr 的 action-specific 参数值。",
-              "x-description-zh": "args.config.araddr 的 action-specific 参数值。"
+              "description": "Action-specific araddr input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific araddr input. Its type and accepted values are defined by this schema."
             },
             "arid": {
               "type": "string",
               "minLength": 1,
-              "description": "args.config.arid 的 action-specific 参数值。",
-              "x-description-zh": "args.config.arid 的 action-specific 参数值。"
+              "description": "Action-specific arid input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific arid input. Its type and accepted values are defined by this schema."
             },
             "arlen": {
               "type": "string",
               "minLength": 1,
-              "description": "args.config.arlen 的 action-specific 参数值。",
-              "x-description-zh": "args.config.arlen 的 action-specific 参数值。"
+              "description": "Action-specific arlen input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific arlen input. Its type and accepted values are defined by this schema."
             },
             "arsize": {
               "type": "string",
               "minLength": 1,
-              "description": "args.config.arsize 的 action-specific 参数值。",
-              "x-description-zh": "args.config.arsize 的 action-specific 参数值。"
+              "description": "Action-specific arsize input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific arsize input. Its type and accepted values are defined by this schema."
             },
             "arburst": {
               "type": "string",
               "minLength": 1,
-              "description": "args.config.arburst 的 action-specific 参数值。",
-              "x-description-zh": "args.config.arburst 的 action-specific 参数值。"
+              "description": "Action-specific arburst input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific arburst input. Its type and accepted values are defined by this schema."
             },
             "rvalid": {
               "type": "string",
               "minLength": 1,
-              "description": "args.config.rvalid 的 action-specific 参数值。",
-              "x-description-zh": "args.config.rvalid 的 action-specific 参数值。"
+              "description": "Action-specific rvalid input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific rvalid input. Its type and accepted values are defined by this schema."
             },
             "rready": {
               "type": "string",
               "minLength": 1,
-              "description": "args.config.rready 的 action-specific 参数值。",
-              "x-description-zh": "args.config.rready 的 action-specific 参数值。"
+              "description": "Action-specific rready input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific rready input. Its type and accepted values are defined by this schema."
             },
             "rdata": {
               "type": "string",
               "minLength": 1,
-              "description": "args.config.rdata 的 action-specific 参数值。",
-              "x-description-zh": "args.config.rdata 的 action-specific 参数值。"
+              "description": "Action-specific rdata input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific rdata input. Its type and accepted values are defined by this schema."
             },
             "rid": {
               "type": "string",
               "minLength": 1,
-              "description": "args.config.rid 的 action-specific 参数值。",
-              "x-description-zh": "args.config.rid 的 action-specific 参数值。"
+              "description": "Action-specific rid input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific rid input. Its type and accepted values are defined by this schema."
             },
             "rresp": {
               "type": "string",
               "minLength": 1,
-              "description": "args.config.rresp 的 action-specific 参数值。",
-              "x-description-zh": "args.config.rresp 的 action-specific 参数值。"
+              "description": "Action-specific rresp input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific rresp input. Its type and accepted values are defined by this schema."
             },
             "rlast": {
               "type": "string",
               "minLength": 1,
-              "description": "args.config.rlast 的 action-specific 参数值。",
-              "x-description-zh": "args.config.rlast 的 action-specific 参数值。"
+              "description": "Action-specific rlast input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific rlast input. Its type and accepted values are defined by this schema."
             },
             "edge": {
               "type": "string",
@@ -227,8 +227,8 @@
                 "negedge",
                 "dual"
               ],
-              "description": "args.config.edge 的 action-specific 参数值。",
-              "x-description-zh": "args.config.edge 的 action-specific 参数值。"
+              "description": "Clock sampling edge. The schema default is authoritative; negedge often matches monitor semantics.",
+              "x-description-zh": "Clock sampling edge. The schema default is authoritative; negedge often matches monitor semantics."
             },
             "sample_point": {
               "type": "string",
@@ -236,8 +236,8 @@
                 "before",
                 "after"
               ],
-              "description": "args.config.sample_point 的 action-specific 参数值。",
-              "x-description-zh": "args.config.sample_point 的 action-specific 参数值。"
+              "description": "Before/after observation point for posedge or dual sampling; it does not change the raw waveform range.",
+              "x-description-zh": "Before/after observation point for posedge or dual sampling; it does not change the raw waveform range."
             }
           },
           "required": [
@@ -274,17 +274,17 @@
             "rlast"
           ],
           "additionalProperties": false,
-          "x-description-zh": "内联配置对象。"
+          "x-description-zh": "Structured config configuration. Only the declared properties are accepted."
         },
         "config_path": {
           "type": "string",
-          "description": "输入配置文件路径。",
-          "x-description-zh": "输入配置文件路径。"
+          "description": "Action-specific config_path input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific config_path input. Its type and accepted values are defined by this schema."
         },
         "name": {
           "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。",
-          "x-description-zh": "已保存配置、游标、列表或接口配置名称。"
+          "description": "Saved-object name in this action namespace; do not assume names are shared by cursors, lists, and protocol configs.",
+          "x-description-zh": "Saved-object name in this action namespace; do not assume names are shared by cursors, lists, and protocol configs."
         },
         "time_unit": {
           "type": "string",
@@ -297,8 +297,8 @@
             "ms",
             "s"
           ],
-          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
-          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
+          "description": "Interprets only unitless time numbers; it never overrides a time string that already has a unit.",
+          "x-description-zh": "Interprets only unitless time numbers; it never overrides a time string that already has a unit."
         }
       },
       "additionalProperties": false,
@@ -346,12 +346,21 @@
   "x-description-zh": "加载 AXI 配置。",
   "x-agent": {
     "use_when": [
-      "需要执行该 action 的 catalog 所述能力。"
+      "加载 AXI 配置。"
     ],
     "do_not_use_when": [
-      "任务不属于该 action 的公开合同。"
+      "不要把本 action 用于 axi.analysis、axi.export 的业务目标；请改用列出的同域 action。"
     ],
-    "alternatives": [],
+    "alternatives": [
+      {
+        "action": "axi.analysis",
+        "when": "汇总 AXI 行为。"
+      },
+      {
+        "action": "axi.export",
+        "when": "导出 AXI 数据。"
+      }
+    ],
     "constraints": [
       "required: name; also one of: config / config_path"
     ]

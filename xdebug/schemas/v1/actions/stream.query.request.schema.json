@@ -33,8 +33,8 @@
       "properties": {
         "channel": {
           "type": "string",
-          "description": "args.channel 的 action-specific 参数值。",
-          "x-description-zh": "args.channel 的 action-specific 参数值。"
+          "description": "Action-specific channel input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific channel input. Its type and accepted values are defined by this schema."
         },
         "filter": {
           "type": "object",
@@ -48,8 +48,8 @@
                 "sop",
                 "eop"
               ],
-              "description": "args.filter.position 的 action-specific 参数值。",
-              "x-description-zh": "args.filter.position 的 action-specific 参数值。"
+              "description": "Action-specific position input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific position input. Its type and accepted values are defined by this schema."
             },
             "fields": {
               "type": "object",
@@ -64,7 +64,9 @@
                     ],
                     "properties": {
                       "mode": {
-                        "const": "exact"
+                        "const": "exact",
+                        "description": "Action processing or return mode. Its legal values, default, and interactions are action-specific.",
+                        "x-description-zh": "Action processing or return mode. Its legal values, default, and interactions are action-specific."
                       },
                       "values": {
                         "type": "array",
@@ -74,11 +76,15 @@
                           "type": "string",
                           "minLength": 1,
                           "description": "Known unsigned integer or SystemVerilog literal of arbitrary width; X/Z and 0x are rejected.",
-                          "x-description-zh": "任意位宽的已知无符号整数或 SystemVerilog literal；不允许 X/Z 和 0x。"
-                        }
+                          "x-description-zh": "Known unsigned integer or SystemVerilog literal of arbitrary width; X/Z and 0x are rejected."
+                        },
+                        "description": "Ordered values entries. Each item must satisfy the declared item contract.",
+                        "x-description-zh": "Ordered values entries. Each item must satisfy the declared item contract."
                       }
                     },
-                    "additionalProperties": false
+                    "additionalProperties": false,
+                    "description": "Structured * configuration. Only the declared properties are accepted.",
+                    "x-description-zh": "Structured * configuration. Only the declared properties are accepted."
                   },
                   {
                     "type": "object",
@@ -89,22 +95,26 @@
                     ],
                     "properties": {
                       "mode": {
-                        "const": "range"
+                        "const": "range",
+                        "description": "Action processing or return mode. Its legal values, default, and interactions are action-specific.",
+                        "x-description-zh": "Action processing or return mode. Its legal values, default, and interactions are action-specific."
                       },
                       "begin": {
                         "type": "string",
                         "minLength": 1,
                         "description": "Known unsigned integer or SystemVerilog literal of arbitrary width; X/Z and 0x are rejected.",
-                        "x-description-zh": "任意位宽的已知无符号整数或 SystemVerilog literal；不允许 X/Z 和 0x。"
+                        "x-description-zh": "Known unsigned integer or SystemVerilog literal of arbitrary width; X/Z and 0x are rejected."
                       },
                       "end": {
                         "type": "string",
                         "minLength": 1,
                         "description": "Known unsigned integer or SystemVerilog literal of arbitrary width; X/Z and 0x are rejected.",
-                        "x-description-zh": "任意位宽的已知无符号整数或 SystemVerilog literal；不允许 X/Z 和 0x。"
+                        "x-description-zh": "Known unsigned integer or SystemVerilog literal of arbitrary width; X/Z and 0x are rejected."
                       }
                     },
-                    "additionalProperties": false
+                    "additionalProperties": false,
+                    "description": "Structured * configuration. Only the declared properties are accepted.",
+                    "x-description-zh": "Structured * configuration. Only the declared properties are accepted."
                   },
                   {
                     "type": "object",
@@ -115,47 +125,54 @@
                     ],
                     "properties": {
                       "mode": {
-                        "const": "mask"
+                        "const": "mask",
+                        "description": "Action processing or return mode. Its legal values, default, and interactions are action-specific.",
+                        "x-description-zh": "Action processing or return mode. Its legal values, default, and interactions are action-specific."
                       },
                       "value": {
                         "type": "string",
                         "minLength": 1,
                         "description": "Known unsigned integer or SystemVerilog literal of arbitrary width; X/Z and 0x are rejected.",
-                        "x-description-zh": "任意位宽的已知无符号整数或 SystemVerilog literal；不允许 X/Z 和 0x。"
+                        "x-description-zh": "Known unsigned integer or SystemVerilog literal of arbitrary width; X/Z and 0x are rejected."
                       },
                       "mask": {
                         "type": "string",
                         "minLength": 1,
                         "description": "Known unsigned integer or SystemVerilog literal of arbitrary width; X/Z and 0x are rejected.",
-                        "x-description-zh": "任意位宽的已知无符号整数或 SystemVerilog literal；不允许 X/Z 和 0x。"
+                        "x-description-zh": "Known unsigned integer or SystemVerilog literal of arbitrary width; X/Z and 0x are rejected."
                       }
                     },
-                    "additionalProperties": false
+                    "additionalProperties": false,
+                    "description": "Structured * configuration. Only the declared properties are accepted.",
+                    "x-description-zh": "Structured * configuration. Only the declared properties are accepted."
                   }
-                ]
+                ],
+                "description": "Value for a caller-defined fields key.",
+                "x-dynamic-contract": "The property name is caller-defined; the value must follow this declared schema.",
+                "x-description-zh": "Value for a caller-defined fields key."
               },
-              "description": "args.filter.fields 的组合参数对象。",
-              "x-description-zh": "args.filter.fields 的组合参数对象。"
+              "description": "Structured fields configuration. Only the declared properties are accepted.",
+              "x-description-zh": "Structured fields configuration. Only the declared properties are accepted."
             }
           },
           "additionalProperties": false,
           "description": "AND-combined Stream field filters; each field selects exact queue, inclusive range, or value/mask.",
-          "x-description-zh": "Stream 字段间取 AND；每个字段只能选择精确值队列、闭区间或 value/mask。packet stream 必须指定 SOP/EOP position。"
+          "x-description-zh": "AND-combined Stream field filters; each field selects exact queue, inclusive range, or value/mask."
         },
         "line_limit": {
           "type": "integer",
           "minimum": 1,
-          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。",
-          "x-description-zh": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
+          "description": "Limits returned evidence rows only, not scanning, aggregation, or the verdict; read completeness fields as well.",
+          "x-description-zh": "Limits returned evidence rows only, not scanning, aggregation, or the verdict; read completeness fields as well."
         },
         "packet_index": {
           "type": "integer",
           "minimum": 0,
-          "description": "args.packet_index 的 action-specific 参数值。",
-          "x-description-zh": "args.packet_index 的 action-specific 参数值。"
+          "description": "Action-specific packet_index input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific packet_index input. Its type and accepted values are defined by this schema."
         },
         "query": {
-          "description": "查询种类。beat stream 支持 summary、first/last_transfer、transfer_window、first/last_stall、stall_window；packet stream 还支持 first/last_packet、packet_at、packet_window。启用 filter 时可用集合进一步受 packet 边界限制。",
+          "description": "Action-specific query selector. Do not copy index, channel, or filter forms from another action.",
           "type": "string",
           "enum": [
             "summary",
@@ -170,30 +187,30 @@
             "packet_at",
             "packet_window"
           ],
-          "x-description-zh": "查询种类。beat stream 支持 summary、first/last_transfer、transfer_window、first/last_stall、stall_window；packet stream 还支持 first/last_packet、packet_at、packet_window。启用 filter 时可用集合进一步受 packet 边界限制。"
+          "x-description-zh": "Action-specific query selector. Do not copy index, channel, or filter forms from another action."
         },
         "stream": {
           "type": "string",
-          "description": "已保存 stream 配置名称。",
-          "x-description-zh": "已保存 stream 配置名称。"
+          "description": "Action-specific stream input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific stream input. Its type and accepted values are defined by this schema."
         },
         "time_range": {
           "type": "object",
           "properties": {
             "begin": {
               "type": "string",
-              "description": "args.time_range.begin 的 action-specific 参数值。",
-              "x-description-zh": "args.time_range.begin 的 action-specific 参数值。"
+              "description": "Action-specific begin input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific begin input. Its type and accepted values are defined by this schema."
             },
             "end": {
               "type": "string",
-              "description": "args.time_range.end 的 action-specific 参数值。",
-              "x-description-zh": "args.time_range.end 的 action-specific 参数值。"
+              "description": "Action-specific end input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific end input. Its type and accepted values are defined by this schema."
             }
           },
           "additionalProperties": false,
-          "description": "分析时间窗口；begin/end 为闭区间端点，可分别省略以使用可用波形边界。",
-          "x-description-zh": "分析时间窗口；begin/end 为闭区间端点，可分别省略以使用可用波形边界。"
+          "description": "Closed analysis interval. begin and end may be omitted independently to use the available waveform bounds.",
+          "x-description-zh": "Closed analysis interval. begin and end may be omitted independently to use the available waveform bounds."
         },
         "time_unit": {
           "type": "string",
@@ -206,8 +223,8 @@
             "ms",
             "s"
           ],
-          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
-          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
+          "description": "Interprets only unitless time numbers; it never overrides a time string that already has a unit.",
+          "x-description-zh": "Interprets only unitless time numbers; it never overrides a time string that already has a unit."
         }
       },
       "additionalProperties": false

@@ -34,21 +34,21 @@
           "type": "array",
           "items": {
             "type": "object",
-            "description": "args.conditions[] 的组合参数对象。",
-            "x-description-zh": "args.conditions[] 的组合参数对象。"
+            "description": "Structured conditions configuration. Only the declared properties are accepted.",
+            "x-description-zh": "Structured conditions configuration. Only the declared properties are accepted."
           },
-          "description": "需要验证的条件列表。",
-          "x-description-zh": "需要验证的条件列表。"
+          "description": "Ordered conditions entries. Each item must satisfy the declared item contract.",
+          "x-description-zh": "Ordered conditions entries. Each item must satisfy the declared item contract."
         },
         "mode": {
           "type": "string",
-          "description": "本 action 的处理或返回模式；合法值、默认值和与其它参数的关系由 action-specific 合同定义。",
-          "x-description-zh": "本 action 的处理或返回模式；合法值、默认值和与其它参数的关系由 action-specific 合同定义。"
+          "description": "Action processing or return mode. Its legal values, default, and interactions are action-specific.",
+          "x-description-zh": "Action processing or return mode. Its legal values, default, and interactions are action-specific."
         },
         "signal": {
           "type": "string",
-          "description": "目标信号路径。",
-          "x-description-zh": "目标信号路径。"
+          "description": "Final leaf signal path. Aggregate, array, and struct roots are not expanded automatically.",
+          "x-description-zh": "Final leaf signal path. Aggregate, array, and struct roots are not expanded automatically."
         },
         "signals": {
           "oneOf": [
@@ -56,41 +56,44 @@
               "type": "array",
               "items": {
                 "type": "string",
-                "description": "args.signals[] 的 action-specific 参数值。",
-                "x-description-zh": "args.signals[] 的 action-specific 参数值。"
+                "description": "Signal-path list or alias-to-path/expression map. Expressions must reference aliases rather than nested paths.",
+                "x-description-zh": "Signal-path list or alias-to-path/expression map. Expressions must reference aliases rather than nested paths."
               },
-              "description": "args.signals 的有序项目列表。",
-              "x-description-zh": "args.signals 的有序项目列表。"
+              "description": "Signal-path list or alias-to-path/expression map. Expressions must reference aliases rather than nested paths.",
+              "x-description-zh": "Signal-path list or alias-to-path/expression map. Expressions must reference aliases rather than nested paths."
             },
             {
               "type": "object",
               "additionalProperties": {
-                "type": "string"
+                "type": "string",
+                "description": "Value for a caller-defined signal alias key. Supply the real signal path or the action-supported expression for that alias.",
+                "x-dynamic-contract": "Each property key is an alias referenced by this action; each value resolves that alias to a signal path or supported expression.",
+                "x-description-zh": "Value for a caller-defined signal alias key. Supply the real signal path or the action-supported expression for that alias."
               },
-              "description": "args.signals 的组合参数对象。",
-              "x-description-zh": "args.signals 的组合参数对象。"
+              "description": "Signal-path list or alias-to-path/expression map. Expressions must reference aliases rather than nested paths.",
+              "x-description-zh": "Signal-path list or alias-to-path/expression map. Expressions must reference aliases rather than nested paths."
             }
           ],
-          "description": "信号列表，或 alias 到信号路径的映射。",
-          "x-description-zh": "信号列表，或 alias 到信号路径的映射。"
+          "description": "Signal-path list or alias-to-path/expression map. Expressions must reference aliases rather than nested paths.",
+          "x-description-zh": "Signal-path list or alias-to-path/expression map. Expressions must reference aliases rather than nested paths."
         },
         "time_range": {
           "type": "object",
           "properties": {
             "begin": {
               "type": "string",
-              "description": "args.time_range.begin 的 action-specific 参数值。",
-              "x-description-zh": "args.time_range.begin 的 action-specific 参数值。"
+              "description": "Action-specific begin input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific begin input. Its type and accepted values are defined by this schema."
             },
             "end": {
               "type": "string",
-              "description": "args.time_range.end 的 action-specific 参数值。",
-              "x-description-zh": "args.time_range.end 的 action-specific 参数值。"
+              "description": "Action-specific end input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific end input. Its type and accepted values are defined by this schema."
             }
           },
           "additionalProperties": false,
-          "description": "分析时间窗口；begin/end 为闭区间端点，可分别省略以使用可用波形边界。",
-          "x-description-zh": "分析时间窗口；begin/end 为闭区间端点，可分别省略以使用可用波形边界。"
+          "description": "Closed analysis interval. begin and end may be omitted independently to use the available waveform bounds.",
+          "x-description-zh": "Closed analysis interval. begin and end may be omitted independently to use the available waveform bounds."
         },
         "time_unit": {
           "type": "string",
@@ -103,8 +106,8 @@
             "ms",
             "s"
           ],
-          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
-          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
+          "description": "Interprets only unitless time numbers; it never overrides a time string that already has a unit.",
+          "x-description-zh": "Interprets only unitless time numbers; it never overrides a time string that already has a unit."
         }
       },
       "additionalProperties": false,
@@ -140,12 +143,21 @@
   "x-description-zh": "检查信号窗口内是否稳定。",
   "x-agent": {
     "use_when": [
-      "需要执行该 action 的 catalog 所述能力。"
+      "检查信号窗口内是否稳定。"
     ],
     "do_not_use_when": [
-      "任务不属于该 action 的公开合同。"
+      "不要把本 action 用于 signal.canonicalize、signal.changes 的业务目标；请改用列出的同域 action。"
     ],
-    "alternatives": [],
+    "alternatives": [
+      {
+        "action": "signal.canonicalize",
+        "when": "返回信号 canonical 名称。"
+      },
+      {
+        "action": "signal.changes",
+        "when": "读取信号变化点。"
+      }
+    ],
     "constraints": [
       "required: signal"
     ]

@@ -48,13 +48,13 @@
         },
         "signal": {
           "type": "string",
-          "description": "目标信号路径。",
-          "x-description-zh": "目标信号路径。"
+          "description": "Final leaf signal path. Aggregate, array, and struct roots are not expanded automatically.",
+          "x-description-zh": "Final leaf signal path. Aggregate, array, and struct roots are not expanded automatically."
         },
         "time": {
           "type": "string",
-          "description": "查询或验证的目标时间点。",
-          "x-description-zh": "查询或验证的目标时间点。"
+          "description": "Target sample time. Prefer a canonical string with a unit; a bare number is interpreted only with time_unit.",
+          "x-description-zh": "Target sample time. Prefer a canonical string with a unit; a bare number is interpreted only with time_unit."
         },
         "time_unit": {
           "type": "string",
@@ -67,8 +67,8 @@
             "ms",
             "s"
           ],
-          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
-          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
+          "description": "Interprets only unitless time numbers; it never overrides a time string that already has a unit.",
+          "x-description-zh": "Interprets only unitless time numbers; it never overrides a time string that already has a unit."
         }
       },
       "additionalProperties": false,
@@ -129,12 +129,21 @@
   "x-description-zh": "展开 active driver 链。",
   "x-agent": {
     "use_when": [
-      "需要执行该 action 的 catalog 所述能力。"
+      "展开 active driver 链。"
     ],
     "do_not_use_when": [
-      "任务不属于该 action 的公开合同。"
+      "不要把本 action 用于 trace.active_driver、trace.driver 的业务目标；请改用列出的同域 action。"
     ],
-    "alternatives": [],
+    "alternatives": [
+      {
+        "action": "trace.active_driver",
+        "when": "在指定时间找 active driver。"
+      },
+      {
+        "action": "trace.driver",
+        "when": "查找信号直接 driver。"
+      }
+    ],
     "constraints": [
       "required: signal, time; do not use args.depth"
     ]

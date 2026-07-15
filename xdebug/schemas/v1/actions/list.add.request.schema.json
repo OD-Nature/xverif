@@ -32,13 +32,13 @@
       "properties": {
         "name": {
           "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。",
-          "x-description-zh": "已保存配置、游标、列表或接口配置名称。"
+          "description": "Saved-object name in this action namespace; do not assume names are shared by cursors, lists, and protocol configs.",
+          "x-description-zh": "Saved-object name in this action namespace; do not assume names are shared by cursors, lists, and protocol configs."
         },
         "signal": {
           "type": "string",
-          "description": "目标信号路径。",
-          "x-description-zh": "目标信号路径。"
+          "description": "Final leaf signal path. Aggregate, array, and struct roots are not expanded automatically.",
+          "x-description-zh": "Final leaf signal path. Aggregate, array, and struct roots are not expanded automatically."
         },
         "time_unit": {
           "type": "string",
@@ -51,8 +51,8 @@
             "ms",
             "s"
           ],
-          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
-          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
+          "description": "Interprets only unitless time numbers; it never overrides a time string that already has a unit.",
+          "x-description-zh": "Interprets only unitless time numbers; it never overrides a time string that already has a unit."
         }
       },
       "additionalProperties": false,
@@ -89,12 +89,21 @@
   "x-description-zh": "向信号列表追加一个信号。",
   "x-agent": {
     "use_when": [
-      "需要执行该 action 的 catalog 所述能力。"
+      "向信号列表追加一个信号。"
     ],
     "do_not_use_when": [
-      "任务不属于该 action 的公开合同。"
+      "不要把本 action 用于 list.create、list.delete 的业务目标；请改用列出的同域 action。"
     ],
-    "alternatives": [],
+    "alternatives": [
+      {
+        "action": "list.create",
+        "when": "创建命名信号列表。"
+      },
+      {
+        "action": "list.delete",
+        "when": "从信号列表删除信号或 index。"
+      }
+    ],
     "constraints": [
       "required: name, signal"
     ]

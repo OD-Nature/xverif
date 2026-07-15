@@ -32,8 +32,8 @@
       "properties": {
         "channel": {
           "type": "string",
-          "description": "args.channel 的 action-specific 参数值。",
-          "x-description-zh": "args.channel 的 action-specific 参数值。"
+          "description": "Action-specific channel input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific channel input. Its type and accepted values are defined by this schema."
         },
         "kind": {
           "type": "string",
@@ -42,22 +42,22 @@
             "packet",
             "packet_beats"
           ],
-          "description": "导出或查询的结果类型。",
-          "x-description-zh": "导出或查询的结果类型。"
+          "description": "Action-specific kind input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific kind input. Its type and accepted values are defined by this schema."
         },
         "line_limit": {
           "type": "integer",
           "minimum": 1,
-          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。",
-          "x-description-zh": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
+          "description": "Limits returned evidence rows only, not scanning, aggregation, or the verdict; read completeness fields as well.",
+          "x-description-zh": "Limits returned evidence rows only, not scanning, aggregation, or the verdict; read completeness fields as well."
         },
         "output": {
           "type": "object",
           "properties": {
             "path": {
               "type": "string",
-              "description": "args.output.path 的 action-specific 参数值。",
-              "x-description-zh": "args.output.path 的 action-specific 参数值。"
+              "description": "Action-specific path input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific path input. Its type and accepted values are defined by this schema."
             },
             "file_format": {
               "type": "string",
@@ -71,36 +71,36 @@
             },
             "verbose": {
               "type": "boolean",
-              "description": "args.output.verbose 的 action-specific 参数值。",
-              "x-description-zh": "args.output.verbose 的 action-specific 参数值。"
+              "description": "Action-specific verbose input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific verbose input. Its type and accepted values are defined by this schema."
             }
           },
           "additionalProperties": false,
-          "description": "导出目标与显示控制；不同 action 对 path、file_format 和 verbose 的支持以本 action schema 为准。",
-          "x-description-zh": "导出目标与显示控制；不同 action 对 path、file_format 和 verbose 的支持以本 action schema 为准。"
+          "description": "Export destination and rendering controls. path, file_format, and verbose are supported only where this action declares them.",
+          "x-description-zh": "Export destination and rendering controls. path, file_format, and verbose are supported only where this action declares them."
         },
         "stream": {
           "type": "string",
-          "description": "已保存 stream 配置名称。",
-          "x-description-zh": "已保存 stream 配置名称。"
+          "description": "Action-specific stream input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific stream input. Its type and accepted values are defined by this schema."
         },
         "time_range": {
           "type": "object",
           "properties": {
             "begin": {
               "type": "string",
-              "description": "args.time_range.begin 的 action-specific 参数值。",
-              "x-description-zh": "args.time_range.begin 的 action-specific 参数值。"
+              "description": "Action-specific begin input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific begin input. Its type and accepted values are defined by this schema."
             },
             "end": {
               "type": "string",
-              "description": "args.time_range.end 的 action-specific 参数值。",
-              "x-description-zh": "args.time_range.end 的 action-specific 参数值。"
+              "description": "Action-specific end input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific end input. Its type and accepted values are defined by this schema."
             }
           },
           "additionalProperties": false,
-          "description": "分析时间窗口；begin/end 为闭区间端点，可分别省略以使用可用波形边界。",
-          "x-description-zh": "分析时间窗口；begin/end 为闭区间端点，可分别省略以使用可用波形边界。"
+          "description": "Closed analysis interval. begin and end may be omitted independently to use the available waveform bounds.",
+          "x-description-zh": "Closed analysis interval. begin and end may be omitted independently to use the available waveform bounds."
         },
         "time_unit": {
           "type": "string",
@@ -113,8 +113,8 @@
             "ms",
             "s"
           ],
-          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
-          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
+          "description": "Interprets only unitless time numbers; it never overrides a time string that already has a unit.",
+          "x-description-zh": "Interprets only unitless time numbers; it never overrides a time string that already has a unit."
         }
       },
       "additionalProperties": false,
@@ -179,12 +179,21 @@
   "x-description-zh": "导出 stream 查询结果。",
   "x-agent": {
     "use_when": [
-      "需要执行该 action 的 catalog 所述能力。"
+      "导出 stream 查询结果。"
     ],
     "do_not_use_when": [
-      "任务不属于该 action 的公开合同。"
+      "不要把本 action 用于 stream.config.load、stream.config.list 的业务目标；请改用列出的同域 action。"
     ],
-    "alternatives": [],
+    "alternatives": [
+      {
+        "action": "stream.config.load",
+        "when": "加载 stream 配置。"
+      },
+      {
+        "action": "stream.config.list",
+        "when": "列出 stream 配置。"
+      }
+    ],
     "constraints": [
       "required: stream; kind: transfer / packet / packet_beats; format: tsv / csv / xout; when kind=packet_beats: output"
     ]

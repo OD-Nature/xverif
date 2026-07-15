@@ -32,8 +32,8 @@
       "properties": {
         "signal": {
           "type": "string",
-          "description": "目标信号路径。",
-          "x-description-zh": "目标信号路径。"
+          "description": "Final leaf signal path. Aggregate, array, and struct roots are not expanded automatically.",
+          "x-description-zh": "Final leaf signal path. Aggregate, array, and struct roots are not expanded automatically."
         },
         "time_unit": {
           "type": "string",
@@ -46,8 +46,8 @@
             "ms",
             "s"
           ],
-          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
-          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
+          "description": "Interprets only unitless time numbers; it never overrides a time string that already has a unit.",
+          "x-description-zh": "Interprets only unitless time numbers; it never overrides a time string that already has a unit."
         }
       },
       "additionalProperties": false,
@@ -83,12 +83,21 @@
   "x-description-zh": "返回信号 canonical 名称。",
   "x-agent": {
     "use_when": [
-      "需要执行该 action 的 catalog 所述能力。"
+      "返回信号 canonical 名称。"
     ],
     "do_not_use_when": [
-      "任务不属于该 action 的公开合同。"
+      "不要把本 action 用于 signal.changes、signal.resolve 的业务目标；请改用列出的同域 action。"
     ],
-    "alternatives": [],
+    "alternatives": [
+      {
+        "action": "signal.changes",
+        "when": "读取信号变化点。"
+      },
+      {
+        "action": "signal.resolve",
+        "when": "解析设计信号。"
+      }
+    ],
     "constraints": [
       "required: signal"
     ]

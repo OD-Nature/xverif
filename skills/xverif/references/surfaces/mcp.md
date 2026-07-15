@@ -8,9 +8,10 @@
 ## Schema discovery
 
 `xverif_debug_get_schema(action, kind="request", view="mcp")` 默认返回可直接用于 MCP
-query 的投影：`args_schema`、`limits_schema`、递归 `parameter_guide`、展开的
-`constraints`、`minimal_call`、内嵌 examples、适用/禁用边界、替代 action 与 response
-guide。不要把它返回的 native schema 再套入 `xverif_debug_query.args`。
+query 的投影：中英文 action 总览 `purpose_en`/`purpose_zh`、`args_schema`、`limits_schema`、递归 `parameter_guide`、展开的
+`constraints`、`minimal_call`、内嵌 examples、适用/禁用边界、替代 action 与完整的
+`response_guide.primary_fields`。不要把它返回的 native schema 再套入
+`xverif_debug_query.args`，也不需要为 primary response fields 再查询一次 schema。
 
 - `view="mcp"`：默认；用于构造 query tool 的内层 args/limits。
 - `view="args"`：只查看 action-specific args 合同。

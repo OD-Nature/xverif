@@ -32,45 +32,45 @@
       "properties": {
         "clock": {
           "type": "string",
-          "description": "采样、统计或协议检查使用的 clock 信号路径。",
-          "x-description-zh": "采样、统计或协议检查使用的 clock 信号路径。"
+          "description": "Action-specific clock input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific clock input. Its type and accepted values are defined by this schema."
         },
         "data": {
           "oneOf": [
             {
               "type": "string",
-              "description": "args.data 的 action-specific 参数值。",
-              "x-description-zh": "args.data 的 action-specific 参数值。"
+              "description": "Action-specific data input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific data input. Its type and accepted values are defined by this schema."
             },
             {
               "type": "array",
               "items": {
                 "type": "string",
-                "description": "args.data[] 的 action-specific 参数值。",
-                "x-description-zh": "args.data[] 的 action-specific 参数值。"
+                "description": "Action-specific data input. Its type and accepted values are defined by this schema.",
+                "x-description-zh": "Action-specific data input. Its type and accepted values are defined by this schema."
               },
-              "description": "args.data 的有序项目列表。",
-              "x-description-zh": "args.data 的有序项目列表。"
+              "description": "Ordered data entries. Each item must satisfy the declared item contract.",
+              "x-description-zh": "Ordered data entries. Each item must satisfy the declared item contract."
             }
           ],
-          "description": "可选 payload 信号路径或路径列表；仅提供时才可检查 stalled-data stability。",
-          "x-description-zh": "可选 payload 信号路径或路径列表；仅提供时才可检查 stalled-data stability。"
+          "description": "Valid-ready or protocol payload signal path. Data-specific checks run only when it is supplied.",
+          "x-description-zh": "Valid-ready or protocol payload signal path. Data-specific checks run only when it is supplied."
         },
         "edge": {
           "type": "string",
-          "description": "clock sampling 使用的边沿：posedge、negedge 或 dual。",
-          "x-description-zh": "clock sampling 使用的边沿：posedge、negedge 或 dual。"
+          "description": "Clock sampling edge. The schema default is authoritative; negedge often matches monitor semantics.",
+          "x-description-zh": "Clock sampling edge. The schema default is authoritative; negedge often matches monitor semantics."
         },
         "line_limit": {
           "type": "integer",
           "minimum": 1,
-          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。",
-          "x-description-zh": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
+          "description": "Limits returned evidence rows only, not scanning, aggregation, or the verdict; read completeness fields as well.",
+          "x-description-zh": "Limits returned evidence rows only, not scanning, aggregation, or the verdict; read completeness fields as well."
         },
         "ready": {
           "type": "string",
-          "description": "valid-ready 握手中的 ready 信号路径。",
-          "x-description-zh": "valid-ready 握手中的 ready 信号路径。"
+          "description": "Action-specific ready input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific ready input. Its type and accepted values are defined by this schema."
         },
         "rules": {
           "type": "object",
@@ -78,20 +78,20 @@
             "max_wait_cycles": {
               "type": "integer",
               "minimum": 0,
-              "description": "从 valid 被采样为 1 到 handshake 前允许的最大连续等待 cycle 数。",
-              "x-description-zh": "从 valid 被采样为 1 到 handshake 前允许的最大连续等待 cycle 数。"
+              "description": "Maximum consecutive wait cycles from a sampled valid=1 until handshake.",
+              "x-description-zh": "Maximum consecutive wait cycles from a sampled valid=1 until handshake."
             },
             "check_data_stable_when_stalled": {
               "type": "boolean",
               "default": false,
-              "description": "仅提供 data 时有效；检查 valid=1、ready=0 期间 data 是否改变。",
-              "x-description-zh": "仅提供 data 时有效；检查 valid=1、ready=0 期间 data 是否改变。"
+              "description": "Effective only when data is supplied; checks whether data changes while valid=1 and ready=0.",
+              "x-description-zh": "Effective only when data is supplied; checks whether data changes while valid=1 and ready=0."
             },
             "require_valid_hold_until_handshake": {
               "type": "boolean",
               "default": true,
-              "description": "检查 valid 在首次断言后是否保持到 valid&&ready handshake。",
-              "x-description-zh": "检查 valid 在首次断言后是否保持到 valid&&ready handshake。"
+              "description": "Checks that valid remains asserted from its first assertion through valid&&ready handshake.",
+              "x-description-zh": "Checks that valid remains asserted from its first assertion through valid&&ready handshake."
             },
             "ready_without_valid": {
               "type": "string",
@@ -101,13 +101,13 @@
                 "all"
               ],
               "default": "summary",
-              "description": "ready=1 且 valid=0 的返回粒度；这是活动统计，不单独等于协议错误。",
-              "x-description-zh": "ready=1 且 valid=0 的返回粒度；这是活动统计，不单独等于协议错误。"
+              "description": "Reporting granularity for ready=1 and valid=0. This is activity information, not by itself a protocol violation.",
+              "x-description-zh": "Reporting granularity for ready=1 and valid=0. This is activity information, not by itself a protocol violation."
             }
           },
           "additionalProperties": false,
-          "description": "valid-ready 检查规则；未提供字段使用各自 schema default。",
-          "x-description-zh": "valid-ready 检查规则；未提供字段使用各自 schema default。"
+          "description": "Valid-ready inspection rules. Omitted fields use their declared schema defaults.",
+          "x-description-zh": "Valid-ready inspection rules. Omitted fields use their declared schema defaults."
         },
         "sample_point": {
           "type": "string",
@@ -115,26 +115,26 @@
             "before",
             "after"
           ],
-          "description": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。",
-          "x-description-zh": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。"
+          "description": "Before/after observation point for posedge or dual sampling; it does not change the raw waveform range.",
+          "x-description-zh": "Before/after observation point for posedge or dual sampling; it does not change the raw waveform range."
         },
         "time_range": {
           "type": "object",
           "properties": {
             "begin": {
               "type": "string",
-              "description": "args.time_range.begin 的 action-specific 参数值。",
-              "x-description-zh": "args.time_range.begin 的 action-specific 参数值。"
+              "description": "Action-specific begin input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific begin input. Its type and accepted values are defined by this schema."
             },
             "end": {
               "type": "string",
-              "description": "args.time_range.end 的 action-specific 参数值。",
-              "x-description-zh": "args.time_range.end 的 action-specific 参数值。"
+              "description": "Action-specific end input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific end input. Its type and accepted values are defined by this schema."
             }
           },
           "additionalProperties": false,
-          "description": "分析时间窗口；begin/end 为闭区间端点，可分别省略以使用可用波形边界。",
-          "x-description-zh": "分析时间窗口；begin/end 为闭区间端点，可分别省略以使用可用波形边界。"
+          "description": "Closed analysis interval. begin and end may be omitted independently to use the available waveform bounds.",
+          "x-description-zh": "Closed analysis interval. begin and end may be omitted independently to use the available waveform bounds."
         },
         "time_unit": {
           "type": "string",
@@ -147,13 +147,13 @@
             "ms",
             "s"
           ],
-          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
-          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
+          "description": "Interprets only unitless time numbers; it never overrides a time string that already has a unit.",
+          "x-description-zh": "Interprets only unitless time numbers; it never overrides a time string that already has a unit."
         },
         "valid": {
           "type": "string",
-          "description": "valid-ready 握手或采样检查中的 valid 信号路径。",
-          "x-description-zh": "valid-ready 握手或采样检查中的 valid 信号路径。"
+          "description": "Action-specific valid input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific valid input. Its type and accepted values are defined by this schema."
         }
       },
       "additionalProperties": false,

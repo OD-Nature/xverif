@@ -32,13 +32,13 @@
       "properties": {
         "addr": {
           "type": "string",
-          "description": "args.addr 的 action-specific 参数值。",
-          "x-description-zh": "args.addr 的 action-specific 参数值。"
+          "description": "Action-specific addr input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific addr input. Its type and accepted values are defined by this schema."
         },
         "address": {
           "type": "string",
-          "description": "args.address 的 action-specific 参数值。",
-          "x-description-zh": "args.address 的 action-specific 参数值。"
+          "description": "Action-specific address input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific address input. Its type and accepted values are defined by this schema."
         },
         "direction": {
           "type": "string",
@@ -46,23 +46,23 @@
             "write",
             "read"
           ],
-          "description": "args.direction 的 action-specific 参数值。",
-          "x-description-zh": "args.direction 的 action-specific 参数值。"
+          "description": "Action-specific direction input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific direction input. Its type and accepted values are defined by this schema."
         },
         "id": {
           "type": "string",
-          "description": "args.id 的 action-specific 参数值。",
-          "x-description-zh": "args.id 的 action-specific 参数值。"
+          "description": "Action-specific id input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific id input. Its type and accepted values are defined by this schema."
         },
         "last": {
           "type": "boolean",
-          "description": "args.last 的 action-specific 参数值。",
-          "x-description-zh": "args.last 的 action-specific 参数值。"
+          "description": "Action-specific last input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific last input. Its type and accepted values are defined by this schema."
         },
         "name": {
           "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。",
-          "x-description-zh": "已保存配置、游标、列表或接口配置名称。"
+          "description": "Saved-object name in this action namespace; do not assume names are shared by cursors, lists, and protocol configs.",
+          "x-description-zh": "Saved-object name in this action namespace; do not assume names are shared by cursors, lists, and protocol configs."
         },
         "output": {
           "type": "object",
@@ -70,13 +70,13 @@
             "include_data": {
               "type": "boolean",
               "default": false,
-              "description": "args.output.include_data 的 action-specific 参数值。",
-              "x-description-zh": "args.output.include_data 的 action-specific 参数值。"
+              "description": "Action-specific include_data input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific include_data input. Its type and accepted values are defined by this schema."
             }
           },
           "additionalProperties": false,
-          "description": "AXI payload display controls; beat data is omitted unless include_data is true.",
-          "x-description-zh": "AXI payload display controls; beat data is omitted unless include_data is true."
+          "description": "Export destination and rendering controls. path, file_format, and verbose are supported only where this action declares them.",
+          "x-description-zh": "Export destination and rendering controls. path, file_format, and verbose are supported only where this action declares them."
         },
         "query": {
           "oneOf": [
@@ -86,19 +86,19 @@
                 "line_limit": {
                   "type": "integer",
                   "minimum": 1,
-                  "description": "args.query.line_limit 的 action-specific 参数值。",
-                  "x-description-zh": "args.query.line_limit 的 action-specific 参数值。"
+                  "description": "Limits returned evidence rows only, not scanning, aggregation, or the verdict; read completeness fields as well.",
+                  "x-description-zh": "Limits returned evidence rows only, not scanning, aggregation, or the verdict; read completeness fields as well."
                 },
                 "index": {
                   "type": "integer",
                   "minimum": 1,
-                  "description": "args.query.index 的 action-specific 参数值。",
-                  "x-description-zh": "args.query.index 的 action-specific 参数值。"
+                  "description": "One-based query, cursor, or list position; the action schema defines its exact reference set.",
+                  "x-description-zh": "One-based query, cursor, or list position; the action schema defines its exact reference set."
                 }
               },
               "additionalProperties": false,
-              "description": "args.query 的组合参数对象。",
-              "x-description-zh": "args.query 的组合参数对象。"
+              "description": "Action-specific query selector. Do not copy index, channel, or filter forms from another action.",
+              "x-description-zh": "Action-specific query selector. Do not copy index, channel, or filter forms from another action."
             },
             {
               "type": "object",
@@ -116,22 +116,22 @@
                     "ar",
                     "r"
                   ],
-                  "description": "args.query.channel 的 action-specific 参数值。",
-                  "x-description-zh": "args.query.channel 的 action-specific 参数值。"
+                  "description": "Action-specific channel input. Its type and accepted values are defined by this schema.",
+                  "x-description-zh": "Action-specific channel input. Its type and accepted values are defined by this schema."
                 },
                 "handshake_time": {
                   "type": "string",
-                  "description": "args.query.handshake_time 的 action-specific 参数值。",
-                  "x-description-zh": "args.query.handshake_time 的 action-specific 参数值。"
+                  "description": "Action-specific handshake_time input. Its type and accepted values are defined by this schema.",
+                  "x-description-zh": "Action-specific handshake_time input. Its type and accepted values are defined by this schema."
                 }
               },
               "additionalProperties": false,
-              "description": "args.query 的组合参数对象。",
-              "x-description-zh": "args.query 的组合参数对象。"
+              "description": "Action-specific query selector. Do not copy index, channel, or filter forms from another action.",
+              "x-description-zh": "Action-specific query selector. Do not copy index, channel, or filter forms from another action."
             }
           ],
-          "description": "Select transactions by 1-based index/line_limit, or exactly match an AXI channel handshake time.",
-          "x-description-zh": "Select transactions by 1-based index/line_limit, or exactly match an AXI channel handshake time."
+          "description": "Action-specific query selector. Do not copy index, channel, or filter forms from another action.",
+          "x-description-zh": "Action-specific query selector. Do not copy index, channel, or filter forms from another action."
         },
         "time_unit": {
           "type": "string",
@@ -144,8 +144,8 @@
             "ms",
             "s"
           ],
-          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
-          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
+          "description": "Interprets only unitless time numbers; it never overrides a time string that already has a unit.",
+          "x-description-zh": "Interprets only unitless time numbers; it never overrides a time string that already has a unit."
         }
       },
       "additionalProperties": false,
@@ -236,12 +236,21 @@
   "x-description-zh": "查询 AXI channel/transaction。",
   "x-agent": {
     "use_when": [
-      "需要执行该 action 的 catalog 所述能力。"
+      "查询 AXI channel/transaction。"
     ],
     "do_not_use_when": [
-      "任务不属于该 action 的公开合同。"
+      "不要把本 action 用于 axi.analysis、axi.export 的业务目标；请改用列出的同域 action。"
     ],
-    "alternatives": [],
+    "alternatives": [
+      {
+        "action": "axi.analysis",
+        "when": "汇总 AXI 行为。"
+      },
+      {
+        "action": "axi.export",
+        "when": "导出 AXI 数据。"
+      }
+    ],
     "constraints": [
       "required: name; channel and handshake_time must appear together; do not mix handshake query with transaction selectors"
     ]

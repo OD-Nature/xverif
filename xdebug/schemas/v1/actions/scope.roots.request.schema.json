@@ -37,8 +37,8 @@
             "design"
           ],
           "default": "auto",
-          "description": "args.source 的 action-specific 参数值。",
-          "x-description-zh": "args.source 的 action-specific 参数值。"
+          "description": "Action-specific source input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific source input. Its type and accepted values are defined by this schema."
         },
         "time_unit": {
           "type": "string",
@@ -51,8 +51,8 @@
             "ms",
             "s"
           ],
-          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
-          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
+          "description": "Interprets only unitless time numbers; it never overrides a time string that already has a unit.",
+          "x-description-zh": "Interprets only unitless time numbers; it never overrides a time string that already has a unit."
         }
       },
       "additionalProperties": false,
@@ -86,12 +86,17 @@
   "x-description-zh": "发现 waveform/design 根。",
   "x-agent": {
     "use_when": [
-      "需要执行该 action 的 catalog 所述能力。"
+      "发现 waveform/design 根。"
     ],
     "do_not_use_when": [
-      "任务不属于该 action 的公开合同。"
+      "不要把本 action 用于 scope.list 的业务目标；请改用列出的同域 action。"
     ],
-    "alternatives": [],
+    "alternatives": [
+      {
+        "action": "scope.list",
+        "when": "列出 FSDB scope 或信号。"
+      }
+    ],
     "constraints": [
       "none"
     ]

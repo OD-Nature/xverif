@@ -32,8 +32,8 @@
       "properties": {
         "stream": {
           "type": "string",
-          "description": "已保存 stream 配置名称。",
-          "x-description-zh": "已保存 stream 配置名称。"
+          "description": "Action-specific stream input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific stream input. Its type and accepted values are defined by this schema."
         },
         "time_unit": {
           "type": "string",
@@ -46,8 +46,8 @@
             "ms",
             "s"
           ],
-          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
-          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
+          "description": "Interprets only unitless time numbers; it never overrides a time string that already has a unit.",
+          "x-description-zh": "Interprets only unitless time numbers; it never overrides a time string that already has a unit."
         }
       },
       "additionalProperties": false
@@ -83,12 +83,21 @@
   "x-description-zh": "显示 stream 定义和摘要。",
   "x-agent": {
     "use_when": [
-      "需要执行该 action 的 catalog 所述能力。"
+      "显示 stream 定义和摘要。"
     ],
     "do_not_use_when": [
-      "任务不属于该 action 的公开合同。"
+      "不要把本 action 用于 stream.config.load、stream.config.list 的业务目标；请改用列出的同域 action。"
     ],
-    "alternatives": [],
+    "alternatives": [
+      {
+        "action": "stream.config.load",
+        "when": "加载 stream 配置。"
+      },
+      {
+        "action": "stream.config.list",
+        "when": "列出 stream 配置。"
+      }
+    ],
     "constraints": [
       "required: stream"
     ]

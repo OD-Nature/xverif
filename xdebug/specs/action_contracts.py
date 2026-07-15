@@ -8,6 +8,8 @@ by ``(action, argument)`` rather than bare argument name.
 from __future__ import annotations
 
 from copy import deepcopy
+import json
+from pathlib import Path
 from typing import Any
 
 
@@ -15,24 +17,134 @@ Json = dict[str, Any]
 
 
 COMMON_DESCRIPTIONS = {
-    "time": "目标采样时间。使用带单位的 canonical 时间字符串；裸数字仅在 time_unit 明确时解释。",
-    "time_range": "分析时间窗口；begin/end 为闭区间端点，可分别省略以使用可用波形边界。",
-    "time_unit": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
-    "edge": "clock 采样边沿。默认值必须以 schema default 为准；negedge 适合多数 monitor 语义。",
-    "sample_point": "posedge 或 dual 采样时的沿前/沿后观察点；它不改变时间范围或 raw 波形。",
-    "line_limit": "只限制返回的 evidence 行数，不限制扫描、聚合或 verdict；结果须结合 completeness 字段理解。",
-    "signal": "最终叶子信号路径；aggregate 根、数组根或 struct 根不自动展开。",
-    "signals": "信号路径列表，或 alias 到信号路径/表达式的映射；表达式中引用 alias 而非再次嵌套路径。",
-    "output": "导出目标与显示控制；不同 action 对 path、file_format 和 verbose 的支持以本 action schema 为准。",
-    "name": "本 action 所属命名空间中的已保存对象名称；不得假定可跨 cursor/list/protocol config 复用。",
-    "mode": "本 action 的处理或返回模式；合法值、默认值和与其它参数的关系由 action-specific 合同定义。",
-    "query": "本 action 的查询选择器；不要把其它 action 的 index、channel 或 filter 形态迁入。",
-    "rules": "本 action 的协议/检查规则对象；每个 rule 的默认和生效条件见嵌套字段说明。",
-    "limits": "执行资源限制；只使用本 action 的顶层 limits properties，不能写入 args.limits。",
+    "time": "Target sample time. Prefer a canonical string with a unit; a bare number is interpreted only with time_unit.",
+    "time_range": "Closed analysis interval. begin and end may be omitted independently to use the available waveform bounds.",
+    "time_unit": "Interprets only unitless time numbers; it never overrides a time string that already has a unit.",
+    "edge": "Clock sampling edge. The schema default is authoritative; negedge often matches monitor semantics.",
+    "sample_point": "Before/after observation point for posedge or dual sampling; it does not change the raw waveform range.",
+    "line_limit": "Limits returned evidence rows only, not scanning, aggregation, or the verdict; read completeness fields as well.",
+    "signal": "Final leaf signal path. Aggregate, array, and struct roots are not expanded automatically.",
+    "signals": "Signal-path list or alias-to-path/expression map. Expressions must reference aliases rather than nested paths.",
+    "output": "Export destination and rendering controls. path, file_format, and verbose are supported only where this action declares them.",
+    "name": "Saved-object name in this action namespace; do not assume names are shared by cursors, lists, and protocol configs.",
+    "mode": "Action processing or return mode. Its legal values, default, and interactions are action-specific.",
+    "query": "Action-specific query selector. Do not copy index, channel, or filter forms from another action.",
+    "rules": "Protocol or check-rule object. Nested fields define each rule default and applicability.",
+    "limits": "Execution resource limits. Use this action's top-level limits properties, never args.limits.",
+    "vld": "Signal path or expression defining the valid sampling condition for counter statistics.",
+    "data": "Valid-ready or protocol payload signal path. Data-specific checks run only when it is supplied.",
+    "index": "One-based query, cursor, or list position; the action schema defines its exact reference set.",
+}
+
+# These descriptions are deliberately keyed by semantic field, not by the
+# first action that happened to use the spelling.  Action-specific overrides
+# below always win.  Keeping this dictionary here makes the generated schema,
+# MCP guide and examples use exactly the same vocabulary.
+FIELD_DESCRIPTIONS = {
+    "addr": "要匹配或返回的总线地址；可使用本 action 定义的数值 literal 形式。",
+    "address": "地址过滤条件；exact、range 和 mask 分支互斥。",
+    "aggregate": "聚合请求；省略时返回逐项 evidence，提供时按 operation 返回汇总。",
+    "aggregate_only": "为 true 时只返回聚合结论，不返回逐项变化 evidence。",
+    "analysis": "选择协议分析视图；每个视图返回不同的 primary data 对象。",
+    "begin": "闭区间起点；省略时使用可用波形窗口起点。",
+    "bind": "session server 的监听地址或 UDS 绑定设置。",
+    "bind_host": "TCP session server 的监听主机地址。",
+    "bp": "back-pressure 信号路径；与 rdy 只能按 stream 定义的其中一种流控语义使用。",
+    "channel": "协议或 stream 的逻辑 channel 选择；可用值由本 action 的 enum 决定。",
+    "clock": "采样、统计或协议检查使用的 clock 信号路径。",
+    "conditions": "要在同一采样合同下验证的命名条件列表。",
+    "config": "内联配置；字段定义接口 mapping、采样与输入信号，不读取外部文件。",
+    "config_path": "配置文件路径；与内联 config 属于互斥输入来源。",
+    "context_lines": "目标源码行前后各返回的上下文行数。",
+    "data": "valid-ready 或协议 payload 信号路径；提供后才会产生 data 相关检查。",
+    "direction": "协议 transaction 的方向过滤；read/write/all 的可用性以本 action enum 为准。",
+    "dynamic": "为 true 时允许本 action 已声明的运行时动态检查；不开放未声明字段。",
+    "edge": "clock 采样边沿；真实默认值必须读取 schema default。",
+    "end": "闭区间终点；省略时使用可用波形窗口终点。",
+    "events": "事件表达式或已保存事件名称；与 aggregate/group_by 一起决定返回粒度。",
+    "expr": "在指定采样语义下求值或匹配的表达式。",
+    "file": "输入配置或源码文件路径；不会隐式推断其它输入来源。",
+    "file_format": "写入文件的格式；只允许该 action 明确列出的 enum。",
+    "filter": "筛选对象；同级字段通常取 AND，数组候选值取 OR，具体组合由 constraints 说明。",
+    "format": "本 action 的值或导出表示格式；不得把其他 action 的同名 format 语义迁入。",
+    "group_by": "分组 key 列表；每项必须引用本 action 已定义的 signal alias 或字段。",
+    "host": "要连接或启动 session server 的主机名。",
+    "id": "协议 ID 过滤值或候选值集合。",
+    "include_data": "为 true 时在 response 中包含 payload/beat 数据；为 false 时只保留 transaction 摘要。",
+    "index": "从 1 开始的查询、游标或列表位置；具体基准以本 action schema 说明为准。",
+    "kind": "本 action 的结果种类或导出种类；合法值由 enum 限定。",
+    "last": "协议 transaction 的最后 beat 或最后匹配条件。",
+    "line": "源码中的 1-based 行号。",
+    "line_limit": "只限制返回 evidence 行数；不限制扫描、聚合或 verdict，必须结合 completeness 解读。",
+    "max_depth": "递归 scope 或 trace 展开的最大层数；达到上限时 response 标记截断范围。",
+    "max_events": "允许处理或写出的事件预算；耗尽会影响 analysis/file completeness。",
+    "max_samples": "允许扫描的时钟采样预算；耗尽表示分析不完整而非仅 response 截断。",
+    "mode": "该 action 的处理或返回模式；合法值、默认值和参数交互由本 action schema 定义。",
+    "name": "本 action 所属命名空间中的已保存对象名称。",
+    "name_pattern": "用于过滤 scope 或对象名称的匹配模式。",
+    "op": "游标或协议浏览操作；begin/next/prev 等含义由本 action enum 限定。",
+    "output": "导出目的地和显示控制；path、file_format、verbose 等只在本 action 明确支持时有效。",
+    "packet_index": "从 1 开始的 packet 位置；只在 packet 查询模式中有效。",
+    "path": "输出文件路径；不提供时 action 按其 response-only 合同返回结果。",
+    "payload": "单个 payload 信号或表达式，用于脉冲、稳定性或协议检查。",
+    "payloads": "payload 信号列表；每项按同一采样合同检查。",
+    "port": "session TCP 端口号。",
+    "position": "packet filter 的边界位置；sop/eop 决定字段在哪个 packet beat 取值。",
+    "query": "本 action 的查询选择器；不要混用其它 action 的 index、channel 或 filter 形态。",
+    "ready": "valid-ready 握手中的 ready 信号路径。",
+    "recursive": "为 true 时递归列出子 scope；max_depth 仍然限制展开深度。",
+    "reset": "reset 信号及极性定义；reset asserted 的 sample 不参加协议或事件判断。",
+    "role": "设计 trace 中节点的语义角色过滤。",
+    "rst_n": "低有效 reset 信号路径；asserted 期间的 sample 不参与匹配。",
+    "rules": "该 action 的检查规则；省略字段采用对应 schema default，未公开字段不会被接受。",
+    "sample_point": "posedge 或 dual 采样的沿前/沿后观察点；不会改变 raw 波形时间范围。",
+    "session_id": "目标 xdebug session 标识；MCP 调用使用外层 session_id，而非 native target。",
+    "signal": "最终叶子信号路径；aggregate、数组根或 struct 根不会自动展开。",
+    "signals": "信号路径列表，或 alias 到路径/表达式的映射；表达式引用 alias。",
+    "slice_hint": "值显示的可选位段提示；不改变被读取的底层 signal。",
+    "source": "scope roots 或证据的来源选择。",
+    "stream": "已加载的 stream 配置名称。",
+    "streams": "要加载或定义的 stream 配置列表。",
+    "symbol": "源码中的设计符号或层次路径。",
+    "time": "目标采样时间；带单位字符串优先，裸数字仅由 time_unit 解释。",
+    "time_range": "分析时间闭区间；begin/end 可分别省略，begin 大于 end 是语义错误。",
+    "time_unit": "仅解释无单位时间数字；不会覆盖带单位字符串。",
+    "transport": "session transport 类型；只使用 schema enum 中明确支持的模式。",
+    "valid": "valid-ready 握手中的 valid 信号路径。",
+    "value_format": "返回 LogicValue 的显示格式；不改变比较、采样或底层四态值。",
+    "verbose": "为 true 时请求该 action 已声明的详细输出；不改变分析范围。",
+    "vld": "统计采样有效条件的信号路径或表达式。",
 }
 
 
 ACTION_GUIDANCE: dict[str, Json] = {
+    "actions": {"use_when": ["需要发现当前 runtime 公开的 action、状态和适用资源。"],
+                "do_not_use_when": ["已经知道 action 且需要它的字段、枚举或 response 合同。"],
+                "alternatives": [{"action": "schema", "when": "需要一个已知 action 的完整调用合同。"}]},
+    "batch": {"use_when": ["需要按顺序执行多个相互独立的 native xdebug request。"],
+              "do_not_use_when": ["需要一个 MCP session 中的单个 action 查询或跨请求共享结果。"],
+              "alternatives": [{"action": "schema", "when": "需要先验证单个 request 合同。"}]},
+    "counter.statistics": {"use_when": ["需要按采样 clock 统计一个 counter 的增量、回绕或活动。"],
+                           "do_not_use_when": ["需要多个一般信号的活动统计或原始变化列表。"],
+                           "alternatives": [{"action": "signal.statistics", "when": "需要一般信号而非 counter 语义的统计。"}]},
+    "sampled_pulse.inspect": {"use_when": ["需要发现未被指定 clock sample 捕获的 valid 短脉冲。"],
+                               "do_not_use_when": ["需要 raw glitch/stuck 扫描或 valid-ready 协议违规结论。"],
+                               "alternatives": [{"action": "detect_abnormal", "when": "需要 raw pulse/glitch/stuck 异常。"}, {"action": "handshake.inspect", "when": "需要 valid-ready 协议检查。"}]},
+    "schema": {"use_when": ["已知 action 名称，需要其 request 或 response 合同。"],
+               "do_not_use_when": ["尚未知道 action 名称，或需要实际执行一个 debug 查询。"],
+               "alternatives": [{"action": "actions", "when": "需要先发现 action catalog。"}]},
+    "source.context": {"use_when": ["需要按设计 symbol 或层次路径读取对应源码上下文。"],
+                       "do_not_use_when": ["需要 driver/load 连接关系或 waveform 采样值。"],
+                       "alternatives": [{"action": "trace.driver", "when": "需要设计 driver 关系。"}, {"action": "trace.load", "when": "需要设计 load 关系。"}]},
+    "rc.generate": {"use_when": ["需要从分组信号生成可复用 waveform rc 配置。"],
+                    "do_not_use_when": ["需要直接导出当前 waveform evidence 或查询一个信号。"],
+                    "alternatives": [{"action": "list.export", "when": "需要导出 list 的当前数据。"}]},
+    "verify.conditions": {"use_when": ["需要在一个采样时刻验证命名条件集合。"],
+                          "do_not_use_when": ["需要跨时间窗口的持续性结论或原始表达式求值。"],
+                          "alternatives": [{"action": "window.verify", "when": "需要跨时间窗口验证。"}, {"action": "expr.eval_at", "when": "需要一个表达式在一个时刻的值。"}]},
+    "window.verify": {"use_when": ["需要在时间窗口内按 clock sample 验证多个条件。"],
+                      "do_not_use_when": ["只需要单个采样时刻的条件结果或单个信号稳定性。"],
+                      "alternatives": [{"action": "verify.conditions", "when": "需要单个时刻的条件验证。"}, {"action": "signal.stability", "when": "需要单信号稳定性检查。"}]},
     "value.at": {
         "use_when": ["需要一个最终叶子信号在单一采样时刻的值。"],
         "do_not_use_when": ["需要原始值变化时间线。", "需要多信号布尔表达式求值。"],
@@ -70,38 +182,33 @@ ACTION_GUIDANCE: dict[str, Json] = {
 
 
 ACTION_ARG_OVERRIDES: dict[tuple[str, str], Json] = {
+    ("value.at", "format"): {
+        "description": "Low-level display format for the sampled value. Only hexadecimal, binary, and decimal forms are accepted; export formats are invalid.",
+        "type": "string", "enum": ["h", "hex", "b", "bin", "binary", "d", "dec", "decimal"], "default": "h",
+    },
     ("signal.changes", "mode"): {
-        "description": "返回模式：timeline 返回逐变化 evidence；summary 只返回聚合事实。与 aggregate_only 不同时使用。",
+        "description": "Return mode: timeline emits each change evidence, while summary emits aggregate facts only. Do not combine it with aggregate_only.",
         "enum": ["timeline", "summary"], "default": "timeline",
     },
     ("event.find", "mode"): {
-        "description": "first/last 返回时间顺序的首/末命中；all 返回多个命中。line_limit 仅能与 all 同用。",
+        "description": "first and last return the chronologically first or last match; all returns multiple matches. line_limit is valid only with all.",
         "enum": ["first", "last", "all"], "default": "first",
     },
-    ("event.find", "aggregate"): {
-        "description": "事件聚合合同。未提供时返回匹配事件；与 events/group_by 的组合以 constraints 为准。",
-        "type": "object", "properties": {"operation": {"type": "string", "enum": ["count"]}},
-        "additionalProperties": False,
-    },
-    ("event.find", "group_by"): {
-        "description": "按 signals alias 分组的字段名列表。每项必须引用 args.signals 中的 alias。",
-        "type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": True,
-    },
     ("event.find", "max_samples"): {
-        "description": "允许检查的 clock sample 数量上限；耗尽时分析不完整，不是返回行数限制。",
+        "description": "Maximum number of clock samples to inspect. Exhaustion makes analysis incomplete; it is not a response-row limit.",
         "type": "integer", "minimum": 1,
     },
     ("event.find", "rst_n"): {
-        "description": "低有效 reset 信号路径或 alias；reset asserted 的 sample 不参与事件匹配。",
+        "description": "Active-low reset signal path or alias. Samples while reset is asserted do not participate in event matching.",
         "type": "string", "minLength": 1,
     },
     ("handshake.inspect", "rules"): {
-        "description": "valid-ready 检查规则；未提供字段使用各自 schema default。",
+        "description": "Valid-ready inspection rules. Omitted fields use their declared schema defaults.",
         "type": "object", "properties": {
-            "max_wait_cycles": {"type": "integer", "minimum": 0, "description": "从 valid 被采样为 1 到 handshake 前允许的最大连续等待 cycle 数。"},
-            "check_data_stable_when_stalled": {"type": "boolean", "default": False, "description": "仅提供 data 时有效；检查 valid=1、ready=0 期间 data 是否改变。"},
-            "require_valid_hold_until_handshake": {"type": "boolean", "default": True, "description": "检查 valid 在首次断言后是否保持到 valid&&ready handshake。"},
-            "ready_without_valid": {"type": "string", "enum": ["summary", "intervals", "all"], "default": "summary", "description": "ready=1 且 valid=0 的返回粒度；这是活动统计，不单独等于协议错误。"},
+            "max_wait_cycles": {"type": "integer", "minimum": 0, "description": "Maximum consecutive wait cycles from a sampled valid=1 until handshake."},
+            "check_data_stable_when_stalled": {"type": "boolean", "default": False, "description": "Effective only when data is supplied; checks whether data changes while valid=1 and ready=0."},
+            "require_valid_hold_until_handshake": {"type": "boolean", "default": True, "description": "Checks that valid remains asserted from its first assertion through valid&&ready handshake."},
+            "ready_without_valid": {"type": "string", "enum": ["summary", "intervals", "all"], "default": "summary", "description": "Reporting granularity for ready=1 and valid=0. This is activity information, not by itself a protocol violation."},
         }, "additionalProperties": False,
     },
     ("handshake.inspect", "data"): {
@@ -114,9 +221,15 @@ ACTION_ARG_OVERRIDES: dict[tuple[str, str], Json] = {
                                 "description": "超过该连续 valid&&!ready sample 数才返回 long_stall finding。"},
         }, "additionalProperties": False,
     },
-    ("event.export", "group_by"): {
-        "description": "按 signals alias 分组的字段名列表。每项必须引用 args.signals 中的 alias。",
-        "type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": True,
+    ("event.export", "aggregate"): {
+        "description": "导出聚合控制。events=false 时只返回 aggregate；group_by 按 event fields 或 signal aliases 统计。",
+        "type": "object", "properties": {
+            "events": {"type": "boolean", "default": True,
+                       "description": "为 false 时不在 response 中返回逐项 events，只返回 aggregate。"},
+            "group_by": {"type": "array", "items": {"type": "string", "minLength": 1,
+                         "description": "要参与聚合分组的 event field 或 signal alias。"}, "uniqueItems": True,
+                         "description": "聚合分组 key 列表。"},
+        }, "additionalProperties": False,
     },
     ("detect_abnormal", "checks"): {
         "description": "要执行的 raw-waveform 检查。省略时执行运行时默认检查集合；字符串 shorthand 不被接受。",
@@ -134,11 +247,32 @@ ACTION_ARG_OVERRIDES: dict[tuple[str, str], Json] = {
 
 
 def guidance_for(action: str) -> Json:
-    return deepcopy(ACTION_GUIDANCE.get(action, {
-        "use_when": ["需要执行该 action 的 catalog 所述能力。"],
-        "do_not_use_when": ["任务不属于该 action 的公开合同。"],
-        "alternatives": [],
-    }))
+    if action in ACTION_GUIDANCE:
+        return deepcopy(ACTION_GUIDANCE[action])
+    specs_path = Path(__file__).with_name("actions") / "actions.yaml"
+    try:
+        specs = json.loads(specs_path.read_text(encoding="utf-8"))["actions"]
+        spec = next(item for item in specs if item["name"] == action)
+    except (OSError, ValueError, KeyError, StopIteration):
+        return {"use_when": [f"需要执行 {action} 的公开能力。"],
+                "do_not_use_when": [f"不适用于 {action} 以外的资源或分析目标。"],
+                "alternatives": []}
+    purpose = spec.get("description_zh", action)
+    peers = [item for item in specs if item["name"] != action and item.get("status") != "removed"
+             and item["name"].split(".", 1)[0] == action.split(".", 1)[0]]
+    if not peers:
+        peers = [item for item in specs if item["name"] != action and item.get("status") != "removed"
+                 and item["name"].split(".", 1)[0] == spec.get("category")]
+    alternatives = [
+        {"action": item["name"], "when": item.get("description_zh", item["name"])}
+        for item in peers[:2]
+    ]
+    if alternatives:
+        names = "、".join(item["action"] for item in alternatives)
+        do_not_use = f"不要把本 action 用于 {names} 的业务目标；请改用列出的同域 action。"
+    else:
+        do_not_use = "不要把本 action 用作不属于其已声明业务对象的查询；当前没有更近的公开替代 action。"
+    return {"use_when": [purpose], "do_not_use_when": [do_not_use], "alternatives": alternatives}
 
 
 def apply_argument_contract(action: str, name: str, schema: Json) -> Json:
@@ -153,9 +287,12 @@ def apply_argument_contract(action: str, name: str, schema: Json) -> Json:
             for key in ("type", "properties", "items", "required"):
                 result.pop(key, None)
         result.update(deepcopy(override))
+    elif name in COMMON_DESCRIPTIONS:
+        result["description"] = COMMON_DESCRIPTIONS[name]
+        result.pop("x-description-zh", None)
     if "description" not in result and name in COMMON_DESCRIPTIONS:
         result["description"] = COMMON_DESCRIPTIONS[name]
-    if "x-description-zh" not in result and "description" in result:
+    if "x-description-zh" not in result and "description" in result and name not in COMMON_DESCRIPTIONS:
         result["x-description-zh"] = result["description"]
     return result
 
@@ -168,13 +305,30 @@ def complete_descriptions(schema: Json, path: str) -> Json:
     JSON objects to an agent.
     """
     result = deepcopy(schema)
-    if (result.get("type") == "object" or "properties" in result) and "description" not in result:
-        result["description"] = f"{path} 的组合参数对象。"
-    if result.get("type") == "array" and "description" not in result:
-        result["description"] = f"{path} 的有序项目列表。"
-    if "description" not in result and result.get("type") in {"string", "integer", "number", "boolean"}:
-        result["description"] = f"{path} 的 action-specific 参数值。"
-    if "description" in result and "x-description-zh" not in result:
+    field = path.rsplit(".", 1)[-1].replace("[]", "")
+    semantic = FIELD_DESCRIPTIONS.get(field)
+    english_common = COMMON_DESCRIPTIONS.get(field)
+    generated_placeholder = isinstance(result.get("description"), str) and any(
+        marker in result["description"]
+        for marker in ("action-specific 参数值", "组合参数对象", "有序项目列表")
+    )
+    if generated_placeholder:
+        result.pop("description", None)
+        result.pop("x-description-zh", None)
+    existing_description = result.get("description")
+    if isinstance(existing_description, str) and existing_description.isascii():
+        pass
+    elif english_common:
+        result["description"] = english_common
+    elif result.get("type") == "object" or "properties" in result:
+        result["description"] = f"Structured {field} configuration. Only the declared properties are accepted."
+    elif result.get("type") == "array":
+        result["description"] = f"Ordered {field} entries. Each item must satisfy the declared item contract."
+    elif result.get("type") in {"string", "integer", "number", "boolean"}:
+        result["description"] = f"Action-specific {field} input. Its type and accepted values are defined by this schema."
+    elif semantic and "description" not in result:
+        result["description"] = f"Action-specific {field} contract."
+    if "description" in result:
         result["x-description-zh"] = result["description"]
     for key, value in list(result.get("properties", {}).items()):
         if isinstance(value, dict):
@@ -182,6 +336,19 @@ def complete_descriptions(schema: Json, path: str) -> Json:
     items = result.get("items")
     if isinstance(items, dict):
         result["items"] = complete_descriptions(items, f"{path}[]")
+    additional = result.get("additionalProperties")
+    if isinstance(additional, dict):
+        dynamic_name = field
+        if dynamic_name == "signals":
+            additional["description"] = "Value for a caller-defined signal alias key. Supply the real signal path or the action-supported expression for that alias."
+            additional["x-dynamic-contract"] = "Each property key is an alias referenced by this action; each value resolves that alias to a signal path or supported expression."
+        elif dynamic_name in {"beat_fields", "packet_stable_fields"}:
+            additional["description"] = "Value for a caller-defined stream field name. Supply the signal path sampled for that field."
+            additional["x-dynamic-contract"] = "Each property key is a stream field name and each value is its signal path."
+        else:
+            additional["description"] = f"Value for a caller-defined {dynamic_name} key."
+            additional["x-dynamic-contract"] = "The property name is caller-defined; the value must follow this declared schema."
+        result["additionalProperties"] = complete_descriptions(additional, f"{path}.*")
     for keyword in ("oneOf", "anyOf", "allOf"):
         branches = result.get(keyword)
         if isinstance(branches, list):

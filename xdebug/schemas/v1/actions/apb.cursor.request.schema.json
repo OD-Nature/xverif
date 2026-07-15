@@ -37,13 +37,13 @@
             "read",
             "all"
           ],
-          "description": "args.direction 的 action-specific 参数值。",
-          "x-description-zh": "args.direction 的 action-specific 参数值。"
+          "description": "Action-specific direction input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific direction input. Its type and accepted values are defined by this schema."
         },
         "name": {
           "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。",
-          "x-description-zh": "已保存配置、游标、列表或接口配置名称。"
+          "description": "Saved-object name in this action namespace; do not assume names are shared by cursors, lists, and protocol configs.",
+          "x-description-zh": "Saved-object name in this action namespace; do not assume names are shared by cursors, lists, and protocol configs."
         },
         "op": {
           "type": "string",
@@ -54,8 +54,8 @@
             "pre",
             "last"
           ],
-          "description": "游标移动或协议浏览操作。",
-          "x-description-zh": "游标移动或协议浏览操作。"
+          "description": "Action-specific op input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific op input. Its type and accepted values are defined by this schema."
         },
         "time_unit": {
           "type": "string",
@@ -68,8 +68,8 @@
             "ms",
             "s"
           ],
-          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
-          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
+          "description": "Interprets only unitless time numbers; it never overrides a time string that already has a unit.",
+          "x-description-zh": "Interprets only unitless time numbers; it never overrides a time string that already has a unit."
         }
       },
       "additionalProperties": false,
@@ -106,12 +106,21 @@
   "x-description-zh": "在 APB transfer 间移动游标。",
   "x-agent": {
     "use_when": [
-      "需要执行该 action 的 catalog 所述能力。"
+      "在 APB transfer 间移动游标。"
     ],
     "do_not_use_when": [
-      "任务不属于该 action 的公开合同。"
+      "不要把本 action 用于 apb.config.list、apb.config.load 的业务目标；请改用列出的同域 action。"
     ],
-    "alternatives": [],
+    "alternatives": [
+      {
+        "action": "apb.config.list",
+        "when": "列出 APB 配置。"
+      },
+      {
+        "action": "apb.config.load",
+        "when": "加载 APB 配置。"
+      }
+    ],
     "constraints": [
       "required: name, op"
     ]

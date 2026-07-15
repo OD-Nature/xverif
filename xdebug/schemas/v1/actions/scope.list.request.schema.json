@@ -36,18 +36,18 @@
             "scope",
             "signal"
           ],
-          "description": "只返回 scope、signal，或两者都返回。",
-          "x-description-zh": "只返回 scope、signal，或两者都返回。"
+          "description": "Action-specific kind input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific kind input. Its type and accepted values are defined by this schema."
         },
         "max_depth": {
           "type": "integer",
-          "description": "args.max_depth 的 action-specific 参数值。",
-          "x-description-zh": "args.max_depth 的 action-specific 参数值。"
+          "description": "Action-specific max_depth input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific max_depth input. Its type and accepted values are defined by this schema."
         },
         "name_pattern": {
           "type": "string",
-          "description": "args.name_pattern 的 action-specific 参数值。",
-          "x-description-zh": "args.name_pattern 的 action-specific 参数值。"
+          "description": "Action-specific name_pattern input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific name_pattern input. Its type and accepted values are defined by this schema."
         },
         "path": {
           "type": "string",
@@ -56,8 +56,8 @@
         },
         "recursive": {
           "type": "boolean",
-          "description": "args.recursive 的 action-specific 参数值。",
-          "x-description-zh": "args.recursive 的 action-specific 参数值。"
+          "description": "Action-specific recursive input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific recursive input. Its type and accepted values are defined by this schema."
         },
         "time_unit": {
           "type": "string",
@@ -70,8 +70,8 @@
             "ms",
             "s"
           ],
-          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
-          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
+          "description": "Interprets only unitless time numbers; it never overrides a time string that already has a unit.",
+          "x-description-zh": "Interprets only unitless time numbers; it never overrides a time string that already has a unit."
         }
       },
       "additionalProperties": false,
@@ -105,12 +105,17 @@
   "x-description-zh": "列出 FSDB scope 或信号。",
   "x-agent": {
     "use_when": [
-      "需要执行该 action 的 catalog 所述能力。"
+      "列出 FSDB scope 或信号。"
     ],
     "do_not_use_when": [
-      "任务不属于该 action 的公开合同。"
+      "不要把本 action 用于 scope.roots 的业务目标；请改用列出的同域 action。"
     ],
-    "alternatives": [],
+    "alternatives": [
+      {
+        "action": "scope.roots",
+        "when": "发现 waveform/design 根。"
+      }
+    ],
     "constraints": [
       "none"
     ]

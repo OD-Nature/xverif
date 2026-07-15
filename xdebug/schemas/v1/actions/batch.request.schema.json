@@ -32,18 +32,18 @@
       "properties": {
         "mode": {
           "type": "string",
-          "description": "本 action 的处理或返回模式；合法值、默认值和与其它参数的关系由 action-specific 合同定义。",
-          "x-description-zh": "本 action 的处理或返回模式；合法值、默认值和与其它参数的关系由 action-specific 合同定义。"
+          "description": "Action processing or return mode. Its legal values, default, and interactions are action-specific.",
+          "x-description-zh": "Action processing or return mode. Its legal values, default, and interactions are action-specific."
         },
         "requests": {
           "type": "array",
           "items": {
             "type": "object",
-            "description": "args.requests[] 的组合参数对象。",
-            "x-description-zh": "args.requests[] 的组合参数对象。"
+            "description": "Structured requests configuration. Only the declared properties are accepted.",
+            "x-description-zh": "Structured requests configuration. Only the declared properties are accepted."
           },
-          "description": "batch action 中按顺序执行的 request 列表。",
-          "x-description-zh": "batch action 中按顺序执行的 request 列表。"
+          "description": "Ordered requests entries. Each item must satisfy the declared item contract.",
+          "x-description-zh": "Ordered requests entries. Each item must satisfy the declared item contract."
         }
       },
       "additionalProperties": false,
@@ -79,12 +79,17 @@
   "x-description-zh": "批量执行多个 xdebug request。",
   "x-agent": {
     "use_when": [
-      "需要执行该 action 的 catalog 所述能力。"
+      "需要按顺序执行多个相互独立的 native xdebug request。"
     ],
     "do_not_use_when": [
-      "任务不属于该 action 的公开合同。"
+      "需要一个 MCP session 中的单个 action 查询或跨请求共享结果。"
     ],
-    "alternatives": [],
+    "alternatives": [
+      {
+        "action": "schema",
+        "when": "需要先验证单个 request 合同。"
+      }
+    ],
     "constraints": [
       "required: requests"
     ]

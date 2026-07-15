@@ -135,9 +135,7 @@ EXTRA_ARGS_BY_ACTION: dict[str, set[str]] = {
     "event.config.load": {"config_path"},
     "event.export": {
         "aggregate",
-        "events",
         "edge",
-        "group_by",
         "line_limit",
         "max_events",
         "max_samples",
@@ -149,10 +147,7 @@ EXTRA_ARGS_BY_ACTION: dict[str, set[str]] = {
         "time_range",
     },
     "event.find": {
-        "aggregate",
-        "events",
         "edge",
-        "group_by",
         "line_limit",
         "max_samples",
         "mode",

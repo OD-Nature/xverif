@@ -32,29 +32,29 @@
       "properties": {
         "expr": {
           "type": "string",
-          "description": "需要求值或匹配的布尔表达式。",
-          "x-description-zh": "需要求值或匹配的布尔表达式。"
+          "description": "Action-specific expr input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific expr input. Its type and accepted values are defined by this schema."
         },
         "line_limit": {
           "type": "integer",
           "minimum": 1,
-          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。",
-          "x-description-zh": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
+          "description": "Limits returned evidence rows only, not scanning, aggregation, or the verdict; read completeness fields as well.",
+          "x-description-zh": "Limits returned evidence rows only, not scanning, aggregation, or the verdict; read completeness fields as well."
         },
         "no_statement_only": {
           "type": "boolean",
-          "description": "args.no_statement_only 的 action-specific 参数值。",
-          "x-description-zh": "args.no_statement_only 的 action-specific 参数值。"
+          "description": "Action-specific no_statement_only input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific no_statement_only input. Its type and accepted values are defined by this schema."
         },
         "role": {
           "type": "string",
-          "description": "args.role 的 action-specific 参数值。",
-          "x-description-zh": "args.role 的 action-specific 参数值。"
+          "description": "Action-specific role input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific role input. Its type and accepted values are defined by this schema."
         },
         "signal": {
           "type": "string",
-          "description": "目标信号路径。",
-          "x-description-zh": "目标信号路径。"
+          "description": "Final leaf signal path. Aggregate, array, and struct roots are not expanded automatically.",
+          "x-description-zh": "Final leaf signal path. Aggregate, array, and struct roots are not expanded automatically."
         },
         "time_unit": {
           "type": "string",
@@ -67,8 +67,8 @@
             "ms",
             "s"
           ],
-          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
-          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
+          "description": "Interprets only unitless time numbers; it never overrides a time string that already has a unit.",
+          "x-description-zh": "Interprets only unitless time numbers; it never overrides a time string that already has a unit."
         }
       },
       "additionalProperties": false,
@@ -122,12 +122,17 @@
   "x-description-zh": "规范化表达式。",
   "x-agent": {
     "use_when": [
-      "需要执行该 action 的 catalog 所述能力。"
+      "规范化表达式。"
     ],
     "do_not_use_when": [
-      "任务不属于该 action 的公开合同。"
+      "不要把本 action 用于 expr.eval_at 的业务目标；请改用列出的同域 action。"
     ],
-    "alternatives": [],
+    "alternatives": [
+      {
+        "action": "expr.eval_at",
+        "when": "在指定时间求布尔/表达式值。"
+      }
+    ],
     "constraints": [
       "required: expr"
     ]

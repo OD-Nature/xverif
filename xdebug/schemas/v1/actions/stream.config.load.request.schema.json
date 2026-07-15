@@ -46,23 +46,26 @@
                 "properties": {
                   "name": {
                     "type": "string",
-                    "description": "args.config.streams[].name 的 action-specific 参数值。",
-                    "x-description-zh": "args.config.streams[].name 的 action-specific 参数值。"
+                    "description": "Saved-object name in this action namespace; do not assume names are shared by cursors, lists, and protocol configs.",
+                    "x-description-zh": "Saved-object name in this action namespace; do not assume names are shared by cursors, lists, and protocol configs."
                   },
                   "signals": {
                     "type": "object",
                     "minProperties": 1,
                     "additionalProperties": {
                       "type": "string",
-                      "minLength": 1
+                      "minLength": 1,
+                      "description": "Value for a caller-defined signal alias key. Supply the real signal path or the action-supported expression for that alias.",
+                      "x-dynamic-contract": "Each property key is an alias referenced by this action; each value resolves that alias to a signal path or supported expression.",
+                      "x-description-zh": "Value for a caller-defined signal alias key. Supply the real signal path or the action-supported expression for that alias."
                     },
-                    "description": "args.config.streams[].signals 的组合参数对象。",
-                    "x-description-zh": "args.config.streams[].signals 的组合参数对象。"
+                    "description": "Signal-path list or alias-to-path/expression map. Expressions must reference aliases rather than nested paths.",
+                    "x-description-zh": "Signal-path list or alias-to-path/expression map. Expressions must reference aliases rather than nested paths."
                   },
                   "clock": {
                     "type": "string",
-                    "description": "args.config.streams[].clock 的 action-specific 参数值。",
-                    "x-description-zh": "args.config.streams[].clock 的 action-specific 参数值。"
+                    "description": "Action-specific clock input. Its type and accepted values are defined by this schema.",
+                    "x-description-zh": "Action-specific clock input. Its type and accepted values are defined by this schema."
                   },
                   "edge": {
                     "type": "string",
@@ -71,8 +74,8 @@
                       "negedge",
                       "dual"
                     ],
-                    "description": "args.config.streams[].edge 的 action-specific 参数值。",
-                    "x-description-zh": "args.config.streams[].edge 的 action-specific 参数值。"
+                    "description": "Clock sampling edge. The schema default is authoritative; negedge often matches monitor semantics.",
+                    "x-description-zh": "Clock sampling edge. The schema default is authoritative; negedge often matches monitor semantics."
                   },
                   "sample_point": {
                     "type": "string",
@@ -80,64 +83,70 @@
                       "before",
                       "after"
                     ],
-                    "description": "args.config.streams[].sample_point 的 action-specific 参数值。",
-                    "x-description-zh": "args.config.streams[].sample_point 的 action-specific 参数值。"
+                    "description": "Before/after observation point for posedge or dual sampling; it does not change the raw waveform range.",
+                    "x-description-zh": "Before/after observation point for posedge or dual sampling; it does not change the raw waveform range."
                   },
                   "reset": {
                     "type": "string",
-                    "description": "args.config.streams[].reset 的 action-specific 参数值。",
-                    "x-description-zh": "args.config.streams[].reset 的 action-specific 参数值。"
+                    "description": "Action-specific reset input. Its type and accepted values are defined by this schema.",
+                    "x-description-zh": "Action-specific reset input. Its type and accepted values are defined by this schema."
                   },
                   "vld": {
                     "type": "string",
-                    "description": "args.config.streams[].vld 的 action-specific 参数值。",
-                    "x-description-zh": "args.config.streams[].vld 的 action-specific 参数值。"
+                    "description": "Signal path or expression defining the valid sampling condition for counter statistics.",
+                    "x-description-zh": "Signal path or expression defining the valid sampling condition for counter statistics."
                   },
                   "rdy": {
                     "type": "string",
-                    "description": "args.config.streams[].rdy 的 action-specific 参数值。",
-                    "x-description-zh": "args.config.streams[].rdy 的 action-specific 参数值。"
+                    "description": "Action-specific rdy input. Its type and accepted values are defined by this schema.",
+                    "x-description-zh": "Action-specific rdy input. Its type and accepted values are defined by this schema."
                   },
                   "bp": {
                     "type": "string",
-                    "description": "args.config.streams[].bp 的 action-specific 参数值。",
-                    "x-description-zh": "args.config.streams[].bp 的 action-specific 参数值。"
+                    "description": "Action-specific bp input. Its type and accepted values are defined by this schema.",
+                    "x-description-zh": "Action-specific bp input. Its type and accepted values are defined by this schema."
                   },
                   "sop": {
                     "type": "string",
-                    "description": "args.config.streams[].sop 的 action-specific 参数值。",
-                    "x-description-zh": "args.config.streams[].sop 的 action-specific 参数值。"
+                    "description": "Action-specific sop input. Its type and accepted values are defined by this schema.",
+                    "x-description-zh": "Action-specific sop input. Its type and accepted values are defined by this schema."
                   },
                   "eop": {
                     "type": "string",
-                    "description": "args.config.streams[].eop 的 action-specific 参数值。",
-                    "x-description-zh": "args.config.streams[].eop 的 action-specific 参数值。"
+                    "description": "Action-specific eop input. Its type and accepted values are defined by this schema.",
+                    "x-description-zh": "Action-specific eop input. Its type and accepted values are defined by this schema."
                   },
                   "data": {
                     "type": "string",
-                    "description": "args.config.streams[].data 的 action-specific 参数值。",
-                    "x-description-zh": "args.config.streams[].data 的 action-specific 参数值。"
+                    "description": "Valid-ready or protocol payload signal path. Data-specific checks run only when it is supplied.",
+                    "x-description-zh": "Valid-ready or protocol payload signal path. Data-specific checks run only when it is supplied."
                   },
                   "beat_fields": {
                     "type": "object",
                     "additionalProperties": {
-                      "type": "string"
+                      "type": "string",
+                      "description": "Value for a caller-defined stream field name. Supply the signal path sampled for that field.",
+                      "x-dynamic-contract": "Each property key is a stream field name and each value is its signal path.",
+                      "x-description-zh": "Value for a caller-defined stream field name. Supply the signal path sampled for that field."
                     },
-                    "description": "args.config.streams[].beat_fields 的组合参数对象。",
-                    "x-description-zh": "args.config.streams[].beat_fields 的组合参数对象。"
+                    "description": "Structured beat_fields configuration. Only the declared properties are accepted.",
+                    "x-description-zh": "Structured beat_fields configuration. Only the declared properties are accepted."
                   },
                   "packet_stable_fields": {
                     "type": "object",
                     "additionalProperties": {
-                      "type": "string"
+                      "type": "string",
+                      "description": "Value for a caller-defined stream field name. Supply the signal path sampled for that field.",
+                      "x-dynamic-contract": "Each property key is a stream field name and each value is its signal path.",
+                      "x-description-zh": "Value for a caller-defined stream field name. Supply the signal path sampled for that field."
                     },
-                    "description": "args.config.streams[].packet_stable_fields 的组合参数对象。",
-                    "x-description-zh": "args.config.streams[].packet_stable_fields 的组合参数对象。"
+                    "description": "Structured packet_stable_fields configuration. Only the declared properties are accepted.",
+                    "x-description-zh": "Structured packet_stable_fields configuration. Only the declared properties are accepted."
                   },
                   "channel_id": {
                     "type": "string",
-                    "description": "args.config.streams[].channel_id 的 action-specific 参数值。",
-                    "x-description-zh": "args.config.streams[].channel_id 的 action-specific 参数值。"
+                    "description": "Action-specific channel_id input. Its type and accepted values are defined by this schema.",
+                    "x-description-zh": "Action-specific channel_id input. Its type and accepted values are defined by this schema."
                   },
                   "channel_id_valid": {
                     "type": "string",
@@ -146,41 +155,41 @@
                       "eop",
                       "every_beat"
                     ],
-                    "description": "args.config.streams[].channel_id_valid 的 action-specific 参数值。",
-                    "x-description-zh": "args.config.streams[].channel_id_valid 的 action-specific 参数值。"
+                    "description": "Action-specific channel_id_valid input. Its type and accepted values are defined by this schema.",
+                    "x-description-zh": "Action-specific channel_id_valid input. Its type and accepted values are defined by this schema."
                   },
                   "allow_interleaving": {
                     "type": "boolean",
-                    "description": "args.config.streams[].allow_interleaving 的 action-specific 参数值。",
-                    "x-description-zh": "args.config.streams[].allow_interleaving 的 action-specific 参数值。"
+                    "description": "Action-specific allow_interleaving input. Its type and accepted values are defined by this schema.",
+                    "x-description-zh": "Action-specific allow_interleaving input. Its type and accepted values are defined by this schema."
                   },
                   "description": {
                     "type": "string",
-                    "description": "args.config.streams[].description 的 action-specific 参数值。",
-                    "x-description-zh": "args.config.streams[].description 的 action-specific 参数值。"
+                    "description": "Action-specific description input. Its type and accepted values are defined by this schema.",
+                    "x-description-zh": "Action-specific description input. Its type and accepted values are defined by this schema."
                   }
                 },
                 "additionalProperties": false,
-                "description": "args.config.streams[] 的组合参数对象。",
-                "x-description-zh": "args.config.streams[] 的组合参数对象。"
+                "description": "Structured streams configuration. Only the declared properties are accepted.",
+                "x-description-zh": "Structured streams configuration. Only the declared properties are accepted."
               },
-              "description": "需要加载的 stream 配置列表。",
-              "x-description-zh": "需要加载的 stream 配置列表。"
+              "description": "Ordered streams entries. Each item must satisfy the declared item contract.",
+              "x-description-zh": "Ordered streams entries. Each item must satisfy the declared item contract."
             }
           },
           "additionalProperties": false,
-          "description": "内联配置对象。",
-          "x-description-zh": "内联配置对象。"
+          "description": "Structured config configuration. Only the declared properties are accepted.",
+          "x-description-zh": "Structured config configuration. Only the declared properties are accepted."
         },
         "config_path": {
           "type": "string",
-          "description": "输入配置文件路径。",
-          "x-description-zh": "输入配置文件路径。"
+          "description": "Action-specific config_path input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific config_path input. Its type and accepted values are defined by this schema."
         },
         "file": {
           "type": "string",
-          "description": "源码文件路径。",
-          "x-description-zh": "源码文件路径。"
+          "description": "Action-specific file input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific file input. Its type and accepted values are defined by this schema."
         },
         "mode": {
           "type": "string",
@@ -188,8 +197,8 @@
             "replace",
             "append"
           ],
-          "description": "本 action 的处理或返回模式；合法值、默认值和与其它参数的关系由 action-specific 合同定义。",
-          "x-description-zh": "本 action 的处理或返回模式；合法值、默认值和与其它参数的关系由 action-specific 合同定义。"
+          "description": "Action processing or return mode. Its legal values, default, and interactions are action-specific.",
+          "x-description-zh": "Action processing or return mode. Its legal values, default, and interactions are action-specific."
         },
         "streams": {
           "type": "array",
@@ -205,23 +214,26 @@
             "properties": {
               "name": {
                 "type": "string",
-                "description": "args.streams[].name 的 action-specific 参数值。",
-                "x-description-zh": "args.streams[].name 的 action-specific 参数值。"
+                "description": "Saved-object name in this action namespace; do not assume names are shared by cursors, lists, and protocol configs.",
+                "x-description-zh": "Saved-object name in this action namespace; do not assume names are shared by cursors, lists, and protocol configs."
               },
               "signals": {
                 "type": "object",
                 "minProperties": 1,
                 "additionalProperties": {
                   "type": "string",
-                  "minLength": 1
+                  "minLength": 1,
+                  "description": "Value for a caller-defined signal alias key. Supply the real signal path or the action-supported expression for that alias.",
+                  "x-dynamic-contract": "Each property key is an alias referenced by this action; each value resolves that alias to a signal path or supported expression.",
+                  "x-description-zh": "Value for a caller-defined signal alias key. Supply the real signal path or the action-supported expression for that alias."
                 },
-                "description": "args.streams[].signals 的组合参数对象。",
-                "x-description-zh": "args.streams[].signals 的组合参数对象。"
+                "description": "Signal-path list or alias-to-path/expression map. Expressions must reference aliases rather than nested paths.",
+                "x-description-zh": "Signal-path list or alias-to-path/expression map. Expressions must reference aliases rather than nested paths."
               },
               "clock": {
                 "type": "string",
-                "description": "args.streams[].clock 的 action-specific 参数值。",
-                "x-description-zh": "args.streams[].clock 的 action-specific 参数值。"
+                "description": "Action-specific clock input. Its type and accepted values are defined by this schema.",
+                "x-description-zh": "Action-specific clock input. Its type and accepted values are defined by this schema."
               },
               "edge": {
                 "type": "string",
@@ -230,8 +242,8 @@
                   "negedge",
                   "dual"
                 ],
-                "description": "args.streams[].edge 的 action-specific 参数值。",
-                "x-description-zh": "args.streams[].edge 的 action-specific 参数值。"
+                "description": "Clock sampling edge. The schema default is authoritative; negedge often matches monitor semantics.",
+                "x-description-zh": "Clock sampling edge. The schema default is authoritative; negedge often matches monitor semantics."
               },
               "sample_point": {
                 "type": "string",
@@ -239,64 +251,70 @@
                   "before",
                   "after"
                 ],
-                "description": "args.streams[].sample_point 的 action-specific 参数值。",
-                "x-description-zh": "args.streams[].sample_point 的 action-specific 参数值。"
+                "description": "Before/after observation point for posedge or dual sampling; it does not change the raw waveform range.",
+                "x-description-zh": "Before/after observation point for posedge or dual sampling; it does not change the raw waveform range."
               },
               "reset": {
                 "type": "string",
-                "description": "args.streams[].reset 的 action-specific 参数值。",
-                "x-description-zh": "args.streams[].reset 的 action-specific 参数值。"
+                "description": "Action-specific reset input. Its type and accepted values are defined by this schema.",
+                "x-description-zh": "Action-specific reset input. Its type and accepted values are defined by this schema."
               },
               "vld": {
                 "type": "string",
-                "description": "args.streams[].vld 的 action-specific 参数值。",
-                "x-description-zh": "args.streams[].vld 的 action-specific 参数值。"
+                "description": "Signal path or expression defining the valid sampling condition for counter statistics.",
+                "x-description-zh": "Signal path or expression defining the valid sampling condition for counter statistics."
               },
               "rdy": {
                 "type": "string",
-                "description": "args.streams[].rdy 的 action-specific 参数值。",
-                "x-description-zh": "args.streams[].rdy 的 action-specific 参数值。"
+                "description": "Action-specific rdy input. Its type and accepted values are defined by this schema.",
+                "x-description-zh": "Action-specific rdy input. Its type and accepted values are defined by this schema."
               },
               "bp": {
                 "type": "string",
-                "description": "args.streams[].bp 的 action-specific 参数值。",
-                "x-description-zh": "args.streams[].bp 的 action-specific 参数值。"
+                "description": "Action-specific bp input. Its type and accepted values are defined by this schema.",
+                "x-description-zh": "Action-specific bp input. Its type and accepted values are defined by this schema."
               },
               "sop": {
                 "type": "string",
-                "description": "args.streams[].sop 的 action-specific 参数值。",
-                "x-description-zh": "args.streams[].sop 的 action-specific 参数值。"
+                "description": "Action-specific sop input. Its type and accepted values are defined by this schema.",
+                "x-description-zh": "Action-specific sop input. Its type and accepted values are defined by this schema."
               },
               "eop": {
                 "type": "string",
-                "description": "args.streams[].eop 的 action-specific 参数值。",
-                "x-description-zh": "args.streams[].eop 的 action-specific 参数值。"
+                "description": "Action-specific eop input. Its type and accepted values are defined by this schema.",
+                "x-description-zh": "Action-specific eop input. Its type and accepted values are defined by this schema."
               },
               "data": {
                 "type": "string",
-                "description": "args.streams[].data 的 action-specific 参数值。",
-                "x-description-zh": "args.streams[].data 的 action-specific 参数值。"
+                "description": "Valid-ready or protocol payload signal path. Data-specific checks run only when it is supplied.",
+                "x-description-zh": "Valid-ready or protocol payload signal path. Data-specific checks run only when it is supplied."
               },
               "beat_fields": {
                 "type": "object",
                 "additionalProperties": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "Value for a caller-defined stream field name. Supply the signal path sampled for that field.",
+                  "x-dynamic-contract": "Each property key is a stream field name and each value is its signal path.",
+                  "x-description-zh": "Value for a caller-defined stream field name. Supply the signal path sampled for that field."
                 },
-                "description": "args.streams[].beat_fields 的组合参数对象。",
-                "x-description-zh": "args.streams[].beat_fields 的组合参数对象。"
+                "description": "Structured beat_fields configuration. Only the declared properties are accepted.",
+                "x-description-zh": "Structured beat_fields configuration. Only the declared properties are accepted."
               },
               "packet_stable_fields": {
                 "type": "object",
                 "additionalProperties": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "Value for a caller-defined stream field name. Supply the signal path sampled for that field.",
+                  "x-dynamic-contract": "Each property key is a stream field name and each value is its signal path.",
+                  "x-description-zh": "Value for a caller-defined stream field name. Supply the signal path sampled for that field."
                 },
-                "description": "args.streams[].packet_stable_fields 的组合参数对象。",
-                "x-description-zh": "args.streams[].packet_stable_fields 的组合参数对象。"
+                "description": "Structured packet_stable_fields configuration. Only the declared properties are accepted.",
+                "x-description-zh": "Structured packet_stable_fields configuration. Only the declared properties are accepted."
               },
               "channel_id": {
                 "type": "string",
-                "description": "args.streams[].channel_id 的 action-specific 参数值。",
-                "x-description-zh": "args.streams[].channel_id 的 action-specific 参数值。"
+                "description": "Action-specific channel_id input. Its type and accepted values are defined by this schema.",
+                "x-description-zh": "Action-specific channel_id input. Its type and accepted values are defined by this schema."
               },
               "channel_id_valid": {
                 "type": "string",
@@ -305,26 +323,26 @@
                   "eop",
                   "every_beat"
                 ],
-                "description": "args.streams[].channel_id_valid 的 action-specific 参数值。",
-                "x-description-zh": "args.streams[].channel_id_valid 的 action-specific 参数值。"
+                "description": "Action-specific channel_id_valid input. Its type and accepted values are defined by this schema.",
+                "x-description-zh": "Action-specific channel_id_valid input. Its type and accepted values are defined by this schema."
               },
               "allow_interleaving": {
                 "type": "boolean",
-                "description": "args.streams[].allow_interleaving 的 action-specific 参数值。",
-                "x-description-zh": "args.streams[].allow_interleaving 的 action-specific 参数值。"
+                "description": "Action-specific allow_interleaving input. Its type and accepted values are defined by this schema.",
+                "x-description-zh": "Action-specific allow_interleaving input. Its type and accepted values are defined by this schema."
               },
               "description": {
                 "type": "string",
-                "description": "args.streams[].description 的 action-specific 参数值。",
-                "x-description-zh": "args.streams[].description 的 action-specific 参数值。"
+                "description": "Action-specific description input. Its type and accepted values are defined by this schema.",
+                "x-description-zh": "Action-specific description input. Its type and accepted values are defined by this schema."
               }
             },
             "additionalProperties": false,
-            "description": "args.streams[] 的组合参数对象。",
-            "x-description-zh": "args.streams[] 的组合参数对象。"
+            "description": "Structured streams configuration. Only the declared properties are accepted.",
+            "x-description-zh": "Structured streams configuration. Only the declared properties are accepted."
           },
-          "description": "需要加载的 stream 配置列表。",
-          "x-description-zh": "需要加载的 stream 配置列表。"
+          "description": "Ordered streams entries. Each item must satisfy the declared item contract.",
+          "x-description-zh": "Ordered streams entries. Each item must satisfy the declared item contract."
         },
         "time_unit": {
           "type": "string",
@@ -337,8 +355,8 @@
             "ms",
             "s"
           ],
-          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
-          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
+          "description": "Interprets only unitless time numbers; it never overrides a time string that already has a unit.",
+          "x-description-zh": "Interprets only unitless time numbers; it never overrides a time string that already has a unit."
         }
       },
       "additionalProperties": false,
@@ -397,12 +415,21 @@
   "x-description-zh": "加载 stream 配置。",
   "x-agent": {
     "use_when": [
-      "需要执行该 action 的 catalog 所述能力。"
+      "加载 stream 配置。"
     ],
     "do_not_use_when": [
-      "任务不属于该 action 的公开合同。"
+      "不要把本 action 用于 stream.config.list、stream.show 的业务目标；请改用列出的同域 action。"
     ],
-    "alternatives": [],
+    "alternatives": [
+      {
+        "action": "stream.config.list",
+        "when": "列出 stream 配置。"
+      },
+      {
+        "action": "stream.show",
+        "when": "显示 stream 定义和摘要。"
+      }
+    ],
     "constraints": [
       "also one of: streams / config / config_path / file"
     ]

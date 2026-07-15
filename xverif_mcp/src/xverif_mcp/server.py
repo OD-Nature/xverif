@@ -269,7 +269,7 @@ def xverif_debug_list_actions(
 
 @xverif_tool("debug")
 def xverif_debug_get_schema(action: str, kind: str = "request", view: str = "mcp",
-                            include_examples: bool = True, language: str = "zh") -> dict:
+                            include_examples: bool = True) -> dict:
     """Return a self-explanatory action-specific xdebug schema.
 
     Args:
@@ -277,19 +277,16 @@ def xverif_debug_get_schema(action: str, kind: str = "request", view: str = "mcp
         kind: "request" for input schema, "response" for output schema.
         view: "mcp" (default), "args", "native", or "response".
         include_examples: Include checked-in minimal/common MCP examples.
-        language: Human-readable guide language; defaults to Chinese.
     """
     if kind not in ("request", "response"):
         return _tool_error("INVALID_ARGUMENT", "kind must be 'request' or 'response'")
     if view not in ("mcp", "args", "native", "response"):
         return _tool_error("INVALID_ARGUMENT", "view must be 'mcp', 'args', 'native', or 'response'")
-    if language not in ("zh", "en"):
-        return _tool_error("INVALID_ARGUMENT", "language must be 'zh' or 'en'")
     if view == "response" and kind != "response":
         return _tool_error("INVALID_ARGUMENT", "view='response' requires kind='response'")
-    if kind == "response" and view == "args":
-        return _tool_error("INVALID_ARGUMENT", "response kind does not support view='args'")
-    return debug.schema(action, kind, view=view, include_examples=include_examples, language=language)
+    if kind == "response" and view not in ("native", "response"):
+        return _tool_error("INVALID_ARGUMENT", "response kind requires view='response' or view='native'")
+    return debug.schema(action, kind, view=view, include_examples=include_examples)
 
 
 @xverif_tool("debug")

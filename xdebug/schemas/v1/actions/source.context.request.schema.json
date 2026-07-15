@@ -32,46 +32,46 @@
       "properties": {
         "context_lines": {
           "type": "integer",
-          "description": "args.context_lines 的 action-specific 参数值。",
-          "x-description-zh": "args.context_lines 的 action-specific 参数值。"
+          "description": "Action-specific context_lines input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific context_lines input. Its type and accepted values are defined by this schema."
         },
         "file": {
           "type": "string",
-          "description": "源码文件路径。",
-          "x-description-zh": "源码文件路径。"
+          "description": "Action-specific file input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific file input. Its type and accepted values are defined by this schema."
         },
         "line": {
           "type": "integer",
-          "description": "源码行号。",
-          "x-description-zh": "源码行号。"
+          "description": "Action-specific line input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific line input. Its type and accepted values are defined by this schema."
         },
         "output": {
           "type": "object",
           "properties": {
             "path": {
               "type": "string",
-              "description": "args.output.path 的 action-specific 参数值。",
-              "x-description-zh": "args.output.path 的 action-specific 参数值。"
+              "description": "Action-specific path input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific path input. Its type and accepted values are defined by this schema."
             },
             "file_format": {
               "type": "string",
-              "description": "args.output.file_format 的 action-specific 参数值。",
-              "x-description-zh": "args.output.file_format 的 action-specific 参数值。"
+              "description": "Action-specific file_format input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific file_format input. Its type and accepted values are defined by this schema."
             },
             "verbose": {
               "type": "boolean",
-              "description": "args.output.verbose 的 action-specific 参数值。",
-              "x-description-zh": "args.output.verbose 的 action-specific 参数值。"
+              "description": "Action-specific verbose input. Its type and accepted values are defined by this schema.",
+              "x-description-zh": "Action-specific verbose input. Its type and accepted values are defined by this schema."
             }
           },
           "additionalProperties": false,
-          "description": "导出目标与显示控制；不同 action 对 path、file_format 和 verbose 的支持以本 action schema 为准。",
-          "x-description-zh": "导出目标与显示控制；不同 action 对 path、file_format 和 verbose 的支持以本 action schema 为准。"
+          "description": "Export destination and rendering controls. path, file_format, and verbose are supported only where this action declares them.",
+          "x-description-zh": "Export destination and rendering controls. path, file_format, and verbose are supported only where this action declares them."
         },
         "symbol": {
           "type": "string",
-          "description": "args.symbol 的 action-specific 参数值。",
-          "x-description-zh": "args.symbol 的 action-specific 参数值。"
+          "description": "Action-specific symbol input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific symbol input. Its type and accepted values are defined by this schema."
         },
         "time_unit": {
           "type": "string",
@@ -84,8 +84,8 @@
             "ms",
             "s"
           ],
-          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
-          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
+          "description": "Interprets only unitless time numbers; it never overrides a time string that already has a unit.",
+          "x-description-zh": "Interprets only unitless time numbers; it never overrides a time string that already has a unit."
         }
       },
       "additionalProperties": false,
@@ -122,12 +122,21 @@
   "x-description-zh": "读取源码上下文。",
   "x-agent": {
     "use_when": [
-      "需要执行该 action 的 catalog 所述能力。"
+      "需要按设计 symbol 或层次路径读取对应源码上下文。"
     ],
     "do_not_use_when": [
-      "任务不属于该 action 的公开合同。"
+      "需要 driver/load 连接关系或 waveform 采样值。"
     ],
-    "alternatives": [],
+    "alternatives": [
+      {
+        "action": "trace.driver",
+        "when": "需要设计 driver 关系。"
+      },
+      {
+        "action": "trace.load",
+        "when": "需要设计 load 关系。"
+      }
+    ],
     "constraints": [
       "required: file, line"
     ]

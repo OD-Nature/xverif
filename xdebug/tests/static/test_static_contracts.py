@@ -34,6 +34,10 @@ def test_protocol_statistics_response_schemas_are_generated_and_synced() -> None
     assert _module("sync_protocol_statistics_response_schemas").main(["--check"]) == 0
 
 
+def test_response_contracts_are_closed_from_compact_examples() -> None:
+    assert _module("sync_response_contracts").main(["--check"]) == 0
+
+
 def test_clock_sampling_is_consolidated() -> None:
     assert _module("check_clock_sampling_consolidation").main() == 0
 
@@ -54,6 +58,10 @@ def test_action_schema_coverage_is_complete() -> None:
 
 def test_request_schemas_are_agent_discoverable() -> None:
     assert _module("audit_agent_schema_quality").main() == 0
+
+
+def test_request_schemas_are_runtime_draft7_compatible() -> None:
+    assert _module("audit_runtime_schema_compatibility").main() == 0
 
 
 def test_generated_action_metadata_is_synced() -> None:

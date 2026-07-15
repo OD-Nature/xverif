@@ -38,33 +38,33 @@
       "properties": {
         "bind": {
           "type": "string",
-          "description": "args.bind 的 action-specific 参数值。",
-          "x-description-zh": "args.bind 的 action-specific 参数值。"
+          "description": "Action-specific bind input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific bind input. Its type and accepted values are defined by this schema."
         },
         "bind_host": {
           "type": "string",
-          "description": "args.bind_host 的 action-specific 参数值。",
-          "x-description-zh": "args.bind_host 的 action-specific 参数值。"
+          "description": "Action-specific bind_host input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific bind_host input. Its type and accepted values are defined by this schema."
         },
         "host": {
           "type": "string",
-          "description": "args.host 的 action-specific 参数值。",
-          "x-description-zh": "args.host 的 action-specific 参数值。"
+          "description": "Action-specific host input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific host input. Its type and accepted values are defined by this schema."
         },
         "name": {
           "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。",
-          "x-description-zh": "已保存配置、游标、列表或接口配置名称。"
+          "description": "Saved-object name in this action namespace; do not assume names are shared by cursors, lists, and protocol configs.",
+          "x-description-zh": "Saved-object name in this action namespace; do not assume names are shared by cursors, lists, and protocol configs."
         },
         "port": {
           "type": "integer",
-          "description": "args.port 的 action-specific 参数值。",
-          "x-description-zh": "args.port 的 action-specific 参数值。"
+          "description": "Action-specific port input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific port input. Its type and accepted values are defined by this schema."
         },
         "session_id": {
           "type": "string",
-          "description": "目标 xdebug session 标识。",
-          "x-description-zh": "目标 xdebug session 标识。"
+          "description": "Action-specific session_id input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific session_id input. Its type and accepted values are defined by this schema."
         },
         "transport": {
           "type": "string",
@@ -73,8 +73,8 @@
             "tcp",
             "file"
           ],
-          "description": "args.transport 的 action-specific 参数值。",
-          "x-description-zh": "args.transport 的 action-specific 参数值。"
+          "description": "Action-specific transport input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific transport input. Its type and accepted values are defined by this schema."
         }
       },
       "additionalProperties": false,
@@ -110,12 +110,21 @@
   "x-description-zh": "打开 design/waveform session。",
   "x-agent": {
     "use_when": [
-      "需要执行该 action 的 catalog 所述能力。"
+      "打开 design/waveform session。"
     ],
     "do_not_use_when": [
-      "任务不属于该 action 的公开合同。"
+      "不要把本 action 用于 session.close、session.doctor 的业务目标；请改用列出的同域 action。"
     ],
-    "alternatives": [],
+    "alternatives": [
+      {
+        "action": "session.close",
+        "when": "关闭指定 session。"
+      },
+      {
+        "action": "session.doctor",
+        "when": "诊断当前 session。"
+      }
+    ],
     "constraints": [
       "required: name"
     ]

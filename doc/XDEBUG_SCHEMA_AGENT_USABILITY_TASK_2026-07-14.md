@@ -176,3 +176,9 @@ xverif_debug_get_schema(
 ## 9. Git 交付边界
 
 提交前运行 `git status --short`，只暂存本任务的 ActionContract、生成器、schema、examples、MCP adapter/server、测试、skill、架构说明和任务书；不得包含已有无关改动。commit message 使用中文并说明动机、公开合同变化、生成物和验证。提交后将当前目标分支推送远端，报告 commit id、分支和推送结果。
+
+## 10. 2026-07-15 全量收口补充
+
+- request runtime 使用 embedded third-party Draft-7 validator。checked-in JSON 文件仍声明 Draft 2020-12，但 72 个 request schema 只能使用已验证的 Draft-7 兼容子集；不得引入 `$dynamicRef`、`unevaluatedProperties`、`prefixItems`、`dependentSchemas` 等后期关键字。此约束由独立 audit 与真实 C++ validator 共同验证，不生成第二份 schema 或静默降级。
+- `get_schema(view="mcp")` 必须在一次响应中同时给出 request parameter guide 和 response primary fields；`kind="response"` 不再隐式改写为 response view。
+- response compact 主路径从 canonical basic example 生成闭合 `summary/data/meta` 结构；无法在 compact example 中稳定枚举的诊断 payload 必须保留为带 `x-dynamic-contract` 的显式扩展点，而非裸开放 object。

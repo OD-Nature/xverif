@@ -37,8 +37,8 @@
             "osd",
             "pending"
           ],
-          "description": "args.analysis 的 action-specific 参数值。",
-          "x-description-zh": "args.analysis 的 action-specific 参数值。"
+          "description": "Action-specific analysis input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific analysis input. Its type and accepted values are defined by this schema."
         },
         "direction": {
           "type": "string",
@@ -47,19 +47,19 @@
             "read",
             "all"
           ],
-          "description": "args.direction 的 action-specific 参数值。",
-          "x-description-zh": "args.direction 的 action-specific 参数值。"
+          "description": "Action-specific direction input. Its type and accepted values are defined by this schema.",
+          "x-description-zh": "Action-specific direction input. Its type and accepted values are defined by this schema."
         },
         "line_limit": {
           "type": "integer",
           "minimum": 1,
-          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。",
-          "x-description-zh": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
+          "description": "Limits returned evidence rows only, not scanning, aggregation, or the verdict; read completeness fields as well.",
+          "x-description-zh": "Limits returned evidence rows only, not scanning, aggregation, or the verdict; read completeness fields as well."
         },
         "name": {
           "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。",
-          "x-description-zh": "已保存配置、游标、列表或接口配置名称。"
+          "description": "Saved-object name in this action namespace; do not assume names are shared by cursors, lists, and protocol configs.",
+          "x-description-zh": "Saved-object name in this action namespace; do not assume names are shared by cursors, lists, and protocol configs."
         },
         "time_unit": {
           "type": "string",
@@ -72,8 +72,8 @@
             "ms",
             "s"
           ],
-          "description": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。",
-          "x-description-zh": "仅解释不带单位的时间数字；带单位时间字符串优先，auto 不改变带单位值。"
+          "description": "Interprets only unitless time numbers; it never overrides a time string that already has a unit.",
+          "x-description-zh": "Interprets only unitless time numbers; it never overrides a time string that already has a unit."
         }
       },
       "additionalProperties": false,
@@ -132,12 +132,21 @@
   "x-description-zh": "汇总 AXI 行为。",
   "x-agent": {
     "use_when": [
-      "需要执行该 action 的 catalog 所述能力。"
+      "汇总 AXI 行为。"
     ],
     "do_not_use_when": [
-      "任务不属于该 action 的公开合同。"
+      "不要把本 action 用于 axi.export、axi.channel_stall 的业务目标；请改用列出的同域 action。"
     ],
-    "alternatives": [],
+    "alternatives": [
+      {
+        "action": "axi.export",
+        "when": "导出 AXI 数据。"
+      },
+      {
+        "action": "axi.channel_stall",
+        "when": "实验性 AXI stall 分析。"
+      }
+    ],
     "constraints": [
       "required: name"
     ]

@@ -60,12 +60,21 @@
   "x-description-zh": "清理过期 session。",
   "x-agent": {
     "use_when": [
-      "需要执行该 action 的 catalog 所述能力。"
+      "清理过期 session。"
     ],
     "do_not_use_when": [
-      "任务不属于该 action 的公开合同。"
+      "不要把本 action 用于 session.close、session.doctor 的业务目标；请改用列出的同域 action。"
     ],
-    "alternatives": [],
+    "alternatives": [
+      {
+        "action": "session.close",
+        "when": "关闭指定 session。"
+      },
+      {
+        "action": "session.doctor",
+        "when": "诊断当前 session。"
+      }
+    ],
     "constraints": [
       "none"
     ]
