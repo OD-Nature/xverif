@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import socket
+import stat
 import sys
 import threading
 import time
@@ -105,6 +106,35 @@ def test_loop_wrapper_ping(tmp_path, monkeypatch):
     finally:
         server.shutdown()
         thread.join(timeout=5)
+
+
+def test_loop_wrapper_socket_is_private(tmp_path, monkeypatch):
+    monkeypatch.setenv("XVERIF_LOOP_LOG_DIR", str(tmp_path / "logs"))
+    debug = _make_fake_loop(tmp_path / "fake_xdebug", protocol="xdebug-stdio-loop", api_version="xdebug")
+    cov = _make_fake_loop(tmp_path / "fake_xcov", protocol="xcov-stdio-loop", api_version="xcov")
+    service = LoopWrapperService(mode="direct", xdebug_bin=debug, xcov_bin=cov)
+    server, thread, sock = _start_server(tmp_path, service)
+    try:
+        assert stat.S_IMODE(Path(sock).stat().st_mode) == 0o600
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+
+
+@pytest.mark.parametrize("kind", ("file", "symlink"))
+def test_loop_wrapper_rejects_unsafe_existing_socket_path(tmp_path, monkeypatch, kind):
+    monkeypatch.setenv("XVERIF_LOOP_LOG_DIR", str(tmp_path / "logs"))
+    target = tmp_path / "target"
+    target.write_text("do not delete")
+    socket_path = tmp_path / "wrapper.sock"
+    if kind == "file":
+        socket_path.write_text("do not delete")
+    else:
+        socket_path.symlink_to(target)
+    server = LoopWrapperServer(str(socket_path), service=LoopWrapperService(mode="direct"))
+    with pytest.raises(RuntimeError, match="SOCKET_PATH_UNSAFE"):
+        server.serve_forever()
+    assert target.read_text() == "do not delete"
 
 
 def test_loop_wrapper_debug_session_lifecycle(tmp_path, monkeypatch):

@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import socket
+import stat
 import sys
 import threading
 import time
@@ -26,7 +27,7 @@ from xverif_loop.logging import (
     log_uds_event,
 )
 from xverif_loop.sessions.session_manager import McpSessionManager
-from xverif_mcp.xdebug_errors import (
+from xverif_loop.xdebug_errors import (
     forbidden_native_session_error,
     is_forbidden_native_session_action,
 )
@@ -295,14 +296,30 @@ class LoopWrapperServer:
     def serve_forever(self) -> None:
         path = Path(self.socket_path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        if path.exists():
+        try:
+            if path.exists() or path.is_symlink():
+                info = path.lstat()
+                if not stat.S_ISSOCK(info.st_mode) or info.st_uid != os.getuid():
+                    raise RuntimeError("SOCKET_PATH_UNSAFE")
+                with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as probe:
+                    probe.settimeout(0.2)
+                    probe.connect(self.socket_path)
+                raise RuntimeError("SOCKET_PATH_UNSAFE")
+        except ConnectionRefusedError:
             path.unlink()
+        except FileNotFoundError:
+            pass
+        except Exception as exc:
+            self._startup_error = exc
+            self._startup_finished.set()
+            raise
         log_uds_event("uds.listen.begin", True, socket_path=self.socket_path)
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as srv:
             self._server_socket = srv
             try:
                 srv.bind(self.socket_path)
                 self._created_socket = True
+                os.chmod(self.socket_path, 0o600)
                 srv.listen()
                 srv.settimeout(0.2)
             except Exception as exc:

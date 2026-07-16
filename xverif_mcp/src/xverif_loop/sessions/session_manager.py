@@ -5,6 +5,7 @@ from __future__ import annotations
 import getpass
 import os
 import re
+import threading
 import uuid as _uuid
 from typing import Any, Dict, Optional
 
@@ -114,6 +115,8 @@ class McpSessionManager:
         )
         self.sessions: Dict[str, XdebugLoopSession] = {}
         self.tombstones: Dict[str, XdebugLoopSession] = {}
+        self._manager_lock = threading.RLock()
+        self._opening: set[str] = set()
         log_server_event("manager.init", True, backend=self.backend,
                          launcher=self.mode, xdebug_bin=self.xdebug_bin)
 
@@ -136,24 +139,20 @@ class McpSessionManager:
                               backend=self.backend, launcher=self.mode,
                               error_code="RESOURCE_REQUIRED")
             return _error("RESOURCE_REQUIRED", "provide fsdb or daidir")
-        if name in self.sessions:
-            existing = self.sessions[name]
-            if existing.state == "alive":
-                if existing.process_alive():
-                    log_session_event(name, "manager.open.rejected", False,
-                                      backend=self.backend, launcher=self.mode,
-                                      error_code="SESSION_ID_EXISTS")
-                    return _error("SESSION_ID_EXISTS",
-                                  f"session id already exists: {name}")
-                log_session_event(name, "manager.open.rejected", False,
-                                  backend=self.backend, launcher=self.mode,
-                                  error_code="SESSION_STALE")
-                return _error("SESSION_STALE",
-                              "session id exists but is stale: "
-                              f"{name}; close it explicitly before opening again")
-        if name in self.tombstones:
-            return _error("SESSION_TOMBSTONE_EXISTS",
-                          f"session tombstone exists: {name}; inspect doctor and run gc or kill explicitly")
+        with self._manager_lock:
+            if name in self._opening:
+                return _error("SESSION_ID_EXISTS", f"session id is opening: {name}")
+            if name in self.sessions:
+                existing = self.sessions[name]
+                if existing.state == "alive":
+                    if existing.process_alive():
+                        return _error("SESSION_ID_EXISTS", f"session id already exists: {name}")
+                    return _error("SESSION_STALE", "session id exists but is stale: "
+                                  f"{name}; close it explicitly before opening again")
+            if name in self.tombstones:
+                return _error("SESSION_TOMBSTONE_EXISTS",
+                              f"session tombstone exists: {name}; inspect doctor and run gc or kill explicitly")
+            self._opening.add(name)
         job_name = None
         actual_queue = queue or (self._session_queue if self.mode == "lsf" else None)
         actual_resource = resource or (self._session_resource if self.mode == "lsf" else None)
@@ -174,15 +173,20 @@ class McpSessionManager:
             backend=self.backend, api_version=self.api_version,
             ready_protocol=self.ready_protocol, target_key=self.target_key,
             recovery_tool=self.recovery_tool, run_manifest=run_manifest)
-        result = session.open()
+        try:
+            result = session.open()
+        finally:
+            with self._manager_lock:
+                self._opening.discard(name)
         if not result.get("ok"):
             log_session_event(name, "manager.open.end", False,
                               backend=self.backend, launcher=self.mode,
                               response=result)
             return result
-        self.sessions[name] = session
-        if session.session_id:
-            self.sessions[session.session_id] = session
+        with self._manager_lock:
+            self.sessions[name] = session
+            if session.session_id:
+                self.sessions[session.session_id] = session
         log_session_event(name, "manager.open.end", True,
                           backend=self.backend, launcher=self.mode,
                           session_id=session.session_id,

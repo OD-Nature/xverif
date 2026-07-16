@@ -20,7 +20,7 @@ from xverif_loop.config import default_xdebug_bin, startup_timeout, request_time
 from xverif_loop.sessions.launchers import LaunchConfig, Launcher
 from xverif_loop.sessions.capabilities import lifecycle_capability
 from xverif_loop.sessions.session_errors import response_says_session_terminal
-from xverif_mcp.xdebug_errors import translate_native_example_for_query, xout_error
+from xverif_loop.xdebug_errors import translate_native_example_for_query, xout_error
 
 Json = Dict[str, Any]
 
