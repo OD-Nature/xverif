@@ -2,6 +2,7 @@
 
 #include "stream_config.h"
 #include "stream_expr.h"
+#include "waveform/cache/analysis_repository.h"
 #include "waveform/filter/value_filter.h"
 
 #include "npi_fsdb.h"
@@ -203,16 +204,26 @@ private:
 
 class StreamAnalyzer {
 public:
+    void configure_repository(AnalysisRepository* repository,
+                              const std::string& session_id,
+                              const FsdbIdentity& fsdb_identity);
     bool validate_static(npiFsdbFileHandle file, const StreamConfig& config,
                          std::vector<StreamValidationIssue>& issues,
                          std::string& error);
     bool analyze(npiFsdbFileHandle file, const StreamConfig& config,
                  const StreamQueryOptions& options, StreamAnalysis& analysis,
                  std::string& error);
+    bool analyze_cached(npiFsdbFileHandle file, const StreamConfig& config,
+                        const StreamQueryOptions& options,
+                        AnalysisCacheScope cache_scope,
+                        StreamAnalysis& analysis, std::string& error);
     bool analyze_legacy(npiFsdbFileHandle file, const StreamConfig& config,
                         const StreamQueryOptions& options,
                         StreamAnalysis& analysis, std::string& error,
                         bool record_probe = false);
+    const AnalysisCacheError& last_cache_error() const {
+        return last_cache_error_;
+    }
 
 private:
     struct Compiled;
@@ -220,7 +231,17 @@ private:
                  std::vector<StreamValidationIssue>* issues, std::string& error);
     bool build_base(npiFsdbFileHandle file, const StreamConfig& config,
                     const StreamQueryOptions& options,
-                    StreamBaseAnalysis& base, std::string& error);
+                    StreamBaseAnalysis& base, std::string& error,
+                    const AnalysisCacheKey* build_key = nullptr);
+    AnalysisCacheKey cache_key(const StreamConfig& config,
+                               AnalysisCacheScope scope,
+                               npiFsdbTime begin,
+                               npiFsdbTime end) const;
+
+    AnalysisRepository* repository_ = nullptr;
+    std::string session_id_;
+    FsdbIdentity fsdb_identity_;
+    AnalysisCacheError last_cache_error_;
 };
 
 Json stream_row_json(const StreamRow& row);

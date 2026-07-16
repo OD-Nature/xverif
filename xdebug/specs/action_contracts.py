@@ -47,6 +47,7 @@ FIELD_DESCRIPTIONS = {
     "aggregate_only": "为 true 时只返回聚合结论，不返回逐项变化 evidence。",
     "analysis": "选择协议分析视图；每个视图返回不同的 primary data 对象。",
     "begin": "闭区间起点；省略时使用可用波形窗口起点。",
+    "cache_scope": "Stream 基础分析缓存范围；full 为默认并缓存完整 FSDB，range 只缓存规范化闭区间。range 未提供 time_range 时规范化为 full；engine 不自动 fallback。",
     "bind": "session server 的监听地址或 UDS 绑定设置。",
     "bind_host": "TCP session server 的监听主机地址。",
     "bp": "back-pressure 信号路径；与 rdy 只能按 stream 定义的其中一种流控语义使用。",
@@ -84,7 +85,7 @@ FIELD_DESCRIPTIONS = {
     "name_pattern": "用于过滤 scope 或对象名称的匹配模式。",
     "op": "游标或协议浏览操作；begin/next/prev 等含义由本 action enum 限定。",
     "output": "导出目的地和显示控制；path、file_format、verbose 等只在本 action 明确支持时有效。",
-    "packet_index": "从 1 开始的 packet 位置；只在 packet 查询模式中有效。",
+    "packet_index": "当前请求窗口内从 0 开始的 packet 位置；只在 packet 查询模式中有效。",
     "path": "输出文件路径；不提供时 action 按其 response-only 合同返回结果。",
     "payload": "单个 payload 信号或表达式，用于脉冲、稳定性或协议检查。",
     "payloads": "payload 信号列表；每项按同一采样合同检查。",
@@ -173,7 +174,7 @@ ACTION_GUIDANCE: dict[str, Json] = {
         "alternatives": [{"action": "handshake.inspect", "when": "需要协议层 stall 或稳定性结论。"}],
     },
     "stream.query": {
-        "use_when": ["已加载通用 stream 配置，需要查询 transfer、stall、packet 或字段。"],
+        "use_when": ["已加载通用 stream 配置，需要查询 transfer、stall、packet 或字段；连续查询默认 full，一次性窄窗口可显式 range。"],
         "do_not_use_when": ["接口是 AXI/APB 且需要其标准专用语义。"],
         "alternatives": [{"action": "event.find", "when": "只需一次性表达式找点。"}],
     },
@@ -240,6 +241,18 @@ ACTION_ARG_OVERRIDES: dict[tuple[str, str], Json] = {
     ("stream.query", "query"): {
         "description": "查询种类。beat stream 支持 summary、first/last_transfer、transfer_window、first/last_stall、stall_window；packet stream 还支持 first/last_packet、packet_at、packet_window。启用 filter 时可用集合进一步受 packet 边界限制。",
         "type": "string", "enum": ["summary", "first_transfer", "last_transfer", "transfer_window", "first_stall", "last_stall", "stall_window", "first_packet", "last_packet", "packet_at", "packet_window"],
+    },
+    ("stream.query", "cache_scope"): {
+        "description": "Base-analysis cache scope. full (default) caches the complete FSDB while the response still honors time_range; range caches only that normalized closed interval. range without time_range reuses full. The engine never falls back automatically.",
+        "type": "string", "enum": ["full", "range"], "default": "full",
+    },
+    ("stream.export", "cache_scope"): {
+        "description": "Base-analysis cache scope. full (default) is reusable by query, export, and dynamic validate; use range explicitly for a one-off narrow interval. range without time_range reuses full.",
+        "type": "string", "enum": ["full", "range"], "default": "full",
+    },
+    ("stream.validate", "cache_scope"): {
+        "description": "Base-analysis cache scope for dynamic=true only. full (default) caches the complete FSDB; range caches the normalized time_range. Omit this argument when dynamic=false.",
+        "type": "string", "enum": ["full", "range"], "default": "full",
     },
 }
 

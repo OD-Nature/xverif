@@ -41,7 +41,7 @@
     }
   },
   "additionalProperties": true,
-  "description": "Query and filter stream transfers, stalls, and packets.",
+  "description": "Query and filter stream transfers, stalls, and packets with explicit full or range base-cache scope.",
   "x-output_notes": "返回该 action 的 summary/data/error/meta；具体字段以 response schema 和 response example 为准。",
-  "x-description-zh": "查询并按多个字段过滤 stream transfer 或 packet。"
+  "x-description-zh": "以显式 full 或 range 基础分析缓存范围查询并按多个字段过滤 stream transfer 或 packet。"
 }

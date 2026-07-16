@@ -621,28 +621,28 @@ if (spec.name == "stream.show") {
     return;
 }
 if (spec.name == "stream.validate") {
-    spec.description_en = "Validate stream configuration and observed behavior.";
-    spec.description_zh = "验证 stream 配置。";
+    spec.description_en = "Validate stream configuration and observed behavior; dynamic validation supports explicit full or range base-cache scope.";
+    spec.description_zh = "验证 stream 配置；动态验证可显式选择 full 或 range 基础分析缓存范围。";
     spec.purposes = {"verify"};
-    spec.use_for = {"Validate stream configuration and observed behavior."};
+    spec.use_for = {"Validate stream configuration statically, or reuse an explicit full/range base analysis for dynamic validation."};
     spec.do_not_use_for = {"Tasks outside this action's documented contract."};
     spec.preferred_alternative = Json::object();
     return;
 }
 if (spec.name == "stream.query") {
-    spec.description_en = "Query and filter stream transfers, stalls, and packets.";
-    spec.description_zh = "查询并按多个字段过滤 stream transfer 或 packet。";
+    spec.description_en = "Query and filter stream transfers, stalls, and packets with explicit full or range base-cache scope.";
+    spec.description_zh = "以显式 full 或 range 基础分析缓存范围查询并按多个字段过滤 stream transfer 或 packet。";
     spec.purposes = {"query"};
-    spec.use_for = {"Query stream transfers, stalls, or packets and apply AND-combined exact/range/mask field filters."};
+    spec.use_for = {"Query stream transfers, stalls, or packets, reuse a full/range base analysis, and apply AND-combined exact/range/mask field filters."};
     spec.do_not_use_for = {"Tasks outside this action's documented contract."};
     spec.preferred_alternative = Json::object();
     return;
 }
 if (spec.name == "stream.export") {
-    spec.description_en = "Export stream transfers or packet data.";
-    spec.description_zh = "导出 stream 查询结果。";
+    spec.description_en = "Export stream transfers or packet data from an explicit full or range base-cache scope.";
+    spec.description_zh = "从显式 full 或 range 基础分析缓存范围导出 stream 查询结果。";
     spec.purposes = {"export"};
-    spec.use_for = {"Export stream transfers or packet data."};
+    spec.use_for = {"Export stream transfers or packet data while reusing an explicit full/range base analysis."};
     spec.do_not_use_for = {"Tasks outside this action's documented contract."};
     spec.preferred_alternative = Json::object();
     return;

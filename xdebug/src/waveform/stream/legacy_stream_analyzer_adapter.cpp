@@ -70,6 +70,27 @@ bool differential_enabled() {
     return value != nullptr && std::string(value) == "1";
 }
 
+bool compare_with_legacy(npiFsdbFileHandle file,
+                         const StreamConfig& config,
+                         const StreamQueryOptions& options,
+                         const StreamAnalysis& analysis,
+                         std::string& error) {
+    if (!differential_enabled()) return true;
+    LegacyStreamAnalyzerAdapter legacy;
+    StreamAnalysis expected;
+    std::string legacy_error;
+    if (!legacy.analyze(file, config, options, expected, legacy_error)) {
+        error = "legacy stream differential oracle failed: " + legacy_error;
+        return false;
+    }
+    if (analysis_snapshot(config, options, analysis) !=
+        analysis_snapshot(config, options, expected)) {
+        error = "stream columnar differential mismatch for " + config.name;
+        return false;
+    }
+    return true;
+}
+
 }  // namespace
 
 bool LegacyStreamAnalyzerAdapter::analyze(npiFsdbFileHandle file,
@@ -88,20 +109,18 @@ bool analyze_stream_with_legacy_differential(
     StreamAnalyzer analyzer;
     if (!analyzer.analyze(file, config, options, analysis, error))
         return false;
-    if (!differential_enabled()) return true;
-    LegacyStreamAnalyzerAdapter legacy;
-    StreamAnalysis expected;
-    std::string legacy_error;
-    if (!legacy.analyze(file, config, options, expected, legacy_error)) {
-        error = "legacy stream differential oracle failed: " + legacy_error;
+    return compare_with_legacy(file, config, options, analysis, error);
+}
+
+bool analyze_stream_cached_with_legacy_differential(
+    StreamAnalyzer& analyzer, npiFsdbFileHandle file,
+    const StreamConfig& config, const StreamQueryOptions& options,
+    AnalysisCacheScope cache_scope, StreamAnalysis& analysis,
+    std::string& error) {
+    if (!analyzer.analyze_cached(
+            file, config, options, cache_scope, analysis, error))
         return false;
-    }
-    if (analysis_snapshot(config, options, analysis) !=
-        analysis_snapshot(config, options, expected)) {
-        error = "stream columnar differential mismatch for " + config.name;
-        return false;
-    }
-    return true;
+    return compare_with_legacy(file, config, options, analysis, error);
 }
 
 }  // namespace xdebug_waveform

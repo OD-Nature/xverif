@@ -81,7 +81,7 @@
     }
   },
   "additionalProperties": true,
-  "description": "Export stream transfers or packet data.",
+  "description": "Export stream transfers or packet data from an explicit full or range base-cache scope.",
   "x-output_notes": "返回该 action 的 summary/data/error/meta；具体字段以 response schema 和 response example 为准。",
-  "x-description-zh": "导出 stream 查询结果。"
+  "x-description-zh": "从显式 full 或 range 基础分析缓存范围导出 stream 查询结果。"
 }

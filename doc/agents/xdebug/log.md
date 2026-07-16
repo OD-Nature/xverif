@@ -31,6 +31,14 @@
   不提供 public bypass。nightly benchmark 固化 cold P95、RSS 上限和至少 25% RSS 降幅。
 - Phase 4A 尚不启用跨请求 cache；stream full/range scope、repository 复用、预算/LRU 与
   schema/skill 合同留在独立 Phase 4B 实施。
+- 完成 Phase 4B Stream repository 迁移：`stream.query`、`stream.export` 与动态
+  `stream.validate` 共享版本化语义 base，`cache_scope` 默认 `full` 并支持显式 `range`；
+  静态 validate 不创建 cache entry。
+- range 优先复用同语义 full；full 成功发布后事务性清除同语义 ranges，失败保持旧
+  ranges；不同 ranges 不合并或自动提升。soft LRU、hard-limit 预扫描拒绝和 config
+  replace 语义失效均由正式 stream/unit/benchmark 回归固化。
+- 同步 native schema、request examples、MCP schema projection 与 xverif skill 决策指导；
+  hard-limit 后只允许调用方显式发起新的 range 请求，engine 不缩小范围或切换 backend。
 
 ## 2026-07-14
 

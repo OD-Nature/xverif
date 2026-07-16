@@ -31,6 +31,15 @@
         "query"
       ],
       "properties": {
+        "cache_scope": {
+          "type": "string",
+          "enum": [
+            "full",
+            "range"
+          ],
+          "default": "full",
+          "description": "Base-analysis cache scope. full (default) caches the complete FSDB while the response still honors time_range; range caches only that normalized closed interval. range without time_range reuses full. The engine never falls back automatically."
+        },
         "channel": {
           "type": "string",
           "description": "Action-specific channel input. Its type and accepted values are defined by this schema."
@@ -227,15 +236,15 @@
     }
   },
   "additionalProperties": false,
-  "description": "Query and filter stream transfers, stalls, and packets.",
+  "description": "Query and filter stream transfers, stalls, and packets with explicit full or range base-cache scope.",
   "x-purpose": "查询并过滤 stream transfer/packet。",
-  "x-how_it_works": "无 sop/eop 时按 transfer 在线过滤；packet stream 必须用 filter.position=sop/eop 选择边界拍并返回整包。",
-  "x-when_to_use": "按多个 data/beat/stable 字段筛选流事务。",
-  "x-arg_contract_notes": "required: stream, query; filter.fields conditions AND; each mode exact/range/mask; packet filter requires position sop/eop",
-  "x-description-zh": "查询并按多个字段过滤 stream transfer 或 packet。",
+  "x-how_it_works": "无 sop/eop 时按 transfer 在线过滤；packet stream 必须用 filter.position=sop/eop 选择边界拍并返回整包；默认 full base 仍只投影 time_range response。",
+  "x-when_to_use": "按多个 data/beat/stable 字段筛选流事务并复用基础分析。",
+  "x-arg_contract_notes": "required: stream, query; cache_scope: full(default) / range; filter.fields conditions AND; each mode exact/range/mask; packet filter requires position sop/eop",
+  "x-description-zh": "以显式 full 或 range 基础分析缓存范围查询并按多个字段过滤 stream transfer 或 packet。",
   "x-agent": {
     "use_when": [
-      "已加载通用 stream 配置，需要查询 transfer、stall、packet 或字段。"
+      "已加载通用 stream 配置，需要查询 transfer、stall、packet 或字段；连续查询默认 full，一次性窄窗口可显式 range。"
     ],
     "do_not_use_when": [
       "接口是 AXI/APB 且需要其标准专用语义。"
@@ -247,7 +256,7 @@
       }
     ],
     "constraints": [
-      "required: stream, query; filter.fields conditions AND; each mode exact/range/mask; packet filter requires position sop/eop"
+      "required: stream, query; cache_scope: full(default) / range; filter.fields conditions AND; each mode exact/range/mask; packet filter requires position sop/eop"
     ]
   }
 }

@@ -26,6 +26,8 @@
 - `handshake.inspect`：valid/ready protocol inspection。用于统计 transfer、stall、ready-without-valid、stalled data stability violation；默认启用 `rules.require_valid_hold_until_handshake:true`；`rules.ready_without_valid` 默认 `summary`，可选 `intervals` 或 `all`；适合协议层风险，不替代 raw glitch 检测。
 - `value.at` / `value.batch_at`：用 `args.value_format:"hex"|"bin"|"dec"` 控制响应显示。decimal 遇 X/Z 会明确报告 binary effective format。aggregate 根和 `format:"array_indexed"` 当前统一返回 `UNSUPPORTED_AGGREGATE_QUERY`；应传入最终 leaf signal，xdebug 不猜测 indexed path。
 - `stream.*`：通用 vld-data / vld-rdy-data 任务抽取，是重要能力。凡是可抽象成 `clock + vld + data`，并可选 `rdy`、`bp`、`sop/eop`、`channel_id` 的外部接口、模块内部交互、pipeline stage、FIFO/queue 出入口、仲裁请求授予、RM/scoreboard 内部任务流，都可以注册 stream 后查询 transfer、stall、packet、多字段 filter 或导出 beats。一次性条件找点用 `event.find/export`；协议统计用 `handshake.inspect`；标准 AXI/APB 可优先用专用 action；非标准或模块内部 vld-data 任务优先考虑 stream。stream action 字段统一写 `stream`，不写 `name`。
+- `stream.query`、`stream.export` 和 `stream.validate(dynamic:true)` 的 `cache_scope` 默认 `full`：完整 FSDB 只构建一次 base，response 仍严格使用请求的 `time_range`。预计连续 query/export/dynamic validate 或多个不同窗口时保持 `full`；明确的一次性窄窗口可显式用 `range`。`range` 未提供 `time_range` 时规范化为 `full`，不同 range 不合并、不自动提升。
+- 收到 `ANALYSIS_MEMORY_LIMIT_EXCEEDED` 后，agent 可以显式发起新的 `cache_scope:"range"` 窄窗口请求；这是用户可见的新请求，不是 engine fallback。range 仍失败时停止重试并建议使用 `x-npi` 做离线一次性分析。`stream.validate(dynamic:false)` 必须省略 `cache_scope`。
 - `window.verify`：sampled proof。用于证明某个 clock window 内条件 always/eventually/never 是否成立；适合最终证明，不适合枚举原始 value-change timeline。
 - `signal.changes`：raw timeline。用于列出某个信号的精确变化时间；需要按表达式关联多信号时改用 `event.find/export`。
 
@@ -112,9 +114,9 @@ Stream 配置必须使用 `signals` map：真实信号路径只写在 `signals` 
 | `stream.config.load` | stable | waveform | 加载 stream 配置。 | 把 stream 定义写入 stream manager。 | 定义 valid/ready/data 类流接口。 | also one of: streams / config / config_path / file |
 | `stream.config.list` | stable | waveform | 列出 stream 配置。 | 读取已保存 stream 定义；`args:{}` 列全部，`args.name` 显示单个配置详情。 | 查看可查询的 stream。 | args:{} list all; optional name shows one config |
 | `stream.show` | stable | waveform | 显示 stream 定义和摘要。 | 按 stream 名读取配置并返回字段。 | 确认 stream 绑定了哪些信号。 | required: stream |
-| `stream.validate` | stable | waveform | 验证 stream 配置。 | 检查 stream 信号在 FSDB 中是否可解析。 | 提前发现错误信号路径。 | required: stream |
-| `stream.query` | stable | waveform | 查询并过滤 stream transfer/packet。 | 无 `sop/eop` 时按 transfer 在线过滤；packet stream 必须用 `filter.position=sop/eop` 选择边界拍并返回整包。 | 按多个 data/beat/stable 字段筛选流事务。 | required: stream, query<br>filter.fields conditions AND; each mode exact/range/mask<br>packet filter requires position sop/eop |
-| `stream.export` | stable | waveform | 导出 stream 查询结果。 | 运行 stream query 后按 kind/format 写出；`kind` 只能是 `transfer`、`packet`、`packet_beats`。 | 把流数据输出给外部脚本。 | required: stream<br>kind: transfer / packet / packet_beats<br>format: tsv / csv / xout<br>when kind=packet_beats: output |
+| `stream.validate` | stable | waveform | 验证 stream 配置。 | static validation 不建 base；`dynamic:true` 与 query/export 复用 `cache_scope` 选择的 base。 | 提前发现错误信号路径和动态流行为问题。 | required: stream<br>cache_scope: full(default) / range only when dynamic=true |
+| `stream.query` | stable | waveform | 查询并过滤 stream transfer/packet。 | 无 `sop/eop` 时按 transfer 在线过滤；packet stream 必须用 `filter.position=sop/eop` 选择边界拍并返回整包；默认 full base 仍只投影 time_range response。 | 按多个 data/beat/stable 字段筛选流事务并复用基础分析。 | required: stream, query<br>cache_scope: full(default) / range<br>filter.fields conditions AND; each mode exact/range/mask<br>packet filter requires position sop/eop |
+| `stream.export` | stable | waveform | 导出 stream 查询结果。 | 按 kind/format 从 query/dynamic validate 共用的 full/range base 写出；`kind` 只能是 `transfer`、`packet`、`packet_beats`。 | 把流数据输出给外部脚本并避免重复扫描。 | required: stream<br>cache_scope: full(default) / range<br>kind: transfer / packet / packet_beats<br>format: tsv / csv / xout<br>when kind=packet_beats: output |
 ## Combined Actions
 | action | status | resource | purpose | how it works | objective | args contract |
 | --- | --- | --- | --- | --- | --- | --- |

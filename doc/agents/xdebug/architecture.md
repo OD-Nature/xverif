@@ -246,8 +246,12 @@ frontend 不直接承载 NPI 重逻辑；NPI/FSDB/engine 能力集中在内部 e
   已迁移 APB canonical、AddressIndex 与 cursor。Phase 4A 已把 stream 单次分析拆为
   `StreamBaseAnalysis` 与请求级 `StreamQueryView`：所有 sample 只保留时间、控制、
   stall 和 X/Z 统计元数据，完整 field column 只与 transfer ordinal 对齐；packet 只保存
-  transfer 引用、边界、channel 和 stable mismatch。当前尚未启用 stream 跨请求缓存，
-  每个动态请求仍独立构建 base；Phase 4B 再由 repository 管理 full/range base。
+  transfer 引用、边界、channel 和 stable mismatch。Phase 4B 已把 `stream.query`、
+  `stream.export` 和动态 `stream.validate` 接入 repository：`cache_scope` 默认 `full`，
+  显式 `range` 只构建规范化请求窗口；静态 validate 不创建 base。
+- 同语义 full 已存在时，range 请求直接从 full 构建 QueryView，不新增 range entry；
+  full 构建成功后事务性清除同语义 ranges，构建或 hard-limit 失败则保留旧 ranges。
+  不同 range 不合并、不自动提升为 full，达到 hard limit 时返回结构化错误。
 - `StreamQueryView` 从 base 重建窗口局部 cycle、packet index、stall 边界、partial 标记、
   filter evidence 与完整 summary；base sample/transfer ID 不进入 public response。
   query-specific projection 只限制 packet body materialize，不改变完整计数、首末 evidence

@@ -171,10 +171,12 @@
 
 职责与要求：
 
-- engine 只能有一个 repository；AXI/APB analyzer 已接入 repository。Phase 4A 的 stream
-  已使用列式 `StreamBaseAnalysis` 和临时 `StreamQueryView`，但尚未跨请求复用；Phase 4B
-  才通过 `ensure_stream` 把 full/range base 交给 repository。analyzer 不持有预算或 LRU
-  状态。
+- engine 只能有一个 repository；AXI/APB analyzer 与三个动态 stream action 已接入同一
+  repository。stream analyzer 只负责 full/range base 构建和临时 `StreamQueryView`，
+  repository 负责预算、LRU、building/ready 与发布；analyzer 不持有这些全局状态。
+- stream `cache_scope` 默认 `full`。range 请求优先复用同语义 full；没有 full 时才缓存
+  精确规范化 range。full 成功发布后清除同语义 range entries，失败则保留它们；不同
+  range 不合并、不自动提升，静态 validate 不进入 repository。
 - key 必须同时保存 SHA-256 摘要和规范化语义做等值确认；config name、description、
   JSON 字段顺序和 config 文件路径不进入语义 fingerprint。
 - canonical 发布后不可变；lazy index 独立记账、优先淘汰，canonical 淘汰时释放全部

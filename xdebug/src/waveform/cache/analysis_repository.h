@@ -417,21 +417,34 @@ private:
     std::uint64_t charge(std::uint64_t estimated_bytes) const;
     std::uint64_t next_access_sequence();
     std::uint64_t current_charged_bytes(const AnalysisCacheKey* exempt_canonical,
-                                        const IndexKey* exempt_index) const;
+                                        const IndexKey* exempt_index,
+                                        const AnalysisCacheKey*
+                                            excluded_stream_ranges_for_full =
+                                                nullptr) const;
     std::uint64_t current_resident_estimated_bytes() const;
     std::uint64_t current_build_estimated_bytes() const;
     bool make_hard_room(std::uint64_t new_charge,
                         const AnalysisCacheKey* protected_canonical,
                         const IndexKey* protected_index,
                         AnalysisCacheError& error,
-                        const AnalysisCacheKey& request_key);
+                        const AnalysisCacheKey& request_key,
+                        const AnalysisCacheKey*
+                            excluded_stream_ranges_for_full = nullptr);
     void enforce_soft_budget(const AnalysisCacheKey* protected_canonical,
                              const IndexKey* protected_index);
     bool evict_cold_index(const IndexKey* protected_index,
                           const AnalysisCacheKey* protected_owner,
-                          const std::string& reason);
+                          const std::string& reason,
+                          const AnalysisCacheKey*
+                              preserve_stream_ranges_for_full = nullptr);
     bool evict_cold_canonical(const AnalysisCacheKey* protected_canonical,
-                              const std::string& reason);
+                              const std::string& reason,
+                              const AnalysisCacheKey*
+                                  preserve_stream_ranges_for_full = nullptr);
+    static bool is_stream_sibling_range(
+        const AnalysisCacheKey& candidate,
+        const AnalysisCacheKey& full_key);
+    void erase_stream_sibling_ranges(const AnalysisCacheKey& full_key);
     void erase_canonical_internal(const AnalysisCacheKey& key,
                                   const std::string& reason,
                                   bool invalidate_cursors);

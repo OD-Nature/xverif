@@ -31,6 +31,7 @@ ADDITIONAL_ARG_SCHEMAS: dict[str, dict[str, Any]] = {
     "auth_token": {"type": "string"},
     "bind": {"type": "string"},
     "bind_host": {"type": "string"},
+    "cache_scope": {"type": "string", "enum": ["full", "range"], "default": "full"},
     "channel": {"type": "string"},
     "clk_period": {"type": "string"},
     "config": {"type": "object"},
@@ -185,10 +186,10 @@ EXTRA_ARGS_BY_ACTION: dict[str, set[str]] = {
     "source.context": {"context_lines", "symbol", "output"},
     "stream.config.load": {"config", "config_path", "file", "mode"},
     "stream.config.list": {"name", "output"},
-    "stream.export": {"channel", "line_limit", "output", "time_range"},
-    "stream.query": {"channel", "filter", "line_limit", "packet_index", "time_range"},
+    "stream.export": {"cache_scope", "channel", "line_limit", "output", "time_range"},
+    "stream.query": {"cache_scope", "channel", "filter", "line_limit", "packet_index", "time_range"},
     "stream.show": set(),
-    "stream.validate": {"channel", "line_limit", "time_range"},
+    "stream.validate": {"cache_scope", "channel", "line_limit", "time_range"},
     "trace.active_driver": {
         "limits",
     },
@@ -846,6 +847,16 @@ def sync_schema(schema: dict[str, Any], spec: dict[str, Any], arg_schemas: dict[
                     },
                 },
                 "then": {"not": {"required": ["line_limit"]}},
+            }
+        ]
+    if action == "stream.validate":
+        args["allOf"] = list(args.get("allOf", [])) + [
+            {
+                "if": {
+                    "required": ["dynamic"],
+                    "properties": {"dynamic": {"const": False}},
+                },
+                "then": {"not": {"required": ["cache_scope"]}},
             }
         ]
     if action == "axi.analysis":

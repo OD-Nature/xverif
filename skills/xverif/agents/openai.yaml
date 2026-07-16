@@ -4,4 +4,5 @@ interface:
   default_prompt: >
     使用 xverif 先按问题类型选择能力，再按当前环境选择 MCP 或 CLI。
     精确参数先查询 runtime catalog 和 action-specific schema；MCP 默认 schema view 的
-    args_schema 可直接填入 query 的内层 args，不自动 fallback。
+    args_schema 可直接填入 query 的内层 args，不自动 fallback。stream 的连续查询、导出
+    和动态验证默认使用 cache_scope=full；一次性窄窗口才显式使用 range。

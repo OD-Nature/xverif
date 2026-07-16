@@ -30,6 +30,15 @@
         "stream"
       ],
       "properties": {
+        "cache_scope": {
+          "type": "string",
+          "enum": [
+            "full",
+            "range"
+          ],
+          "default": "full",
+          "description": "Base-analysis cache scope for dynamic=true only. full (default) caches the complete FSDB; range caches the normalized time_range. Omit this argument when dynamic=false."
+        },
         "channel": {
           "type": "string",
           "description": "Action-specific channel input. Its type and accepted values are defined by this schema."
@@ -76,7 +85,28 @@
           "description": "Interprets only unitless time numbers; it never overrides a time string that already has a unit."
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "dynamic"
+            ],
+            "properties": {
+              "dynamic": {
+                "const": false
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "cache_scope"
+              ]
+            }
+          }
+        }
+      ]
     },
     "limits": {
       "type": "object"
@@ -101,15 +131,15 @@
     }
   },
   "additionalProperties": false,
-  "description": "Validate stream configuration and observed behavior.",
+  "description": "Validate stream configuration and observed behavior; dynamic validation supports explicit full or range base-cache scope.",
   "x-purpose": "验证 stream 配置。",
-  "x-how_it_works": "检查 stream 信号在 FSDB 中是否可解析。",
-  "x-when_to_use": "提前发现错误信号路径。",
-  "x-arg_contract_notes": "required: stream",
-  "x-description-zh": "验证 stream 配置。",
+  "x-how_it_works": "static validation 不建 base；dynamic:true 与 query/export 复用 cache_scope 选择的 base。",
+  "x-when_to_use": "提前发现错误信号路径和动态流行为问题。",
+  "x-arg_contract_notes": "required: stream; cache_scope: full(default) / range only when dynamic=true",
+  "x-description-zh": "验证 stream 配置；动态验证可显式选择 full 或 range 基础分析缓存范围。",
   "x-agent": {
     "use_when": [
-      "验证 stream 配置。"
+      "验证 stream 配置；动态验证可显式选择 full 或 range 基础分析缓存范围。"
     ],
     "do_not_use_when": [
       "不要把本 action 用于 stream.config.load、stream.config.list 的业务目标；请改用列出的同域 action。"
@@ -125,7 +155,7 @@
       }
     ],
     "constraints": [
-      "required: stream"
+      "required: stream; cache_scope: full(default) / range only when dynamic=true"
     ]
   }
 }

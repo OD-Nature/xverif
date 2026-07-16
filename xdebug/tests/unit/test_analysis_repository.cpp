@@ -292,6 +292,53 @@ void test_generation_cursor_and_config_invalidation() {
     assert(!stream_repository.find_canonical<FakeEntry>(old_key, "fake"));
 }
 
+void test_stream_full_range_replacement_is_transactional() {
+    AnalysisCacheConfig config;
+    config.soft_max_bytes = 0;
+    config.hard_max_bytes = 200;
+    config.estimator_safety_factor = 1.0;
+    std::vector<AnalysisCacheEvent> events;
+    AnalysisRepository repository(config, [&](const AnalysisCacheEvent& event) {
+        events.push_back(event);
+    });
+    const AnalysisCacheKey full = key("stream", "stream-semantics");
+    const AnalysisCacheKey range_a = key(
+        "stream", "stream-semantics", AnalysisCacheScope::Range, 10, 20);
+    const AnalysisCacheKey range_b = key(
+        "stream", "stream-semantics", AnalysisCacheScope::Range, 30, 40);
+    const AnalysisCacheKey other_range = key(
+        "stream", "other-semantics", AnalysisCacheScope::Range, 10, 20);
+    publish(repository, range_a, 1, 20);
+    publish(repository, range_b, 2, 20);
+    publish(repository, other_range, 3, 20);
+
+    AnalysisCacheError error;
+    assert(repository.begin_canonical(full, "fake", 10, error) ==
+           AnalysisAcquireStatus::BuildStarted);
+    assert(repository.publish_canonical(full, "fake", fake(4), 30, error));
+    assert(repository.find_canonical<FakeEntry>(full, "fake")->value == 4);
+    assert(!repository.find_canonical<FakeEntry>(range_a, "fake"));
+    assert(!repository.find_canonical<FakeEntry>(range_b, "fake"));
+    assert(repository.find_canonical<FakeEntry>(other_range, "fake")->value == 3);
+    std::size_t replaced = 0;
+    for (const auto& event : events)
+        if (event.event == "invalidate" &&
+            event.reason == "full_replaced_range")
+            ++replaced;
+    assert(replaced == 2);
+
+    AnalysisCacheConfig tight = config;
+    tight.hard_max_bytes = 35;
+    AnalysisRepository failed_full(tight);
+    publish(failed_full, range_a, 5, 20);
+    assert(failed_full.begin_canonical(full, "fake", 10, error) ==
+           AnalysisAcquireStatus::BuildStarted);
+    assert(!failed_full.update_canonical_build_bytes(full, 20, error));
+    assert(error.code == "ANALYSIS_MEMORY_LIMIT_EXCEEDED");
+    assert(failed_full.find_canonical<FakeEntry>(range_a, "fake")->value == 5);
+    assert(!failed_full.find_canonical<FakeEntry>(full, "fake"));
+}
+
 }  // namespace
 
 int main() {
@@ -300,5 +347,6 @@ int main() {
     test_index_first_and_cross_protocol_lru();
     test_oversize_hard_limit_and_saturation();
     test_generation_cursor_and_config_invalidation();
+    test_stream_full_range_replacement_is_transactional();
     return 0;
 }

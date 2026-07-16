@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 from pathlib import Path
 from typing import Any
@@ -85,6 +86,19 @@ def _query_xout(
     )
 
 
+def _stream_probe_rows(path: Path) -> list[dict[str, Any]]:
+    if not path.is_file():
+        return []
+    return [
+        row for row in (
+            json.loads(line)
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        )
+        if row.get("protocol") == "stream"
+    ]
+
+
 @pytest.mark.synthetic
 @pytest.mark.waveform
 @pytest.mark.stream
@@ -107,6 +121,8 @@ def test_stream_v1_real_waveform_actions(
     assert expected_path.is_file()
     expected = json.loads(expected_path.read_text(encoding="utf-8"))["streams"]
     cli_runner.base_env["XDEBUG_TEST_STREAM_DIFFERENTIAL"] = "1"
+    probe_path = tmp_path / "stream-analysis-probe.jsonl"
+    cli_runner.base_env["XDEBUG_TEST_ANALYSIS_PROBE_PATH"] = str(probe_path)
 
     open_response = _query(
         cli_runner,
@@ -811,6 +827,11 @@ def test_stream_v1_real_waveform_actions(
         assert Path(packet_beats_exported["summary"]["output"]["meta_path"]).is_file()
         assert packet_beats_exported["summary"]["row_count"] == expected["ready_packet"]["transfer_count"]
         assert "packet_index\tchannel_id\tbeat_index" in packet_beats_out.read_text(encoding="utf-8").splitlines()[0]
+        probe_rows = _stream_probe_rows(probe_path)
+        assert probe_rows and probe_rows[-1]["scanner_invocations"] == len(expected)
+        assert sum(row["event"] == "scan" for row in probe_rows) == len(expected)
+        assert sum(row["event"] == "build" for row in probe_rows) == len(expected)
+        assert sum(row["event"] == "hit" for row in probe_rows) > len(expected)
     finally:
         cli_runner.run(
             {
@@ -819,4 +840,369 @@ def test_stream_v1_real_waveform_actions(
                 "target": target,
             },
             timeout_sec=60,
+        )
+
+
+@pytest.mark.synthetic
+@pytest.mark.waveform
+@pytest.mark.stream
+@pytest.mark.regression
+@pytest.mark.slow
+def test_stream_v1_cache_scope_repository_contract(
+    cli_runner: CliRunner,
+    xdebug_root: Path,
+    artifact_root: Path,
+    tmp_path: Path,
+    xverif_fixture: Any,
+) -> None:
+    resources = xverif_fixture("xdebug.stream_v1")
+    fsdb = resources / "out" / "waves.fsdb"
+    configs = json.loads((
+        xdebug_root / "testdata/waveform/stream_v1/config/streams.json"
+    ).read_text(encoding="utf-8"))["streams"]
+    ready_packet = next(
+        config for config in configs if config["name"] == "ready_packet"
+    )
+    range_a = {"begin": "0ns", "end": "5us"}
+    range_b = {"begin": "5us", "end": "10us"}
+
+    probe_path = tmp_path / "stream-cache-scope-probe.jsonl"
+    cli_runner.base_env["XDEBUG_TEST_ANALYSIS_PROBE_PATH"] = str(probe_path)
+    cli_runner.base_env["XDEBUG_TEST_STREAM_DIFFERENTIAL"] = "1"
+    opened = _query(
+        cli_runner,
+        {"api_version": "xdebug.v1", "action": "session.open",
+         "target": {"fsdb": str(fsdb)},
+         "args": {"name": "stream_cache_scope"}},
+        case_name="stream-cache-scope-open",
+        artifact_root=artifact_root,
+    )
+    session = opened.get("session") or opened["data"]["session"]
+    target = {"session_id": session["id"]}
+    try:
+        _query(
+            cli_runner,
+            {"api_version": "xdebug.v1", "action": "stream.config.load",
+             "target": target,
+             "args": {"streams": [ready_packet], "mode": "replace"}},
+            case_name="stream-cache-scope-load",
+            artifact_root=artifact_root,
+        )
+        static_validate = _query(
+            cli_runner,
+            {"api_version": "xdebug.v1", "action": "stream.validate",
+             "target": target,
+             "args": {"stream": "ready_packet", "dynamic": False}},
+            case_name="stream-cache-scope-static-validate",
+            artifact_root=artifact_root,
+        )
+        assert static_validate["summary"]["dynamic_requested"] is False
+        assert not _stream_probe_rows(probe_path)
+
+        first_range = _query(
+            cli_runner,
+            {"api_version": "xdebug.v1", "action": "stream.query",
+             "target": target,
+             "args": {"stream": "ready_packet", "query": "summary",
+                      "cache_scope": "range", "time_range": range_a}},
+            case_name="stream-cache-scope-range-a",
+            artifact_root=artifact_root,
+        )
+        _query(
+            cli_runner,
+            {"api_version": "xdebug.v1", "action": "stream.export",
+             "target": target,
+             "args": {"stream": "ready_packet", "kind": "packet",
+                      "cache_scope": "range", "time_range": range_a,
+                      "line_limit": 2}},
+            case_name="stream-cache-scope-range-a-export-hit",
+            artifact_root=artifact_root,
+        )
+        _query(
+            cli_runner,
+            {"api_version": "xdebug.v1", "action": "stream.validate",
+             "target": target,
+             "args": {"stream": "ready_packet", "dynamic": True,
+                      "cache_scope": "range", "time_range": range_a}},
+            case_name="stream-cache-scope-range-a-validate-hit",
+            artifact_root=artifact_root,
+        )
+        second_range = _query(
+            cli_runner,
+            {"api_version": "xdebug.v1", "action": "stream.query",
+             "target": target,
+             "args": {"stream": "ready_packet", "query": "summary",
+                      "cache_scope": "range", "time_range": range_b}},
+            case_name="stream-cache-scope-range-b",
+            artifact_root=artifact_root,
+        )
+        assert first_range["summary"]["requested_range"] != \
+            second_range["summary"]["requested_range"]
+        rows = _stream_probe_rows(probe_path)
+        assert rows[-1]["scanner_invocations"] == 2
+        assert sum(row["event"] == "build" for row in rows) == 2
+
+        full_from_range = _query(
+            cli_runner,
+            {"api_version": "xdebug.v1", "action": "stream.query",
+             "target": target,
+             "args": {"stream": "ready_packet", "query": "summary",
+                      "cache_scope": "full", "time_range": range_a}},
+            case_name="stream-cache-scope-full-build",
+            artifact_root=artifact_root,
+        )
+        assert full_from_range["summary"] == first_range["summary"]
+        rows = _stream_probe_rows(probe_path)
+        assert rows[-1]["scanner_invocations"] == 3
+        assert sum(row["event"] == "invalidate" for row in rows) == 2
+
+        derived_range = _query(
+            cli_runner,
+            {"api_version": "xdebug.v1", "action": "stream.query",
+             "target": target,
+             "args": {"stream": "ready_packet", "query": "summary",
+                      "cache_scope": "range", "time_range": range_b}},
+            case_name="stream-cache-scope-range-from-full",
+            artifact_root=artifact_root,
+        )
+        assert derived_range["summary"] == second_range["summary"]
+        assert _stream_probe_rows(probe_path)[-1]["scanner_invocations"] == 3
+
+        same_semantics = copy.deepcopy(ready_packet)
+        same_semantics["description"] = "description-only replacement"
+        _query(
+            cli_runner,
+            {"api_version": "xdebug.v1", "action": "stream.config.load",
+             "target": target,
+             "args": {"streams": [same_semantics], "mode": "replace"}},
+            case_name="stream-cache-scope-description-replace",
+            artifact_root=artifact_root,
+        )
+        _query(
+            cli_runner,
+            {"api_version": "xdebug.v1", "action": "stream.query",
+             "target": target,
+             "args": {"stream": "ready_packet", "query": "summary",
+                      "cache_scope": "full", "time_range": range_a}},
+            case_name="stream-cache-scope-description-hit",
+            artifact_root=artifact_root,
+        )
+        assert _stream_probe_rows(probe_path)[-1]["scanner_invocations"] == 3
+
+        changed_semantics = copy.deepcopy(same_semantics)
+        changed_semantics["sample_point"] = "after"
+        _query(
+            cli_runner,
+            {"api_version": "xdebug.v1", "action": "stream.config.load",
+             "target": target,
+             "args": {"streams": [changed_semantics], "mode": "replace"}},
+            case_name="stream-cache-scope-semantic-replace",
+            artifact_root=artifact_root,
+        )
+        _query(
+            cli_runner,
+            {"api_version": "xdebug.v1", "action": "stream.query",
+             "target": target,
+             "args": {"stream": "ready_packet", "query": "summary",
+                      "cache_scope": "full", "time_range": range_a}},
+            case_name="stream-cache-scope-semantic-rebuild",
+            artifact_root=artifact_root,
+        )
+        assert _stream_probe_rows(probe_path)[-1]["scanner_invocations"] == 4
+        _query(
+            cli_runner,
+            {"api_version": "xdebug.v1", "action": "stream.query",
+             "target": target,
+             "args": {"stream": "ready_packet", "query": "summary",
+                      "cache_scope": "range"}},
+            case_name="stream-cache-scope-range-without-time-is-full",
+            artifact_root=artifact_root,
+        )
+        assert _stream_probe_rows(probe_path)[-1]["scanner_invocations"] == 4
+
+        invalid_static = cli_runner.run(
+            {"api_version": "xdebug.v1", "action": "stream.validate",
+             "target": target,
+             "args": {"stream": "ready_packet", "dynamic": False,
+                      "cache_scope": "full"}},
+            timeout_sec=120,
+        )
+        assert invalid_static.returncode != 0
+        assert invalid_static.response["error"]["code"] == "INVALID_REQUEST"
+        assert invalid_static.response["error"]["error_layer"] == "schema"
+    finally:
+        cli_runner.run(
+            {"api_version": "xdebug.v1", "action": "session.kill",
+             "target": target}, timeout_sec=60,
+        )
+
+    batch_probe = tmp_path / "stream-batch-cache-probe.jsonl"
+    cli_runner.base_env["XDEBUG_TEST_ANALYSIS_PROBE_PATH"] = str(batch_probe)
+    batch_open = _query(
+        cli_runner,
+        {"api_version": "xdebug.v1", "action": "session.open",
+         "target": {"fsdb": str(fsdb)},
+         "args": {"name": "stream_cache_batch"}},
+        case_name="stream-cache-batch-open",
+        artifact_root=artifact_root,
+    )
+    batch_session = batch_open.get("session") or batch_open["data"]["session"]
+    batch_target = {"session_id": batch_session["id"]}
+    try:
+        _query(
+            cli_runner,
+            {"api_version": "xdebug.v1", "action": "stream.config.load",
+             "target": batch_target,
+             "args": {"streams": [ready_packet], "mode": "replace"}},
+            case_name="stream-cache-batch-load", artifact_root=artifact_root,
+        )
+        batch_requests = [
+            {"api_version": "xdebug.v1", "action": "stream.query",
+             "target": batch_target,
+             "args": {"stream": "ready_packet", "query": "summary",
+                      "cache_scope": "range", "time_range": range_a}},
+            {"api_version": "xdebug.v1", "action": "stream.export",
+             "target": batch_target,
+             "args": {"stream": "ready_packet", "kind": "packet",
+                      "cache_scope": "range", "time_range": range_a,
+                      "line_limit": 2}},
+            {"api_version": "xdebug.v1", "action": "stream.validate",
+             "target": batch_target,
+             "args": {"stream": "ready_packet", "dynamic": True,
+                      "cache_scope": "range", "time_range": range_a}},
+            {"api_version": "xdebug.v1", "action": "stream.query",
+             "target": batch_target,
+             "args": {"stream": "ready_packet", "query": "summary",
+                      "cache_scope": "range", "time_range": range_b}},
+            {"api_version": "xdebug.v1", "action": "stream.query",
+             "target": batch_target,
+             "args": {"stream": "ready_packet", "query": "summary",
+                      "cache_scope": "full", "time_range": range_a}},
+            {"api_version": "xdebug.v1", "action": "stream.query",
+             "target": batch_target,
+             "args": {"stream": "ready_packet", "query": "summary",
+                      "cache_scope": "range", "time_range": range_b}},
+        ]
+        batch_result = cli_runner.run(
+            {"api_version": "xdebug.v1", "action": "batch",
+             "args": {"mode": "continue_on_error",
+                      "requests": batch_requests}},
+            timeout_sec=240,
+        )
+        assert batch_result.returncode == 0, batch_result.stderr
+        assert batch_result.response["summary"] == {
+            "count": 6,
+            "all_ok": True,
+            "failed_count": 0,
+            "failed_indexes": [],
+            "failed_codes": [],
+            "failed_layers": [],
+        }
+        assert all(
+            child["ok"] for child in batch_result.response["data"]["results"]
+        )
+        batch_rows = _stream_probe_rows(batch_probe)
+        assert batch_rows[-1]["scanner_invocations"] == 3
+        assert sum(row["event"] == "build" for row in batch_rows) == 3
+        assert sum(row["event"] == "invalidate" for row in batch_rows) == 2
+    finally:
+        cli_runner.run(
+            {"api_version": "xdebug.v1", "action": "session.kill",
+             "target": batch_target}, timeout_sec=60,
+        )
+
+    soft_probe = tmp_path / "stream-soft-lru-probe.jsonl"
+    cli_runner.base_env["XDEBUG_ANALYSIS_CACHE_MAX_BYTES"] = "1"
+    cli_runner.base_env["XDEBUG_ANALYSIS_CACHE_HARD_MAX_BYTES"] = "2147483648"
+    cli_runner.base_env["XDEBUG_TEST_ANALYSIS_PROBE_PATH"] = str(soft_probe)
+    soft_open = _query(
+        cli_runner,
+        {"api_version": "xdebug.v1", "action": "session.open",
+         "target": {"fsdb": str(fsdb)},
+         "args": {"name": "stream_cache_soft_lru"}},
+        case_name="stream-cache-soft-open",
+        artifact_root=artifact_root,
+    )
+    soft_session = soft_open.get("session") or soft_open["data"]["session"]
+    soft_target = {"session_id": soft_session["id"]}
+    try:
+        _query(
+            cli_runner,
+            {"api_version": "xdebug.v1", "action": "stream.config.load",
+             "target": soft_target,
+             "args": {"streams": [ready_packet], "mode": "replace"}},
+            case_name="stream-cache-soft-load", artifact_root=artifact_root,
+        )
+        for index, time_range in enumerate((range_a, range_b, range_a)):
+            _query(
+                cli_runner,
+                {"api_version": "xdebug.v1", "action": "stream.query",
+                 "target": soft_target,
+                 "args": {"stream": "ready_packet", "query": "summary",
+                          "cache_scope": "range",
+                          "time_range": time_range}},
+                case_name="stream-cache-soft-range-%d" % index,
+                artifact_root=artifact_root,
+            )
+        soft_rows = _stream_probe_rows(soft_probe)
+        assert soft_rows[-1]["scanner_invocations"] == 3
+        assert soft_rows[-1]["evictions"] >= 2
+    finally:
+        cli_runner.run(
+            {"api_version": "xdebug.v1", "action": "session.kill",
+             "target": soft_target}, timeout_sec=60,
+        )
+
+    hard_probe = tmp_path / "stream-hard-limit-probe.jsonl"
+    cli_runner.base_env["XDEBUG_ANALYSIS_CACHE_MAX_BYTES"] = "1"
+    cli_runner.base_env["XDEBUG_ANALYSIS_CACHE_HARD_MAX_BYTES"] = "1"
+    cli_runner.base_env["XDEBUG_TEST_ANALYSIS_PROBE_PATH"] = str(hard_probe)
+    hard_open = _query(
+        cli_runner,
+        {"api_version": "xdebug.v1", "action": "session.open",
+         "target": {"fsdb": str(fsdb)},
+         "args": {"name": "stream_cache_hard_limit"}},
+        case_name="stream-cache-hard-open",
+        artifact_root=artifact_root,
+    )
+    hard_session = hard_open.get("session") or hard_open["data"]["session"]
+    hard_target = {"session_id": hard_session["id"]}
+    try:
+        _query(
+            cli_runner,
+            {"api_version": "xdebug.v1", "action": "stream.config.load",
+             "target": hard_target,
+             "args": {"streams": [ready_packet], "mode": "replace"}},
+            case_name="stream-cache-hard-load", artifact_root=artifact_root,
+        )
+        hard_request = {
+            "api_version": "xdebug.v1", "action": "stream.query",
+            "target": hard_target,
+            "args": {"stream": "ready_packet", "query": "summary",
+                     "cache_scope": "full", "time_range": range_a},
+        }
+        rejected = cli_runner.run(
+            {"api_version": "xdebug.v1", "action": "batch",
+             "args": {"mode": "continue_on_error",
+                      "requests": [hard_request, copy.deepcopy(hard_request)]}},
+            timeout_sec=120,
+        )
+        assert rejected.returncode != 0
+        assert rejected.response["error"]["code"] == "BATCH_PARTIAL_FAILURE"
+        child_results = rejected.response["data"]["results"]
+        assert len(child_results) == 2
+        for child in child_results:
+            cache_error = child["error"]
+            assert cache_error["code"] == "ANALYSIS_MEMORY_LIMIT_EXCEEDED"
+            assert cache_error["protocol"] == "stream"
+            assert cache_error["hard_max_bytes"] == 1
+            assert cache_error["recoverable"] is True
+            assert len(cache_error["suggestions"]) == 2
+        hard_rows = _stream_probe_rows(hard_probe)
+        assert hard_rows[-1]["scanner_invocations"] == 0
+        assert sum(row["event"] == "build_failed" for row in hard_rows) == 2
+    finally:
+        cli_runner.run(
+            {"api_version": "xdebug.v1", "action": "session.kill",
+             "target": hard_target}, timeout_sec=60,
         )

@@ -344,12 +344,12 @@ def test_analysis_cache_phase0_baseline(
             cold_ms, hot_ms, rss_delta_bytes, estimated_bytes, scanner_invocations
         )
 
-    # AXI and APB are repository-backed after Phases 2 and 3. A total of one
-    # scan per engine means every hot request added zero scanner invocations.
-    # Stream retains its frozen Phase 0 expectation until Phase 4.
+    # AXI, APB, and Stream are repository-backed after Phases 2, 3, and 4B.
+    # A total of one scan per engine means every hot request, including the
+    # Stream XOUT projection, added zero scanner invocations.
     assert metrics["apb"]["scanner_invocations"] == [1, 1, 1]
     assert metrics["axi"]["scanner_invocations"] == [1, 1, 1]
-    assert metrics["stream"]["scanner_invocations"] == [4, 3, 3]
+    assert metrics["stream"]["scanner_invocations"] == [1, 1, 1]
     for protocol, values in metrics.items():
         limits = thresholds["phase0_regression_limits"][protocol]
         assert values["cold_p95_ms"] <= limits["cold_p95_ms"]
@@ -383,4 +383,9 @@ def test_analysis_cache_phase0_baseline(
     ) / baseline_stream_rss
     assert rss_reduction_percent >= \
         stream_target["minimum_rss_reduction_percent"]
+    cached_stream_target = thresholds["phase_targets"]["stream_cached"]
+    assert metrics["stream"]["hot_p95_ms"] <= \
+        cached_stream_target["hot_p95_ms"]
+    assert cached_stream_target["hot_scanner_invocations"] == 0
+    assert all(total == 1 for total in metrics["stream"]["scanner_invocations"])
     print("ANALYSIS_CACHE_BASELINE=" + json.dumps(metrics, sort_keys=True))

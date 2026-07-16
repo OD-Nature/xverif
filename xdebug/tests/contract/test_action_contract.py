@@ -1429,6 +1429,61 @@ def test_stream_query_filter_schema_is_strict_and_match_field_is_removed(
 
 
 @pytest.mark.contract
+def test_stream_cache_scope_schema_is_explicit_and_protocol_local(
+    xdebug_root: Path,
+) -> None:
+    def schema(action: str) -> dict[str, Any]:
+        return _load_json(
+            xdebug_root / "schemas" / "v1" / "actions" /
+            ("%s.request.schema.json" % action)
+        )
+
+    for action in ("stream.query", "stream.export", "stream.validate"):
+        args_schema = schema(action)["properties"]["args"]
+        cache_scope = args_schema["properties"]["cache_scope"]
+        assert cache_scope["enum"] == ["full", "range"]
+        assert cache_scope["default"] == "full"
+        assert "range without time_range" in cache_scope["description"] or \
+            "dynamic=true" in cache_scope["description"]
+
+    query = jsonschema.Draft202012Validator(schema("stream.query"))
+    query.validate({
+        "api_version": "xdebug.v1", "action": "stream.query",
+        "args": {"stream": "req", "query": "summary",
+                 "cache_scope": "range",
+                 "time_range": {"begin": "10ns", "end": "20ns"}},
+    })
+    with pytest.raises(jsonschema.ValidationError):
+        query.validate({
+            "api_version": "xdebug.v1", "action": "stream.query",
+            "args": {"stream": "req", "query": "summary",
+                     "cache_scope": "automatic"},
+        })
+
+    validate = jsonschema.Draft202012Validator(schema("stream.validate"))
+    validate.validate({
+        "api_version": "xdebug.v1", "action": "stream.validate",
+        "args": {"stream": "req", "dynamic": True,
+                 "cache_scope": "range",
+                 "time_range": {"begin": "10ns", "end": "20ns"}},
+    })
+    validate.validate({
+        "api_version": "xdebug.v1", "action": "stream.validate",
+        "args": {"stream": "req", "dynamic": False},
+    })
+    with pytest.raises(jsonschema.ValidationError):
+        validate.validate({
+            "api_version": "xdebug.v1", "action": "stream.validate",
+            "args": {"stream": "req", "dynamic": False,
+                     "cache_scope": "full"},
+        })
+
+    for action in ("apb.query", "axi.query"):
+        assert "cache_scope" not in \
+            schema(action)["properties"]["args"]["properties"]
+
+
+@pytest.mark.contract
 def test_line_limit_and_scan_budget_request_contracts_are_strict(
     xdebug_root: Path,
 ) -> None:

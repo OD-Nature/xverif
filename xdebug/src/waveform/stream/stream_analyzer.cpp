@@ -21,6 +21,9 @@ std::string format_time(npiFsdbTime t);
 
 namespace {
 
+constexpr std::uint32_t kStreamFingerprintVersion = 1;
+const char* kStreamBaseTypeTag = "stream_base_analysis.v1";
+
 void issue(std::vector<StreamValidationIssue>& issues,
            const std::string& severity,
            const std::string& code,
@@ -274,11 +277,29 @@ bool StreamAnalyzer::validate_static(npiFsdbFileHandle file, const StreamConfig&
     return true;
 }
 
+void StreamAnalyzer::configure_repository(
+    AnalysisRepository* repository, const std::string& session_id,
+    const FsdbIdentity& fsdb_identity) {
+    repository_ = repository;
+    session_id_ = session_id;
+    fsdb_identity_ = fsdb_identity;
+    last_cache_error_ = AnalysisCacheError();
+}
+
+AnalysisCacheKey StreamAnalyzer::cache_key(
+    const StreamConfig& config, AnalysisCacheScope scope,
+    npiFsdbTime begin, npiFsdbTime end) const {
+    return make_analysis_cache_key(
+        "stream", session_id_, fsdb_identity_, kStreamFingerprintVersion,
+        normalized_stream_config_semantics(config), scope, begin, end);
+}
+
 bool StreamAnalyzer::build_base(npiFsdbFileHandle file,
                                 const StreamConfig& config,
                                 const StreamQueryOptions& options,
                                 StreamBaseAnalysis& base,
-                                std::string& error) {
+                                std::string& error,
+                                const AnalysisCacheKey* build_key) {
     base = StreamBaseAnalysis();
     base.requested_begin = options.begin;
     base.requested_end = options.end;
@@ -399,9 +420,15 @@ bool StreamAnalyzer::build_base(npiFsdbFileHandle file,
         file, clock_sample.edge, clock_sample.sample_point);
     int sample_count = 0;
     bool sample_truncated = false;
+    bool budget_failed = false;
+    const AnalysisRepositoryStats repository_stats = repository_ == nullptr
+        ? AnalysisRepositoryStats() : repository_->stats();
     analysis_probe().record(
         "scan", "stream", config.name,
-        AnalysisProbeMetrics{0, 0, 0, 0, 1});
+        AnalysisProbeMetrics{repository_stats.canonical_entry_count,
+                             repository_stats.index_count,
+                             repository_stats.resident_estimated_bytes,
+                             repository_stats.build_estimated_bytes, 1});
     const bool scan_ok = scanner.scan(
         clock_signals, sample_signals, options.begin, options.end,
         npiFsdbBinStrVal, 'b', -1,
@@ -584,12 +611,26 @@ bool StreamAnalyzer::build_base(npiFsdbFileHandle file,
                 }
             }
             base.samples.push_back(std::move(metadata));
+            const std::size_t observed_samples = base.samples.size();
+            if (build_key != nullptr &&
+                (observed_samples & (observed_samples - 1)) == 0 &&
+                !repository_->update_canonical_build_bytes(
+                    *build_key,
+                    estimate_stream_base_analysis_bytes(base),
+                    last_cache_error_)) {
+                budget_failed = true;
+                error = last_cache_error_.message;
+                return false;
+            }
             return true;
         }, error, sample_count, sample_truncated);
+    if (budget_failed) return false;
     if (!scan_ok) {
-        analysis_probe().record(
-            "build_failed", "stream", config.name,
-            AnalysisProbeMetrics{0, 0, 0, 0, 0});
+        if (build_key == nullptr) {
+            analysis_probe().record(
+                "build_failed", "stream", config.name,
+                AnalysisProbeMetrics{0, 0, 0, 0, 0});
+        }
         return false;
     }
     finish_packet(single_packet, true);
@@ -954,6 +995,101 @@ bool StreamAnalyzer::analyze(npiFsdbFileHandle file,
         AnalysisProbeMetrics{0, 0, 0,
             estimate_stream_base_analysis_bytes(base), 0});
     return true;
+}
+
+bool StreamAnalyzer::analyze_cached(
+    npiFsdbFileHandle file, const StreamConfig& config,
+    const StreamQueryOptions& options, AnalysisCacheScope cache_scope,
+    StreamAnalysis& analysis, std::string& error) {
+    last_cache_error_ = AnalysisCacheError();
+    if (repository_ == nullptr) {
+        last_cache_error_.code = "ANALYSIS_REPOSITORY_UNAVAILABLE";
+        last_cache_error_.message =
+            "stream analysis repository is not configured";
+        error = last_cache_error_.message;
+        return false;
+    }
+
+    npiFsdbTime minimum = 0;
+    npiFsdbTime maximum = 0;
+    npi_fsdb_min_time(file, &minimum);
+    npi_fsdb_max_time(file, &maximum);
+    AnalysisCacheScope effective_scope = cache_scope;
+    if (effective_scope == AnalysisCacheScope::Range &&
+        options.begin == minimum && options.end == maximum)
+        effective_scope = AnalysisCacheScope::Full;
+
+    const AnalysisCacheKey full_key = cache_key(
+        config, AnalysisCacheScope::Full, minimum, maximum);
+    AnalysisCacheKey selected_key = effective_scope == AnalysisCacheScope::Full
+        ? full_key
+        : cache_key(config, AnalysisCacheScope::Range,
+                    options.begin, options.end);
+    std::shared_ptr<const StreamBaseAnalysis> base;
+    if (effective_scope == AnalysisCacheScope::Range) {
+        base = repository_->find_canonical<StreamBaseAnalysis>(
+            full_key, kStreamBaseTypeTag);
+        if (base) selected_key = full_key;
+    }
+
+    if (!base) {
+        const AnalysisAcquireStatus acquire = repository_->begin_canonical(
+            selected_key, kStreamBaseTypeTag, sizeof(StreamBaseAnalysis),
+            last_cache_error_);
+        if (acquire == AnalysisAcquireStatus::Hit) {
+            base = repository_->peek_canonical<StreamBaseAnalysis>(
+                selected_key, kStreamBaseTypeTag);
+        } else if (acquire == AnalysisAcquireStatus::BuildStarted) {
+            try {
+                std::shared_ptr<StreamBaseAnalysis> building(
+                    new StreamBaseAnalysis());
+                StreamQueryOptions build_options = options;
+                if (selected_key.scope == AnalysisCacheScope::Full) {
+                    build_options.begin = minimum;
+                    build_options.end = maximum;
+                } else {
+                    build_options.begin = selected_key.range_begin;
+                    build_options.end = selected_key.range_end;
+                }
+                if (!build_base(file, config, build_options, *building,
+                                error, &selected_key)) {
+                    repository_->fail_canonical(selected_key, "scan_failed");
+                    return false;
+                }
+                const std::uint64_t resident_bytes =
+                    estimate_stream_base_analysis_bytes(*building);
+                if (!repository_->update_canonical_build_bytes(
+                        selected_key, resident_bytes, last_cache_error_)) {
+                    error = last_cache_error_.message;
+                    return false;
+                }
+                if (!repository_->publish_canonical<StreamBaseAnalysis>(
+                        selected_key, kStreamBaseTypeTag,
+                        std::static_pointer_cast<const StreamBaseAnalysis>(
+                            building),
+                        resident_bytes, last_cache_error_)) {
+                    error = last_cache_error_.message;
+                    return false;
+                }
+                base = repository_->peek_canonical<StreamBaseAnalysis>(
+                    selected_key, kStreamBaseTypeTag);
+            } catch (const std::bad_alloc&) {
+                repository_->fail_canonical_bad_alloc(
+                    selected_key, last_cache_error_);
+                error = last_cache_error_.message;
+                return false;
+            }
+        } else {
+            error = last_cache_error_.message;
+            return false;
+        }
+    }
+    if (!base) {
+        error = "stream analysis cache entry is unavailable after build";
+        return false;
+    }
+    StreamQueryView view(*base, config, options);
+    return view.materialize(analysis, error);
 }
 
 bool StreamAnalyzer::analyze_legacy(npiFsdbFileHandle file,

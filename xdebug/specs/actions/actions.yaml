@@ -2433,13 +2433,13 @@
       "required_args": [
         "stream"
       ],
-      "description_en": "Validate stream configuration and observed behavior.",
-      "description_zh": "验证 stream 配置。",
+      "description_en": "Validate stream configuration and observed behavior; dynamic validation supports explicit full or range base-cache scope.",
+      "description_zh": "验证 stream 配置；动态验证可显式选择 full 或 range 基础分析缓存范围。",
       "purposes": [
         "verify"
       ],
       "use_for": [
-        "Validate stream configuration and observed behavior."
+        "Validate stream configuration statically, or reuse an explicit full/range base analysis for dynamic validation."
       ],
       "do_not_use_for": [
         "Tasks outside this action's documented contract."
@@ -2468,13 +2468,13 @@
         "stream",
         "query"
       ],
-      "description_en": "Query and filter stream transfers, stalls, and packets.",
-      "description_zh": "查询并按多个字段过滤 stream transfer 或 packet。",
+      "description_en": "Query and filter stream transfers, stalls, and packets with explicit full or range base-cache scope.",
+      "description_zh": "以显式 full 或 range 基础分析缓存范围查询并按多个字段过滤 stream transfer 或 packet。",
       "purposes": [
         "query"
       ],
       "use_for": [
-        "Query stream transfers, stalls, or packets and apply AND-combined exact/range/mask field filters."
+        "Query stream transfers, stalls, or packets, reuse a full/range base analysis, and apply AND-combined exact/range/mask field filters."
       ],
       "do_not_use_for": [
         "Tasks outside this action's documented contract."
@@ -2502,13 +2502,13 @@
       "required_args": [
         "stream"
       ],
-      "description_en": "Export stream transfers or packet data.",
-      "description_zh": "导出 stream 查询结果。",
+      "description_en": "Export stream transfers or packet data from an explicit full or range base-cache scope.",
+      "description_zh": "从显式 full 或 range 基础分析缓存范围导出 stream 查询结果。",
       "purposes": [
         "export"
       ],
       "use_for": [
-        "Export stream transfers or packet data."
+        "Export stream transfers or packet data while reusing an explicit full/range base analysis."
       ],
       "do_not_use_for": [
         "Tasks outside this action's documented contract."

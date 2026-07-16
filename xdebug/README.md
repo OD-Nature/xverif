@@ -689,6 +689,13 @@ unpacked/聚合数组可显式请求结构化显示：
 
 ### 协议与事件：event / APB / AXI
 
+`stream.query`、`stream.export` 和动态 `stream.validate` 使用同一 repository base cache。
+`args.cache_scope` 可为 `full` 或 `range`，默认 `full`；它只控制 base 扫描与缓存范围，
+不改变响应 `time_range`。一次性窄窗口可显式使用 `range`；重复查询、跨 action 复用或
+多个窗口优先使用 `full`。同语义 full 已存在时 range 直接复用 full；full 成功发布后
+清除同语义 range entries。达到 hard limit 时返回 `ANALYSIS_MEMORY_LIMIT_EXCEEDED`，
+不会静默缩小范围或切换 backend。静态 `stream.validate` 不接受 `cache_scope`。
+
 AXI 的 AW 与 W 是独立通道，`axi.*` 会处理 `aw_before_w`、`same_cycle` 和
 `w_before_aw`，不能假设每个 W handshake 旁边都有 AW handshake。首次
 `axi.query/analysis/pair/timeline/outlier/export` 会为同一 config 建立并缓存唯一

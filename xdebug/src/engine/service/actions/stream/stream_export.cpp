@@ -21,7 +21,8 @@ namespace {
 
 using xdebug_waveform::Json;
 using xdebug_waveform::StreamAnalysis;
-using xdebug_waveform::analyze_stream_with_legacy_differential;
+using xdebug_waveform::analyze_stream_cached_with_legacy_differential;
+using xdebug_waveform::AnalysisCacheScope;
 using xdebug_waveform::StreamConfig;
 using xdebug_waveform::StreamExporter;
 using xdebug_waveform::StreamManager;
@@ -147,13 +148,29 @@ public:
         if (!get_config(args, config, fail)) return fail;
         StreamQueryOptions options;
         std::string error;
+        const std::string cache_scope =
+            args.value("cache_scope", std::string("full"));
+        if (cache_scope != "full" && cache_scope != "range")
+            return err("INVALID_ENUM", "cache_scope must be full or range",
+                       {{"invalid_arg", "args.cache_scope"},
+                        {"expected", "one of full, range"},
+                        {"allowed_values", Json::array({"full", "range"})},
+                        {"correct_example", stream_export_example(config.name)}});
         if (!range_from_args(args, request.value("limits", Json::object()), options, error))
             return stream_time_error(error);
         options.limit = 0;
         StreamAnalysis analysis;
-        if (!analyze_stream_with_legacy_differential(
-                g_fsdb_file, config, options, analysis, error))
+        if (!analyze_stream_cached_with_legacy_differential(
+                xdebug_waveform::g_stream_analyzer, g_fsdb_file, config,
+                options,
+                cache_scope == "range" ? AnalysisCacheScope::Range
+                                       : AnalysisCacheScope::Full,
+                analysis, error)) {
+            if (!xdebug_waveform::g_stream_analyzer.last_cache_error().empty())
+                return make_analysis_cache_error(
+                    xdebug_waveform::g_stream_analyzer.last_cache_error());
             return stream_analyze_error(error);
+        }
         std::string kind = args.value("kind", std::string("transfer"));
         Json output_arg = args.value("output", Json::object());
         std::string format = output_arg.value("file_format", std::string("tsv"));

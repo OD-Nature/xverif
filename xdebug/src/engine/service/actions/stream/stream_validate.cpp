@@ -21,7 +21,8 @@ namespace xdebug_design {
 namespace {
 
 using xdebug_waveform::Json;
-using xdebug_waveform::analyze_stream_with_legacy_differential;
+using xdebug_waveform::analyze_stream_cached_with_legacy_differential;
+using xdebug_waveform::AnalysisCacheScope;
 using xdebug_waveform::StreamAnalysis;
 using xdebug_waveform::StreamAnalyzer;
 using xdebug_waveform::StreamConfig;
@@ -140,12 +141,30 @@ public:
         Json fail;
         StreamConfig config;
         if (!get_config(args, config, fail)) return fail;
+        const bool dynamic = args.value("dynamic", true);
+        if (!dynamic && args.contains("cache_scope")) {
+            Json example = stream_validate_example(config.name);
+            example["args"].erase("cache_scope");
+            return err(
+                "INVALID_ARGUMENT",
+                "cache_scope is only valid when stream.validate dynamic=true",
+                {{"invalid_arg", "args.cache_scope"},
+                 {"expected", "omit cache_scope for static validation"},
+                 {"correct_example", example}});
+        }
+        const std::string cache_scope =
+            args.value("cache_scope", std::string("full"));
+        if (cache_scope != "full" && cache_scope != "range")
+            return err("INVALID_ENUM", "cache_scope must be full or range",
+                       {{"invalid_arg", "args.cache_scope"},
+                        {"expected", "one of full, range"},
+                        {"allowed_values", Json::array({"full", "range"})},
+                        {"correct_example", stream_validate_example(config.name)}});
         StreamAnalyzer analyzer;
         std::vector<xdebug_waveform::StreamValidationIssue> issues;
         std::string error;
         bool static_ok = analyzer.validate_static(g_fsdb_file, config, issues, error);
 
-        bool dynamic = args.value("dynamic", true);
         Json dyn = Json::object();
         bool dynamic_complete = !dynamic;
         if (static_ok && dynamic) {
@@ -155,9 +174,17 @@ public:
             options.limit = args.value("line_limit", 256);
             options.query_kind = "validate";
             StreamAnalysis analysis;
-            if (!analyze_stream_with_legacy_differential(
-                    g_fsdb_file, config, options, analysis, error))
+            if (!analyze_stream_cached_with_legacy_differential(
+                    xdebug_waveform::g_stream_analyzer, g_fsdb_file, config,
+                    options,
+                    cache_scope == "range" ? AnalysisCacheScope::Range
+                                           : AnalysisCacheScope::Full,
+                    analysis, error)) {
+                if (!xdebug_waveform::g_stream_analyzer.last_cache_error().empty())
+                    return make_analysis_cache_error(
+                        xdebug_waveform::g_stream_analyzer.last_cache_error());
                 return stream_analyze_error(error);
+            }
             if (analysis.vld_cycles == 0) add_issue(issues, "WARNING", "VLD_NEVER_TRUE", "vld was never true in validation window");
             if (analysis.transfer_count == 0) add_issue(issues, "WARNING", "NO_TRANSFER", "no transfer observed in validation window");
             if (analysis.ready_bp_conflict_count > 0) add_issue(issues, "WARNING", "READY_BP_CONFLICT", "observed vld=1,rdy=1,bp=1");

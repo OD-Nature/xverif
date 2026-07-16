@@ -7,6 +7,7 @@
   "args": {
     "stream": "req_stream",
     "query": "summary",
+    "cache_scope": "full",
     "time_range": {
       "begin": "0ns",
       "end": "1us"

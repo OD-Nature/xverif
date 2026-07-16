@@ -197,12 +197,17 @@ std::uint64_t AnalysisRepository::next_access_sequence() {
 
 std::uint64_t AnalysisRepository::current_charged_bytes(
     const AnalysisCacheKey* exempt_canonical,
-    const IndexKey* exempt_index) const {
+    const IndexKey* exempt_index,
+    const AnalysisCacheKey* excluded_stream_ranges_for_full) const {
     std::uint64_t total = 0;
     for (const CanonicalStore* store : {&apb_entries_, &axi_entries_,
                                         &stream_entries_}) {
         for (const auto& item : *store) {
             if (exempt_canonical != nullptr && item.first == *exempt_canonical)
+                continue;
+            if (excluded_stream_ranges_for_full != nullptr &&
+                is_stream_sibling_range(
+                    item.first, *excluded_stream_ranges_for_full))
                 continue;
             total = saturating_add(
                 total, charge(item.second.resident_estimated_bytes));
@@ -212,6 +217,11 @@ std::uint64_t AnalysisRepository::current_charged_bytes(
     }
     for (const auto& item : indexes_) {
         if (exempt_index != nullptr && item.first == *exempt_index) continue;
+        if (excluded_stream_ranges_for_full != nullptr &&
+            is_stream_sibling_range(
+                item.first.canonical_key,
+                *excluded_stream_ranges_for_full))
+            continue;
         total = saturating_add(total, charge(item.second.resident_estimated_bytes));
         total = saturating_add(total, charge(item.second.build_estimated_bytes));
     }
@@ -261,12 +271,25 @@ bool AnalysisRepository::make_hard_room(
     const AnalysisCacheKey* protected_canonical,
     const IndexKey* protected_index,
     AnalysisCacheError& error,
-    const AnalysisCacheKey& request_key) {
-    while (saturating_add(current_charged_bytes(nullptr, nullptr), new_charge) >
+    const AnalysisCacheKey& request_key,
+    const AnalysisCacheKey* excluded_stream_ranges_for_full) {
+    const AnalysisCacheKey* preserve_stream_ranges_for_full =
+        request_key.protocol == "stream" &&
+        request_key.scope == AnalysisCacheScope::Full
+            ? &request_key : nullptr;
+    while (saturating_add(
+               current_charged_bytes(
+                   nullptr, nullptr, excluded_stream_ranges_for_full),
+               new_charge) >
            config_.hard_max_bytes) {
-        if (evict_cold_index(protected_index, protected_canonical, "hard_limit"))
+        if (evict_cold_index(
+                protected_index, protected_canonical, "hard_limit",
+                preserve_stream_ranges_for_full))
             continue;
-        if (evict_cold_canonical(protected_canonical, "hard_limit")) continue;
+        if (evict_cold_canonical(
+                protected_canonical, "hard_limit",
+                preserve_stream_ranges_for_full))
+            continue;
         set_memory_error(error, request_key);
         return false;
     }
@@ -288,11 +311,17 @@ void AnalysisRepository::enforce_soft_budget(
 bool AnalysisRepository::evict_cold_index(
     const IndexKey* protected_index,
     const AnalysisCacheKey*,
-    const std::string& reason) {
+    const std::string& reason,
+    const AnalysisCacheKey* preserve_stream_ranges_for_full) {
     auto candidate = indexes_.end();
     for (auto it = indexes_.begin(); it != indexes_.end(); ++it) {
         if (it->second.state != ObjectState::Ready) continue;
         if (protected_index != nullptr && it->first == *protected_index) continue;
+        if (preserve_stream_ranges_for_full != nullptr &&
+            is_stream_sibling_range(
+                it->first.canonical_key,
+                *preserve_stream_ranges_for_full))
+            continue;
         if (candidate == indexes_.end() ||
             it->second.access_sequence < candidate->second.access_sequence ||
             (it->second.access_sequence == candidate->second.access_sequence &&
@@ -318,7 +347,8 @@ bool AnalysisRepository::evict_cold_index(
 
 bool AnalysisRepository::evict_cold_canonical(
     const AnalysisCacheKey* protected_canonical,
-    const std::string& reason) {
+    const std::string& reason,
+    const AnalysisCacheKey* preserve_stream_ranges_for_full) {
     CanonicalStore* candidate_store = nullptr;
     CanonicalStore::iterator candidate;
     for (CanonicalStore* store : {&apb_entries_, &axi_entries_,
@@ -327,6 +357,10 @@ bool AnalysisRepository::evict_cold_canonical(
             if (it->second.state != ObjectState::Ready) continue;
             if (protected_canonical != nullptr &&
                 it->first == *protected_canonical)
+                continue;
+            if (preserve_stream_ranges_for_full != nullptr &&
+                is_stream_sibling_range(
+                    it->first, *preserve_stream_ranges_for_full))
                 continue;
             if (candidate_store == nullptr ||
                 it->second.access_sequence <
@@ -344,6 +378,30 @@ bool AnalysisRepository::evict_cold_canonical(
     erase_canonical_internal(key, reason, false);
     evicted_keys_.insert(key);
     return true;
+}
+
+bool AnalysisRepository::is_stream_sibling_range(
+    const AnalysisCacheKey& candidate,
+    const AnalysisCacheKey& full_key) {
+    return full_key.protocol == "stream" &&
+           full_key.scope == AnalysisCacheScope::Full &&
+           candidate.protocol == "stream" &&
+           candidate.scope == AnalysisCacheScope::Range &&
+           candidate.session_id == full_key.session_id &&
+           candidate.fsdb == full_key.fsdb &&
+           candidate.fingerprint_version == full_key.fingerprint_version &&
+           candidate.semantic_digest == full_key.semantic_digest &&
+           candidate.normalized_semantics == full_key.normalized_semantics;
+}
+
+void AnalysisRepository::erase_stream_sibling_ranges(
+    const AnalysisCacheKey& full_key) {
+    std::vector<AnalysisCacheKey> ranges;
+    for (const auto& item : stream_entries_)
+        if (is_stream_sibling_range(item.first, full_key))
+            ranges.push_back(item.first);
+    for (const auto& range : ranges)
+        erase_canonical_internal(range, "full_replaced_range", true);
 }
 
 void AnalysisRepository::erase_canonical_internal(
@@ -448,14 +506,19 @@ bool AnalysisRepository::publish_canonical_erased(
         return false;
     }
     found->second.build_estimated_bytes = 0;
+    const AnalysisCacheKey* replaced_stream_ranges =
+        key.protocol == "stream" && key.scope == AnalysisCacheScope::Full
+            ? &key : nullptr;
     if (!make_hard_room(charge(resident_estimated_bytes), &key, nullptr,
-                        error, key)) {
+                        error, key, replaced_stream_ranges)) {
         store->erase(found);
         emit(AnalysisCacheEvent{"build_failed", key.protocol, key.session_id,
                                 key.summary(), "canonical", "hard_limit",
                                 resident_estimated_bytes});
         return false;
     }
+    if (replaced_stream_ranges != nullptr)
+        erase_stream_sibling_ranges(key);
     found = store->find(key);
     found->second.state = ObjectState::Ready;
     found->second.value = value;

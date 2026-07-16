@@ -41,7 +41,7 @@
     }
   },
   "additionalProperties": true,
-  "description": "Validate stream configuration and observed behavior.",
+  "description": "Validate stream configuration and observed behavior; dynamic validation supports explicit full or range base-cache scope.",
   "x-output_notes": "返回该 action 的 summary/data/error/meta；具体字段以 response schema 和 response example 为准。",
-  "x-description-zh": "验证 stream 配置。"
+  "x-description-zh": "验证 stream 配置；动态验证可显式选择 full 或 range 基础分析缓存范围。"
 }

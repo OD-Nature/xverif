@@ -89,7 +89,9 @@ def _constraints(action: str, args_schema: Json) -> list[str]:
     out: list[str] = []
     action_constraints = {
         "event.find": "line_limit 仅在 mode=all 时合法，且只限制返回 evidence，不限制扫描。",
-        "stream.query": "query 选择查询种类；field filter 的每个字段独立匹配，字段之间取 AND。",
+        "stream.query": "query 选择查询种类；field filter 的每个字段独立匹配，字段之间取 AND。cache_scope 默认 full；一次性窄 time_range 才显式使用 range，engine 不自动 fallback。",
+        "stream.export": "cache_scope 默认 full，并与 stream.query 和 dynamic validate 复用同一 base；一次性窄 time_range 可显式使用 range。",
+        "stream.validate": "cache_scope 仅在 dynamic=true 时合法；dynamic=false 必须省略。默认 full，窄窗口可显式使用 range。",
         "handshake.inspect": "check_data_stable_when_stalled 仅在提供 data 时产生 data-stability finding。",
         "detect_abnormal": "checks 的每项由 type 判别；glitch 必须带 min_pulse_width，stuck 必须带 min_duration。",
     }

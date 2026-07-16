@@ -82,6 +82,33 @@ def test_all_action_projections_have_one_field_contract_and_one_success_example(
                        for item in payload["constraints"]), action["name"]
 
 
+def test_stream_cache_scope_is_visible_in_mcp_projection() -> None:
+    root = Path(__file__).resolve().parents[2]
+    for action in ("stream.query", "stream.export", "stream.validate"):
+        schema = json.loads((
+            root / "xdebug/schemas/v1/actions" /
+            (action + ".request.schema.json")
+        ).read_text(encoding="utf-8"))
+        payload = project(
+            action, "request", "mcp",
+            {"ok": True, "data": {"schema": schema}},
+        )["data"]
+        cache_scope = payload["args_schema"]["properties"]["cache_scope"]
+        assert cache_scope["enum"] == ["full", "range"]
+        assert cache_scope["default"] == "full"
+        assert any("cache_scope" in item for item in payload["constraints"])
+    validate_schema = json.loads((
+        root / "xdebug/schemas/v1/actions/stream.validate.request.schema.json"
+    ).read_text(encoding="utf-8"))
+    validate_args = project(
+        "stream.validate", "request", "mcp",
+        {"ok": True, "data": {"schema": validate_schema}},
+    )["data"]["args_schema"]
+    assert validate_args["allOf"][0]["then"]["not"]["required"] == [
+        "cache_scope"
+    ]
+
+
 def _contains_key(value: object, key: str) -> bool:
     if isinstance(value, dict):
         return key in value or any(_contains_key(child, key) for child in value.values())

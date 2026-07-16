@@ -21,5 +21,10 @@ bool analyze_stream_with_legacy_differential(
     npiFsdbFileHandle file, const StreamConfig& config,
     const StreamQueryOptions& options, StreamAnalysis& analysis,
     std::string& error);
+bool analyze_stream_cached_with_legacy_differential(
+    StreamAnalyzer& analyzer, npiFsdbFileHandle file,
+    const StreamConfig& config, const StreamQueryOptions& options,
+    AnalysisCacheScope cache_scope, StreamAnalysis& analysis,
+    std::string& error);
 
 }  // namespace xdebug_waveform

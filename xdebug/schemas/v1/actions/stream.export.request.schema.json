@@ -30,6 +30,15 @@
         "stream"
       ],
       "properties": {
+        "cache_scope": {
+          "type": "string",
+          "enum": [
+            "full",
+            "range"
+          ],
+          "default": "full",
+          "description": "Base-analysis cache scope. full (default) is reusable by query, export, and dynamic validate; use range explicitly for a one-off narrow interval. range without time_range reuses full."
+        },
         "channel": {
           "type": "string",
           "description": "Action-specific channel input. Its type and accepted values are defined by this schema."
@@ -159,15 +168,15 @@
     }
   },
   "additionalProperties": false,
-  "description": "Export stream transfers or packet data.",
+  "description": "Export stream transfers or packet data from an explicit full or range base-cache scope.",
   "x-purpose": "导出 stream 查询结果。",
-  "x-how_it_works": "运行 stream query 后按 kind/format 写出；kind 只能是 transfer、packet、packet_beats。",
-  "x-when_to_use": "把流数据输出给外部脚本。",
-  "x-arg_contract_notes": "required: stream; kind: transfer / packet / packet_beats; format: tsv / csv / xout; when kind=packet_beats: output",
-  "x-description-zh": "导出 stream 查询结果。",
+  "x-how_it_works": "按 kind/format 从 query/dynamic validate 共用的 full/range base 写出；kind 只能是 transfer、packet、packet_beats。",
+  "x-when_to_use": "把流数据输出给外部脚本并避免重复扫描。",
+  "x-arg_contract_notes": "required: stream; cache_scope: full(default) / range; kind: transfer / packet / packet_beats; format: tsv / csv / xout; when kind=packet_beats: output",
+  "x-description-zh": "从显式 full 或 range 基础分析缓存范围导出 stream 查询结果。",
   "x-agent": {
     "use_when": [
-      "导出 stream 查询结果。"
+      "从显式 full 或 range 基础分析缓存范围导出 stream 查询结果。"
     ],
     "do_not_use_when": [
       "不要把本 action 用于 stream.config.load、stream.config.list 的业务目标；请改用列出的同域 action。"
@@ -183,7 +192,7 @@
       }
     ],
     "constraints": [
-      "required: stream; kind: transfer / packet / packet_beats; format: tsv / csv / xout; when kind=packet_beats: output"
+      "required: stream; cache_scope: full(default) / range; kind: transfer / packet / packet_beats; format: tsv / csv / xout; when kind=packet_beats: output"
     ]
   }
 }
