@@ -221,6 +221,28 @@ bool convert_time(npiFsdbFileHandle fsdb,
     return convert_without_fsdb(value, unit, out_time, error);
 }
 
+bool format_time_in_unit(npiFsdbFileHandle fsdb,
+                         npiFsdbTime time,
+                         const std::string& unit_text,
+                         std::string& out,
+                         std::string& error) {
+    std::string unit = normalize_unit(unit_text);
+    double ignored_scale = 0.0;
+    if (!unit_scale(unit, ignored_scale)) {
+        error = "unsupported unit, expected ms/us/ns/ps/fs";
+        return false;
+    }
+    if (time == kMaxSentinel) {
+        error = "max time cannot be formatted in a concrete unit";
+        return false;
+    }
+    if (!format_in_unit(fsdb, time, unit.c_str(), out)) {
+        error = "failed to format time in " + unit + " for FSDB scale " + fsdb_time_scale(fsdb);
+        return false;
+    }
+    return true;
+}
+
 bool parse_time(npiFsdbFileHandle fsdb,
                 const std::string& text,
                 const TimeParseOptions& options,
@@ -266,6 +288,15 @@ bool parse_time(npiFsdbFileHandle fsdb,
         return false;
     }
     return true;
+}
+
+bool has_explicit_time_unit(const std::string& text) {
+    std::string source = trim(text);
+    char* end = nullptr;
+    (void)std::strtod(source.c_str(), &end);
+    if (end == source.c_str()) return false;
+    while (*end && std::isspace(static_cast<unsigned char>(*end))) ++end;
+    return *end != '\0';
 }
 
 std::string format_time(npiFsdbFileHandle fsdb, npiFsdbTime time) {

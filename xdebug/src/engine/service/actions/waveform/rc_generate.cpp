@@ -79,13 +79,24 @@ public:
             return make_handler_error(
                 "INVALID_ARGUMENT",
                 err,
+                 {{"invalid_arg", "args.config_path"},
+                  {"expected", "rc config JSON matching rc.generate schema"},
+                  {"cause_code", "PARSE_FAILED"}});
+
+        if (!xdebug_waveform::validate_rc_time_refs(cfg, g_fsdb_file, err) ||
+            !xdebug_waveform::normalize_rc_user_marker_times(cfg, g_fsdb_file, err)) {
+            return make_handler_error(
+                "INVALID_ARGUMENT",
+                err,
                 {{"invalid_arg", "args.config_path"},
-                 {"expected", "rc config JSON matching rc.generate schema"},
-                 {"cause_code", "PARSE_FAILED"}});
+                 {"expected", "valid rc time values; user_markers[].time requires an explicit unit"},
+                 {"cause_code", "TIME_PARSE_FAILED"}});
+        }
+
+        auto refs = xdebug_waveform::collect_rc_signal_refs(cfg);
 
         // Validate signals exist in FSDB
         if (!allow_invalid) {
-            auto refs = xdebug_waveform::collect_rc_signal_refs(cfg);
             for (auto& ref : refs) {
                 if (ref.kind != "signal") continue;
                 if (!npi_fsdb_sig_by_name(g_fsdb_file, ref.input_path.c_str(), NULL)) {
@@ -110,9 +121,9 @@ public:
             {"output", {{"path", rc_path}}}, {"valid", true}};
         if (counts.contains("group_count")) out["summary"]["group_count"] = counts["group_count"];
         if (counts.contains("signal_count")) out["summary"]["signal_count"] = counts["signal_count"];
-        out["config_path"] = config_path;
-        out["output"] = {{"path", rc_path}};
-        out["written"] = true;
+        out["validation"] = {{"signals", refs.size()},
+                               {"times", xdebug_waveform::collect_rc_time_refs(cfg).size()}};
+        out["rc_preview"] = xdebug_waveform::rc_preview_lines(rc_text, 20);
         return out;
     }
 };

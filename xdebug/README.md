@@ -630,8 +630,7 @@ unpacked/聚合数组可显式请求结构化显示：
   "target": {"session_id": "case_a"},
   "args": {
     "config_path": "wave_view.json",
-    "rc_path": "signal.rc",
-    "include_preview": true
+    "output": {"path": "signal.rc"}
   }
 }
 ```
@@ -641,7 +640,6 @@ unpacked/聚合数组可显式请求结构化显示：
 ```json
 {
   "file_time_scale": "1ns",
-  "window_time_unit": "1ns",
   "cursor": "120ns",
   "main_marker": "120ns",
   "zoom": {"begin": "0ns", "end": "500ns"},
@@ -685,7 +683,7 @@ unpacked/聚合数组可显式请求结构化显示：
 }
 ```
 
-校验失败时默认不写 rc；确实需要生成草稿时传 `allow_invalid:true`，并检查响应里的 `warnings` 和 `data.validation`。
+`windowTimeUnit` 不可配置，生成文件始终以 `windowTimeUnit 1ns` 作为第一条非注释语句。`user_markers[].time` 必须带单位输入，生成时按 ns 归一化并移除后缀。
 
 ### 协议与事件：event / APB / AXI
 

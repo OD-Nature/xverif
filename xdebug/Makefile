@@ -273,7 +273,7 @@ cpp-unit-binaries: $(CORE_OBJS) $(API_SUPPORT_OBJS) $(BUILD)/src/api/response.o 
 	$(CXX) $(CXXFLAGS) -o $(BUILD)/tests/test_logic_value tests/unit/test_logic_value.cpp $(BUILD)/src/waveform/value/logic_value.o
 	$(CXX) $(CXXFLAGS) -o $(BUILD)/tests/test_event_expr tests/unit/test_event_expr.cpp $(BUILD)/src/waveform/event/event_expr.o $(BUILD)/src/waveform/common/expression.o $(BUILD)/src/waveform/stream/stream_expr.o $(BUILD)/src/waveform/value/logic_value.o
 	$(CXX) $(CXXFLAGS) -o $(BUILD)/tests/test_expression tests/unit/test_expression.cpp $(BUILD)/src/waveform/common/expression.o $(BUILD)/src/waveform/stream/stream_expr.o $(BUILD)/src/waveform/value/logic_value.o
-	$(CXX) $(CXXFLAGS) -o $(BUILD)/tests/test_rc_generator tests/unit/test_rc_generator.cpp $(BUILD)/src/waveform/service/rc_generator.o
+	$(CXX) $(CXXFLAGS) -o $(BUILD)/tests/test_rc_generator tests/unit/test_rc_generator.cpp $(BUILD)/src/waveform/service/rc_generator.o $(CORE_OBJS) $(LDFLAGS)
 	$(CXX) $(CXXFLAGS) -o $(BUILD)/tests/test_sha256 tests/unit/test_sha256.cpp $(BUILD)/src/core/common/sha256.o
 	$(CXX) $(CXXFLAGS) -o $(BUILD)/tests/test_axi_transaction_tracker tests/unit/test_axi_transaction_tracker.cpp $(BUILD)/src/waveform/axi/axi_transaction_tracker.o $(BUILD)/src/waveform/cache/analysis_size_estimator.o
 	$(CXX) $(CXXFLAGS) -o $(BUILD)/tests/test_analysis_probe tests/unit/test_analysis_probe.cpp $(BUILD)/src/waveform/cache/analysis_probe.o

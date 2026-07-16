@@ -8,6 +8,8 @@
 - 配置里的信号路径使用点分层次，例如 `top.u.sig[3:0]`。
 - 生成 rc 时自动转成 nWave slash 路径，例如 `/top/u/sig[3:0]`。
 - 支持 `addSignal`、`addSignal -w analog`、`addExprSig`、`addGroup/addSubGroup`、`cursor/marker/userMarker/zoom`。
+- 第一条非注释 RC 语句固定为 `windowTimeUnit 1ns`；配置中不得出现 `window_time_unit`。
+- `user_markers[].time` 必须是带单位的时间字符串，生成的 `userMarker` 使用无后缀 ns 数值。
 - 不写 `openDirFile` 和 `activeDirFile`。
 - 校验失败默认不写 rc；`allow_invalid:true` 才允许带 warning 生成。
 
@@ -36,14 +38,12 @@
 | --- | --- |
 | `args.config_path` | 必填；rc 配置 JSON 文件路径 |
 | `args.output.path` | 必填；生成 rc 文件路径 |
-| `args.allow_invalid` | 默认 `false`；校验失败时是否仍生成 rc |
 
 ## 配置示例
 
 ```json
 {
   "file_time_scale": "1ns",
-  "window_time_unit": "1ns",
   "signal_spacing": 5,
   "cursor": "120ns",
   "main_marker": "120ns",
@@ -196,7 +196,12 @@ expression signal 推荐使用 `$alias` 引用 `signals` map：
 
 ```rc
 addExprSig -b 1 -n UUU aw_fire "/top/u_axi/awvalid" & "/top/u_axi/awready"
+
+addGroup "AW"
+addSignal -h 18 /aw_fire
 ```
+
+所有 `addExprSig` 会在第一个 group 前统一创建；expression 对应的 `addSignal -h 18` 则位于所属 group 内。
 
 `raw_expr` 只是逃生口，仅当 `allow_raw_expr:true` 时允许；`raw_expr` 不做信号校验。
 

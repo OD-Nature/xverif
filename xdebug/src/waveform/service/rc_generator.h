@@ -1,6 +1,7 @@
 #pragma once
 
 #include "json.hpp"
+#include "npi_fsdb.h"
 
 #include <map>
 #include <string>
@@ -63,7 +64,6 @@ struct RcUserMarker {
 
 struct RcConfig {
     std::string file_time_scale = "1ns";
-    std::string window_time_unit = "1ns";
     int signal_spacing = 5;
     std::string cursor;
     std::string main_marker;
@@ -96,6 +96,8 @@ struct RcTimeRef {
 };
 
 bool parse_rc_config_json(const Json& doc, RcConfig& cfg, std::string& err);
+bool validate_rc_time_refs(const RcConfig& cfg, npiFsdbFileHandle fsdb, std::string& err);
+bool normalize_rc_user_marker_times(RcConfig& cfg, npiFsdbFileHandle fsdb, std::string& err);
 std::string rc_dot_path_to_slash(const std::string& path, std::string& err);
 std::string render_signal_rc(const RcConfig& cfg);
 std::vector<RcSignalRef> collect_rc_signal_refs(const RcConfig& cfg);

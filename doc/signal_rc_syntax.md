@@ -506,15 +506,18 @@ addSignal -h 15 -UNSIGNED -HEX /${TOP}/${ALUB}/data[7:0]
 openDirFile -d / "" "/path/to/wave.fsdb"
 activeDirFile "" "/path/to/wave.fsdb"
 
-; Time and view
+; Time and view (xdebug rc.generate fixes this as the first executable statement)
+windowTimeUnit 1ns
 fileTimeScale 1ns
 signalSpacing 5
-windowTimeUnit 1ns
 zoom 0.0 1000.0
 cursor 100.0
 marker 0.0
 userMarker 100.0 reset_release ID_RED5 solid
 top 0
+
+; Expressions are created before groups, then attached inside their group
+addExprSig -b 1 fire "/top/u_dut/valid" & "/top/u_dut/ready"
 
 ; Groups and signals
 addGroup "ClockReset"
@@ -527,7 +530,7 @@ addSignal -h 15 -UNSIGNED -HEX /top/u_dut/addr[31:0]
 addSignal -h 15 -UNSIGNED -UDEC /top/u_dut/count[15:0]
 
 addGroup "Expr"
-addExprSig -b 1 fire "/top/u_dut/valid" & "/top/u_dut/ready"
+addSignal -h 18 /fire
 
 addGroup "Analog"
 addSignal -w analog -ds pwl -gx -gy /top/u_adc/sample[11:0]

@@ -1263,6 +1263,98 @@ def test_rc_and_source_handler_errors_include_repair_hints(
 
 
 @pytest.mark.contract
+def test_rc_generate_emits_fixed_window_unit_marker_and_grouped_expression(
+    cli_runner: CliRunner,
+    complex_wave_fsdb: Path,
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "wave_view.json"
+    rc_path = tmp_path / "signal.rc"
+    config_path.write_text(
+        json.dumps(
+            {
+                "file_time_scale": "1ns",
+                "groups": [
+                    {"name": "G1", "signals": ["ai_complex_top.clk"]},
+                    {
+                        "name": "G2",
+                        "expr_signals": [
+                            {
+                                "name": "req_fire",
+                                "bit_size": 1,
+                                "notation": "UU",
+                                "expr": "$valid & $ready",
+                                "signals": {
+                                    "valid": "ai_complex_top.hs_valid",
+                                    "ready": "ai_complex_top.hs_ready",
+                                },
+                            }
+                        ],
+                    },
+                ],
+                "user_markers": [
+                    {
+                        "name": "test",
+                        "time": "10347.651ns",
+                        "color": "ID_CYAN5",
+                        "linestyle": "long_dashed",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    session_name = "rc_render_contract"
+    opened = cli_runner.run(
+        {
+            "api_version": "xdebug.v1",
+            "action": "session.open",
+            "target": {"fsdb": str(complex_wave_fsdb)},
+            "args": {"name": session_name},
+        },
+        output_format="json",
+        timeout_sec=120,
+    )
+    assert opened.ok, opened.stdout_raw + opened.stderr_raw
+    session = opened.response.get("session") or opened.response["data"]["session"]
+    target = {"session_id": session.get("id") or session.get("session_id") or session_name}
+    try:
+        result = cli_runner.run(
+            {
+                "api_version": "xdebug.v1",
+                "action": "rc.generate",
+                "target": target,
+                "args": {"config_path": str(config_path), "output": {"path": str(rc_path)}},
+            },
+            output_format="json",
+            timeout_sec=120,
+        )
+        assert result.ok, result.stdout_raw + result.stderr_raw
+        payload = result.response["data"]
+        assert payload["rc_preview"][2] == "windowTimeUnit 1ns"
+        assert payload["validation"] == {"signals": 3, "times": 1}
+        lines = rc_path.read_text(encoding="utf-8").splitlines()
+        statements = [line for line in lines if line and not line.startswith(";")]
+        assert statements[0] == "windowTimeUnit 1ns"
+        assert "userMarker 10347.651 test ID_CYAN5 long_dashed" in lines
+        expr = lines.index('addExprSig -b 1 -n UU req_fire "/ai_complex_top/hs_valid" & "/ai_complex_top/hs_ready"')
+        g2 = lines.index('addGroup "G2"')
+        expr_signal = lines.index("addSignal -h 18 /req_fire")
+        assert expr < g2 < expr_signal
+        assert not any(line.startswith("addExprSig") for line in lines[g2:])
+    finally:
+        cli_runner.run(
+            {
+                "api_version": "xdebug.v1",
+                "action": "session.close",
+                "target": target,
+            },
+            output_format="json",
+            timeout_sec=120,
+        )
+
+
+@pytest.mark.contract
 def test_action_schemas_explain_purpose_and_required_args(xdebug_root: Path) -> None:
     specs = _load_json(xdebug_root / "specs" / "actions" / "actions.yaml")[
         "actions"

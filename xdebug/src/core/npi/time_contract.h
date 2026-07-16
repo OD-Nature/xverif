@@ -47,11 +47,19 @@ bool parse_time(npiFsdbFileHandle fsdb,
                 npiFsdbTime& out_time,
                 std::string& error);
 
+bool has_explicit_time_unit(const std::string& text);
+
 bool convert_time(npiFsdbFileHandle fsdb,
                   double value,
                   const std::string& unit,
                   npiFsdbTime& out_time,
                   std::string& error);
+
+bool format_time_in_unit(npiFsdbFileHandle fsdb,
+                         npiFsdbTime time,
+                         const std::string& unit,
+                         std::string& out,
+                         std::string& error);
 
 std::string format_time(npiFsdbFileHandle fsdb, npiFsdbTime time);
 std::string format_duration(npiFsdbFileHandle fsdb, npiFsdbTime duration);
