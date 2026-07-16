@@ -56,6 +56,12 @@ test-only probe 证明只发布一次 AXI canonical build、只扫描一次 FSDB
 address、ID 和 handshake lazy index；1-byte hard budget 必须稳定返回
 `ANALYSIS_MEMORY_LIMIT_EXCEEDED`，不得改用 range、offline 或其它 backend。
 
+`xdebug.apb_vip` 除 wait-state、PSLVERR、statistics filter 和 cursor 既有语义外，
+还必须通过 test-only probe 证明 query/statistics/transfer_window/cursor 全流程只发布一次
+APB canonical build、只扫描一次 FSDB，并触发独立 AddressIndex。1-byte soft budget
+覆盖两个语义 config 逐出后 generation cursor 位置恢复；1-byte hard budget 必须返回
+`ANALYSIS_MEMORY_LIMIT_EXCEEDED`，不得缩小范围或切换 backend。
+
 `xdebug.analysis_cache_benchmark` 是 nightly 的独立 performance/semantic suite，消费
 APB VIP、AXI VIP 和 stream v1 三个已发布 fixture，不生成数据库。它在三个独立
 engine 上记录 cold/hot P50/P95、scanner、estimated bytes 和 RSS delta，并校验 compact
@@ -66,7 +72,7 @@ stream JSON/XOUT golden。冻结数据与阶段阈值维护在
 `xdebug.cpp_unit` 的 `test_analysis_repository` 用 fake entry 覆盖版本化 key、full/range、
 strict env、building 重入、failure/bad_alloc 回滚、index-first 与跨协议 LRU、soft
 oversize entry/index、hard/saturated accounting、typed ensure、无 access side effect 的
-peek 和 AXI generation cursor；`test_axi_transaction_tracker` 同时检查 pending working-set
+peek 和 generation cursor；`test_axi_transaction_tracker` 同时检查 pending working-set
 估算覆盖动态 payload；
 `test_stream_manager` 覆盖语义 fingerprint、同目录原子 replace 及 write/rename fault。
 

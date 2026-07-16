@@ -1,7 +1,9 @@
 #pragma once
 
 #include "apb_config.h"
+#include "../cache/analysis_repository.h"
 #include "npi_fsdb.h"
+#include <cstdint>
 #include <string>
 #include <vector>
 #include <map>
@@ -14,6 +16,8 @@ struct ApbTransaction {
     std::string data;
     bool is_write;
     bool has_error = false;
+    bool has_numeric_addr = false;
+    uint64_t numeric_addr = 0;
 };
 
 struct ApbContextTransaction {
@@ -35,18 +39,17 @@ struct ApbResult {
     ApbDiagnostics diagnostics;
 };
 
-struct ApbCursor {
-    size_t all_idx = 0;
-    size_t wr_idx = 0;
-    size_t rd_idx = 0;
-};
-
 class ApbAnalyzer {
 public:
-    // Analyze and cache result for the given config name.
-    // If already cached, returns cached result.
-    bool analyze(const std::string& name, npiFsdbFileHandle file, const ApbConfig& config);
+    void configure_repository(AnalysisRepository* repository,
+                              const std::string& session_id,
+                              const FsdbIdentity& fsdb_identity);
+    bool analyze(const std::string& name, npiFsdbFileHandle file,
+                 const ApbConfig& config,
+                 AnalysisCacheError* cache_error = nullptr);
     const ApbResult* get_result(const std::string& name) const;
+    const AnalysisCacheError& last_cache_error() const { return last_cache_error_; }
+    bool ensure_address_index(const std::string& name) const;
 
     // Getters for wr/rd counts
     size_t get_write_count(const std::string& name) const;
@@ -93,12 +96,31 @@ public:
                                    int max_results = -1) const;
 
 private:
-    std::map<std::string, ApbResult> results_;
-    std::map<std::string, ApbCursor> cursors_;
+    struct AddressBucket {
+        std::vector<size_t> all;
+        std::vector<size_t> writes;
+        std::vector<size_t> reads;
+    };
+    using AddressIndex = std::map<uint64_t, AddressBucket>;
 
-    ApbResult* get_result_mut(const std::string& name);
-    ApbCursor* get_cursor_mut(const std::string& name);
+    AnalysisRepository* repository_ = nullptr;
+    std::string session_id_;
+    FsdbIdentity fsdb_identity_;
+    std::map<std::string, AnalysisCacheKey> keys_;
+    mutable AnalysisCacheError last_cache_error_;
+
     static bool parse_hex_value(const std::string& hex_str, uint64_t& out);
+    AnalysisCacheKey cache_key(const ApbConfig& config) const;
+    const ApbResult* get_result_internal(const std::string& name,
+                                         std::uint64_t* generation) const;
+    const AddressIndex* address_index(const std::string& name,
+                                      bool record_access = false) const;
+    static std::uint64_t estimate_address_index_bytes(
+        const AddressIndex& index);
+    static std::string cursor_id(const std::string& name, int filter);
+    static size_t transaction_count(const ApbResult& result, int filter);
+    static const ApbTransaction* transaction_at(const ApbResult& result,
+                                                int filter, size_t index);
 };
 
 } // namespace xdebug_waveform

@@ -20,21 +20,6 @@
 namespace xdebug_design {
 namespace {
 
-static bool ensure_apb_analyzed(const std::string& name,
-                                 xdebug_waveform::ApbConfig& cfg,
-                                 std::string& err) {
-    xdebug_waveform::ApbManager am;
-    if (!am.get_apb(xdebug_waveform::g_session_id, name, cfg)) {
-        err = "APB config not found: " + name;
-        return false;
-    }
-    if (!xdebug_waveform::g_apb_analyzer.analyze(name,
-            xdebug_waveform::g_fsdb_file, cfg)) {
-        err = "Failed to analyze APB: " + name;
-        return false;
-    }
-    return true;
-}
 static bool parse_user_uint64_literal(const std::string& text,
                                       uint64_t& out,
                                       std::string& err) {
@@ -76,10 +61,14 @@ public:
         if (name.empty()) return protocol_missing_name_error(action_name(), "apb");
 
         ApbConfig cfg; std::string err;
-        if (!ensure_apb_analyzed(name, cfg, err))
-            return err.rfind("APB config not found:", 0) == 0
-                ? protocol_config_not_found_error(action_name(), "apb", name)
-                : protocol_analyze_error(action_name(), "apb", name, err);
+        if (!ensure_apb_analyzed(name, cfg, err)) {
+            if (err.rfind("APB config not found:", 0) == 0)
+                return protocol_config_not_found_error(action_name(), "apb", name);
+            if (!g_apb_analyzer.last_cache_error().empty())
+                return make_analysis_cache_error(
+                    g_apb_analyzer.last_cache_error());
+            return protocol_analyze_error(action_name(), "apb", name, err);
+        }
 
         std::string dir = a.value("direction", "all");
         const int filter = dir == "write" ? 1 : (dir == "read" ? 2 : 0);
@@ -98,6 +87,9 @@ public:
                 return protocol_invalid_arg_error(action_name(), "args.address",
                                                   parse_err,
                                                   "known integer or SystemVerilog literal address");
+            if (!g_apb_analyzer.ensure_address_index(name))
+                return make_analysis_cache_error(
+                    g_apb_analyzer.last_cache_error());
             if (num >= 0) {
                 found = g_apb_analyzer.get_by_addr_num(name, filter, addr,
                                                        static_cast<size_t>(num), txn);

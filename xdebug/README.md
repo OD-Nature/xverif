@@ -797,6 +797,10 @@ APB 配置的基础字段为 `paddr/pwdata/prdata/pwrite/penable/psel/clk/rst_n`
 - 旧配置不带这两个字段仍可使用，但不能可靠区分 wait-state 或报告 slave
   error response。
 
+同一 session 和同一 APB 语义配置的 query、statistics、transfer_window 与 cursor
+复用一次完整 FSDB 扫描；地址查询按需构建独立索引。分析缓存达到 hard limit 时返回
+明确错误，不会静默缩小时间范围或切换数据源。
+
 ### 联合定位：trace.active_driver
 
 当同时有 `daidir` 和 `fsdb` 时，用 `trace.active_driver` 把“某时刻波形值”连接到“当前生效的设计驱动证据”：

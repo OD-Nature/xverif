@@ -14,6 +14,7 @@
 #include "waveform/service/action_support.h"
 #include "waveform/service/rc_generator.h"
 #include "waveform/value/logic_value.h"
+#include "waveform/apb/apb_analyzer.h"
 #include "core/npi/time_contract.h"
 
 #include "npi.h"
@@ -44,6 +45,9 @@ public:
         Json effective_request = request;
         Json result = xdebug_waveform::ai_dispatch_query(effective_request, error);
         if (!error.empty()) {
+            if (!xdebug_waveform::g_apb_analyzer.last_cache_error().empty())
+                return make_analysis_cache_error(
+                    xdebug_waveform::g_apb_analyzer.last_cache_error());
             return make_handler_error_from_message(error);
         }
         // Fix statistics end time: ai functions may return FSDB max time

@@ -171,8 +171,8 @@
 
 职责与要求：
 
-- engine 只能有一个 repository；AXI analyzer 已接入 repository，APB/stream 后续分别
-  使用 `ensure_apb` 和 `ensure_stream`。analyzer 不持有预算或 LRU 状态。
+- engine 只能有一个 repository；AXI/APB analyzer 已接入 repository，stream 在 Phase 4
+  使用 `ensure_stream`。analyzer 不持有预算或 LRU 状态。
 - key 必须同时保存 SHA-256 摘要和规范化语义做等值确认；config name、description、
   JSON 字段顺序和 config 文件路径不进入语义 fingerprint。
 - canonical 发布后不可变；lazy index 独立记账、优先淘汰，canonical 淘汰时释放全部
@@ -185,6 +185,9 @@
   层时复用该组件，不新增 public `cache.status` 或调试 action。
 - size estimator 使用容器 capacity 和动态 string/map 内容形成确定性计量；新增
   canonical/index 数据结构时必须同步 estimator 和 unit/benchmark。
+- APB scan 期在 canonical transaction 上冻结 `has_numeric_addr/numeric_addr`，既有
+  address 字符串仍是 public 输出 source of truth；lazy AddressIndex 只保存 all/write/read
+  三个 canonical view 的 position，并与 canonical 分开记账和淘汰。
 - hard-limit 判定后续使用冻结的 safety factor；不能用 RSS 瞬时值作为运行时预算
   决策，也不能因 probe 写入失败改变 action 结果。
 - legacy adapter 是 stream 列式重构的内部差分 seam；Phase 0 原样委托现有

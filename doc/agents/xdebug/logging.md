@@ -138,6 +138,8 @@ xdebug 的 log 是工具可观测性合同的一部分。任何 session、transp
 - AXI Phase 2 的 index object kind 使用 `index:address`、`index:id` 和
   `index:handshake:<channel>`；canonical build 和各 lazy index 分别记账，不能把 index
   命中伪装成新的 FSDB scan。
+- APB Phase 3 的 index object kind 使用 `index:address`；canonical 与 AddressIndex
+  分开记账，query 内部重复定位使用无 access side effect 的 peek。
 - 每条只包含 protocol、非敏感 key 摘要、object kind、reason、estimated bytes、
   generation 和单调 access sequence；不得记录规范化 config 或完整 signal path。
 - `build_failed` 的 action 错误仍由 handler 返回；日志不能触发 scope/backend fallback。

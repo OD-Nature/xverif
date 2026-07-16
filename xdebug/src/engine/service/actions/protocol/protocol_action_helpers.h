@@ -2,11 +2,37 @@
 
 #include "service/engine_action_handler.h"
 #include "service/engine_globals.h"
+#include "waveform/apb/apb_analyzer.h"
 #include "waveform/apb/apb_manager.h"
 #include "waveform/axi/axi_analyzer.h"
 #include "waveform/axi/axi_manager.h"
 
 namespace xdebug_design {
+
+inline bool analyze_apb_config(const std::string& name,
+                               const xdebug_waveform::ApbConfig& config,
+                               std::string& error) {
+    if (xdebug_waveform::g_apb_analyzer.analyze(
+            name, xdebug_waveform::g_fsdb_file, config)) {
+        return true;
+    }
+    const auto& cache_error =
+        xdebug_waveform::g_apb_analyzer.last_cache_error();
+    error = cache_error.message.empty()
+        ? "Failed to analyze APB: " + name : cache_error.message;
+    return false;
+}
+
+inline bool ensure_apb_analyzed(const std::string& name,
+                                xdebug_waveform::ApbConfig& config,
+                                std::string& error) {
+    xdebug_waveform::ApbManager manager;
+    if (!manager.get_apb(xdebug_waveform::g_session_id, name, config)) {
+        error = "APB config not found: " + name;
+        return false;
+    }
+    return analyze_apb_config(name, config, error);
+}
 
 inline bool analyze_axi_config(const std::string& name,
                                const xdebug_waveform::AxiConfig& config,

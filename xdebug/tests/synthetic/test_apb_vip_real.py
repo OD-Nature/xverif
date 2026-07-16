@@ -76,6 +76,18 @@ def _resources_ready(fixture_dir: Path, manifest: dict[str, Any]) -> bool:
     )
 
 
+def _apb_probe_rows(path: Path) -> list[dict[str, Any]]:
+    if not path.is_file():
+        return []
+    return [
+        row
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line
+        for row in [json.loads(line)]
+        if row.get("protocol") == "apb"
+    ]
+
+
 @pytest.mark.synthetic
 @pytest.mark.waveform
 @pytest.mark.apb
@@ -86,6 +98,7 @@ def test_apb_vip_real_wait_state_and_error_actions(
     cli_runner: CliRunner,
     xdebug_root: Path,
     artifact_root: Path,
+    tmp_path: Path,
     xverif_fixture: Any,
 ) -> None:
     fixture_dir = xdebug_root / "testdata" / "waveform" / "apb_vip_real"
@@ -103,6 +116,9 @@ def test_apb_vip_real_wait_state_and_error_actions(
     assert "UVM_ERROR :    0" in log_text
     assert "UVM_FATAL :    0" in log_text
     assert "APB VIP fixture completed: writes=5 reads=5 errors=1" in log_text
+
+    probe_path = tmp_path / "apb-analysis-probe.jsonl"
+    cli_runner.base_env["XDEBUG_TEST_ANALYSIS_PROBE_PATH"] = str(probe_path)
 
     open_response = _query(
         cli_runner,
@@ -310,6 +326,53 @@ def test_apb_vip_real_wait_state_and_error_actions(
             assert rejected["ok"] is False
             assert rejected["error"]["invalid_arg"].startswith("args.config")
 
+        address_rows = _query(
+            cli_runner,
+            {
+                "api_version": "xdebug.v1",
+                "action": "apb.query",
+                "target": target,
+                "args": {
+                    "name": "apb0",
+                    "direction": "write",
+                    "address": "'h4",
+                    "query": {"line_limit": 10},
+                },
+            },
+            case_name="apb-vip-address-index-lines",
+            artifact_root=artifact_root,
+            manifest=manifest,
+        )
+        assert address_rows["summary"]["count"] == 2
+        indexed_transactions = address_rows["data"]["transactions"]
+        assert [item["addr"] for item in indexed_transactions] == [
+            "00000004", "00000004"
+        ]
+        for case_name, selector, expected in (
+            ("first", {}, indexed_transactions[0]),
+            ("index", {"query": {"index": 2}}, indexed_transactions[1]),
+            ("last", {"last": True}, indexed_transactions[-1]),
+        ):
+            selected = _query(
+                cli_runner,
+                {
+                    "api_version": "xdebug.v1",
+                    "action": "apb.query",
+                    "target": target,
+                    "args": {
+                        "name": "apb0",
+                        "direction": "write",
+                        "address": "'h4",
+                        **selector,
+                    },
+                },
+                case_name="apb-vip-address-index-" + case_name,
+                artifact_root=artifact_root,
+                manifest=manifest,
+            )
+            assert selected["summary"]["found"] is True
+            assert selected["data"]["transaction"] == expected
+
         error_txn = _query(
             cli_runner,
             {
@@ -371,12 +434,180 @@ def test_apb_vip_real_wait_state_and_error_actions(
                 manifest=manifest,
             )
             assert cursor["summary"]["found"] is True
+
+        probe_rows = _apb_probe_rows(probe_path)
+        assert probe_rows and probe_rows[-1]["scanner_invocations"] == 1
+        assert sum(row.get("event") == "build" for row in probe_rows) == 1
+        assert sum(row.get("event") == "index_build" for row in probe_rows) >= 1
     finally:
         cli_runner.run(
             {
                 "api_version": "xdebug.v1",
                 "action": "session.kill",
                 "target": {"session_id": session_id},
+            },
+            timeout_sec=60,
+        )
+
+    lru_probe_path = tmp_path / "apb-lru-analysis-probe.jsonl"
+    cli_runner.base_env["XDEBUG_ANALYSIS_CACHE_MAX_BYTES"] = "1"
+    cli_runner.base_env["XDEBUG_ANALYSIS_CACHE_HARD_MAX_BYTES"] = "2147483648"
+    cli_runner.base_env["XDEBUG_TEST_ANALYSIS_PROBE_PATH"] = str(lru_probe_path)
+    lru_open = _query(
+        cli_runner,
+        {
+            "api_version": "xdebug.v1",
+            "action": "session.open",
+            "target": {"fsdb": str(fsdb)},
+            "args": {"name": "apb_soft_lru"},
+        },
+        case_name="apb-lru-session-open",
+        artifact_root=artifact_root,
+        manifest=manifest,
+    )
+    lru_session = lru_open.get("session") or lru_open["data"]["session"]
+    lru_target = {"session_id": lru_session["id"]}
+    try:
+        before_config = dict(config)
+        before_config["sample_point"] = "before"
+        after_config = dict(config)
+        after_config["sample_point"] = "after"
+        for name, variant in (("apb_before", before_config),
+                              ("apb_after", after_config)):
+            _query(
+                cli_runner,
+                {
+                    "api_version": "xdebug.v1",
+                    "action": "apb.config.load",
+                    "target": lru_target,
+                    "args": {"name": name, "config": variant},
+                },
+                case_name="apb-lru-config-" + name,
+                artifact_root=artifact_root,
+                manifest=manifest,
+            )
+        started = _query(
+            cli_runner,
+            {
+                "api_version": "xdebug.v1",
+                "action": "apb.cursor",
+                "target": lru_target,
+                "args": {"name": "apb_before", "op": "begin",
+                         "direction": "all"},
+            },
+            case_name="apb-lru-cursor-begin",
+            artifact_root=artifact_root,
+            manifest=manifest,
+        )
+        advanced = _query(
+            cli_runner,
+            {
+                "api_version": "xdebug.v1",
+                "action": "apb.cursor",
+                "target": lru_target,
+                "args": {"name": "apb_before", "op": "next",
+                         "direction": "all"},
+            },
+            case_name="apb-lru-cursor-next",
+            artifact_root=artifact_root,
+            manifest=manifest,
+        )
+        assert started["summary"]["index"] == 1
+        assert advanced["summary"]["index"] == 2
+        _query(
+            cli_runner,
+            {
+                "api_version": "xdebug.v1",
+                "action": "apb.query",
+                "target": lru_target,
+                "args": {"name": "apb_after", "direction": "write"},
+            },
+            case_name="apb-lru-second-config-query",
+            artifact_root=artifact_root,
+            manifest=manifest,
+        )
+        resumed = _query(
+            cli_runner,
+            {
+                "api_version": "xdebug.v1",
+                "action": "apb.cursor",
+                "target": lru_target,
+                "args": {"name": "apb_before", "op": "next",
+                         "direction": "all"},
+            },
+            case_name="apb-lru-cursor-resume",
+            artifact_root=artifact_root,
+            manifest=manifest,
+        )
+        assert resumed["summary"]["found"] is True
+        assert resumed["summary"]["index"] == 3
+        lru_rows = _apb_probe_rows(lru_probe_path)
+        assert lru_rows[-1]["scanner_invocations"] == 3
+        assert lru_rows[-1]["evictions"] >= 2
+        assert sum(row.get("event") == "scan" for row in lru_rows) == 3
+    finally:
+        cli_runner.run(
+            {
+                "api_version": "xdebug.v1",
+                "action": "session.kill",
+                "target": lru_target,
+            },
+            timeout_sec=60,
+        )
+
+    cli_runner.base_env["XDEBUG_ANALYSIS_CACHE_MAX_BYTES"] = "1"
+    cli_runner.base_env["XDEBUG_ANALYSIS_CACHE_HARD_MAX_BYTES"] = "1"
+    hard_open = _query(
+        cli_runner,
+        {
+            "api_version": "xdebug.v1",
+            "action": "session.open",
+            "target": {"fsdb": str(fsdb)},
+            "args": {"name": "apb_hard_limit"},
+        },
+        case_name="apb-hard-limit-session-open",
+        artifact_root=artifact_root,
+        manifest=manifest,
+    )
+    hard_session = hard_open.get("session") or hard_open["data"]["session"]
+    hard_target = {"session_id": hard_session["id"]}
+    try:
+        _query(
+            cli_runner,
+            {
+                "api_version": "xdebug.v1",
+                "action": "apb.config.load",
+                "target": hard_target,
+                "args": {"name": "apb0", "config": config},
+            },
+            case_name="apb-hard-limit-config-load",
+            artifact_root=artifact_root,
+            manifest=manifest,
+        )
+        rejected_result = cli_runner.run(
+            {
+                "api_version": "xdebug.v1",
+                "action": "apb.query",
+                "target": hard_target,
+                "args": {"name": "apb0", "direction": "write"},
+            },
+            timeout_sec=120,
+        )
+        rejected = rejected_result.response
+        assert rejected_result.returncode != 0
+        assert isinstance(rejected, dict) and rejected["ok"] is False
+        cache_error = rejected["error"]
+        assert cache_error["code"] == "ANALYSIS_MEMORY_LIMIT_EXCEEDED"
+        assert cache_error["recoverable"] is True
+        assert cache_error["hard_max_bytes"] == 1
+        assert cache_error["protocol"] == "apb"
+        assert len(cache_error["suggestions"]) == 2
+    finally:
+        cli_runner.run(
+            {
+                "api_version": "xdebug.v1",
+                "action": "session.kill",
+                "target": hard_target,
             },
             timeout_sec=60,
         )

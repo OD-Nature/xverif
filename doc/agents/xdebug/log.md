@@ -19,6 +19,10 @@
   独立 lazy build，cursor 按 generation 在 soft LRU 重建后续用。
 - AXI 扫描与 index 构建纳入 working-set/hard-limit accounting，best-effort bad_alloc
   转换为结构化内存错误；由 AXI response schema 生成器统一发布预算错误字段。
+- 完成 Phase 3 APB repository 迁移：APB query/statistics/transfer_window/cursor 复用单次
+  canonical scan；扫描期冻结既有地址解析语义，AddressIndex 独立 lazy build 和记账。
+- APB canonical/index 构建纳入 working-set/hard-limit accounting，soft LRU 后 generation
+  cursor 按原 position 续用；APB VIP 与 nightly benchmark 固化单扫描、逐出和硬上限合同。
 
 ## 2026-07-14
 

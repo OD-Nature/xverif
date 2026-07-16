@@ -20,22 +20,6 @@
 namespace xdebug_design {
 namespace {
 
-static bool ensure_apb_analyzed(const std::string& name,
-                                 xdebug_waveform::ApbConfig& cfg,
-                                 std::string& err) {
-    xdebug_waveform::ApbManager am;
-    if (!am.get_apb(xdebug_waveform::g_session_id, name, cfg)) {
-        err = "APB config not found: " + name;
-        return false;
-    }
-    if (!xdebug_waveform::g_apb_analyzer.analyze(name,
-            xdebug_waveform::g_fsdb_file, cfg)) {
-        err = "Failed to analyze APB: " + name;
-        return false;
-    }
-    return true;
-}
-
 class ApbCursorHandler : public EngineActionHandler {
 public:
     const char* action_name() const override { return "apb.cursor"; }
@@ -49,10 +33,14 @@ public:
         if (name.empty()) return protocol_missing_name_error(action_name(), "apb");
 
         ApbConfig cfg; std::string err;
-        if (!ensure_apb_analyzed(name, cfg, err))
-            return err.rfind("APB config not found:", 0) == 0
-                ? protocol_config_not_found_error(action_name(), "apb", name)
-                : protocol_analyze_error(action_name(), "apb", name, err);
+        if (!ensure_apb_analyzed(name, cfg, err)) {
+            if (err.rfind("APB config not found:", 0) == 0)
+                return protocol_config_not_found_error(action_name(), "apb", name);
+            if (!g_apb_analyzer.last_cache_error().empty())
+                return make_analysis_cache_error(
+                    g_apb_analyzer.last_cache_error());
+            return protocol_analyze_error(action_name(), "apb", name, err);
+        }
 
         std::string dir = a.value("direction", "all");
         int filter = (dir == "write") ? 1 : (dir == "read") ? 2 : 0;

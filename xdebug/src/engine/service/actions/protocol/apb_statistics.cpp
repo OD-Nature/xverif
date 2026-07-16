@@ -32,12 +32,21 @@ public:
                 filter_error.expected);
 
         ApbConfig config;
-        ApbManager manager;
-        if (!manager.get_apb(g_session_id, name, config))
-            return protocol_config_not_found_error(action_name(), "apb", name);
-        if (!g_apb_analyzer.analyze(name, g_fsdb_file, config))
+        std::string analysis_error;
+        if (!ensure_apb_analyzed(name, config, analysis_error)) {
+            if (analysis_error.rfind("APB config not found:", 0) == 0)
+                return protocol_config_not_found_error(
+                    action_name(), "apb", name);
+            if (!g_apb_analyzer.last_cache_error().empty())
+                return make_analysis_cache_error(
+                    g_apb_analyzer.last_cache_error());
             return protocol_analyze_error(action_name(), "apb", name,
-                                          "Failed to analyze APB: " + name);
+                                          analysis_error);
+        }
+        if (filter.address_mode != StatisticsAddressMode::None &&
+            !g_apb_analyzer.ensure_address_index(name))
+            return make_analysis_cache_error(
+                g_apb_analyzer.last_cache_error());
 
         const ApbResult* result = g_apb_analyzer.get_result(name);
         if (!result)

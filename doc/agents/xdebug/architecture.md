@@ -160,6 +160,18 @@ frontend 不直接承载 NPI 重逻辑；NPI/FSDB/engine 能力集中在内部 e
 - 新 action 应进入对应 `actions/<domain>/` 子目录，并在对应 `register_*_handlers.cpp` 注册。
 - handler 不应重新发明 schema 校验；只做业务语义检查。
 
+### APB canonical transaction reconstruction
+
+- `ApbAnalyzer` 按规范化 APB 语义和 FSDB identity 将 completed transfer 发布到
+  engine-owned `AnalysisRepository`；query、statistics、transfer_window 和 cursor
+  复用同一份 canonical result，不重复扫描 FSDB。
+- scan 时一次性冻结既有十六进制地址解析结果，保留原始 `addr` 字符串；按地址查询
+  使用独立 lazy `AddressIndex`，index 只保存 canonical position，不复制 transaction。
+- APB cursor 与 AXI cursor 一样只保存 key、generation、direction 和 position；soft
+  LRU 后同 key 重建时恢复位置，显式 config/session 失效则清除。
+- APB canonical 与 AddressIndex 的 build working set 都受 hard limit 约束；失败返回统一
+  结构化 cache error，不缩小扫描范围、不切换 backend。
+
 ## Design Engine 能力层
 
 主要路径：
@@ -230,9 +242,10 @@ frontend 不直接承载 NPI 重逻辑；NPI/FSDB/engine 能力集中在内部 e
   engine 启动时严格解析一次，非法值直接启动失败，不使用默认值兜底。
 - 预算按 estimator bytes 乘冻结 safety factor 2.0 计费；index 先于 canonical 淘汰，
   单一 oversize entry 或 owner+index 可越过 soft 但不能越过 hard。失败构建不发布对象。
-- Phase 2 已迁移 AXI canonical、address/ID/handshake lazy index 与 cursor；APB 和
-  stream canonical 仍沿用既有 analyzer，分别在后续 Phase 3/4 迁移。所有 public AXI
-  response 与排序保持不变，hard limit 通过统一 handler error 返回，不切换 scope/backend。
+- Phase 2 已迁移 AXI canonical、address/ID/handshake lazy index 与 cursor；Phase 3
+  已迁移 APB canonical、AddressIndex 与 cursor。stream canonical 仍沿用既有 analyzer，
+  在 Phase 4 迁移。所有 public AXI/APB response 与排序保持不变，hard limit 通过统一
+  handler error 返回，不切换 scope/backend。
 
 ## Combined Active Trace 层
 
