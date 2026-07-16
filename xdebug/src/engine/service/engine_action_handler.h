@@ -6,6 +6,8 @@
 
 #include <string>
 
+namespace xdebug_waveform { struct AnalysisCacheError; }
+
 namespace xdebug_design {
 
 using Json = nlohmann::ordered_json;
@@ -36,5 +38,7 @@ Json make_handler_error(const std::string& code, const std::string& message);
 Json make_handler_error(const std::string& code, const std::string& message,
                         const Json& details);
 Json make_handler_error_from_message(const std::string& message);
+Json make_analysis_cache_error(
+    const xdebug_waveform::AnalysisCacheError& error);
 
 } // namespace xdebug_design

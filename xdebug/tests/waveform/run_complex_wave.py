@@ -1207,6 +1207,8 @@ def run_axi(xdebug, fsdb, sim_log=AXI_SIM_LOG, handshake_oracle_path=AXI_HANDSHA
             expected_count=3200, num_ids=16, transactions_per_id=200,
             min_random_delay=50, max_random_delay=100):
     r = AiRunner(xdebug, fsdb, "axi")
+    cache_probe = os.path.join(r.home, "axi-analysis-cache.jsonl")
+    r.env["XDEBUG_TEST_ANALYSIS_PROBE_PATH"] = cache_probe
     try:
         r.open()
         prefix = "axi_vip_fixture_top.axi_vip_if.master_if[0]"
@@ -1431,6 +1433,98 @@ def run_axi(xdebug, fsdb, sim_log=AXI_SIM_LOG, handshake_oracle_path=AXI_HANDSHA
         )
         require(windowed["summary"]["write_count"] <= exported["summary"]["write_count"], "windowed write count exceeds full export")
         require(windowed["summary"]["read_count"] <= exported["summary"]["read_count"], "windowed read count exceeds full export")
+        with open(cache_probe, "r", encoding="utf-8") as probe_fh:
+            cache_rows = [json.loads(line) for line in probe_fh if line.strip()]
+        axi_rows = [row for row in cache_rows if row.get("protocol") == "axi"]
+        require(axi_rows and axi_rows[-1]["scanner_invocations"] == 1,
+                "AXI repository workflow must perform exactly one FSDB scan")
+        require(sum(row.get("event") == "build" for row in axi_rows) == 1,
+                "AXI repository must publish exactly one canonical build")
+        require(sum(row.get("event") == "index_build" for row in axi_rows) >= 3,
+                "AXI address, ID, and handshake lazy indexes were not all built")
+
+        if expected_count <= 32:
+            lru_probe_dir = tempfile.mkdtemp(prefix="xdebug_axi_lru_probe_")
+            lru_probe = os.path.join(lru_probe_dir, "analysis-probe.jsonl")
+            lru = AiRunner(xdebug, fsdb, "axi_soft_lru")
+            lru.env["XDEBUG_ANALYSIS_CACHE_MAX_BYTES"] = "1"
+            lru.env["XDEBUG_ANALYSIS_CACHE_HARD_MAX_BYTES"] = "2147483648"
+            lru.env["XDEBUG_TEST_ANALYSIS_PROBE_PATH"] = lru_probe
+            try:
+                lru.open()
+                lru.query(
+                    "axi.config.load",
+                    args={"name": "axi_before",
+                          "config": make_axi_config(
+                              prefix, sample_point="before")},
+                )
+                lru.query(
+                    "axi.config.load",
+                    args={"name": "axi_after",
+                          "config": make_axi_config(
+                              prefix, sample_point="after")},
+                )
+                started = lru.query(
+                    "axi.cursor",
+                    args={"name": "axi_before", "op": "begin",
+                          "direction": "all"},
+                )
+                advanced = lru.query(
+                    "axi.cursor",
+                    args={"name": "axi_before", "op": "next",
+                          "direction": "all"},
+                )
+                require(started["summary"]["index"] == 1 and
+                        advanced["summary"]["index"] == 2,
+                        "AXI LRU cursor setup did not reach position 2")
+                lru.query(
+                    "axi.query",
+                    args={"name": "axi_after", "direction": "write"},
+                )
+                resumed = lru.query(
+                    "axi.cursor",
+                    args={"name": "axi_before", "op": "next",
+                          "direction": "all"},
+                )
+                require(resumed["summary"]["found"] is True and
+                        resumed["summary"]["index"] == 3,
+                        "AXI generation cursor did not resume after soft LRU rebuild")
+                with open(lru_probe, "r", encoding="utf-8") as probe_fh:
+                    lru_rows = [json.loads(line) for line in probe_fh if line.strip()]
+                lru_axi_rows = [row for row in lru_rows
+                                if row.get("protocol") == "axi"]
+                require(lru_axi_rows[-1]["scanner_invocations"] == 3 and
+                        lru_axi_rows[-1]["evictions"] >= 2 and
+                        sum(row.get("event") == "scan"
+                            for row in lru_axi_rows) == 3,
+                        "AXI soft LRU must rescan only after eviction")
+            finally:
+                lru.cleanup()
+                shutil.rmtree(lru_probe_dir, ignore_errors=True)
+
+        limited = AiRunner(xdebug, fsdb, "axi_hard_limit")
+        limited.env["XDEBUG_ANALYSIS_CACHE_MAX_BYTES"] = "1"
+        limited.env["XDEBUG_ANALYSIS_CACHE_HARD_MAX_BYTES"] = "1"
+        try:
+            limited.open()
+            limited.query(
+                "axi.config.load",
+                args={"name": "axi0", "config": make_axi_config(prefix)},
+            )
+            rejected = limited.query(
+                "axi.query",
+                args={"name": "axi0", "direction": "write"},
+                expect_ok=False,
+            )
+            cache_error = rejected.get("error", {})
+            require(cache_error.get("code") == "ANALYSIS_MEMORY_LIMIT_EXCEEDED" and
+                    cache_error.get("recoverable") is True and
+                    cache_error.get("hard_max_bytes") == 1 and
+                    cache_error.get("protocol") == "axi" and
+                    len(cache_error.get("suggestions", [])) == 2,
+                    "AXI hard-limit error contract mismatch: {}".format(cache_error))
+        finally:
+            limited.cleanup()
         return r.rows
     finally:
         r.cleanup()

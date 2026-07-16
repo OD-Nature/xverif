@@ -149,6 +149,11 @@ frontend 不直接承载 NPI 重逻辑；NPI/FSDB/engine 能力集中在内部 e
   同 ID 最老的 data-complete write，RID 绑定同 ID 最老的 AR。
 - `AxiAnalyzer` 每个 session/config 只做一次完整 FSDB clock scan，query、analysis、
   pair、timeline、outlier、cursor 和 export 复用 `AxiResult`。
+- `AxiResult` 由 engine-owned `AnalysisRepository` 按 FSDB identity 和规范化 AXI
+  语义持有；address、ID 与各 channel handshake index 独立按需构建、记账和淘汰，
+  不改变 tracker 的 canonical transaction 与排序。
+- AXI cursor 只保存 key、generation、direction 和 position，不 pin canonical entry；
+  soft LRU 后同 key 重建时恢复 position，显式 config/session 失效则清除。
 - 新增 AXI action 或输出时必须保留 `full_scan_count=1` 回归，并用独立 pin/VIP oracle
   验证，不能以另一个 xdebug action 作为期望值。
 
@@ -225,8 +230,9 @@ frontend 不直接承载 NPI 重逻辑；NPI/FSDB/engine 能力集中在内部 e
   engine 启动时严格解析一次，非法值直接启动失败，不使用默认值兜底。
 - 预算按 estimator bytes 乘冻结 safety factor 2.0 计费；index 先于 canonical 淘汰，
   单一 oversize entry 或 owner+index 可越过 soft 但不能越过 hard。失败构建不发布对象。
-- Phase 1 只提供 repository/fake-entry 基础设施与 stream config 原子 replace 通知，
-  尚未迁移 APB/AXI/stream canonical；旧 analyzer 的扫描与公共响应仍保持不变。
+- Phase 2 已迁移 AXI canonical、address/ID/handshake lazy index 与 cursor；APB 和
+  stream canonical 仍沿用既有 analyzer，分别在后续 Phase 3/4 迁移。所有 public AXI
+  response 与排序保持不变，hard limit 通过统一 handler error 返回，不切换 scope/backend。
 
 ## Combined Active Trace 层
 

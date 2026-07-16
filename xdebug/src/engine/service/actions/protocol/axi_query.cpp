@@ -21,21 +21,6 @@
 namespace xdebug_design {
 namespace {
 
-static bool ensure_axi_analyzed(const std::string& name,
-                                 xdebug_waveform::AxiConfig& cfg,
-                                 std::string& err) {
-    xdebug_waveform::AxiManager am;
-    if (!am.get_axi(xdebug_waveform::g_session_id, name, cfg)) {
-        err = "AXI config not found: " + name;
-        return false;
-    }
-    if (!xdebug_waveform::g_axi_analyzer.analyze(name,
-            xdebug_waveform::g_fsdb_file, cfg)) {
-        err = "Failed to analyze AXI: " + name;
-        return false;
-    }
-    return true;
-}
 static bool parse_user_uint64_literal(const std::string& text,
                                       uint64_t& out,
                                       std::string& err) {
@@ -68,10 +53,15 @@ public:
         if (name.empty()) return protocol_missing_name_error(action_name(), "axi");
 
         AxiConfig cfg; std::string err;
-        if (!ensure_axi_analyzed(name, cfg, err))
-            return err.rfind("AXI config not found:", 0) == 0
-                ? protocol_config_not_found_error(action_name(), "axi", name)
-                : protocol_analyze_error(action_name(), "axi", name, err);
+        if (!ensure_axi_analyzed(name, cfg, err)) {
+            if (err.rfind("AXI config not found:", 0) == 0)
+                return protocol_config_not_found_error(action_name(), "axi", name);
+            else if (!g_axi_analyzer.last_cache_error().empty())
+                return make_analysis_cache_error(
+                    g_axi_analyzer.last_cache_error());
+            else
+                return protocol_analyze_error(action_name(), "axi", name, err);
+        }
 
         std::string dir = a.value("direction", "write");
         bool is_write = (dir != "read");
@@ -104,6 +94,9 @@ public:
                                                   time_error, "canonical time string such as 120ns");
             AxiHandshakeMatch match;
             const bool found = g_axi_analyzer.get_by_handshake(name, channel, handshake_time, match);
+            if (!g_axi_analyzer.last_cache_error().empty())
+                return make_analysis_cache_error(
+                    g_axi_analyzer.last_cache_error());
             Json out;
             out["summary"] = { {"name", name}, {"query_mode", "handshake"}, {"found", found} };
             out["match"] = {
@@ -135,6 +128,9 @@ public:
                                                       "known integer or SystemVerilog literal id");
                 id_str = std::to_string(id_value);
             }
+            if (!g_axi_analyzer.ensure_address_index(name))
+                return make_analysis_cache_error(
+                    g_axi_analyzer.last_cache_error());
             if (!id_str.empty()) {
                 if (num >= 0)
                     found = is_write ? g_axi_analyzer.get_write_by_addr_num(name, addr, id_str.c_str(), (size_t)num, txn)
@@ -185,6 +181,9 @@ public:
                                      : g_axi_analyzer.get_read_by_addr(name, addr, txn);
             }
         } else if (!id_str.empty()) {
+            if (!g_axi_analyzer.ensure_id_index(name))
+                return make_analysis_cache_error(
+                    g_axi_analyzer.last_cache_error());
             if (num >= 0)
                 found = is_write ? g_axi_analyzer.get_write_by_num(name, id_str.c_str(), (size_t)num, txn)
                                  : g_axi_analyzer.get_read_by_num(name, id_str.c_str(), (size_t)num, txn);

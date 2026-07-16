@@ -14,6 +14,11 @@
   building/ready 回滚、oversize、hard-limit/bad_alloc 和 generation cursor。
 - stream config replace 改为同目录 temp + fsync + atomic rename，并仅在成功后以忽略
   name/description 的语义 fingerprint 通知 repository；同语义复用，差异语义失效。
+- 完成 Phase 2 AXI repository 迁移：保留既有 `AxiTransactionTracker`/`AxiResult` 和
+  输出顺序，所有 AXI action 复用单次 canonical scan；address、ID、handshake index
+  独立 lazy build，cursor 按 generation 在 soft LRU 重建后续用。
+- AXI 扫描与 index 构建纳入 working-set/hard-limit accounting，best-effort bad_alloc
+  转换为结构化内存错误；由 AXI response schema 生成器统一发布预算错误字段。
 
 ## 2026-07-14
 

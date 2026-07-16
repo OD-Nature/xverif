@@ -80,10 +80,14 @@ public:
         AxiExportResult result;
         result.format = format;
         std::string error;
-        if (!g_axi_analyzer.analyze(name, g_fsdb_file, cfg))
-            return make_handler_error("ACTION_FAILED", "Failed to analyze AXI: " + name,
+        if (!analyze_axi_config(name, cfg, error)) {
+            if (!g_axi_analyzer.last_cache_error().empty())
+                return make_analysis_cache_error(
+                    g_axi_analyzer.last_cache_error());
+            return make_handler_error("ACTION_FAILED", error,
                                       {{"cause_code", "ANALYZE_FAILED"},
                                        {"correct_example", protocol_action_example(action_name())}});
+        }
         const AxiResult* canonical = g_axi_analyzer.get_result(name);
         if (!canonical)
             return make_handler_error("ACTION_FAILED", "AXI canonical result unavailable: " + name,

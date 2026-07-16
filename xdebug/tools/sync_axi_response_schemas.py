@@ -423,6 +423,11 @@ def error_schema() -> dict[str, Any]:
             "correct_example": {},
             "cause_code": STRING,
             "validation": {},
+            "current_estimated_bytes": {"type": "integer", "minimum": 0},
+            "hard_max_bytes": {"type": "integer", "minimum": 0},
+            "protocol": {"type": "string", "enum": ["apb", "axi", "stream"]},
+            "key_summary": STRING,
+            "suggestions": {"type": "array", "items": STRING},
         },
         ["code", "message", "recoverable", "error_layer"],
     )

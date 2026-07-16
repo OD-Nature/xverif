@@ -2,6 +2,7 @@
 #include "../cache/analysis_probe.h"
 #include "../cache/analysis_size_estimator.h"
 #include "../common/clock_sampling.h"
+#include "../common/reset_config.h"
 #include "../server/fsdb_value_reader.h"
 #include "../server/fsdb_scan_utils.h"
 #include "npi_fsdb.h"
@@ -13,10 +14,41 @@
 #include <list>
 #include <deque>
 #include <map>
+#include <memory>
 #include <limits>
 #include <set>
+#include "json.hpp"
 
 namespace xdebug_waveform {
+
+namespace {
+
+constexpr std::uint32_t kAxiFingerprintVersion = 1;
+const char* kAxiResultTypeTag = "axi_result.v1";
+
+std::string normalized_axi_config_semantics(const AxiConfig& c) {
+    nlohmann::ordered_json j;
+    j["awaddr"] = c.awaddr; j["awid"] = c.awid; j["awlen"] = c.awlen;
+    j["awsize"] = c.awsize; j["awburst"] = c.awburst;
+    j["awvalid"] = c.awvalid; j["awready"] = c.awready;
+    j["wdata"] = c.wdata; j["wstrb"] = c.wstrb; j["wlast"] = c.wlast;
+    j["wvalid"] = c.wvalid; j["wready"] = c.wready;
+    j["bid"] = c.bid; j["bresp"] = c.bresp;
+    j["bvalid"] = c.bvalid; j["bready"] = c.bready;
+    j["araddr"] = c.araddr; j["arid"] = c.arid; j["arlen"] = c.arlen;
+    j["arsize"] = c.arsize; j["arburst"] = c.arburst;
+    j["arvalid"] = c.arvalid; j["arready"] = c.arready;
+    j["rid"] = c.rid; j["rdata"] = c.rdata; j["rresp"] = c.rresp;
+    j["rlast"] = c.rlast; j["rvalid"] = c.rvalid; j["rready"] = c.rready;
+    j["clock"] = c.clock_sample.clock;
+    j["edge"] = clock_edge_kind_text(c.clock_sample.edge);
+    if (c.clock_sample.edge != ClockEdgeKind::Negedge)
+        j["sample_point"] = clock_sample_point_text(c.clock_sample.sample_point);
+    j["reset"] = reset_config_json(c.reset);
+    return j.dump();
+}
+
+}  // namespace
 
 bool AxiAnalyzer::parse_hex_value(const std::string& hex_str, uint64_t& out) {
     if (hex_str.empty()) return false;
@@ -36,22 +68,36 @@ bool AxiAnalyzer::id_matches(const std::string& txn_id, const char* id_str) {
     return txn_id_val == id_val;
 }
 
+void AxiAnalyzer::configure_repository(AnalysisRepository* repository,
+                                       const std::string& session_id,
+                                       const FsdbIdentity& fsdb_identity) {
+    repository_ = repository;
+    session_id_ = session_id;
+    fsdb_identity_ = fsdb_identity;
+    keys_.clear();
+    last_cache_error_ = AnalysisCacheError();
+}
+
+AnalysisCacheKey AxiAnalyzer::cache_key(const AxiConfig& config) const {
+    return make_analysis_cache_key(
+        "axi", session_id_, fsdb_identity_, kAxiFingerprintVersion,
+        normalized_axi_config_semantics(config), AnalysisCacheScope::Full);
+}
+
+const AxiResult* AxiAnalyzer::get_result_internal(
+    const std::string& name, std::uint64_t* generation) const {
+    if (repository_ == nullptr) return nullptr;
+    auto found = keys_.find(name);
+    if (found == keys_.end()) return nullptr;
+    std::shared_ptr<const AxiResult> result =
+        repository_->peek_canonical<AxiResult>(found->second,
+                                               kAxiResultTypeTag,
+                                               generation);
+    return result.get();
+}
+
 const AxiResult* AxiAnalyzer::get_result(const std::string& name) const {
-    auto it = results_.find(name);
-    if (it != results_.end()) return &it->second;
-    return nullptr;
-}
-
-AxiResult* AxiAnalyzer::get_result_mut(const std::string& name) {
-    auto it = results_.find(name);
-    if (it != results_.end()) return &it->second;
-    return nullptr;
-}
-
-AxiCursor* AxiAnalyzer::get_cursor_mut(const std::string& name) {
-    auto it = cursors_.find(name);
-    if (it != cursors_.end()) return &it->second;
-    return nullptr;
+    return get_result_internal(name, nullptr);
 }
 
 struct SigIdx {
@@ -76,24 +122,47 @@ static bool is_active(const std::string& v) {
     return !v.empty() && v != "0" && v != "X" && v != "Z";
 }
 
-bool AxiAnalyzer::analyze(const std::string& name, npiFsdbFileHandle file, const AxiConfig& config) {
-    if (get_result(name) != nullptr) {
-        std::size_t resident_bytes = 0;
-        for (const auto& item : results_)
-            resident_bytes += estimate_axi_result_bytes(item.second);
-        analysis_probe().record(
-            "hit", "axi", name,
-            AnalysisProbeMetrics{results_.size(), 0, resident_bytes, 0, 0});
-        return true; // already cached
+bool AxiAnalyzer::analyze(const std::string& name, npiFsdbFileHandle file,
+                          const AxiConfig& config,
+                          AnalysisCacheError* cache_error) {
+    last_cache_error_ = AnalysisCacheError();
+    if (repository_ == nullptr) {
+        last_cache_error_.code = "ANALYSIS_REPOSITORY_UNAVAILABLE";
+        last_cache_error_.message = "AXI analysis repository is not configured";
+        if (cache_error != nullptr) *cache_error = last_cache_error_;
+        return false;
     }
+    const AnalysisCacheKey key = cache_key(config);
+    auto previous_key = keys_.find(name);
+    if (previous_key != keys_.end() && !(previous_key->second == key)) {
+        repository_->erase_cursor(cursor_id(name, 0));
+        repository_->erase_cursor(cursor_id(name, 1));
+        repository_->erase_cursor(cursor_id(name, 2));
+    }
+    keys_[name] = key;
+    const AnalysisAcquireStatus acquire = repository_->begin_canonical(
+        key, kAxiResultTypeTag, sizeof(AxiResult), last_cache_error_);
+    if (acquire == AnalysisAcquireStatus::Hit) return true;
+    if (acquire != AnalysisAcquireStatus::BuildStarted) {
+        if (cache_error != nullptr) *cache_error = last_cache_error_;
+        return false;
+    }
+    auto fail_build = [&](const std::string& reason) {
+        repository_->fail_canonical(key, reason);
+        if (last_cache_error_.message.empty()) {
+            last_cache_error_.message = "failed to build AXI analysis";
+        }
+        if (cache_error != nullptr) *cache_error = last_cache_error_;
+        return false;
+    };
 
-    analysis_probe().record(
-        "miss", "axi", name,
-        AnalysisProbeMetrics{results_.size(), 0, 0, 0, 0});
-
+    try {
     ClockSampleSpec clock_sample = config.clock_sample;
     std::string normalize_error;
-    if (!normalize_clock_sample_spec(file, clock_sample, normalize_error)) return false;
+    if (!normalize_clock_sample_spec(file, clock_sample, normalize_error)) {
+        last_cache_error_.message = normalize_error;
+        return fail_build("clock_normalization_failed");
+    }
 
     // Build signal vector and index map
     std::vector<std::string> signals;
@@ -134,7 +203,8 @@ bool AxiAnalyzer::analyze(const std::string& name, npiFsdbFileHandle file, const
     for (const auto& sig_name : signals) {
         npiFsdbSigHandle sig = npi_fsdb_sig_by_name(file, sig_name.c_str(), NULL);
         if (!sig) {
-            return false;
+            last_cache_error_.message = "AXI signal not found: " + sig_name;
+            return fail_build("signal_not_found");
         }
         sig_handles.push_back(sig);
     }
@@ -199,29 +269,57 @@ bool AxiAnalyzer::analyze(const std::string& name, npiFsdbFileHandle file, const
     bool truncated = false;
     analysis_probe().record(
         "scan", "axi", name,
-        AnalysisProbeMetrics{results_.size(), 0, 0, 0, 1});
-    if (!scanner.scan(sample_signals, min_time, max_time, npiFsdbHexStrVal, '\0', -1,
+        AnalysisProbeMetrics{repository_->stats().canonical_entry_count,
+                             repository_->stats().index_count, 0, 0, 1});
+    std::size_t observed_samples = 0;
+    bool budget_failed = false;
+    const bool scan_ok = scanner.scan(
+        sample_signals, min_time, max_time, npiFsdbHexStrVal, '\0', -1,
         [&](const ClockSample& sample) -> bool {
             process_edge(sample.time, sample.values);
+            ++observed_samples;
+            if ((observed_samples & (observed_samples - 1)) == 0) {
+                const std::uint64_t bytes =
+                    tracker.estimated_working_set_bytes();
+                if (!repository_->update_canonical_build_bytes(
+                        key, bytes, last_cache_error_)) {
+                    budget_failed = true;
+                    return false;
+                }
+            }
             return true;
-        }, scan_error, sample_count, truncated)) {
-        analysis_probe().record(
-            "build_failed", "axi", name,
-            AnalysisProbeMetrics{results_.size(), 0, 0, 0, 0});
+        }, scan_error, sample_count, truncated);
+    if (budget_failed) {
+        if (cache_error != nullptr) *cache_error = last_cache_error_;
         return false;
     }
+    if (!scan_ok) {
+        last_cache_error_.message = scan_error;
+        return fail_build("scan_failed");
+    }
 
-    results_[name] = tracker.finish(min_time, max_time, !truncated);
-    results_[name].diagnostics.full_scan_count = 1;
-    cursors_[name] = AxiCursor();
-    std::size_t resident_bytes = 0;
-    for (const auto& item : results_)
-        resident_bytes += estimate_axi_result_bytes(item.second);
-    analysis_probe().record(
-        "build", "axi", name,
-        AnalysisProbeMetrics{results_.size(), 0, resident_bytes,
-                             estimate_axi_result_bytes(results_[name]), 0});
+    std::shared_ptr<AxiResult> result(new AxiResult(
+        tracker.finish(min_time, max_time, !truncated)));
+    result->diagnostics.full_scan_count = 1;
+    const std::uint64_t resident_bytes = estimate_axi_result_bytes(*result);
+    if (!repository_->update_canonical_build_bytes(
+            key, resident_bytes, last_cache_error_)) {
+        if (cache_error != nullptr) *cache_error = last_cache_error_;
+        return false;
+    }
+    if (!repository_->publish_canonical<AxiResult>(
+            key, kAxiResultTypeTag,
+            std::static_pointer_cast<const AxiResult>(result), resident_bytes,
+            last_cache_error_)) {
+        if (cache_error != nullptr) *cache_error = last_cache_error_;
+        return false;
+    }
     return true;
+    } catch (const std::bad_alloc&) {
+        repository_->fail_canonical_bad_alloc(key, last_cache_error_);
+        if (cache_error != nullptr) *cache_error = last_cache_error_;
+        return false;
+    }
 }
 
 size_t AxiAnalyzer::get_write_count(const std::string& name) const {
@@ -234,51 +332,115 @@ size_t AxiAnalyzer::get_read_count(const std::string& name) const {
     return r ? r->reads.size() : 0;
 }
 
-bool AxiAnalyzer::get_write_by_addr(const std::string& name, uint64_t addr, const AxiTransaction*& out) const {
-    const AxiResult* r = get_result(name);
-    if (!r) return false;
-    for (const auto& txn : r->writes) {
-        uint64_t txn_addr = 0;
-        if (parse_hex_value(txn.addr, txn_addr) && txn_addr == addr) {
-            out = &txn;
-            return true;
-        }
-    }
-    return false;
+bool AxiAnalyzer::ensure_address_index(const std::string& name) const {
+    return numeric_index(name, "address", true) != nullptr;
 }
 
-bool AxiAnalyzer::get_write_by_addr_num(const std::string& name, uint64_t addr, size_t num, const AxiTransaction*& out) const {
-    const AxiResult* r = get_result(name);
-    if (!r) return false;
-    if (num == 0) return false;
-    size_t count = 0;
-    for (const auto& txn : r->writes) {
-        uint64_t txn_addr = 0;
-        if (parse_hex_value(txn.addr, txn_addr) && txn_addr == addr) {
-            if (++count == num) {
-                out = &txn;
-                return true;
-            }
-        }
-    }
-    return false;
+bool AxiAnalyzer::ensure_id_index(const std::string& name) const {
+    return numeric_index(name, "id", true) != nullptr;
 }
 
-bool AxiAnalyzer::get_write_by_addr_last(const std::string& name, uint64_t addr, const AxiTransaction*& out) const {
-    const AxiResult* r = get_result(name);
-    if (!r) return false;
-    const AxiTransaction* found = nullptr;
-    for (const auto& txn : r->writes) {
-        uint64_t txn_addr = 0;
-        if (parse_hex_value(txn.addr, txn_addr) && txn_addr == addr) {
-            found = &txn;
-        }
+std::uint64_t AxiAnalyzer::estimate_numeric_index_bytes(
+    const NumericIndex& index) {
+    std::uint64_t bytes = sizeof(index);
+    for (const auto& bucket : index) {
+        bytes += sizeof(bucket);
+        bytes += bucket.second.writes.capacity() * sizeof(std::size_t);
+        bytes += bucket.second.reads.capacity() * sizeof(std::size_t);
     }
-    if (found) {
-        out = found;
-        return true;
+    return bytes;
+}
+
+const AxiAnalyzer::NumericIndex* AxiAnalyzer::numeric_index(
+    const std::string& name, const std::string& kind,
+    bool record_access) const {
+    last_cache_error_ = AnalysisCacheError();
+    std::uint64_t generation = 0;
+    const AxiResult* result = get_result_internal(name, &generation);
+    auto key_it = keys_.find(name);
+    if (!result || key_it == keys_.end() || repository_ == nullptr) return nullptr;
+    const std::string index_kind = kind == "id" ? "id" : "address";
+    const std::string type_tag = "axi_numeric_index.v1";
+    if (!record_access) {
+        std::shared_ptr<const NumericIndex> cached =
+            repository_->peek_index<NumericIndex>(
+                key_it->second, generation, index_kind, type_tag);
+        if (cached) return cached.get();
     }
-    return false;
+    const AnalysisAcquireStatus acquire = repository_->begin_index(
+        key_it->second, generation, index_kind, type_tag,
+        sizeof(NumericIndex), last_cache_error_);
+    if (acquire == AnalysisAcquireStatus::Hit) {
+        return repository_->peek_index<NumericIndex>(
+            key_it->second, generation, index_kind, type_tag).get();
+    }
+    if (acquire != AnalysisAcquireStatus::BuildStarted) return nullptr;
+
+    try {
+    std::shared_ptr<NumericIndex> index(new NumericIndex());
+    std::size_t inserted = 0;
+    auto add = [&](const AxiTransaction& txn, bool write,
+                   std::size_t position) -> bool {
+        std::uint64_t value = 0;
+        const std::string& text = kind == "id" ? txn.id : txn.addr;
+        if (!parse_hex_value(text, value)) return true;
+        DirectionBucket& bucket = (*index)[value];
+        (write ? bucket.writes : bucket.reads).push_back(position);
+        ++inserted;
+        if ((inserted & (inserted - 1)) != 0) return true;
+        return repository_->update_index_build_bytes(
+            key_it->second, generation, index_kind,
+            estimate_numeric_index_bytes(*index), last_cache_error_);
+    };
+    for (std::size_t i = 0; i < result->writes.size(); ++i) {
+        if (!add(result->writes[i], true, i)) return nullptr;
+    }
+    for (std::size_t i = 0; i < result->reads.size(); ++i) {
+        if (!add(result->reads[i], false, i)) return nullptr;
+    }
+    const std::uint64_t bytes = estimate_numeric_index_bytes(*index);
+    if (!repository_->update_index_build_bytes(
+            key_it->second, generation, index_kind, bytes,
+            last_cache_error_)) return nullptr;
+    if (!repository_->publish_index<NumericIndex>(
+            key_it->second, generation, index_kind, type_tag,
+            std::static_pointer_cast<const NumericIndex>(index), bytes,
+            last_cache_error_)) return nullptr;
+    return repository_->peek_index<NumericIndex>(
+        key_it->second, generation, index_kind, type_tag).get();
+    } catch (const std::bad_alloc&) {
+        repository_->fail_index_bad_alloc(
+            key_it->second, generation, index_kind, last_cache_error_);
+        return nullptr;
+    }
+}
+
+bool AxiAnalyzer::get_write_by_addr(const std::string& name, uint64_t addr,
+                                    const AxiTransaction*& out) const {
+    return get_write_by_addr_num(name, addr, 1, out);
+}
+
+bool AxiAnalyzer::get_write_by_addr_num(const std::string& name, uint64_t addr,
+                                        size_t num,
+                                        const AxiTransaction*& out) const {
+    const AxiResult* result = get_result(name);
+    const NumericIndex* index = numeric_index(name, "address");
+    if (!result || !index || num == 0) return false;
+    auto found = index->find(addr);
+    if (found == index->end() || num > found->second.writes.size()) return false;
+    out = &result->writes[found->second.writes[num - 1]];
+    return true;
+}
+
+bool AxiAnalyzer::get_write_by_addr_last(const std::string& name, uint64_t addr,
+                                         const AxiTransaction*& out) const {
+    const AxiResult* result = get_result(name);
+    const NumericIndex* index = numeric_index(name, "address");
+    if (!result || !index) return false;
+    auto found = index->find(addr);
+    if (found == index->end() || found->second.writes.empty()) return false;
+    out = &result->writes[found->second.writes.back()];
+    return true;
 }
 
 bool AxiAnalyzer::get_write_by_num(const std::string& name, size_t num, const AxiTransaction*& out) const {
@@ -295,12 +457,24 @@ bool AxiAnalyzer::get_write_last(const std::string& name, const AxiTransaction*&
     return true;
 }
 
-bool AxiAnalyzer::get_write_by_addr(const std::string& name, uint64_t addr, const char* id_str, const AxiTransaction*& out) const {
-    const AxiResult* r = get_result(name);
-    if (!r) return false;
-    for (const auto& txn : r->writes) {
-        uint64_t txn_addr = 0;
-        if (parse_hex_value(txn.addr, txn_addr) && txn_addr == addr && id_matches(txn.id, id_str)) {
+bool AxiAnalyzer::get_write_by_addr(const std::string& name, uint64_t addr,
+                                    const char* id_str,
+                                    const AxiTransaction*& out) const {
+    return get_write_by_addr_num(name, addr, id_str, 1, out);
+}
+
+bool AxiAnalyzer::get_write_by_addr_num(const std::string& name, uint64_t addr,
+                                        const char* id_str, size_t num,
+                                        const AxiTransaction*& out) const {
+    const AxiResult* result = get_result(name);
+    const NumericIndex* index = numeric_index(name, "address");
+    if (!result || !index || num == 0) return false;
+    auto found = index->find(addr);
+    if (found == index->end()) return false;
+    std::size_t matched = 0;
+    for (std::size_t position : found->second.writes) {
+        const AxiTransaction& txn = result->writes[position];
+        if (id_matches(txn.id, id_str) && ++matched == num) {
             out = &txn;
             return true;
         }
@@ -308,107 +482,78 @@ bool AxiAnalyzer::get_write_by_addr(const std::string& name, uint64_t addr, cons
     return false;
 }
 
-bool AxiAnalyzer::get_write_by_addr_num(const std::string& name, uint64_t addr, const char* id_str, size_t num, const AxiTransaction*& out) const {
-    const AxiResult* r = get_result(name);
-    if (!r || num == 0) return false;
-    size_t count = 0;
-    for (const auto& txn : r->writes) {
-        uint64_t txn_addr = 0;
-        if (parse_hex_value(txn.addr, txn_addr) && txn_addr == addr && id_matches(txn.id, id_str)) {
-            if (++count == num) {
-                out = &txn;
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
-bool AxiAnalyzer::get_write_by_addr_last(const std::string& name, uint64_t addr, const char* id_str, const AxiTransaction*& out) const {
-    const AxiResult* r = get_result(name);
-    if (!r) return false;
+bool AxiAnalyzer::get_write_by_addr_last(const std::string& name, uint64_t addr,
+                                         const char* id_str,
+                                         const AxiTransaction*& out) const {
+    const AxiResult* result = get_result(name);
+    const NumericIndex* index = numeric_index(name, "address");
+    if (!result || !index) return false;
+    auto bucket = index->find(addr);
+    if (bucket == index->end()) return false;
     const AxiTransaction* found = nullptr;
-    for (const auto& txn : r->writes) {
-        uint64_t txn_addr = 0;
-        if (parse_hex_value(txn.addr, txn_addr) && txn_addr == addr && id_matches(txn.id, id_str)) {
-            found = &txn;
-        }
-    }
+    for (std::size_t position : bucket->second.writes)
+        if (id_matches(result->writes[position].id, id_str))
+            found = &result->writes[position];
     if (!found) return false;
     out = found;
     return true;
 }
 
-bool AxiAnalyzer::get_write_by_num(const std::string& name, const char* id_str, size_t num, const AxiTransaction*& out) const {
-    const AxiResult* r = get_result(name);
-    if (!r || num == 0) return false;
-    size_t count = 0;
-    for (const auto& txn : r->writes) {
-        if (id_matches(txn.id, id_str) && ++count == num) {
-            out = &txn;
-            return true;
-        }
-    }
-    return false;
-}
-
-bool AxiAnalyzer::get_write_last(const std::string& name, const char* id_str, const AxiTransaction*& out) const {
-    const AxiResult* r = get_result(name);
-    if (!r) return false;
-    const AxiTransaction* found = nullptr;
-    for (const auto& txn : r->writes) {
-        if (id_matches(txn.id, id_str)) found = &txn;
-    }
-    if (!found) return false;
-    out = found;
+bool AxiAnalyzer::get_write_by_num(const std::string& name, const char* id_str,
+                                   size_t num,
+                                   const AxiTransaction*& out) const {
+    const AxiResult* result = get_result(name);
+    const NumericIndex* index = numeric_index(name, "id");
+    if (!result || !index || num == 0) return false;
+    char* end = nullptr;
+    const std::uint64_t id = std::strtoull(id_str, &end, 0);
+    if (end == id_str) return false;
+    auto found = index->find(id);
+    if (found == index->end() || num > found->second.writes.size()) return false;
+    out = &result->writes[found->second.writes[num - 1]];
     return true;
 }
 
-bool AxiAnalyzer::get_read_by_addr(const std::string& name, uint64_t addr, const AxiTransaction*& out) const {
-    const AxiResult* r = get_result(name);
-    if (!r) return false;
-    for (const auto& txn : r->reads) {
-        uint64_t txn_addr = 0;
-        if (parse_hex_value(txn.addr, txn_addr) && txn_addr == addr) {
-            out = &txn;
-            return true;
-        }
-    }
-    return false;
+bool AxiAnalyzer::get_write_last(const std::string& name, const char* id_str,
+                                 const AxiTransaction*& out) const {
+    const AxiResult* result = get_result(name);
+    const NumericIndex* index = numeric_index(name, "id");
+    if (!result || !index) return false;
+    char* end = nullptr;
+    const std::uint64_t id = std::strtoull(id_str, &end, 0);
+    if (end == id_str) return false;
+    auto found = index->find(id);
+    if (found == index->end() || found->second.writes.empty()) return false;
+    out = &result->writes[found->second.writes.back()];
+    return true;
 }
 
-bool AxiAnalyzer::get_read_by_addr_num(const std::string& name, uint64_t addr, size_t num, const AxiTransaction*& out) const {
-    const AxiResult* r = get_result(name);
-    if (!r) return false;
-    if (num == 0) return false;
-    size_t count = 0;
-    for (const auto& txn : r->reads) {
-        uint64_t txn_addr = 0;
-        if (parse_hex_value(txn.addr, txn_addr) && txn_addr == addr) {
-            if (++count == num) {
-                out = &txn;
-                return true;
-            }
-        }
-    }
-    return false;
+bool AxiAnalyzer::get_read_by_addr(const std::string& name, uint64_t addr,
+                                   const AxiTransaction*& out) const {
+    return get_read_by_addr_num(name, addr, 1, out);
 }
 
-bool AxiAnalyzer::get_read_by_addr_last(const std::string& name, uint64_t addr, const AxiTransaction*& out) const {
-    const AxiResult* r = get_result(name);
-    if (!r) return false;
-    const AxiTransaction* found = nullptr;
-    for (const auto& txn : r->reads) {
-        uint64_t txn_addr = 0;
-        if (parse_hex_value(txn.addr, txn_addr) && txn_addr == addr) {
-            found = &txn;
-        }
-    }
-    if (found) {
-        out = found;
-        return true;
-    }
-    return false;
+bool AxiAnalyzer::get_read_by_addr_num(const std::string& name, uint64_t addr,
+                                       size_t num,
+                                       const AxiTransaction*& out) const {
+    const AxiResult* result = get_result(name);
+    const NumericIndex* index = numeric_index(name, "address");
+    if (!result || !index || num == 0) return false;
+    auto found = index->find(addr);
+    if (found == index->end() || num > found->second.reads.size()) return false;
+    out = &result->reads[found->second.reads[num - 1]];
+    return true;
+}
+
+bool AxiAnalyzer::get_read_by_addr_last(const std::string& name, uint64_t addr,
+                                        const AxiTransaction*& out) const {
+    const AxiResult* result = get_result(name);
+    const NumericIndex* index = numeric_index(name, "address");
+    if (!result || !index) return false;
+    auto found = index->find(addr);
+    if (found == index->end() || found->second.reads.empty()) return false;
+    out = &result->reads[found->second.reads.back()];
+    return true;
 }
 
 bool AxiAnalyzer::get_read_by_num(const std::string& name, size_t num, const AxiTransaction*& out) const {
@@ -425,12 +570,24 @@ bool AxiAnalyzer::get_read_last(const std::string& name, const AxiTransaction*& 
     return true;
 }
 
-bool AxiAnalyzer::get_read_by_addr(const std::string& name, uint64_t addr, const char* id_str, const AxiTransaction*& out) const {
-    const AxiResult* r = get_result(name);
-    if (!r) return false;
-    for (const auto& txn : r->reads) {
-        uint64_t txn_addr = 0;
-        if (parse_hex_value(txn.addr, txn_addr) && txn_addr == addr && id_matches(txn.id, id_str)) {
+bool AxiAnalyzer::get_read_by_addr(const std::string& name, uint64_t addr,
+                                   const char* id_str,
+                                   const AxiTransaction*& out) const {
+    return get_read_by_addr_num(name, addr, id_str, 1, out);
+}
+
+bool AxiAnalyzer::get_read_by_addr_num(const std::string& name, uint64_t addr,
+                                       const char* id_str, size_t num,
+                                       const AxiTransaction*& out) const {
+    const AxiResult* result = get_result(name);
+    const NumericIndex* index = numeric_index(name, "address");
+    if (!result || !index || num == 0) return false;
+    auto found = index->find(addr);
+    if (found == index->end()) return false;
+    std::size_t matched = 0;
+    for (std::size_t position : found->second.reads) {
+        const AxiTransaction& txn = result->reads[position];
+        if (id_matches(txn.id, id_str) && ++matched == num) {
             out = &txn;
             return true;
         }
@@ -438,181 +595,165 @@ bool AxiAnalyzer::get_read_by_addr(const std::string& name, uint64_t addr, const
     return false;
 }
 
-bool AxiAnalyzer::get_read_by_addr_num(const std::string& name, uint64_t addr, const char* id_str, size_t num, const AxiTransaction*& out) const {
-    const AxiResult* r = get_result(name);
-    if (!r || num == 0) return false;
-    size_t count = 0;
-    for (const auto& txn : r->reads) {
-        uint64_t txn_addr = 0;
-        if (parse_hex_value(txn.addr, txn_addr) && txn_addr == addr && id_matches(txn.id, id_str)) {
-            if (++count == num) {
-                out = &txn;
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
-bool AxiAnalyzer::get_read_by_addr_last(const std::string& name, uint64_t addr, const char* id_str, const AxiTransaction*& out) const {
-    const AxiResult* r = get_result(name);
-    if (!r) return false;
+bool AxiAnalyzer::get_read_by_addr_last(const std::string& name, uint64_t addr,
+                                        const char* id_str,
+                                        const AxiTransaction*& out) const {
+    const AxiResult* result = get_result(name);
+    const NumericIndex* index = numeric_index(name, "address");
+    if (!result || !index) return false;
+    auto bucket = index->find(addr);
+    if (bucket == index->end()) return false;
     const AxiTransaction* found = nullptr;
-    for (const auto& txn : r->reads) {
-        uint64_t txn_addr = 0;
-        if (parse_hex_value(txn.addr, txn_addr) && txn_addr == addr && id_matches(txn.id, id_str)) {
-            found = &txn;
-        }
-    }
+    for (std::size_t position : bucket->second.reads)
+        if (id_matches(result->reads[position].id, id_str))
+            found = &result->reads[position];
     if (!found) return false;
     out = found;
     return true;
 }
 
-bool AxiAnalyzer::get_read_by_num(const std::string& name, const char* id_str, size_t num, const AxiTransaction*& out) const {
-    const AxiResult* r = get_result(name);
-    if (!r || num == 0) return false;
-    size_t count = 0;
-    for (const auto& txn : r->reads) {
-        if (id_matches(txn.id, id_str) && ++count == num) {
-            out = &txn;
-            return true;
-        }
-    }
-    return false;
+bool AxiAnalyzer::get_read_by_num(const std::string& name, const char* id_str,
+                                  size_t num,
+                                  const AxiTransaction*& out) const {
+    const AxiResult* result = get_result(name);
+    const NumericIndex* index = numeric_index(name, "id");
+    if (!result || !index || num == 0) return false;
+    char* end = nullptr;
+    const std::uint64_t id = std::strtoull(id_str, &end, 0);
+    if (end == id_str) return false;
+    auto found = index->find(id);
+    if (found == index->end() || num > found->second.reads.size()) return false;
+    out = &result->reads[found->second.reads[num - 1]];
+    return true;
 }
 
-bool AxiAnalyzer::get_read_last(const std::string& name, const char* id_str, const AxiTransaction*& out) const {
-    const AxiResult* r = get_result(name);
-    if (!r) return false;
-    const AxiTransaction* found = nullptr;
-    for (const auto& txn : r->reads) {
-        if (id_matches(txn.id, id_str)) found = &txn;
-    }
-    if (!found) return false;
-    out = found;
+bool AxiAnalyzer::get_read_last(const std::string& name, const char* id_str,
+                                const AxiTransaction*& out) const {
+    const AxiResult* result = get_result(name);
+    const NumericIndex* index = numeric_index(name, "id");
+    if (!result || !index) return false;
+    char* end = nullptr;
+    const std::uint64_t id = std::strtoull(id_str, &end, 0);
+    if (end == id_str) return false;
+    auto found = index->find(id);
+    if (found == index->end() || found->second.reads.empty()) return false;
+    out = &result->reads[found->second.reads.back()];
     return true;
 }
 
 bool AxiAnalyzer::cursor_begin(const std::string& name, int filter, const AxiTransaction*& out) {
-    AxiResult* r = get_result_mut(name);
-    AxiCursor* c = get_cursor_mut(name);
-    if (!r || !c) return false;
-
-    if (filter == 1) {
-        c->wr_idx = 0;
-        if (c->wr_idx < r->writes.size()) {
-            out = &r->writes[c->wr_idx];
-            return true;
-        }
-    } else if (filter == 2) {
-        c->rd_idx = 0;
-        if (c->rd_idx < r->reads.size()) {
-            out = &r->reads[c->rd_idx];
-            return true;
-        }
-    } else {
-        c->all_idx = 0;
-        if (c->all_idx < r->all.size()) {
-            out = &r->all[c->all_idx];
-            return true;
-        }
-    }
-    return false;
+    std::uint64_t generation = 0;
+    const AxiResult* result = get_result_internal(name, &generation);
+    auto key = keys_.find(name);
+    if (!result || key == keys_.end() || repository_ == nullptr ||
+        transaction_count(*result, filter) == 0) return false;
+    GenerationCursor cursor;
+    cursor.cursor_id = cursor_id(name, filter);
+    cursor.key = key->second;
+    cursor.generation = generation;
+    cursor.direction = filter == 1 ? "write" : filter == 2 ? "read" : "all";
+    cursor.position = 0;
+    repository_->put_cursor(cursor);
+    out = transaction_at(*result, filter, 0);
+    return out != nullptr;
 }
 
 bool AxiAnalyzer::cursor_next(const std::string& name, int filter, const AxiTransaction*& out) {
-    AxiResult* r = get_result_mut(name);
-    AxiCursor* c = get_cursor_mut(name);
-    if (!r || !c) return false;
-
-    if (filter == 1) {
-        if (c->wr_idx + 1 < r->writes.size()) {
-            out = &r->writes[++c->wr_idx];
-            return true;
-        }
-    } else if (filter == 2) {
-        if (c->rd_idx + 1 < r->reads.size()) {
-            out = &r->reads[++c->rd_idx];
-            return true;
-        }
-    } else {
-        if (c->all_idx + 1 < r->all.size()) {
-            out = &r->all[++c->all_idx];
-            return true;
-        }
+    std::uint64_t generation = 0;
+    const AxiResult* result = get_result_internal(name, &generation);
+    auto key = keys_.find(name);
+    if (!result || key == keys_.end() || repository_ == nullptr) return false;
+    GenerationCursor cursor;
+    if (!repository_->get_cursor(cursor_id(name, filter), cursor)) {
+        cursor.cursor_id = cursor_id(name, filter);
+        cursor.key = key->second;
+        cursor.generation = generation;
+        cursor.direction = filter == 1 ? "write" : filter == 2 ? "read" : "all";
+        cursor.position = 0;
+    } else if (cursor.generation != generation &&
+               !repository_->resume_cursor(cursor.cursor_id, key->second,
+                                            generation, cursor)) {
+        return false;
     }
-    return false;
+    if (cursor.position + 1 >= transaction_count(*result, filter)) return false;
+    ++cursor.position;
+    repository_->put_cursor(cursor);
+    out = transaction_at(*result, filter, cursor.position);
+    return out != nullptr;
 }
 
 bool AxiAnalyzer::cursor_prev(const std::string& name, int filter, const AxiTransaction*& out) {
-    AxiResult* r = get_result_mut(name);
-    AxiCursor* c = get_cursor_mut(name);
-    if (!r || !c) return false;
-
-    if (filter == 1) {
-        if (c->wr_idx > 0) {
-            out = &r->writes[--c->wr_idx];
-            return true;
-        }
-    } else if (filter == 2) {
-        if (c->rd_idx > 0) {
-            out = &r->reads[--c->rd_idx];
-            return true;
-        }
-    } else {
-        if (c->all_idx > 0) {
-            out = &r->all[--c->all_idx];
-            return true;
-        }
-    }
-    return false;
+    std::uint64_t generation = 0;
+    const AxiResult* result = get_result_internal(name, &generation);
+    auto key = keys_.find(name);
+    GenerationCursor cursor;
+    if (!result || key == keys_.end() || repository_ == nullptr ||
+        !repository_->get_cursor(cursor_id(name, filter), cursor)) return false;
+    if (cursor.generation != generation &&
+        !repository_->resume_cursor(cursor.cursor_id, key->second,
+                                    generation, cursor)) return false;
+    if (cursor.position == 0) return false;
+    --cursor.position;
+    repository_->put_cursor(cursor);
+    out = transaction_at(*result, filter, cursor.position);
+    return out != nullptr;
 }
 
 bool AxiAnalyzer::cursor_last(const std::string& name, int filter, const AxiTransaction*& out) {
-    AxiResult* r = get_result_mut(name);
-    AxiCursor* c = get_cursor_mut(name);
-    if (!r || !c) return false;
-
-    if (filter == 1) {
-        if (!r->writes.empty()) {
-            c->wr_idx = r->writes.size() - 1;
-            out = &r->writes[c->wr_idx];
-            return true;
-        }
-    } else if (filter == 2) {
-        if (!r->reads.empty()) {
-            c->rd_idx = r->reads.size() - 1;
-            out = &r->reads[c->rd_idx];
-            return true;
-        }
-    } else {
-        if (!r->all.empty()) {
-            c->all_idx = r->all.size() - 1;
-            out = &r->all[c->all_idx];
-            return true;
-        }
-    }
-    return false;
+    std::uint64_t generation = 0;
+    const AxiResult* result = get_result_internal(name, &generation);
+    auto key = keys_.find(name);
+    const std::size_t count = result ? transaction_count(*result, filter) : 0;
+    if (!result || key == keys_.end() || repository_ == nullptr || count == 0)
+        return false;
+    GenerationCursor cursor;
+    cursor.cursor_id = cursor_id(name, filter);
+    cursor.key = key->second;
+    cursor.generation = generation;
+    cursor.direction = filter == 1 ? "write" : filter == 2 ? "read" : "all";
+    cursor.position = count - 1;
+    repository_->put_cursor(cursor);
+    out = transaction_at(*result, filter, cursor.position);
+    return out != nullptr;
 }
 
 bool AxiAnalyzer::cursor_state(const std::string& name, int filter,
                                size_t& one_based_index, size_t& total_count) const {
-    const AxiResult* result = get_result(name);
-    auto cursor_it = cursors_.find(name);
-    if (!result || cursor_it == cursors_.end()) return false;
-    const AxiCursor& cursor = cursor_it->second;
-    if (filter == 1) {
-        total_count = result->writes.size();
-        one_based_index = total_count == 0 ? 0 : cursor.wr_idx + 1;
-    } else if (filter == 2) {
-        total_count = result->reads.size();
-        one_based_index = total_count == 0 ? 0 : cursor.rd_idx + 1;
-    } else {
-        total_count = result->all.size();
-        one_based_index = total_count == 0 ? 0 : cursor.all_idx + 1;
+    std::uint64_t generation = 0;
+    const AxiResult* result = get_result_internal(name, &generation);
+    auto key = keys_.find(name);
+    if (!result || key == keys_.end() || repository_ == nullptr) return false;
+    total_count = transaction_count(*result, filter);
+    GenerationCursor cursor;
+    if (!repository_->get_cursor(cursor_id(name, filter), cursor)) {
+        one_based_index = total_count == 0 ? 0 : 1;
+        return true;
     }
+    if (cursor.generation != generation &&
+        !repository_->resume_cursor(cursor.cursor_id, key->second,
+                                    generation, cursor)) return false;
+    one_based_index = total_count == 0 ? 0 : cursor.position + 1;
     return true;
+}
+
+std::string AxiAnalyzer::cursor_id(const std::string& name, int filter) {
+    return "axi:" + name + ":" +
+           (filter == 1 ? "write" : filter == 2 ? "read" : "all");
+}
+
+std::size_t AxiAnalyzer::transaction_count(const AxiResult& result, int filter) {
+    return filter == 1 ? result.writes.size()
+                       : filter == 2 ? result.reads.size()
+                                     : result.all.size();
+}
+
+const AxiTransaction* AxiAnalyzer::transaction_at(const AxiResult& result,
+                                                  int filter,
+                                                  std::size_t position) {
+    if (position >= transaction_count(result, filter)) return nullptr;
+    return filter == 1 ? &result.writes[position]
+                       : filter == 2 ? &result.reads[position]
+                                     : &result.all[position];
 }
 
 bool AxiAnalyzer::get_latency_stats(const std::string& name, bool is_write,
@@ -792,36 +933,75 @@ bool AxiAnalyzer::get_transactions_in_range(const std::string& name,
     return true;
 }
 
-const std::vector<AxiAnalyzer::HandshakeIndexEntry>* AxiAnalyzer::handshake_index(
-        const std::string& name, const std::string& channel) const {
-    const AxiResult* result = get_result(name);
-    if (!result) return nullptr;
-    auto& by_channel = handshake_indexes_[name];
-    auto found = by_channel.find(channel);
-    if (found != by_channel.end()) return &found->second;
+std::uint64_t AxiAnalyzer::estimate_handshake_index_bytes(
+    const HandshakeIndex& index) {
+    return sizeof(index) +
+           index.capacity() * sizeof(HandshakeIndexEntry);
+}
 
-    std::vector<HandshakeIndexEntry> index;
+const AxiAnalyzer::HandshakeIndex* AxiAnalyzer::handshake_index(
+        const std::string& name, const std::string& channel) const {
+    last_cache_error_ = AnalysisCacheError();
+    std::uint64_t generation = 0;
+    const AxiResult* result = get_result_internal(name, &generation);
+    auto key = keys_.find(name);
+    if (!result || key == keys_.end() || repository_ == nullptr) return nullptr;
+    const std::string index_kind = "handshake:" + channel;
+    const std::string type_tag = "axi_handshake_index.v1";
+    const AnalysisAcquireStatus acquire = repository_->begin_index(
+        key->second, generation, index_kind, type_tag,
+        sizeof(HandshakeIndex), last_cache_error_);
+    if (acquire == AnalysisAcquireStatus::Hit) {
+        return repository_->peek_index<HandshakeIndex>(
+            key->second, generation, index_kind, type_tag).get();
+    }
+    if (acquire != AnalysisAcquireStatus::BuildStarted) return nullptr;
+
+    try {
+    std::shared_ptr<HandshakeIndex> index(new HandshakeIndex());
     const bool write_channel = channel == "aw" || channel == "w" || channel == "b";
     const std::vector<AxiTransaction>& txns = write_channel ? result->writes : result->reads;
-    for (const auto& txn : txns) {
+    for (std::size_t transaction_index = 0;
+         transaction_index < txns.size(); ++transaction_index) {
+        const AxiTransaction& txn = txns[transaction_index];
         if (channel == "aw" || channel == "ar") {
-            index.push_back({txn.addr_time, &txn, 0});
+            index->push_back(
+                {txn.addr_time, write_channel, transaction_index, 0});
         } else if (channel == "b") {
-            index.push_back({txn.resp_time, &txn, 0});
+            index->push_back(
+                {txn.resp_time, write_channel, transaction_index, 0});
         } else if (channel == "w" || channel == "r") {
             for (size_t i = 0; i < txn.data_handshake_times.size(); ++i)
-                index.push_back({txn.data_handshake_times[i], &txn, i + 1});
+                index->push_back({txn.data_handshake_times[i], write_channel,
+                                  transaction_index, i + 1});
         }
     }
-    std::sort(index.begin(), index.end(), [](const HandshakeIndexEntry& lhs,
-                                             const HandshakeIndexEntry& rhs) {
+    std::sort(index->begin(), index->end(),
+              [&](const HandshakeIndexEntry& lhs,
+                  const HandshakeIndexEntry& rhs) {
         if (lhs.time != rhs.time) return lhs.time < rhs.time;
-        if (lhs.txn && rhs.txn && lhs.txn->seq != rhs.txn->seq)
-            return lhs.txn->seq < rhs.txn->seq;
+        const AxiTransaction& lhs_txn =
+            (lhs.is_write ? result->writes : result->reads)[lhs.transaction_index];
+        const AxiTransaction& rhs_txn =
+            (rhs.is_write ? result->writes : result->reads)[rhs.transaction_index];
+        if (lhs_txn.seq != rhs_txn.seq) return lhs_txn.seq < rhs_txn.seq;
         return lhs.beat_index < rhs.beat_index;
     });
-    auto inserted = by_channel.emplace(channel, std::move(index));
-    return &inserted.first->second;
+    const std::uint64_t bytes = estimate_handshake_index_bytes(*index);
+    if (!repository_->update_index_build_bytes(
+            key->second, generation, index_kind, bytes,
+            last_cache_error_)) return nullptr;
+    if (!repository_->publish_index<HandshakeIndex>(
+            key->second, generation, index_kind, type_tag,
+            std::static_pointer_cast<const HandshakeIndex>(index), bytes,
+            last_cache_error_)) return nullptr;
+    return repository_->peek_index<HandshakeIndex>(
+        key->second, generation, index_kind, type_tag).get();
+    } catch (const std::bad_alloc&) {
+        repository_->fail_index_bad_alloc(
+            key->second, generation, index_kind, last_cache_error_);
+        return nullptr;
+    }
 }
 
 bool AxiAnalyzer::get_by_handshake(const std::string& name,
@@ -838,7 +1018,12 @@ bool AxiAnalyzer::get_by_handshake(const std::string& name,
             return item.time < time;
         });
     if (it == index->end() || it->time != handshake_time) return false;
-    out.txn = it->txn;
+    const AxiResult* result = get_result(name);
+    if (!result) return false;
+    const std::vector<AxiTransaction>& transactions =
+        it->is_write ? result->writes : result->reads;
+    if (it->transaction_index >= transactions.size()) return false;
+    out.txn = &transactions[it->transaction_index];
     out.channel = channel;
     out.handshake_time = it->time;
     out.beat_index = it->beat_index;

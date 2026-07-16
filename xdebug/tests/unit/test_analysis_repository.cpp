@@ -144,11 +144,19 @@ void test_index_first_and_cross_protocol_lru() {
     publish(repository, apb, 1, 20, &apb_generation);
     publish(repository, axi, 2, 20);
 
+    const std::uint64_t before_peek = repository.stats().access_sequence;
+    assert(repository.peek_canonical<FakeEntry>(axi, "fake")->value == 2);
+    assert(repository.stats().access_sequence == before_peek);
+
     AnalysisCacheError error;
     assert(repository.begin_index(apb, apb_generation, "address", "fake-index",
                                   20, error) == AnalysisAcquireStatus::BuildStarted);
     assert(repository.publish_index(apb, apb_generation, "address", "fake-index",
                                     fake(11), 20, error));
+    const std::uint64_t before_index_peek = repository.stats().access_sequence;
+    assert(repository.peek_index<FakeEntry>(apb, apb_generation, "address",
+                                            "fake-index")->value == 11);
+    assert(repository.stats().access_sequence == before_index_peek);
     publish(repository, stream, 3, 50);
     assert(repository.stats().canonical_entry_count == 3);
     assert(repository.stats().index_count == 0);
@@ -230,12 +238,12 @@ void test_generation_cursor_and_config_invalidation() {
     config.hard_max_bytes = 200;
     config.estimator_safety_factor = 1.0;
     AnalysisRepository repository(config);
-    const AnalysisCacheKey a = key("apb", "cursor-a");
-    const AnalysisCacheKey b = key("axi", "cursor-b");
+    const AnalysisCacheKey a = key("axi", "cursor-a");
+    const AnalysisCacheKey b = key("apb", "cursor-b");
     std::uint64_t generation_one = 0;
     publish(repository, a, 1, 40, &generation_one);
     GenerationCursor cursor;
-    cursor.cursor_id = "cursor-a";
+    cursor.cursor_id = "axi:axi0:write";
     cursor.key = a;
     cursor.generation = generation_one;
     cursor.direction = "write";
@@ -243,12 +251,13 @@ void test_generation_cursor_and_config_invalidation() {
     assert(repository.put_cursor(cursor));
     publish(repository, b, 2, 40);
     assert(!repository.find_canonical<FakeEntry>(a, "fake"));
-    assert(repository.get_cursor("cursor-a", cursor));
+    assert(repository.get_cursor("axi:axi0:write", cursor));
 
     std::uint64_t generation_two = 0;
     publish(repository, a, 3, 40, &generation_two);
     assert(generation_two > generation_one);
-    assert(repository.resume_cursor("cursor-a", a, generation_two, cursor));
+    assert(repository.resume_cursor("axi:axi0:write", a, generation_two,
+                                    cursor));
     assert(cursor.position == 17 && cursor.generation == generation_two);
 
     AnalysisCacheConfig unbounded = config;

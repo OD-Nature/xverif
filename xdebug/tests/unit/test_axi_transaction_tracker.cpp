@@ -239,6 +239,18 @@ void test_reset_and_orphans() {
     assert(result.diagnostics.orphan_r_beat_count == 1);
 }
 
+void test_working_set_estimator_includes_pending_state() {
+    AxiTransactionTracker tracker;
+    const std::size_t empty_bytes = tracker.estimated_working_set_bytes();
+    tracker.consume(aw(10, "pending-id", "7"));
+    AxiSample beat = w(20, false);
+    beat.wdata.assign(4096, 'a');
+    beat.wstrb.assign(512, 'f');
+    tracker.consume(beat);
+    const std::size_t pending_bytes = tracker.estimated_working_set_bytes();
+    assert(pending_bytes > empty_bytes + 4096);
+}
+
 void test_fixed_seed_schedules() {
     for (uint32_t seed : {7u, 19u, 73u}) {
         std::mt19937 random(seed);
@@ -297,6 +309,7 @@ int main() {
     test_same_cycle_and_dependency_violation();
     test_multibeat_before_aw_and_pending_diagnostics();
     test_reset_and_orphans();
+    test_working_set_estimator_includes_pending_state();
     test_fixed_seed_schedules();
     std::cout << "PASS: AXI transaction tracker unit tests\n";
     return 0;

@@ -131,6 +131,8 @@ public:
     void consume(const AxiSample& sample);
     AxiResult finish(npiFsdbTime scan_begin, npiFsdbTime scan_end,
                      bool analysis_complete = true);
+    const AxiResult& in_progress_result() const { return result_; }
+    std::size_t estimated_working_set_bytes() const;
 
 private:
     struct WBeat {

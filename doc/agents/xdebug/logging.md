@@ -135,6 +135,12 @@ xdebug 的 log 是工具可观测性合同的一部分。任何 session、transp
 
 - engine 启动写 `analysis_cache.initialized`，只记录 soft/hard bytes 与 safety factor。
 - repository 写 `analysis_cache.hit/miss/build/evict/invalidate/index_build/oversize_admitted/build_failed`。
+- AXI Phase 2 的 index object kind 使用 `index:address`、`index:id` 和
+  `index:handshake:<channel>`；canonical build 和各 lazy index 分别记账，不能把 index
+  命中伪装成新的 FSDB scan。
 - 每条只包含 protocol、非敏感 key 摘要、object kind、reason、estimated bytes、
   generation 和单调 access sequence；不得记录规范化 config 或完整 signal path。
 - `build_failed` 的 action 错误仍由 handler 返回；日志不能触发 scope/backend fallback。
+- hard-limit 或 best-effort `bad_alloc` 转换统一返回
+  `ANALYSIS_MEMORY_LIMIT_EXCEEDED`，并携带 estimated/hard bytes、protocol、key 摘要和
+  显式建议；日志与 response 均不得包含完整规范化 signal config。

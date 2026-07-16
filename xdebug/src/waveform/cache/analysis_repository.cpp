@@ -523,6 +523,12 @@ void AnalysisRepository::fail_canonical(const AnalysisCacheKey& key,
                             key.summary(), "canonical", reason, bytes});
 }
 
+void AnalysisRepository::fail_canonical_bad_alloc(
+    const AnalysisCacheKey& key, AnalysisCacheError& error) {
+    fail_canonical(key, "bad_alloc");
+    set_memory_error(error, key);
+}
+
 std::shared_ptr<const void> AnalysisRepository::find_canonical_erased(
     const AnalysisCacheKey& key, const std::string& type_tag,
     std::uint64_t* generation, bool record_access) {
@@ -688,6 +694,15 @@ void AnalysisRepository::fail_index(const AnalysisCacheKey& canonical_key,
                             "index:" + index_kind, reason, bytes});
 }
 
+void AnalysisRepository::fail_index_bad_alloc(
+    const AnalysisCacheKey& canonical_key,
+    std::uint64_t canonical_generation,
+    const std::string& index_kind,
+    AnalysisCacheError& error) {
+    fail_index(canonical_key, canonical_generation, index_kind, "bad_alloc");
+    set_memory_error(error, canonical_key);
+}
+
 std::shared_ptr<const void> AnalysisRepository::find_index_erased(
     const AnalysisCacheKey& canonical_key,
     std::uint64_t canonical_generation, const std::string& index_kind,
@@ -711,6 +726,24 @@ std::shared_ptr<const void> AnalysisRepository::find_index_erased(
                             "index:" + index_kind, "",
                             found->second.resident_estimated_bytes, 0, 0,
                             sequence, canonical_generation});
+    return found->second.value;
+}
+
+std::shared_ptr<const void> AnalysisRepository::peek_index_erased(
+    const AnalysisCacheKey& canonical_key,
+    std::uint64_t canonical_generation, const std::string& index_kind,
+    const std::string& type_tag) {
+    IndexKey key{canonical_key, canonical_generation, index_kind};
+    auto found = indexes_.find(key);
+    CanonicalStore* store = canonical_store_for_protocol(canonical_key.protocol);
+    if (store == nullptr) return std::shared_ptr<const void>();
+    auto owner = store->find(canonical_key);
+    if (found == indexes_.end() || owner == store->end() ||
+        found->second.state != ObjectState::Ready ||
+        found->second.type_tag != type_tag ||
+        owner->second.generation != canonical_generation) {
+        return std::shared_ptr<const void>();
+    }
     return found->second.value;
 }
 

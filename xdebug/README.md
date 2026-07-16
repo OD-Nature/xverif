@@ -892,6 +892,10 @@ xdebug log bundle --session <id> --out debug_bundle.redacted.tgz --redact
   `2147483648`（2 GiB），必须为正整数且不小于 soft budget。
 - 两个 cache 变量只在 engine 启动时严格解析一次；空字符串、负数、空白/尾随字符、溢出、
   hard=0 或 soft>hard 都会令 session 启动失败，不会静默使用默认值。
+- AXI query/analysis/cursor/export 与四个 AXI AI action 在同一 engine 内复用一份
+  canonical `AxiResult`；address、ID 和 handshake index 按需建立。达到 hard limit 时
+  action 返回 `ANALYSIS_MEMORY_LIMIT_EXCEEDED` 及预算/key 摘要，不会自动缩小时间范围、
+  切换 backend 或改用离线工具。
 - `XDEBUG_LOG_PATH_MODE=full|basename|hash` / `XDEBUG_LOG_REDACT=1`：控制日志路径字段脱敏。
 - `XDEBUG_LOG_MAX_BYTES` / `XDEBUG_LOG_MAX_FILES`：启用单文件大小滚动。
 - `XVERIF_MCP_LOG_DIR`：覆盖 MCP structured log 根目录，默认 `~/.xverif/mcp`。

@@ -29,7 +29,7 @@ std::size_t stream_value_map_bytes(const std::map<std::string, StreamValue>& val
     return bytes;
 }
 
-std::size_t axi_transaction_bytes(const AxiTransaction& txn) {
+std::size_t axi_transaction_bytes_impl(const AxiTransaction& txn) {
     std::size_t bytes = sizeof(AxiTransaction);
     const std::string* strings[] = {
         &txn.addr, &txn.id, &txn.len, &txn.size, &txn.burst, &txn.resp,
@@ -50,7 +50,8 @@ std::size_t axi_transaction_bytes(const AxiTransaction& txn) {
 
 std::size_t axi_transaction_vector_bytes(const std::vector<AxiTransaction>& values) {
     std::size_t bytes = sizeof(values) + values.capacity() * sizeof(AxiTransaction);
-    for (const auto& value : values) bytes += axi_transaction_bytes(value) - sizeof(value);
+    for (const auto& value : values)
+        bytes += estimate_axi_transaction_bytes(value) - sizeof(value);
     return bytes;
 }
 
@@ -96,6 +97,10 @@ std::size_t estimate_apb_result_bytes(const ApbResult& result) {
         }
     }
     return bytes;
+}
+
+std::size_t estimate_axi_transaction_bytes(const AxiTransaction& transaction) {
+    return axi_transaction_bytes_impl(transaction);
 }
 
 std::size_t estimate_axi_result_bytes(const AxiResult& result) {

@@ -140,6 +140,12 @@
 - 必须支持 AW-first、same-cycle、W-first、多 W burst 先于 AW、跨 ID B 乱序。
 - exporter 和 action 只消费 canonical `AxiResult`；禁止再次扫描 FSDB 或建立第二套
   pending queue。
+- tracker 的 working-set estimator 必须覆盖 canonical result、pending AW/AR/W 状态、
+  outstanding map 和动态 payload；扫描中按幂次采样更新 repository build 计费。
+- address、ID 和 handshake index 只保存 canonical transaction/beat 下标。address+ID
+  组合查询先缩小 address bucket，再使用既有 ID 比较，不建立组合缓存。
+- handshake index 固定按 `time -> transaction seq -> beat index` 排序；canonical
+  transaction 的既有 direction/all 顺序不因 index 建立而改变。
 
 ## APB/AXI Statistics Filter
 
@@ -165,8 +171,8 @@
 
 职责与要求：
 
-- engine 只能有一个 repository；协议 handler 后续分别使用 `ensure_apb`、`ensure_axi`
-  和 `ensure_stream`，analyzer 不持有预算、session 或 LRU 状态。
+- engine 只能有一个 repository；AXI analyzer 已接入 repository，APB/stream 后续分别
+  使用 `ensure_apb` 和 `ensure_stream`。analyzer 不持有预算或 LRU 状态。
 - key 必须同时保存 SHA-256 摘要和规范化语义做等值确认；config name、description、
   JSON 字段顺序和 config 文件路径不进入语义 fingerprint。
 - canonical 发布后不可变；lazy index 独立记账、优先淘汰，canonical 淘汰时释放全部

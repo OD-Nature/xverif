@@ -32,12 +32,25 @@ public:
                 filter_error.expected);
 
         AxiConfig config;
-        AxiManager manager;
-        if (!manager.get_axi(g_session_id, name, config))
-            return protocol_config_not_found_error(action_name(), "axi", name);
-        if (!g_axi_analyzer.analyze(name, g_fsdb_file, config))
+        std::string analysis_error;
+        if (!ensure_axi_analyzed(name, config, analysis_error)) {
+            if (analysis_error.rfind("AXI config not found:", 0) == 0)
+                return protocol_config_not_found_error(
+                    action_name(), "axi", name);
+            if (!g_axi_analyzer.last_cache_error().empty())
+                return make_analysis_cache_error(
+                    g_axi_analyzer.last_cache_error());
             return protocol_analyze_error(action_name(), "axi", name,
-                                          "Failed to analyze AXI: " + name);
+                                          analysis_error);
+        }
+
+        if (filter.address_mode != StatisticsAddressMode::None &&
+            !g_axi_analyzer.ensure_address_index(name))
+            return make_analysis_cache_error(
+                g_axi_analyzer.last_cache_error());
+        if (filter.has_ids && !g_axi_analyzer.ensure_id_index(name))
+            return make_analysis_cache_error(
+                g_axi_analyzer.last_cache_error());
 
         const AxiResult* result = g_axi_analyzer.get_result(name);
         if (!result)

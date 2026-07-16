@@ -166,6 +166,8 @@ public:
                                       AnalysisCacheError& error);
     void fail_canonical(const AnalysisCacheKey& key,
                         const std::string& reason = "build_failed");
+    void fail_canonical_bad_alloc(const AnalysisCacheKey& key,
+                                  AnalysisCacheError& error);
 
     template <typename T>
     bool publish_canonical(const AnalysisCacheKey& key,
@@ -185,6 +187,14 @@ public:
         std::shared_ptr<const void> value = find_canonical_erased(
             key, type_tag, generation);
         return std::static_pointer_cast<const T>(value);
+    }
+
+    template <typename T>
+    std::shared_ptr<const T> peek_canonical(
+        const AnalysisCacheKey& key, const std::string& type_tag,
+        std::uint64_t* generation = nullptr) {
+        return std::static_pointer_cast<const T>(
+            find_canonical_erased(key, type_tag, generation, false));
     }
 
     template <typename T, typename Builder, typename Estimator>
@@ -275,6 +285,10 @@ public:
                     std::uint64_t canonical_generation,
                     const std::string& index_kind,
                     const std::string& reason = "build_failed");
+    void fail_index_bad_alloc(const AnalysisCacheKey& canonical_key,
+                              std::uint64_t canonical_generation,
+                              const std::string& index_kind,
+                              AnalysisCacheError& error);
 
     template <typename T>
     bool publish_index(const AnalysisCacheKey& canonical_key,
@@ -296,6 +310,16 @@ public:
                                         const std::string& index_kind,
                                         const std::string& type_tag) {
         return std::static_pointer_cast<const T>(find_index_erased(
+            canonical_key, canonical_generation, index_kind, type_tag));
+    }
+
+    template <typename T>
+    std::shared_ptr<const T> peek_index(
+        const AnalysisCacheKey& canonical_key,
+        std::uint64_t canonical_generation,
+        const std::string& index_kind,
+        const std::string& type_tag) {
+        return std::static_pointer_cast<const T>(peek_index_erased(
             canonical_key, canonical_generation, index_kind, type_tag));
     }
 
@@ -380,6 +404,11 @@ private:
         const AnalysisCacheKey& key, const std::string& type_tag,
         std::uint64_t* generation, bool record_access = true);
     std::shared_ptr<const void> find_index_erased(
+        const AnalysisCacheKey& canonical_key,
+        std::uint64_t canonical_generation,
+        const std::string& index_kind,
+        const std::string& type_tag);
+    std::shared_ptr<const void> peek_index_erased(
         const AnalysisCacheKey& canonical_key,
         std::uint64_t canonical_generation,
         const std::string& index_kind,

@@ -13,6 +13,7 @@
 #include "waveform/value/logic_value.h"
 #include "waveform/cache/analysis_probe.h"
 #include "waveform/cache/analysis_repository.h"
+#include "waveform/axi/axi_analyzer.h"
 #include "waveform/common/clock_sampling.h"
 #include "json.hpp"
 
@@ -47,6 +48,7 @@ namespace xdebug_waveform {
 extern std::string g_session_id;
 extern npiFsdbFileHandle g_fsdb_file;
 extern std::string g_fsdb_file_path;
+extern AxiAnalyzer g_axi_analyzer;
 std::unique_ptr<AnalysisRepository> g_analysis_repository;
 }
 
@@ -81,6 +83,8 @@ std::string g_daidir_path;
 
 static void close_fsdb_file() {
     if (xdebug_waveform::g_analysis_repository) {
+        xdebug_waveform::g_axi_analyzer.configure_repository(
+            nullptr, std::string(), xdebug_waveform::FsdbIdentity());
         xdebug_waveform::g_analysis_repository->clear("session_exit");
         xdebug_waveform::g_analysis_repository.reset();
     }
@@ -832,6 +836,20 @@ int server_main(int argc, char** argv) {
         g_has_waveform = true;
         xdebug_waveform::g_fsdb_file = g_fsdb_file;
         xdebug_waveform::g_fsdb_file_path = g_fsdb_path;
+        xdebug_waveform::FsdbIdentity fsdb_identity;
+        std::string identity_error;
+        if (!xdebug_waveform::read_fsdb_identity(
+                g_fsdb_path, fsdb_identity, identity_error)) {
+            server_debug_log("fsdb identity failed: %s", identity_error.c_str());
+            xdebug_core::log_lifecycle_event(
+                "engine", g_session_id, "analysis_cache.fsdb_identity_failed",
+                false, {{"message", identity_error}});
+            close_fsdb_file();
+            npi_end(); delete[] npi_argv; return 1;
+        }
+        xdebug_waveform::g_axi_analyzer.configure_repository(
+            xdebug_waveform::g_analysis_repository.get(), g_session_id,
+            fsdb_identity);
         server_debug_log("npi_fsdb_open: ok");
         xdebug_core::log_lifecycle_event("engine", g_session_id, "npi_fsdb_open.ok", true,
                                          {{"fsdb", g_fsdb_path}});

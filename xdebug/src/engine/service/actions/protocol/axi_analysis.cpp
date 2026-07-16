@@ -21,22 +21,6 @@
 namespace xdebug_design {
 namespace {
 
-static bool ensure_axi_analyzed(const std::string& name,
-                                 xdebug_waveform::AxiConfig& cfg,
-                                 std::string& err) {
-    xdebug_waveform::AxiManager am;
-    if (!am.get_axi(xdebug_waveform::g_session_id, name, cfg)) {
-        err = "AXI config not found: " + name;
-        return false;
-    }
-    if (!xdebug_waveform::g_axi_analyzer.analyze(name,
-            xdebug_waveform::g_fsdb_file, cfg)) {
-        err = "Failed to analyze AXI: " + name;
-        return false;
-    }
-    return true;
-}
-
 static Json latency_stat_json(const xdebug_waveform::AxiStatResult& stat) {
     using namespace xdebug_waveform;
     Json out = {{"samples", stat.samples}};
@@ -92,10 +76,14 @@ public:
         if (name.empty()) return protocol_missing_name_error(action_name(), "axi");
 
         AxiConfig cfg; std::string err;
-        if (!ensure_axi_analyzed(name, cfg, err))
-            return err.rfind("AXI config not found:", 0) == 0
-                ? protocol_config_not_found_error(action_name(), "axi", name)
-                : protocol_analyze_error(action_name(), "axi", name, err);
+        if (!ensure_axi_analyzed(name, cfg, err)) {
+            if (err.rfind("AXI config not found:", 0) == 0)
+                return protocol_config_not_found_error(action_name(), "axi", name);
+            if (!g_axi_analyzer.last_cache_error().empty())
+                return make_analysis_cache_error(
+                    g_axi_analyzer.last_cache_error());
+            return protocol_analyze_error(action_name(), "axi", name, err);
+        }
 
         std::string analysis = a.value("analysis", "latency");
         if (analysis != "pending" && a.contains("line_limit"))

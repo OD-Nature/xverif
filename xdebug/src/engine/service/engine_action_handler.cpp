@@ -1,6 +1,7 @@
 #include "engine_action_handler.h"
 
 #include "core/diagnostic_error.h"
+#include "waveform/cache/analysis_repository.h"
 #include "../../api/text_response_builder.h"
 
 #include <algorithm>
@@ -81,6 +82,22 @@ Json make_handler_error(const std::string& code, const std::string& message,
 
 Json make_handler_error_from_message(const std::string& message) {
     return make_handler_error(code_for_handler_message(message), message);
+}
+
+Json make_analysis_cache_error(
+    const xdebug_waveform::AnalysisCacheError& error) {
+    Json suggestions = Json::array();
+    for (const std::string& suggestion : error.suggestions)
+        suggestions.push_back(suggestion);
+    return make_handler_error(
+        error.code.empty() ? "ANALYSIS_BUILD_FAILED" : error.code,
+        error.message.empty() ? "analysis build failed" : error.message,
+        {{"recoverable", error.recoverable},
+         {"current_estimated_bytes", error.current_estimated_bytes},
+         {"hard_max_bytes", error.hard_max_bytes},
+         {"protocol", error.protocol},
+         {"key_summary", error.key_summary},
+         {"suggestions", suggestions}});
 }
 
 std::string append_common_blocks_xout(std::string text, const Json& response) {

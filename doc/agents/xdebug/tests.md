@@ -51,6 +51,10 @@ Fixture 使用内容指纹、工具兼容 identity、跨进程锁、staging、ba
 seed 随机 delay。每组必须发布 FSDB、simulation log 和独立 pin-handshake oracle；
 测试比较 VIP scoreboard、pin oracle 与 xdebug canonical transaction，并检查三种
 AW/W phase order、最终 outstanding、dependency violation 和 `full_scan_count=1`。
+同一 engine 的 query/analysis/pair/timeline/outlier/cursor/export 全流程还必须通过
+test-only probe 证明只发布一次 AXI canonical build、只扫描一次 FSDB，并分别触发
+address、ID 和 handshake lazy index；1-byte hard budget 必须稳定返回
+`ANALYSIS_MEMORY_LIMIT_EXCEEDED`，不得改用 range、offline 或其它 backend。
 
 `xdebug.analysis_cache_benchmark` 是 nightly 的独立 performance/semantic suite，消费
 APB VIP、AXI VIP 和 stream v1 三个已发布 fixture，不生成数据库。它在三个独立
@@ -61,7 +65,9 @@ stream JSON/XOUT golden。冻结数据与阶段阈值维护在
 
 `xdebug.cpp_unit` 的 `test_analysis_repository` 用 fake entry 覆盖版本化 key、full/range、
 strict env、building 重入、failure/bad_alloc 回滚、index-first 与跨协议 LRU、soft
-oversize entry/index、hard/saturated accounting、typed ensure 和 generation cursor；
+oversize entry/index、hard/saturated accounting、typed ensure、无 access side effect 的
+peek 和 AXI generation cursor；`test_axi_transaction_tracker` 同时检查 pending working-set
+估算覆盖动态 payload；
 `test_stream_manager` 覆盖语义 fingerprint、同目录原子 replace 及 write/rename fault。
 
 ## 结果与诊断

@@ -626,7 +626,32 @@
             "cause_code": {
               "type": "string"
             },
-            "validation": {}
+            "validation": {},
+            "current_estimated_bytes": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "hard_max_bytes": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "protocol": {
+              "type": "string",
+              "enum": [
+                "apb",
+                "axi",
+                "stream"
+              ]
+            },
+            "key_summary": {
+              "type": "string"
+            },
+            "suggestions": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
           },
           "additionalProperties": false,
           "required": [

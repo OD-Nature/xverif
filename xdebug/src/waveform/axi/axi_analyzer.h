@@ -2,6 +2,7 @@
 
 #include "axi_config.h"
 #include "axi_transaction_tracker.h"
+#include "../cache/analysis_repository.h"
 #include "npi_fsdb.h"
 #include <string>
 #include <vector>
@@ -36,12 +37,6 @@ struct AxiOutstandingSummary {
     bool has_samples = false;
 };
 
-struct AxiCursor {
-    size_t all_idx = 0;
-    size_t wr_idx = 0;
-    size_t rd_idx = 0;
-};
-
 struct AxiStatResult {
     double max = 0.0;
     double min = 0.0;
@@ -56,10 +51,16 @@ struct AxiStatResult {
 
 class AxiAnalyzer {
 public:
-    // Analyze and cache result for the given config name.
-    // If already cached, returns cached result.
-    bool analyze(const std::string& name, npiFsdbFileHandle file, const AxiConfig& config);
+    void configure_repository(AnalysisRepository* repository,
+                              const std::string& session_id,
+                              const FsdbIdentity& fsdb_identity);
+    bool analyze(const std::string& name, npiFsdbFileHandle file,
+                 const AxiConfig& config,
+                 AnalysisCacheError* cache_error = nullptr);
     const AxiResult* get_result(const std::string& name) const;
+    const AnalysisCacheError& last_cache_error() const { return last_cache_error_; }
+    bool ensure_address_index(const std::string& name) const;
+    bool ensure_id_index(const std::string& name) const;
 
     // Getters for wr/rd counts
     size_t get_write_count(const std::string& name) const;
@@ -131,28 +132,51 @@ public:
                                         AxiOutstandingSummary& out) const;
 
 private:
+    struct DirectionBucket {
+        std::vector<size_t> writes;
+        std::vector<size_t> reads;
+    };
+    using NumericIndex = std::map<uint64_t, DirectionBucket>;
     struct HandshakeIndexEntry {
         npiFsdbTime time = 0;
-        const AxiTransaction* txn = nullptr;
+        bool is_write = false;
+        size_t transaction_index = 0;
         size_t beat_index = 0;
         HandshakeIndexEntry() = default;
         HandshakeIndexEntry(npiFsdbTime value_time,
-                            const AxiTransaction* value_txn,
+                            bool value_is_write,
+                            size_t value_transaction_index,
                             size_t value_beat_index)
-            : time(value_time), txn(value_txn), beat_index(value_beat_index) {}
+            : time(value_time), is_write(value_is_write),
+              transaction_index(value_transaction_index),
+              beat_index(value_beat_index) {}
     };
-    std::map<std::string, AxiResult> results_;
-    std::map<std::string, AxiCursor> cursors_;
-    mutable std::map<std::string,
-        std::map<std::string, std::vector<HandshakeIndexEntry>>> handshake_indexes_;
+    using HandshakeIndex = std::vector<HandshakeIndexEntry>;
 
-    AxiResult* get_result_mut(const std::string& name);
-    AxiCursor* get_cursor_mut(const std::string& name);
+    AnalysisRepository* repository_ = nullptr;
+    std::string session_id_;
+    FsdbIdentity fsdb_identity_;
+    std::map<std::string, AnalysisCacheKey> keys_;
+    mutable AnalysisCacheError last_cache_error_;
 
     static bool parse_hex_value(const std::string& hex_str, uint64_t& out);
     static bool id_matches(const std::string& txn_id, const char* id_str);
-    const std::vector<HandshakeIndexEntry>* handshake_index(
+    AnalysisCacheKey cache_key(const AxiConfig& config) const;
+    const AxiResult* get_result_internal(const std::string& name,
+                                         std::uint64_t* generation) const;
+    const NumericIndex* numeric_index(const std::string& name,
+                                      const std::string& kind,
+                                      bool record_access = false) const;
+    const HandshakeIndex* handshake_index(
         const std::string& name, const std::string& channel) const;
+    static std::uint64_t estimate_numeric_index_bytes(const NumericIndex& index);
+    static std::uint64_t estimate_handshake_index_bytes(
+        const HandshakeIndex& index);
+    static std::string cursor_id(const std::string& name, int filter);
+    static const AxiTransaction* transaction_at(const AxiResult& result,
+                                                int filter,
+                                                std::size_t position);
+    static std::size_t transaction_count(const AxiResult& result, int filter);
 };
 
 } // namespace xdebug_waveform

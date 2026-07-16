@@ -1,10 +1,19 @@
 #include "axi_transaction_tracker.h"
+#include "waveform/cache/analysis_size_estimator.h"
 
 #include <algorithm>
 #include <cstdlib>
 
 namespace xdebug_waveform {
 namespace {
+
+template <typename Value>
+std::size_t tracker_map_node_bytes(const std::map<std::string, Value>& values) {
+    std::size_t bytes = values.size() *
+        (sizeof(std::pair<const std::string, Value>) + 4 * sizeof(void*));
+    for (const auto& item : values) bytes += item.first.capacity();
+    return bytes;
+}
 
 void inc_outstanding(int& total, std::map<std::string, int>& by_id,
                      const std::string& id) {
@@ -40,6 +49,22 @@ std::string axi_write_phase_order(const AxiTransaction& txn) {
     if (txn.first_data_time < txn.addr_time) return "w_before_aw";
     if (txn.first_data_time == txn.addr_time) return "same_cycle";
     return "aw_before_w";
+}
+
+std::size_t AxiTransactionTracker::estimated_working_set_bytes() const {
+    std::size_t bytes = estimate_axi_result_bytes(result_) +
+                        sizeof(*this) - sizeof(result_);
+    for (const auto& beat : w_beats_)
+        bytes += sizeof(beat) + beat.data.capacity() + beat.strb.capacity();
+    for (const auto& txn : pending_writes_)
+        bytes += estimate_axi_transaction_bytes(txn);
+    bytes += tracker_map_node_bytes(pending_reads_);
+    for (const auto& item : pending_reads_)
+        for (const auto& txn : item.second)
+            bytes += estimate_axi_transaction_bytes(txn);
+    bytes += tracker_map_node_bytes(write_outstanding_by_id_);
+    bytes += tracker_map_node_bytes(read_outstanding_by_id_);
+    return bytes;
 }
 
 void AxiTransactionTracker::clear_for_reset() {
