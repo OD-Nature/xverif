@@ -70,3 +70,14 @@ def test_rebuild_atomically_switches_to_new_immutable_generation(tmp_path: Path)
 def test_tool_identity_uses_compatible_major_minor() -> None:
     assert _compatibility_identity("/tools/verdi/V-2023.12-SP2") == "V-2023.12"
     assert _compatibility_identity("") == "unset"
+
+
+def test_fingerprint_uses_effective_default_environment(tmp_path: Path, monkeypatch) -> None:
+    store, spec = make_store(tmp_path)
+    spec = FixtureSpec(**{**spec.__dict__, "builder": {
+        **spec.builder, "default_env": {"VIP_ROOT": "{home}/vip"},
+    }})
+    first, _ = store.fingerprint(spec)
+    monkeypatch.setenv("VIP_ROOT", "/opt/other-vip")
+    second, _ = store.fingerprint(spec)
+    assert second != first

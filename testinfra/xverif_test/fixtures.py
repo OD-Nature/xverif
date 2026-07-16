@@ -114,8 +114,19 @@ class FixtureStore:
             name: _compatibility_identity(os.environ.get(name, ""))
             for name in spec.tool_env
         }
+        # Builder defaults are resolved at execution time.  They must therefore
+        # participate in cache identity; otherwise a changed VIP/reference root
+        # can silently reuse resources produced with another environment.
+        values = {"repo": str(self.repo_root), "home": str(Path.home())}
+        effective_env = {
+            key: os.environ.get(key, str(value).format(**values))
+            for key, value in spec.builder.get("default_env", {}).items()
+        }
         digest.update(
             json.dumps(tool_identity, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        )
+        digest.update(
+            json.dumps(effective_env, sort_keys=True, separators=(",", ":")).encode("utf-8")
         )
         return digest.hexdigest(), tool_identity
 

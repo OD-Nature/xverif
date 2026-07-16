@@ -56,3 +56,30 @@ def test_setup_skip_is_counted_in_json_report(tmp_path: Path) -> None:
     payload = json.loads((manager.run_dir / "report.json").read_text(encoding="utf-8"))
     assert payload["counts"] == {"skipped": 1}
     assert payload["items"][0]["phase"] == "setup"
+
+
+def test_failed_teardown_preserves_error_layer_and_captured_output(tmp_path: Path) -> None:
+    manager = ResultManager(tmp_path, "regression", "xverif-test-catalog.v1")
+    report = SimpleNamespace(
+        when="teardown",
+        user_properties=[("xverif_suite", "xdebug.session")],
+        skipped=False,
+        passed=False,
+        failed=True,
+        nodeid="xdebug/tests/session/test_lifecycle.py::test_close",
+        outcome="failed",
+        duration=1.25,
+        capstdout="stdout evidence\n",
+        capstderr="stderr evidence\n",
+        longrepr="cleanup failed; error_layer=session_manager; more",
+    )
+    manager.record_report(report)
+    manager.finish(1)
+    payload = json.loads((manager.run_dir / "report.json").read_text(encoding="utf-8"))
+    assert payload["counts"] == {"failed": 1}
+    assert payload["items"] == [{
+        "nodeid": report.nodeid, "suite_id": "xdebug.session", "phase": "teardown",
+        "outcome": "failed", "duration_sec": 1.25, "error_layer": "session_manager",
+    }]
+    captured = (manager.run_dir / "suites/xdebug.session/pytest-captured.log").read_text(encoding="utf-8")
+    assert captured == "stdout evidence\nstderr evidence\n"

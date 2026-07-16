@@ -43,11 +43,9 @@ UDS server 为每个客户端创建 daemon thread，[wrapper.py](../xverif_mcp/s
 
 ## P2：可靠性、边界和维护负担
 
-### P2-01 action return replay 没有进入正式测试门禁
+### P2-01 action return replay 已完整删除
 
-catalog 的 `xdebug.contract` 只运行 `xdebug/tests/contract`，[catalog.v1.yaml](../testinfra/catalog.v1.yaml#L335)。其 replay registry 测试只验证 70 条 case、示例/schema 存在及矩阵行，[test_action_return_replay_registry.py](../xdebug/tests/contract/test_action_return_replay_registry.py#L19)。真正执行 native/MCP 请求并比对返回的逻辑在 [replay_action_returns.py](../xdebug/tools/replay_action_returns.py#L136)，未被 pytest/catalog 调用。
-
-这使 handler 语义退化可在 schema 合同仍通过时漏过；并且矩阵文字硬编码「72 个 action」，实际 registry 为 70，[replay_action_returns.py](../xdebug/tools/replay_action_returns.py#L969)。建议将 replay 拆成 catalog 注册的 host-only suite：每个公开 action 至少一条 success 或明确环境错误合同；矩阵使用动态计数并测试生成文本。
+经确认该 replay 体系不纳入任何门禁，因此已删除其 runner、registry/testdata、专用 pytest、矩阵与历史报告。后续 action 行为由公开 schema/contract 和对应功能测试维护，不保留无执行价值的人工索引。
 
 ### P2-02 fixture cache 未指纹化外部 VIP 和 effective default environment
 
