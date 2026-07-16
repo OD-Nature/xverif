@@ -60,8 +60,8 @@ def test_schema_smoke_uses_runtime_action_catalog():
     assert schema_calls == [
         {"action": "counter.statistics", "kind": "request"},
         {"action": "value.at", "kind": "request"},
-        {"action": "counter.statistics", "kind": "response"},
-        {"action": "value.at", "kind": "response"},
+        {"action": "counter.statistics", "kind": "response", "view": "response"},
+        {"action": "value.at", "kind": "response", "view": "response"},
     ]
 
 

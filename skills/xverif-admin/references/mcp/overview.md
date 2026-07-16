@@ -24,4 +24,4 @@
 
 ## batch
 
-`xverif_batch` 执行 NDJSON tool 请求文件，适合 open -> query -> close 的串行流程。batch 行里的 tool 参数需要嵌套在 `args` 里。
+`xverif_batch` 执行 NDJSON tool 请求文件，适合 open -> query -> close 的串行流程。batch 行里的 tool 参数需要嵌套在 `args` 里；每行 `args` 必须是 object，错误行写入带 `line_number` 的失败记录且不执行 tool。所有 MCP tool 的 `xverif_output_path` 写入失败会返回 `OUTPUT_WRITE_FAILED`，不得把原 action 成功当作调用成功。

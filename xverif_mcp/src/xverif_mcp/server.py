@@ -4,9 +4,11 @@ import inspect
 import json
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any, Optional
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import CallToolResult, TextContent
 
 from xverif_mcp.import_paths import ensure_tool_import_paths
 
@@ -19,6 +21,7 @@ from xverif_mcp.adapters.xentry import entry_decode, entry_explain, entry_valida
 from xverif_mcp.adapters.xloc import loc_resolve, loc_context, loc_stats, loc_annotate
 from xverif_mcp.adapters.xsva import sva_list, sva_scan, sva_parse, sva_explain
 from xverif_mcp.errors import error_payload
+from xverif_loop.logging import log_server_event
 from xverif_mcp.tool_policy import filtered_catalog, policy_summary, tool_enabled
 from xverif_mcp.xdebug_errors import (
     forbidden_native_session_error,
@@ -44,8 +47,14 @@ def _cleanup_stateful_sessions() -> None:
     for adapter in (debug, cov):
         try:
             adapter.close_all()
-        except Exception:
-            pass
+        except Exception as exc:
+            log_server_event(
+                "mcp.shutdown.cleanup_failed",
+                False,
+                backend=getattr(adapter, "mode", adapter.__class__.__name__),
+                error_type=type(exc).__name__,
+                error=str(exc),
+            )
 
 
 @asynccontextmanager
@@ -66,8 +75,8 @@ debug = XverifDebugAdapter()
 cov = XverifCoverageAdapter()
 
 
-def _tool_error(code: str, message: str) -> dict:
-    return error_payload(code, message)
+def _tool_error(code: str, message: str, **extra: Any) -> dict:
+    return error_payload(code, message, **extra)
 
 
 def _write_output(result: Any, path: str, append: bool) -> None:
@@ -77,6 +86,24 @@ def _write_output(result: Any, path: str, append: bool) -> None:
             f.write(result)
         else:
             f.write(str(result))
+
+
+def _output_write_failed(result: Any, path: str, exc: OSError) -> CallToolResult:
+    payload = _tool_error(
+        "OUTPUT_WRITE_FAILED",
+        f"cannot write MCP tool output to {path}: {exc}",
+        output_path=path,
+        error_type=type(exc).__name__,
+    )
+    payload["data"] = {"result": result}
+    return CallToolResult(
+        content=[TextContent(type="text", text=json.dumps(payload, ensure_ascii=False))],
+        # FastMCP validates structuredContent against the wrapped tool's original
+        # return annotation.  Keep that successful result shape while signalling
+        # the output-side failure in MCP error content.
+        structuredContent={"result": result},
+        isError=True,
+    )
 
 
 def _wrap_with_output(fn):
@@ -100,8 +127,8 @@ def _wrap_with_output(fn):
             if output_path:
                 try:
                     _write_output(result, output_path, output_append)
-                except Exception:
-                    pass
+                except OSError as exc:
+                    return _output_write_failed(result, output_path, exc)
             return result
     else:
         def wrapper(*args, **kwargs):
@@ -111,8 +138,8 @@ def _wrap_with_output(fn):
             if output_path:
                 try:
                     _write_output(result, output_path, output_append)
-                except Exception:
-                    pass
+                except OSError as exc:
+                    return _output_write_failed(result, output_path, exc)
             return result
 
     wrapper.__signature__ = new_sig
@@ -145,7 +172,7 @@ def xverif_ping() -> str:
 
 def _append_result(output_file: str, tool: str | None, ok: bool,
                    error: str | None, elapsed_ms: int,
-                   response: str | None = None) -> None:
+                   response: str | None = None, line_number: int | None = None) -> None:
     entry: dict = {
         "tool": tool,
         "ok": ok,
@@ -154,6 +181,8 @@ def _append_result(output_file: str, tool: str | None, ok: bool,
     }
     if response is not None:
         entry["response"] = response
+    if line_number is not None:
+        entry["line_number"] = line_number
     with open(output_file, "a", encoding="utf-8") as f:
         f.write(json.dumps(entry, ensure_ascii=False, sort_keys=True) + "\n")
 
@@ -191,10 +220,13 @@ async def xverif_batch(batch_file: str, output_file: str) -> dict:
     Returns ``{total, ok_count, failed_count, output_file}``.
     """
     stats = {"total": 0, "ok": 0, "failed": 0}
+    if not Path(batch_file).is_file():
+        return _tool_error("FILE_NOT_FOUND",
+                           f"batch file not found: {batch_file}")
 
     try:
         with open(batch_file, "r", encoding="utf-8") as f:
-            for line in f:
+            for line_number, line in enumerate(f, start=1):
                 line = line.strip()
                 if not line:
                     continue
@@ -203,7 +235,7 @@ async def xverif_batch(batch_file: str, output_file: str) -> dict:
                     req = json.loads(line)
                 except json.JSONDecodeError as e:
                     _append_result(output_file, None, False,
-                                   f"INVALID_JSON: {e}", 0)
+                                   f"INVALID_JSON: {e}", 0, line_number=line_number)
                     stats["failed"] += 1
                     stats["total"] += 1
                     continue
@@ -211,25 +243,33 @@ async def xverif_batch(batch_file: str, output_file: str) -> dict:
                 tool_name = req.get("tool")
                 if not tool_name:
                     _append_result(output_file, None, False,
-                                   "MISSING_TOOL_FIELD", 0)
+                                   "MISSING_TOOL_FIELD", 0, line_number=line_number)
                     stats["failed"] += 1
                     stats["total"] += 1
                     continue
 
                 tool_args = req.get("args", {})
                 if not isinstance(tool_args, dict):
-                    tool_args = {}
+                    _append_result(output_file, tool_name, False,
+                                   "INVALID_BATCH_ARGUMENTS: args must be an object", 0,
+                                   line_number=line_number)
+                    stats["failed"] += 1
+                    stats["total"] += 1
+                    continue
 
                 ok, error, elapsed_ms, response = await _execute_one(tool_name, tool_args)
-                _append_result(output_file, tool_name, ok, error, elapsed_ms, response)
+                _append_result(output_file, tool_name, ok, error, elapsed_ms, response,
+                               line_number=line_number)
                 if ok:
                     stats["ok"] += 1
                 else:
                     stats["failed"] += 1
                 stats["total"] += 1
-    except FileNotFoundError:
-        return _tool_error("FILE_NOT_FOUND",
-                           f"batch file not found: {batch_file}")
+    except OSError as exc:
+        return _tool_error("BATCH_OUTPUT_WRITE_FAILED",
+                           f"cannot write batch results to {output_file}: {exc}",
+                           output_file=output_file,
+                           error_type=type(exc).__name__)
     except Exception as e:
         return _tool_error("BATCH_FAILED", str(e))
 

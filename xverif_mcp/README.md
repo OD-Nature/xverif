@@ -178,7 +178,7 @@ session 空闲最长存活时间看 `XDEBUG_SESSION_IDLE_TIMEOUT_SEC`（默认 8
 
 | 参数 | 类型 | 默认 | 说明 |
 |---|---|---|---|
-| `xverif_output_path` | `str \| None` | `None` | 指定文件路径时，tool 响应会额外写入该文件 |
+| `xverif_output_path` | `str \| None` | `None` | 指定文件路径时，tool 响应会额外写入该文件；失败时返回 `OUTPUT_WRITE_FAILED` |
 | `xverif_output_append` | `bool` | `False` | True 为追加写入，False（默认）为覆盖写入 |
 
 示例：
@@ -193,13 +193,15 @@ xverif_debug_query(action="value.at", args={...},
                    xverif_output_append=True)
 ```
 
-写文件失败不会影响 tool 正常返回。
+写文件是该调用的一部分；写入失败返回 `OUTPUT_WRITE_FAILED`，`data.result` 保留原 action 结果供诊断，调用方不得把它当作完整成功。
 
 ### 批量执行：`xverif_batch`
 
 `xverif_batch` 允许 AI 将多个 tool 请求写入 NDJSON 文件，一次提交批量串行执行，
 结果写入另一个 NDJSON 文件。适合需要按序执行 session.open → query → session.close
 的场景。
+
+每一条非空 NDJSON 行必须是带 string `tool` 和 object `args` 的 JSON object。格式错误行不会执行 tool，会在结果中写入带 `line_number` 的失败记录，然后继续处理后续行。
 
 **注意嵌套 args**：`xverif_debug_query` / `xverif_cov_query` 自身有 `args` 参数，
 在 batch 行中需要再嵌套一层：

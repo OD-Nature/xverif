@@ -89,6 +89,39 @@ def test_stateful_cleanup_calls_debug_and_cov(monkeypatch: pytest.MonkeyPatch):
     assert calls == ["debug", "cov"]
 
 
+def test_stateful_cleanup_logs_and_continues_after_failure(monkeypatch: pytest.MonkeyPatch):
+    server = _server(monkeypatch)
+    calls: list[str] = []
+    events: list[dict] = []
+
+    class FailingAdapter:
+        mode = "direct"
+
+        def close_all(self) -> None:
+            calls.append("debug")
+            raise RuntimeError("close failed")
+
+    class HealthyAdapter:
+        def close_all(self) -> None:
+            calls.append("cov")
+
+    monkeypatch.setattr(server, "debug", FailingAdapter())
+    monkeypatch.setattr(server, "cov", HealthyAdapter())
+    monkeypatch.setattr(server, "log_server_event",
+                        lambda phase, ok, **fields: events.append({"phase": phase, "ok": ok, **fields}))
+
+    server._cleanup_stateful_sessions()
+
+    assert calls == ["debug", "cov"]
+    assert events == [{
+        "phase": "mcp.shutdown.cleanup_failed",
+        "ok": False,
+        "backend": "direct",
+        "error_type": "RuntimeError",
+        "error": "close failed",
+    }]
+
+
 def test_lifespan_cleanup_runs_on_exit(monkeypatch: pytest.MonkeyPatch):
     server = _server(monkeypatch)
     calls: list[str] = []
@@ -419,14 +452,19 @@ def test_output_path_does_not_affect_response(tmp_path, monkeypatch: pytest.Monk
     assert "pong" in content[0].text.lower()
 
 
-def test_output_path_invalid_dir_no_crash(monkeypatch: pytest.MonkeyPatch):
-    """If the output path is invalid, the tool still returns normally."""
+def test_output_path_invalid_dir_returns_structured_failure(monkeypatch: pytest.MonkeyPatch):
+    """A requested output file is part of the tool contract."""
     content, _ = _call_tool(
         monkeypatch,
         "xverif_ping",
         {"xverif_output_path": "/nonexistent/dir/rsp.txt"},
     )
-    assert "pong" in content[0].text.lower()
+    assert content.isError is True
+    payload = json.loads(content.content[0].text)
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "OUTPUT_WRITE_FAILED"
+    assert payload["error"]["output_path"] == "/nonexistent/dir/rsp.txt"
+    assert payload["data"]["result"] == "pong"
 
 
 def test_batch_fake_lifecycle(tmp_path, monkeypatch: pytest.MonkeyPatch):
@@ -483,6 +521,8 @@ def test_batch_format_errors(tmp_path, monkeypatch: pytest.MonkeyPatch):
     batch_file.write_text("\n".join([
         "not json at all",
         json.dumps({"args": {"expr": "1+1"}}),  # missing tool
+        json.dumps({"tool": "xverif_bit_eval", "args": "1+1"}),
+        json.dumps({"tool": "xverif_no_such_tool", "args": {}}),
         json.dumps({"tool": "xverif_ping", "args": {}}),
     ]) + "\n")
 
@@ -494,20 +534,30 @@ def test_batch_format_errors(tmp_path, monkeypatch: pytest.MonkeyPatch):
     )
     payload = json.loads(content[0].text)
     assert payload["ok"] is True
-    assert payload["total"] == 3
+    assert payload["total"] == 5
     assert payload["ok_count"] == 1
-    assert payload["failed_count"] == 2
+    assert payload["failed_count"] == 4
 
     lines = [json.loads(l) for l in output_file.read_text().splitlines() if l]
-    assert len(lines) == 3
+    assert len(lines) == 5
     assert lines[0]["tool"] is None
     assert lines[0]["ok"] is False
     assert "INVALID_JSON" in lines[0]["error"]
+    assert lines[0]["line_number"] == 1
     assert lines[1]["tool"] is None
     assert lines[1]["ok"] is False
     assert "MISSING_TOOL_FIELD" in lines[1]["error"]
-    assert lines[2]["tool"] == "xverif_ping"
-    assert lines[2]["ok"] is True
+    assert lines[1]["line_number"] == 2
+    assert lines[2]["tool"] == "xverif_bit_eval"
+    assert lines[2]["ok"] is False
+    assert "INVALID_BATCH_ARGUMENTS" in lines[2]["error"]
+    assert lines[2]["line_number"] == 3
+    assert lines[3]["tool"] == "xverif_no_such_tool"
+    assert lines[3]["ok"] is False
+    assert lines[3]["line_number"] == 4
+    assert lines[4]["tool"] == "xverif_ping"
+    assert lines[4]["ok"] is True
+    assert lines[4]["line_number"] == 5
 
 
 def test_batch_file_not_found(tmp_path, monkeypatch: pytest.MonkeyPatch):
@@ -521,3 +571,16 @@ def test_batch_file_not_found(tmp_path, monkeypatch: pytest.MonkeyPatch):
     payload = json.loads(content[0].text)
     assert payload["ok"] is False
     assert payload["error"]["code"] == "FILE_NOT_FOUND"
+
+
+def test_batch_output_file_failure_is_explicit(tmp_path, monkeypatch: pytest.MonkeyPatch):
+    batch_file = tmp_path / "batch.ndjson"
+    batch_file.write_text(json.dumps({"tool": "xverif_ping", "args": {}}) + "\n")
+    content, _ = _call_tool(
+        monkeypatch,
+        "xverif_batch",
+        {"batch_file": str(batch_file), "output_file": "/nonexistent/dir/results.ndjson"},
+    )
+    payload = json.loads(content[0].text)
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "BATCH_OUTPUT_WRITE_FAILED"
