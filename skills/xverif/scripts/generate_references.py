@@ -6,6 +6,8 @@ import argparse
 import json
 from pathlib import Path
 
+import yaml
+
 
 ROOT = Path(__file__).resolve().parents[3]
 SKILL = ROOT / "skills" / "xverif"
@@ -58,14 +60,16 @@ def action_reference() -> str:
 
 
 def surface_examples() -> str:
-    # This canonical example is intentionally parsed without a YAML dependency.
-    action = "value.batch_at"
-    session = "case_a"
-    args = {
-        "time": "100ns",
-        "clock": "top.clk",
-        "signals": ["top.u.valid", "top.u.ready", "top.u.full"],
-    }
+    source = yaml.safe_load(EXAMPLES.read_text(encoding="utf-8"))
+    examples = source.get("examples", []) if isinstance(source, dict) else []
+    if not examples or not isinstance(examples[0], dict):
+        raise ValueError(f"{EXAMPLES} must contain at least one example object")
+    example = examples[0]
+    action = str(example["action"])
+    session = str(example["session"])
+    args = example["args"]
+    if not isinstance(args, dict):
+        raise ValueError(f"{EXAMPLES} example args must be an object")
     native = {"api_version": "xdebug.v1", "action": action,
               "target": {"session_id": session}, "args": args}
     mcp = {"tool": "xverif_debug_query", "args": {

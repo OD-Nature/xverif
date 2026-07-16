@@ -45,7 +45,7 @@ python <xverif-root>/skills/xwiki/scripts/init_xwiki.py --wiki-dir "$XWIKI_DIR" 
 4. 如果存在 `_index/backlinks.md` 或 `_index/tags.md`，用它们做反向或 tag 索引。
 5. 如果仍找不到，只在 `$XWIKI_DIR` 内用 `rg` 搜索 Markdown。
 6. 搜索命中后必须回到页面级证据；不要只引用 grep 片段作答。
-7. wiki 信息不足时再读 raw source，并把稳定发现编译回 wiki。
+7. wiki 信息不足时再读 raw source；只有已获得写回授权时才把稳定发现编译回 wiki，未授权时在最终结果列出建议写回的页面和结论。
 
 详细查询和 CRUD 规则见 [references/wiki-crud.md](references/wiki-crud.md)。
 
