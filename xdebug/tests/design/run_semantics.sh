@@ -58,7 +58,7 @@ d=json.load(sys.stdin)["data"]
 assert "trace.driver" in d["actions"]
 '
 
-printf '%s\n' '{"api_version":"xdebug.v1","action":"schema"}' | "$XDEBUG" --json - | python3 -c 'import json,sys; assert json.load(sys.stdin)["ok"]'
+printf '%s\n' '{"api_version":"xdebug.v1","action":"schema","args":{"action":"signal.statistics","kind":"request"}}' | "$XDEBUG" --json - | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["ok"] and d["summary"]["action"] == "signal.statistics" and d["summary"]["kind"] == "request"'
 
 query "{\"api_version\":\"xdebug.v1\",\"action\":\"session.open\",\"target\":{\"daidir\":\"$UART_DB\"},\"args\":{\"name\":\"uart_ai\"}}" \
   | check_json 'd["ok"] and d["summary"]["session_id"] == "uart_ai"'

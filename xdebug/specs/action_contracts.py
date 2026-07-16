@@ -182,8 +182,8 @@ ACTION_GUIDANCE: dict[str, Json] = {
 
 ACTION_ARG_OVERRIDES: dict[tuple[str, str], Json] = {
     ("value.at", "format"): {
-        "description": "Low-level display format for the sampled value. Only hexadecimal, binary, and decimal forms are accepted; export formats are invalid.",
-        "type": "string", "enum": ["h", "hex", "b", "bin", "binary", "d", "dec", "decimal"], "default": "h",
+        "description": "Low-level display format for the sampled value. Hexadecimal, binary, and decimal forms return sampled values. array_indexed is accepted only to return the explicit UNSUPPORTED_AGGREGATE_QUERY capability error; export formats are invalid.",
+        "type": "string", "enum": ["h", "hex", "b", "bin", "binary", "d", "dec", "decimal", "array_indexed"], "default": "h",
     },
     ("signal.changes", "mode"): {
         "description": "Return mode: timeline emits each change evidence, while summary emits aggregate facts only. Do not combine it with aggregate_only.",

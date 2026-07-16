@@ -29,6 +29,17 @@
         "schema"
       ]
     },
+    "tool": {
+      "type": "object",
+      "description": "Runtime tool identity for this response."
+    },
+    "session": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "Managed session metadata when the schema query is session-scoped."
+    },
     "summary": {
       "type": "object",
       "required": ["action", "kind"],
