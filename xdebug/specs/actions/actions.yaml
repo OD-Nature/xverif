@@ -2031,10 +2031,12 @@
       },
       "examples": {
         "request": [
-          "examples/requests/trace.active_driver_chain.basic.json"
+          "examples/requests/trace.active_driver_chain.basic.json",
+          "examples/requests/trace.active_driver_chain.ambiguous.json"
         ],
         "response": [
-          "examples/responses/trace.active_driver_chain.basic.json"
+          "examples/responses/trace.active_driver_chain.basic.json",
+          "examples/responses/trace.active_driver_chain.ambiguous.json"
         ]
       },
       "required_args": [

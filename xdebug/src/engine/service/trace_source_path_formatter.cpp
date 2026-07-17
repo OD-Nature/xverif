@@ -2,6 +2,7 @@
 
 #include "api/text_response_builder.h"
 #include "common/env_config.h"
+#include "waveform/value/logic_value.h"
 
 #include "npi.h"
 #include "npi_hdl.h"
@@ -25,6 +26,68 @@ std::string scalar_text(const Json& object, const char* key) {
     const Json& value = object[key];
     if (!xdebug::is_xout_scalar_json(value)) return std::string();
     return xdebug::json_to_xout_value(value);
+}
+
+std::string ambiguous_xout_value(const Json& value) {
+    if (value.is_null()) return "null";
+    if (!value.is_string()) return xdebug::json_to_xout_value(value);
+
+    std::string text = value.get<std::string>();
+    size_t tick = text.find('\'');
+    if (tick != std::string::npos && tick + 1 < text.size()) {
+        char radix = static_cast<char>(std::tolower(
+            static_cast<unsigned char>(text[tick + 1])));
+        bool valid_width = tick == 0;
+        if (tick > 0) {
+            valid_width = true;
+            for (size_t i = 0; i < tick; ++i) {
+                if (!std::isdigit(static_cast<unsigned char>(text[i]))) {
+                    valid_width = false;
+                    break;
+                }
+            }
+        }
+        if (valid_width && (radix == 'h' || radix == 'b' || radix == 'd')) return text;
+    }
+
+    std::string bits;
+    bits.reserve(text.size());
+    for (char ch : text) {
+        char lower = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+        if (lower == '_' || std::isspace(static_cast<unsigned char>(lower))) continue;
+        if (lower != '0' && lower != '1' && lower != 'x' && lower != 'z') return text;
+        bits.push_back(lower);
+    }
+    if (bits.empty()) return text;
+    return xdebug_waveform::logic_value_compact_string(
+        xdebug_waveform::logic_value_from_bits(bits, static_cast<int>(bits.size())));
+}
+
+std::string render_ambiguous_rhs_xout(const Json& ambiguity) {
+    if (!ambiguity.is_object()) return std::string();
+    std::vector<std::vector<std::string>> rows;
+    const std::string active_time = ambiguity.value("active_time", std::string());
+    const Json statements = ambiguity.value("statements", Json::array());
+    if (statements.is_array()) {
+        for (const auto& statement : statements) {
+            const Json samples = statement.value("rhs_samples", Json::array());
+            if (!samples.is_array()) continue;
+            for (const auto& sample : samples) {
+                const Json before = sample.value("before", Json::object());
+                const Json after = sample.value("after", Json::object());
+                rows.push_back({
+                    sample.value("signal", std::string()),
+                    active_time,
+                    ambiguous_xout_value(before.value("value", Json())),
+                    ambiguous_xout_value(after.value("value", Json()))
+                });
+            }
+        }
+    }
+    xdebug::TextResponseBuilder out("xdebug");
+    out.emit_section("ambiguous_rhs_samples");
+    out.emit_table({"signal", "time", "before", "after"}, rows);
+    return out.str();
 }
 
 std::string trim_copy(const std::string& input) {
@@ -533,6 +596,10 @@ Json simplify_active_driver_chain_payload(const Json& raw,
     };
     add_limit_hint(out["summary"], limit_truncated, max_results);
     out["hops"] = hops;
+    Json ambiguity_evidence = chain_object.value("ambiguity_evidence", Json());
+    if (ambiguity_evidence.is_object()) {
+        out["ambiguity_evidence"] = ambiguity_evidence;
+    }
     out["truncated"] = truncated;
     return out;
 }
@@ -547,8 +614,8 @@ std::string render_source_path_xout(const std::string& action, const Json& respo
             if (xdebug::is_xout_scalar_json(it.value())) out.emit_kv(it.key(), it.value());
         }
     }
-    std::string text = out.str();
     const Json data = response.value("data", Json::object());
+    std::string text = out.str();
     const Json paths = data.value("paths", Json::array());
     int context_lines = xdebug_core::xdebug_trace_source_context_lines();
     int merge_threshold_lines = xdebug_core::xdebug_trace_source_merge_threshold_lines();
@@ -562,6 +629,12 @@ std::string render_source_path_xout(const std::string& action, const Json& respo
         std::vector<SourceRenderGroup> groups =
             group_source_items(collect_source_items(hops, true), merge_threshold_lines);
         for (const auto& group : groups) emit_source_group_xout(text, group, context_lines);
+    }
+    const Json ambiguity = data.value("ambiguity_evidence", Json());
+    if (ambiguity.is_object()) {
+        std::string ambiguity_text = render_ambiguous_rhs_xout(ambiguity);
+        while (!text.empty() && text.back() == '\n') text.pop_back();
+        text += "\n\n" + ambiguity_text;
     }
     while (!text.empty() && text.back() == '\n') text.pop_back();
     text.push_back('\n');

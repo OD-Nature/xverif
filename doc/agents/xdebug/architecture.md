@@ -276,6 +276,12 @@ frontend 不直接承载 NPI 重逻辑；NPI/FSDB/engine 能力集中在内部 e
 
 - combined action 必须保留 design evidence 和 waveform time evidence。
 - 对未解析、control-only、zero evidence 等状态要稳定表达，不要假装 resolved。
+- active driver chain 只在 `npiRhs` 明确给出直接 signal 时继续追踪。多个 active
+  assignments 或多个 RHS sources 必须停止为 ambiguous，并按 statement 返回 RHS
+  在精确 `active_time` 严格之前和该时刻最终值；该证据不得参与根因猜测。
+- active chain 不接受 `clk_period`，也不得重新引入半周期窗口、邻近时钟沿或其它
+  waveform heuristic/fallback。RHS evidence 截断必须通过 `limits.max_trace_signals`
+  的完整性字段显式表达。
 
 ## Runtime/Work Dir 层
 

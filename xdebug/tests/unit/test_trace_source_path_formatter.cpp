@@ -103,6 +103,78 @@ int main() {
     assert(chain_text.find("1    5     top.a -> top.b") != std::string::npos);
     assert(chain_text.find("2    9     top.b -> top.c") != std::string::npos);
 
+    Json ambiguous_response = {
+        {"summary", Json{{"signal", "top.out"}, {"termination", "ambiguous"}}},
+        {"data", Json{{"ambiguity_evidence", Json{
+            {"kind", "multiple_rhs_sources"},
+            {"signal", "top.out"},
+            {"active_time", "10ns"},
+            {"complete", true},
+            {"rhs_signal_count", 1},
+            {"returned_rhs_signal_count", 1},
+            {"omitted_rhs_signal_count", 0},
+            {"truncation_scope", nullptr},
+            {"statements", Json::array({Json{
+                {"file", "rtl/top.sv"},
+                {"line", 12},
+                {"rhs_samples", Json::array({
+                    Json{
+                        {"signal", "top.raw_bin"},
+                        {"before", Json{{"status", "ok"}, {"value", "1010"}}},
+                        {"after", Json{{"status", "ok"}, {"value", "0011"}}},
+                        {"changed", true}
+                    },
+                    Json{
+                        {"signal", "top.prefixed_hex"},
+                        {"before", Json{{"status", "ok"}, {"value", "8'ha0"}}},
+                        {"after", Json{{"status", "ok"}, {"value", "8'ha1"}}},
+                        {"changed", true}
+                    },
+                    Json{
+                        {"signal", "top.raw_xz"},
+                        {"before", Json{{"status", "ok"}, {"value", "xxxx0010"}}},
+                        {"after", Json{{"status", "ok"}, {"value", "zzzz0011"}}},
+                        {"changed", true}
+                    },
+                    Json{
+                        {"signal", "top.prefixed_bin"},
+                        {"before", Json{{"status", "ok"}, {"value", "8'b10100000"}}},
+                        {"after", Json{{"status", "ok"}, {"value", "8'b10100001"}}},
+                        {"changed", true}
+                    },
+                    Json{
+                        {"signal", "top.prefixed_dec"},
+                        {"before", Json{{"status", "ok"}, {"value", "8'd160"}}},
+                        {"after", Json{{"status", "missing_value"}, {"value", nullptr}}},
+                        {"changed", nullptr}
+                    }
+                })}
+            }})}
+        }}, {"hops", Json::array({
+            Json{{"index", 0}, {"file", file}, {"line", 5},
+                 {"signal_path", Json::array({"top.out"})}}
+        })}}}
+    };
+    std::string ambiguous_text = xdebug_design::render_source_path_xout(
+        "trace.active_driver_chain", ambiguous_response);
+    size_t active_signals_pos = ambiguous_text.find("\nactive_signals:\n");
+    size_t ambiguity_pos = ambiguous_text.find("\nambiguous_rhs_samples:\n");
+    assert(active_signals_pos != std::string::npos);
+    assert(ambiguity_pos != std::string::npos);
+    assert(ambiguity_pos > active_signals_pos);
+    assert(ambiguous_text.find("signal            time  before", ambiguity_pos) != std::string::npos);
+    assert(ambiguous_text.find("top.raw_bin       10ns  4'ha", ambiguity_pos) != std::string::npos);
+    assert(ambiguous_text.find("4'h3", ambiguity_pos) != std::string::npos);
+    assert(ambiguous_text.find("top.raw_xz        10ns  8'hx2", ambiguity_pos) != std::string::npos);
+    assert(ambiguous_text.find("8'hz3", ambiguity_pos) != std::string::npos);
+    assert(ambiguous_text.find("8'ha0", ambiguity_pos) != std::string::npos);
+    assert(ambiguous_text.find("8'b10100000", ambiguity_pos) != std::string::npos);
+    assert(ambiguous_text.find("8'd160", ambiguity_pos) != std::string::npos);
+    assert(ambiguous_text.find("null", ambiguity_pos) != std::string::npos);
+    assert(ambiguous_text.find("statement", ambiguity_pos) == std::string::npos);
+    assert(ambiguous_text.find("changed", ambiguity_pos) == std::string::npos);
+    assert(ambiguous_text.find("status", ambiguity_pos) == std::string::npos);
+
     Json default_limited = xdebug_design::simplify_trace_driver_load_payload(
         trace_raw_with_edges(file, 12), "trace.load", "top.out", "load");
     assert(default_limited["summary"]["path_count"] == 10);

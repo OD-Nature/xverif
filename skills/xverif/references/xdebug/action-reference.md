@@ -121,4 +121,4 @@ Stream 配置必须使用 `signals` map：真实信号路径只写在 `signals` 
 | action | status | resource | purpose | how it works | objective | args contract |
 | --- | --- | --- | --- | --- | --- | --- |
 | `trace.active_driver` | stable | combined | 在指定时间找 active driver。 | 结合 waveform 当前值和 design 依赖，定位 time 的有效驱动证据。 | 回答“此刻是谁真正驱动了它”。 | required: signal, time |
-| `trace.active_driver_chain` | stable | combined | 展开 active driver 链。 | 从 signal/time 递归追溯 active driver；深度限制写 top-level `limits.max_depth`。 | 给出跨级根因链。 | required: signal, time<br>do not use args.depth |
+| `trace.active_driver_chain` | stable | combined | 展开 active driver 链。 | 从 signal/time 递归追溯 active driver；深度限制写 top-level `limits.max_depth`。遇到多个 active assignments 或多个 RHS sources 时在精确 `active_time` 返回前后值证据并停止，不用波形变化猜下一跳。 | 给出跨级根因链及 ambiguous RHS 现场。 | required: signal, time<br>do not use `args.depth` or `args.clk_period` |

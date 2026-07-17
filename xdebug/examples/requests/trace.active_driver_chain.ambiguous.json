@@ -6,7 +6,10 @@
     "fsdb": "waves.fsdb"
   },
   "args": {
-    "signal": "top.data_out",
+    "signal": "top.u.result",
     "time": "50ns"
+  },
+  "limits": {
+    "max_trace_signals": 64
   }
 }

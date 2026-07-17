@@ -4,7 +4,9 @@
 #include "core/ai/common_blocks.h"
 #include "core/npi/time_contract.h"
 #include "runtime/work_dir.h"
+#include "waveform/common/clock_sampling.h"
 
+#include <algorithm>
 #include <set>
 
 namespace xdebug {
@@ -15,15 +17,40 @@ namespace {
 // data types
 // ═══════════════════════════════════════════════════════════════════
 
-struct Candidate {
-    std::string name;
-    std::string value_before, value_at;
-    bool toggled = false;
+struct ValueEvidence {
+    std::string status;
+    std::string value;
+    std::string value_time;
+    bool known = false;
 };
 
-struct BranchEvidence {
-    std::string signal, time, reason;
-    std::vector<Candidate> candidates;
+struct RhsSample {
+    std::string signal;
+    ValueEvidence before;
+    ValueEvidence after;
+    bool has_changed = false;
+    bool changed = false;
+};
+
+struct StatementEvidence {
+    std::string kind, driver, file;
+    int line = 0;
+    int rhs_signal_count = 0;
+    int returned_rhs_signal_count = 0;
+    bool complete = true;
+    std::vector<RhsSample> rhs_samples;
+};
+
+struct AmbiguityEvidence {
+    std::string kind, signal, active_time;
+    int hop_index = 0;
+    int statement_count = 0;
+    int rhs_signal_count = 0;
+    int returned_rhs_signal_count = 0;
+    int omitted_rhs_signal_count = 0;
+    bool complete = true;
+    std::string truncation_scope;
+    std::vector<StatementEvidence> statements;
 };
 
 struct ChainNode {
@@ -40,13 +67,13 @@ struct ChainNode {
 struct ChainStats {
     int calls = 0;
     int edgecheck_direct = 0;
-    int fallback = 0;
     int temporal_boundaries = 0;
 };
 
 struct ChainResult {
     std::vector<ChainNode> chain;
-    std::vector<BranchEvidence> branch_evidence;
+    AmbiguityEvidence ambiguity_evidence;
+    bool has_ambiguity_evidence = false;
     std::vector<std::string> limitations;
     std::string termination = "unresolved";
     std::string termination_detail;
@@ -57,85 +84,106 @@ struct ChainResult {
     bool truncated = false;
 };
 
-struct Decision {
-    bool stop = false;
-    std::string reason;
-    std::string next_signal;
-    BranchEvidence evidence;
-};
+bool is_signal_like_rhs_type(int type) {
+    return type == npiNet || type == npiNetBit ||
+           type == npiReg || type == npiRegBit ||
+           type == npiBitVar || type == npiPartSelect ||
+           type == npiBitSelect || type == npiVarSelect ||
+           type == npiNetSelect || type == 608 || type == 697;
+}
 
-// ═══════════════════════════════════════════════════════════════════
-// decide_next
-// ═══════════════════════════════════════════════════════════════════
+std::string direct_rhs_signal_name(const drvLoadStmt_s& statement) {
+    if (!statement.useHdl) return "";
+    NpiHandleGuard rhs(npi_handle(npiRhs, statement.useHdl));
+    if (!rhs || !is_signal_like_rhs_type(npi_get(npiType, rhs.get()))) return "";
+    return npi_string(npiFullName, rhs.get());
+}
 
-Decision decide_next(npiFsdbFileHandle fsdb,
-                      const std::string& signal,
-                      const std::string& time,
-                      const std::string& clk_period,
-                      const std::vector<std::string>& data_signals,
-                      const std::string& driver_kind,
-                      bool current_is_primary_input,
-                      ChainStats& stats) {
-    Decision d;
+std::vector<std::string> rhs_signal_names(const drvLoadStmt_s& statement,
+                                          const std::string& current_signal) {
+    std::vector<std::string> names;
+    for (const auto& handle : statement.sigHdlVec) {
+        std::string name = npi_string(npiFullName, handle);
+        if (name.empty() || name == current_signal) continue;
+        if (std::find(names.begin(), names.end(), name) == names.end()) names.push_back(name);
+    }
+    std::sort(names.begin(), names.end());
+    return names;
+}
 
-    if (driver_kind == "force") { d.stop = true; d.reason = "force"; return d; }
-    if (data_signals.empty()) {
-        d.stop = true;
-        if (driver_kind.empty() || driver_kind == "unresolved" ||
-            driver_kind == "other" || driver_kind == "port_boundary" ||
-            driver_kind == "modport_port" || driver_kind == "ref_obj") {
-            d.reason = current_is_primary_input ? "primary_input" : "unresolved";
-        } else {
-            d.reason = "primary_input";
+ValueEvidence value_evidence(const xdebug_waveform::ClockPointCell& cell,
+                             npiFsdbFileHandle fsdb,
+                             const std::string& active_time,
+                             bool is_before) {
+    ValueEvidence evidence;
+    evidence.status = cell.status.empty() ? "missing_value" : cell.status;
+    if (evidence.status != "ok") return evidence;
+    evidence.value = cell.raw_value;
+    evidence.known = cell.raw_value.find_first_of("xXzZ") == std::string::npos;
+    evidence.value_time = is_before && cell.has_value_time
+        ? xdebug_core::format_time(fsdb, cell.value_time) : active_time;
+    return evidence;
+}
+
+RhsSample sample_rhs(npiFsdbFileHandle fsdb,
+                     const std::string& signal,
+                     npiFsdbTime active_tick,
+                     const std::string& active_time) {
+    RhsSample sample;
+    sample.signal = signal;
+    xdebug_waveform::ClockPointCell before_cell, after_cell;
+    xdebug_waveform::ClockValueReader::read_before(
+        fsdb, nullptr, signal, active_tick, npiFsdbBinStrVal, '\0', before_cell);
+    xdebug_waveform::ClockValueReader::read_current(
+        fsdb, nullptr, signal, active_tick, npiFsdbBinStrVal, '\0', after_cell);
+    sample.before = value_evidence(before_cell, fsdb, active_time, true);
+    sample.after = value_evidence(after_cell, fsdb, active_time, false);
+    sample.has_changed = sample.before.status == "ok" && sample.after.status == "ok";
+    sample.changed = sample.has_changed && sample.before.value != sample.after.value;
+    return sample;
+}
+
+AmbiguityEvidence collect_ambiguity_evidence(
+    npiFsdbFileHandle fsdb,
+    const std::string& kind,
+    const std::string& signal,
+    const std::string& active_time,
+    npiFsdbTime active_tick,
+    int hop_index,
+    const std::vector<drvLoadStmt_s>& statements,
+    int max_trace_signals) {
+    AmbiguityEvidence evidence;
+    evidence.kind = kind;
+    evidence.signal = signal;
+    evidence.active_time = active_time;
+    evidence.hop_index = hop_index;
+    int remaining = max_trace_signals;
+    for (const auto& statement : statements) {
+        if (!is_assignment_like_statement(statement)) continue;
+        StatementEvidence group;
+        group.kind = statement_kind(statement.useHdl ? npi_get(npiType, statement.useHdl) : 0);
+        group.driver = driver_text(statement.useHdl, group.kind);
+        group.file = npi_string(npiFile, statement.useHdl);
+        group.line = statement.useHdl ? npi_get(npiLineNo, statement.useHdl) : 0;
+        std::vector<std::string> names = rhs_signal_names(statement, signal);
+        group.rhs_signal_count = static_cast<int>(names.size());
+        evidence.rhs_signal_count += group.rhs_signal_count;
+        for (const auto& name : names) {
+            if (remaining <= 0) break;
+            group.rhs_samples.push_back(sample_rhs(fsdb, name, active_tick, active_time));
+            --remaining;
         }
-        return d;
+        group.returned_rhs_signal_count = static_cast<int>(group.rhs_samples.size());
+        group.complete = group.returned_rhs_signal_count == group.rhs_signal_count;
+        evidence.returned_rhs_signal_count += group.returned_rhs_signal_count;
+        evidence.statements.push_back(group);
     }
-
-    if (data_signals.size() == 1) {
-        d.next_signal = data_signals[0];
-        stats.edgecheck_direct++;
-        return d;
-    }
-
-    stats.fallback++;
-    npiFsdbTime center = 0;
-    npiFsdbTime period = 0;
-    std::string time_error;
-    xdebug_core::TimeParseOptions options;
-    options.default_unit = "ns";
-    if (!xdebug_core::parse_time(fsdb, time, options, center, time_error) ||
-        !xdebug_core::parse_time(fsdb, clk_period, options, period, time_error)) {
-        d.stop = true;
-        d.reason = "unresolved";
-        return d;
-    }
-
-    npiFsdbTime half = period / 2;
-    npiFsdbTime before = center > half ? center - half : 0;
-    npiFsdbTime after = center + half;
-
-    BranchEvidence ev;
-    ev.signal = signal; ev.time = time;
-    int toggled_count = 0;
-    std::string last_toggled;
-
-    for (auto& name : data_signals) {
-        Candidate c;
-        c.name = name;
-        c.value_before = fsdb_value_at(fsdb, name, before);
-        c.value_at     = fsdb_value_at(fsdb, name, after);
-        c.toggled = (c.value_before != c.value_at);
-        if (c.toggled) { toggled_count++; last_toggled = name; }
-        ev.candidates.push_back(c);
-    }
-
-    if (toggled_count == 1) { d.next_signal = last_toggled; return d; }
-
-    d.stop = true;
-    d.reason = "ambiguous";
-    d.evidence = ev;
-    d.evidence.reason = std::to_string(toggled_count) + " signals toggled simultaneously";
-    return d;
+    evidence.statement_count = static_cast<int>(evidence.statements.size());
+    evidence.omitted_rhs_signal_count =
+        evidence.rhs_signal_count - evidence.returned_rhs_signal_count;
+    evidence.complete = evidence.omitted_rhs_signal_count == 0;
+    if (!evidence.complete) evidence.truncation_scope = "ambiguity_rhs_samples";
+    return evidence;
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -145,8 +193,8 @@ Decision decide_next(npiFsdbFileHandle fsdb,
 ChainResult build_chain(npiFsdbFileHandle fsdb,
                          const std::string& signal,
                          const std::string& time,
-                         const std::string& clk_period,
-                         int max_depth, int max_nodes) {
+                         int max_depth, int max_nodes,
+                         int max_trace_signals) {
     ChainResult result;
     auto vkey = [](const std::string& sig, const std::string& t) { return sig + "\x1f" + t; };
     std::set<std::string> visited;
@@ -183,12 +231,6 @@ ChainResult build_chain(npiFsdbFileHandle fsdb,
             result.static_candidate_count = resolved.static_candidate_count;
             result.active_check_count = resolved.active_check_count;
         }
-        if (resolved.ambiguous) {
-            result.termination = "ambiguous";
-            result.termination_detail = "multiple_active_candidates";
-            break;
-        }
-
         bool temporal = (active.activeTime != cur_time);
         if (temporal) result.stats.temporal_boundaries++;
 
@@ -200,6 +242,22 @@ ChainResult build_chain(npiFsdbFileHandle fsdb,
         if (!xdebug_core::parse_time(fsdb, active_time, active_time_options, active_tick, active_time_error)) {
             result.termination = "unresolved";
             result.limitations.push_back("could not convert active time " + active_time);
+            break;
+        }
+
+        if (resolved.ambiguous) {
+            result.termination = "ambiguous";
+            result.termination_detail = "multiple_active_candidates";
+            result.ambiguity_evidence = collect_ambiguity_evidence(
+                fsdb, result.termination_detail, cur_sig, active_time, active_tick,
+                static_cast<int>(result.chain.size()), active.drvLoadStmtVec,
+                max_trace_signals);
+            result.has_ambiguity_evidence = true;
+            if (!result.ambiguity_evidence.complete) {
+                result.truncated = true;
+                result.limitations.push_back(
+                    "ambiguity RHS samples truncated by limits.max_trace_signals");
+            }
             break;
         }
 
@@ -243,8 +301,7 @@ ChainResult build_chain(npiFsdbFileHandle fsdb,
         // ── classify ──
         std::string best_kind, best_driver, best_file;
         int best_line = 0;
-        std::vector<std::string> all_signals;
-        std::vector<std::string> best_data_signals;
+        const drvLoadStmt_s* best_statement = nullptr;
 
         for (auto& stmt : active.drvLoadStmtVec) {
             int type = stmt.useHdl ? npi_get(npiType, stmt.useHdl) : 0;
@@ -254,45 +311,13 @@ ChainResult build_chain(npiFsdbFileHandle fsdb,
                 best_driver = driver_text(stmt.useHdl, kind);
                 best_file = npi_string(npiFile, stmt.useHdl);
                 best_line = stmt.useHdl ? npi_get(npiLineNo, stmt.useHdl) : 0;
-                best_data_signals.clear();
-                for (auto& sh : stmt.sigHdlVec) {
-                    std::string n = npi_string(npiFullName, sh);
-                    if (!n.empty()) best_data_signals.push_back(n);
-                }
+                best_statement = &stmt;
             }
-            for (auto& sh : stmt.sigHdlVec) {
-                std::string n = npi_string(npiFullName, sh);
-                if (!n.empty()) all_signals.push_back(n);
-            }
-        }
-        std::sort(all_signals.begin(), all_signals.end());
-        all_signals.erase(std::unique(all_signals.begin(), all_signals.end()), all_signals.end());
-        std::sort(best_data_signals.begin(), best_data_signals.end());
-        best_data_signals.erase(std::unique(best_data_signals.begin(), best_data_signals.end()),
-                                best_data_signals.end());
-
-        std::vector<std::string> data_signals;
-        const bool best_is_assignment =
-            best_kind == "assignment" || best_kind == "force";
-        const std::vector<std::string>& source_signals =
-            best_is_assignment && !best_data_signals.empty()
-                ? best_data_signals : all_signals;
-        for (auto& s : source_signals)
-            if (s != cur_sig) data_signals.push_back(s);
-        if (input_port.is_input_like && !input_port.target_signal.empty()) {
-            data_signals.clear();
-            data_signals.push_back(input_port.target_signal);
         }
 
         std::string raw_val = fsdb_value_at(fsdb, cur_sig, active_tick);
         std::string val_disp = format_value(raw_val);
         bool known = raw_val.find_first_of("xXzZ") == std::string::npos;
-
-        // ── decide ──
-        Decision d = decide_next(fsdb, cur_sig, cur_time, clk_period,
-                                  data_signals, best_kind,
-                                  input_port.is_input_like && input_port.target_signal.empty(),
-                                  result.stats);
 
         // ── record node ──
         ChainNode node;
@@ -304,26 +329,62 @@ ChainResult build_chain(npiFsdbFileHandle fsdb,
         node.driver = best_driver.empty() ? "(no driver)" : best_driver;
         node.file = best_file; node.line = best_line;
 
-        if (d.stop) {
-            result.termination = d.reason;
+        std::string next_signal;
+        if (input_port.is_input_like && !input_port.target_signal.empty()) {
+            next_signal = input_port.target_signal;
+        } else if (best_kind == "force") {
+            result.termination = "force";
             node.hop = "■";
-            if (!d.evidence.candidates.empty())
-                result.branch_evidence.push_back(d.evidence);
+            result.chain.push_back(node);
+            break;
+        } else if (best_kind == "assignment" && best_statement) {
+            next_signal = direct_rhs_signal_name(*best_statement);
+            if (next_signal == cur_sig) next_signal.clear();
+            if (next_signal.empty()) {
+                std::vector<std::string> rhs_signals =
+                    rhs_signal_names(*best_statement, cur_sig);
+                if (rhs_signals.size() > 1) {
+                    result.termination = "ambiguous";
+                    result.termination_detail = "multiple_rhs_sources";
+                    std::vector<drvLoadStmt_s> statements{*best_statement};
+                    result.ambiguity_evidence = collect_ambiguity_evidence(
+                        fsdb, result.termination_detail, cur_sig, active_time,
+                        active_tick, node.index, statements, max_trace_signals);
+                    result.has_ambiguity_evidence = true;
+                    if (!result.ambiguity_evidence.complete) {
+                        result.truncated = true;
+                        result.limitations.push_back(
+                            "ambiguity RHS samples truncated by limits.max_trace_signals");
+                    }
+                } else {
+                    result.termination = "assignment";
+                    result.termination_detail = rhs_signals.empty()
+                        ? "constant_or_no_rhs_signal" : "non_direct_rhs_expression";
+                }
+                node.hop = "■";
+                result.chain.push_back(node);
+                break;
+            }
+            result.stats.edgecheck_direct++;
+        } else {
+            result.termination = input_port.is_input_like
+                ? "primary_input" : (best_kind.empty() ? "unresolved" : "control_only");
+            node.hop = "■";
             result.chain.push_back(node);
             break;
         }
 
         node.hop = temporal ? "⏱" : "→";
-        node.next = d.next_signal;
+        node.next = next_signal;
         result.chain.push_back(node);
 
-        if (visited.count(vkey(d.next_signal, active_time))) {
+        if (visited.count(vkey(next_signal, active_time))) {
             result.termination = "loop_detected";
-            result.limitations.push_back("loop: " + cur_sig + " -> " + d.next_signal);
+            result.limitations.push_back("loop: " + cur_sig + " -> " + next_signal);
             break;
         }
-        visited.insert(vkey(d.next_signal, active_time));
-        cur_sig = d.next_signal;
+        visited.insert(vkey(next_signal, active_time));
+        cur_sig = next_signal;
         cur_time = active_time;
         depth++;
     }
@@ -356,23 +417,59 @@ Json chain_to_json(const ChainResult& r) {
         j["hop"] = n.hop; j["next"] = n.next;
         arr.push_back(j);
     }
-    Json be = Json::array();
-    for (auto& b : r.branch_evidence) {
-        Json bj; bj["signal"] = b.signal; bj["time"] = b.time; bj["reason"] = b.reason;
-        Json cs = Json::array();
-        for (auto& c : b.candidates) {
-            Json cj; cj["name"] = c.name;
-            cj["before"] = c.value_before; cj["after"] = c.value_at; cj["toggled"] = c.toggled;
-            cs.push_back(cj);
-        }
-        bj["candidates"] = cs; be.push_back(bj);
-    }
     Json st; st["calls"] = r.stats.calls;
     st["edgecheck_direct"] = r.stats.edgecheck_direct;
-    st["fallback"] = r.stats.fallback;
     st["temporal_boundaries"] = r.stats.temporal_boundaries;
 
-    Json data; data["chain"] = arr; data["branch_evidence"] = be;
+    Json data; data["chain"] = arr;
+    if (r.has_ambiguity_evidence) {
+        const auto& evidence = r.ambiguity_evidence;
+        Json statements = Json::array();
+        for (const auto& statement : evidence.statements) {
+            Json samples = Json::array();
+            for (const auto& sample : statement.rhs_samples) {
+                auto value_json = [](const ValueEvidence& value) {
+                    Json out;
+                    out["status"] = value.status;
+                    out["value"] = value.status == "ok" ? Json(value.value) : Json(nullptr);
+                    out["known"] = value.status == "ok" ? Json(value.known) : Json(nullptr);
+                    out["value_time"] = value.value_time.empty()
+                        ? Json(nullptr) : Json(value.value_time);
+                    return out;
+                };
+                Json item;
+                item["signal"] = sample.signal;
+                item["before"] = value_json(sample.before);
+                item["after"] = value_json(sample.after);
+                item["changed"] = sample.has_changed ? Json(sample.changed) : Json(nullptr);
+                samples.push_back(item);
+            }
+            statements.push_back({
+                {"kind", statement.kind},
+                {"driver", statement.driver},
+                {"file", statement.file},
+                {"line", statement.line},
+                {"rhs_signal_count", statement.rhs_signal_count},
+                {"returned_rhs_signal_count", statement.returned_rhs_signal_count},
+                {"complete", statement.complete},
+                {"rhs_samples", samples}
+            });
+        }
+        data["ambiguity_evidence"] = {
+            {"kind", evidence.kind},
+            {"signal", evidence.signal},
+            {"active_time", evidence.active_time},
+            {"hop_index", evidence.hop_index},
+            {"statement_count", evidence.statement_count},
+            {"rhs_signal_count", evidence.rhs_signal_count},
+            {"returned_rhs_signal_count", evidence.returned_rhs_signal_count},
+            {"omitted_rhs_signal_count", evidence.omitted_rhs_signal_count},
+            {"complete", evidence.complete},
+            {"truncation_scope", evidence.truncation_scope.empty()
+                ? Json(nullptr) : Json(evidence.truncation_scope)},
+            {"statements", statements}
+        };
+    }
     data["stats"] = st; data["limitations"] = r.limitations;
     data["evidence_source"] = r.evidence_source.empty() ? Json(nullptr) : Json(r.evidence_source);
     data["static_candidate_count"] = r.static_candidate_count;
@@ -392,8 +489,6 @@ nlohmann::ordered_json build_active_driver_chain_payload(const Json& request,
     Json args = request.value("args", Json::object());
     std::string signal = args.value("signal", "");
     std::string req_time = args.value("time", "");
-    std::string clk_period = args.value("clk_period", "10ns");
-
     if (signal.empty() || req_time.empty())
         return nlohmann::ordered_json{{"error", "MISSING_FIELD"},
             {"message", "requires args.signal and args.time"}};
@@ -404,14 +499,15 @@ nlohmann::ordered_json build_active_driver_chain_payload(const Json& request,
     Json limits_j = request.value("limits", Json::object());
     int max_depth = std::max(1, limits_j.value("max_depth", 20));
     int max_nodes = std::max(1, limits_j.value("max_nodes", 50));
+    int max_trace_signals = std::max(1, limits_j.value("max_trace_signals", 64));
 
     NpiHandleGuard sig_hdl(npi_handle_by_name(signal.c_str(), nullptr));
     if (!sig_hdl.get())
         return nlohmann::ordered_json{{"error", "SIGNAL_NOT_FOUND"},
             {"message", "signal not found: " + signal}};
 
-    ChainResult result = build_chain(fsdb, signal, req_time, clk_period,
-                                      max_depth, max_nodes);
+    ChainResult result = build_chain(fsdb, signal, req_time,
+                                      max_depth, max_nodes, max_trace_signals);
 
     nlohmann::ordered_json resp;
     resp["summary"] = {

@@ -114,6 +114,9 @@
             "$ref": "#/$defs/hop"
           }
         },
+        "ambiguity_evidence": {
+          "$ref": "#/$defs/ambiguity_evidence"
+        },
         "truncated": {
           "type": "boolean"
         },
@@ -129,6 +132,108 @@
     }
   },
   "$defs": {
+    "sample_value": {
+      "type": "object",
+      "required": [
+        "status",
+        "value",
+        "known",
+        "value_time"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["ok", "signal_not_found", "missing_value"]
+        },
+        "value": {
+          "type": ["string", "null"]
+        },
+        "known": {
+          "type": ["boolean", "null"]
+        },
+        "value_time": {
+          "type": ["string", "null"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "rhs_sample": {
+      "type": "object",
+      "required": ["signal", "before", "after", "changed"],
+      "properties": {
+        "signal": {"type": "string"},
+        "before": {"$ref": "#/$defs/sample_value"},
+        "after": {"$ref": "#/$defs/sample_value"},
+        "changed": {"type": ["boolean", "null"]}
+      },
+      "additionalProperties": false
+    },
+    "ambiguity_statement": {
+      "type": "object",
+      "required": [
+        "kind",
+        "driver",
+        "file",
+        "line",
+        "rhs_signal_count",
+        "returned_rhs_signal_count",
+        "complete",
+        "rhs_samples"
+      ],
+      "properties": {
+        "kind": {"type": "string"},
+        "driver": {"type": "string"},
+        "file": {"type": "string"},
+        "line": {"type": "integer", "minimum": 0},
+        "rhs_signal_count": {"type": "integer", "minimum": 0},
+        "returned_rhs_signal_count": {"type": "integer", "minimum": 0},
+        "complete": {"type": "boolean"},
+        "rhs_samples": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/rhs_sample"}
+        }
+      },
+      "additionalProperties": false
+    },
+    "ambiguity_evidence": {
+      "type": "object",
+      "required": [
+        "kind",
+        "signal",
+        "active_time",
+        "hop_index",
+        "statement_count",
+        "rhs_signal_count",
+        "returned_rhs_signal_count",
+        "omitted_rhs_signal_count",
+        "complete",
+        "truncation_scope",
+        "statements"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["multiple_active_candidates", "multiple_rhs_sources"]
+        },
+        "signal": {"type": "string"},
+        "active_time": {"type": "string"},
+        "hop_index": {"type": "integer", "minimum": 0},
+        "statement_count": {"type": "integer", "minimum": 1},
+        "rhs_signal_count": {"type": "integer", "minimum": 0},
+        "returned_rhs_signal_count": {"type": "integer", "minimum": 0},
+        "omitted_rhs_signal_count": {"type": "integer", "minimum": 0},
+        "complete": {"type": "boolean"},
+        "truncation_scope": {
+          "type": ["string", "null"],
+          "enum": ["ambiguity_rhs_samples", null]
+        },
+        "statements": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/ambiguity_statement"}
+        }
+      },
+      "additionalProperties": false
+    },
     "hop": {
       "allOf": [
         {

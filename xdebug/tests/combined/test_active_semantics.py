@@ -172,7 +172,6 @@ def test_active_trace_semantic_branches_and_gates(
             "args": {
                 "signal": signal,
                 "time": requested_time,
-                "clk_period": "10ns",
             },
         }
         if limits is not None:
@@ -211,7 +210,6 @@ def test_active_trace_semantic_branches_and_gates(
             "args": {
                 "signal": signal,
                 "time": requested_time,
-                "clk_period": "10ns",
             },
         }
         return _xout(
@@ -291,8 +289,8 @@ def test_active_trace_semantic_branches_and_gates(
         assert "text" not in chain["data"]
         assert "chain" not in chain["data"]
         assert chain["summary"]["hop_count"] == 4
-        assert chain["summary"]["termination"] == "primary_input"
-        assert chain["summary"]["termination_detail"] == "primary_input"
+        assert chain["summary"]["termination"] == "assignment"
+        assert chain["summary"]["termination_detail"] == "constant_or_no_rhs_signal"
         hops = chain["data"]["hops"]
         assert [hop["index"] for hop in hops] == [0, 1, 2, 3]
         assert [_active_lines(hop)[0] for hop in hops] == [
@@ -303,6 +301,89 @@ def test_active_trace_semantic_branches_and_gates(
         ]
         for hop in hops:
             assert hop["signal_path"]
+
+        ambiguous_rhs = active_driver_chain(
+            "active_semantics_tb.u_dut.ambiguous_rhs_out",
+            "26ns",
+        )
+        assert ambiguous_rhs["summary"]["termination"] == "ambiguous"
+        assert ambiguous_rhs["summary"]["termination_detail"] == "multiple_rhs_sources"
+        rhs_evidence = ambiguous_rhs["data"]["ambiguity_evidence"]
+        assert rhs_evidence["kind"] == "multiple_rhs_sources"
+        assert rhs_evidence["active_time"] == "22ns"
+        assert rhs_evidence["complete"] is True
+        assert rhs_evidence["statement_count"] == 1
+        assert rhs_evidence["rhs_signal_count"] == 2
+        rhs_samples = rhs_evidence["statements"][0]["rhs_samples"]
+        assert {sample["signal"] for sample in rhs_samples} == {
+            "active_semantics_tb.u_dut.data_a",
+            "active_semantics_tb.u_dut.data_b",
+        }
+        for sample in rhs_samples:
+            assert sample["before"]["value_time"] == "0ns"
+            assert sample["after"]["value_time"] == "22ns"
+            assert sample["changed"] is True
+
+        ambiguous_xz = active_driver_chain(
+            "active_semantics_tb.u_dut.ambiguous_rhs_out",
+            "36ns",
+        )
+        xz_evidence = ambiguous_xz["data"]["ambiguity_evidence"]
+        assert xz_evidence["active_time"] == "32ns"
+        xz_samples = {
+            sample["signal"]: sample
+            for sample in xz_evidence["statements"][0]["rhs_samples"]
+        }
+        data_a_sample = xz_samples["active_semantics_tb.u_dut.data_a"]
+        assert data_a_sample["after"]["status"] == "ok"
+        assert data_a_sample["after"]["known"] is False
+        assert "x" in data_a_sample["after"]["value"].lower()
+        assert data_a_sample["after"]["value_time"] == "32ns"
+
+        missing_rhs = active_driver_chain(
+            "active_semantics_tb.u_missing_probe.result",
+            "26ns",
+        )
+        assert missing_rhs["summary"]["termination_detail"] == "multiple_rhs_sources"
+        missing_samples = {
+            sample["signal"]: sample
+            for sample in missing_rhs["data"]["ambiguity_evidence"]["statements"][0]["rhs_samples"]
+        }
+        assert missing_samples[
+            "active_semantics_tb.u_missing_probe.recorded_rhs"
+        ]["after"]["status"] == "ok"
+        undumped = missing_samples[
+            "active_semantics_tb.u_missing_probe.undumped_rhs"
+        ]
+        assert undumped["before"]["status"] == "signal_not_found"
+        assert undumped["after"]["status"] == "signal_not_found"
+        assert undumped["before"]["value"] is None
+        assert undumped["after"]["value"] is None
+        assert undumped["changed"] is None
+
+        ambiguous_limited = active_driver_chain(
+            "active_semantics_tb.u_dut.ambiguous_rhs_out",
+            "26ns",
+            limits={"max_trace_signals": 1},
+        )
+        limited_evidence = ambiguous_limited["data"]["ambiguity_evidence"]
+        assert ambiguous_limited["summary"]["termination"] == "ambiguous"
+        assert limited_evidence["complete"] is False
+        assert limited_evidence["returned_rhs_signal_count"] == 1
+        assert limited_evidence["omitted_rhs_signal_count"] == 1
+        assert limited_evidence["truncation_scope"] == "ambiguity_rhs_samples"
+        assert ambiguous_limited["meta"]["truncated"] is True
+
+        multiple_active = active_driver_chain(
+            "active_semantics_tb.u_dut.multiple_driver_out",
+            "26ns",
+        )
+        assert multiple_active["summary"]["termination"] == "ambiguous"
+        assert multiple_active["summary"]["termination_detail"] == "multiple_active_candidates"
+        multiple_evidence = multiple_active["data"]["ambiguity_evidence"]
+        assert multiple_evidence["kind"] == "multiple_active_candidates"
+        assert multiple_evidence["statement_count"] == 2
+        assert multiple_evidence["active_time"] == "22ns"
 
         active_xout = active_driver_xout("active_semantics_tb.u_dut.q_en", "16ns")
         assert active_xout.startswith("@xdebug.trace.active_driver.v1")
@@ -323,8 +404,8 @@ def test_active_trace_semantic_branches_and_gates(
         assert "\nsource: " in chain_xout
         assert "\nactive_signals:\n" in chain_xout
         assert "hop  line  signal_path" in chain_xout
-        assert "termination       : primary_input" in chain_xout
-        assert "termination_detail: primary_input" in chain_xout
+        assert "termination       : assignment" in chain_xout
+        assert "termination_detail: constant_or_no_rhs_signal" in chain_xout
         assert "\n>" in chain_xout
         for removed_section in ("\nchain:\n", "\nstats:\n", "\nchain_path:\n"):
             assert removed_section not in chain_xout
@@ -337,6 +418,35 @@ def test_active_trace_semantic_branches_and_gates(
             "active_semantics_tb.chain_src",
         ]:
             assert expected_signal in chain_xout
+
+        ambiguous_xout = active_driver_chain_xout(
+            "active_semantics_tb.u_dut.ambiguous_rhs_out",
+            "26ns",
+        )
+        active_signals_pos = ambiguous_xout.index("\nactive_signals:\n")
+        ambiguity_pos = ambiguous_xout.index("\nambiguous_rhs_samples:\n")
+        assert ambiguity_pos > active_signals_pos
+        ambiguity_section = ambiguous_xout[ambiguity_pos:]
+        assert "signal                            time  before" in ambiguity_section
+        assert re.search(
+            r"active_semantics_tb\.u_dut\.data_a\s+22ns\s+8'ha0\s+8'ha1",
+            ambiguity_section,
+        )
+        assert re.search(
+            r"active_semantics_tb\.u_dut\.data_b\s+22ns\s+8'hb0\s+8'hb2",
+            ambiguity_section,
+        )
+        for removed_column in ("statement", "changed", "status"):
+            assert removed_column not in ambiguity_section
+        for removed_metadata in (
+            "kind",
+            "complete",
+            "rhs_signal_count",
+            "returned_rhs_signal_count",
+            "omitted_rhs_signal_count",
+            "truncation_scope",
+        ):
+            assert removed_metadata not in ambiguity_section
 
         chain_limited = active_driver_chain(
             "active_semantics_tb.u_dut.chain_out",

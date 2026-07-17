@@ -1932,6 +1932,12 @@ def test_ai_usability_high_risk_request_shapes_are_strict(
             "args": {"signal": "top.q", "time": "10ns",
                      "limits": {"max_depth": 4}},
         })
+    with pytest.raises(jsonschema.ValidationError):
+        active_chain.validate({
+            "api_version": "xdebug.v1",
+            "action": "trace.active_driver_chain",
+            "args": {"signal": "top.q", "time": "10ns", "clk_period": "10ns"},
+        })
     active_chain.validate({
         "api_version": "xdebug.v1",
         "action": "trace.active_driver_chain",

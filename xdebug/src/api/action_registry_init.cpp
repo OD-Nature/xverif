@@ -30,6 +30,12 @@ void add_schema_refs(ActionSpec& spec) {
     spec.response_schema = "schemas/v1/actions/" + spec.name + ".response.schema.json";
     spec.request_examples.push_back("examples/requests/" + spec.name + ".basic.json");
     spec.response_examples.push_back("examples/responses/" + spec.name + ".basic.json");
+    if (spec.name == "trace.active_driver_chain") {
+        spec.request_examples.push_back(
+            "examples/requests/trace.active_driver_chain.ambiguous.json");
+        spec.response_examples.push_back(
+            "examples/responses/trace.active_driver_chain.ambiguous.json");
+    }
 }
 
 void apply_arg_contract(ActionSpec& spec);

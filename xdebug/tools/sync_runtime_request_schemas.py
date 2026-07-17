@@ -33,7 +33,6 @@ ADDITIONAL_ARG_SCHEMAS: dict[str, dict[str, Any]] = {
     "bind_host": {"type": "string"},
     "cache_scope": {"type": "string", "enum": ["full", "range"], "default": "full"},
     "channel": {"type": "string"},
-    "clk_period": {"type": "string"},
     "config": {"type": "object"},
     "context_lines": {"type": "integer"},
     "data": {"oneOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]},

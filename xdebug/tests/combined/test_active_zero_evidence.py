@@ -365,10 +365,11 @@ def test_active_driver_chain_uses_precise_fsdb_time_for_us_scale_reduction_outpu
         artifact_root=artifact_root,
     )
 
-    assert response["summary"]["termination"] not in {"unresolved", "ambiguous"}
+    assert response["summary"]["termination"] == "assignment"
+    assert response["summary"]["termination_detail"] == "non_direct_rhs_expression"
     assert response["summary"]["hop_count"] == len(response["data"]["hops"])
-    assert response["summary"]["hop_count"] >= 3
-    assert _hop_lines(response)[:2] == [167, 142]
+    assert response["summary"]["hop_count"] == 2
+    assert _hop_lines(response) == [167, 142]
     assert "chain" not in response["data"]
 
 

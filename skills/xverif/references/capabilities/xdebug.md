@@ -38,7 +38,7 @@ xdebug 是 daidir/FSDB 确定性事实入口。本文件覆盖高频决策链，
 3. `source.context` 获取候选 file:line 周围源码。
 4. `event.find` 定位异常时间，`value.batch_at` 保存控制现场。
 5. 有 daidir + fsdb + signal + time 时用 `trace.active_driver` 查当前真正生效 driver。
-6. 单级仍未到根因时用 `trace.active_driver_chain`；递归深度写顶层 `limits.max_depth`，不能写 `args.depth`。
+6. 单级仍未到根因时用 `trace.active_driver_chain`；递归深度写顶层 `limits.max_depth`，不能写 `args.depth`。若结果为 ambiguous，读取 `data.ambiguity_evidence` 中各 active statement 的 RHS 在精确 `active_time` 前后的值；这些值是解释证据，不会被用来猜测下一跳，也不需要 `clk_period`。
 7. 回到 `value.at/batch_at` 验证链上的控制条件。
 
 保留 `resolved`、`control_only`、`unresolved`；control evidence 不能冒充最终 data driver。更多 trace/source/graph action 见 [全量 action 索引](../generated/xdebug-actions.md)。

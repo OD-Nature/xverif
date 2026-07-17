@@ -41,10 +41,6 @@
     "args": {
       "type": "object",
       "properties": {
-        "clk_period": {
-          "type": "string",
-          "description": "Clock period for half-period value comparison, e.g. '10ns' (default '10ns')"
-        },
         "signal": {
           "type": "string",
           "description": "Final leaf signal path. Aggregate, array, and struct roots are not expanded automatically."
@@ -119,9 +115,9 @@
   "additionalProperties": false,
   "description": "Trace an active-driver chain across multiple levels.",
   "x-purpose": "展开 active driver 链。",
-  "x-how_it_works": "从 signal/time 递归追溯 active driver；深度限制写 top-level limits.max_depth。",
-  "x-when_to_use": "给出跨级根因链。",
-  "x-arg_contract_notes": "required: signal, time; do not use args.depth",
+  "x-how_it_works": "从 signal/time 递归追溯 active driver；深度限制写 top-level limits.max_depth。遇到多个 active assignments 或多个 RHS sources 时在精确 active_time 返回前后值证据并停止，不用波形变化猜下一跳。",
+  "x-when_to_use": "给出跨级根因链及 ambiguous RHS 现场。",
+  "x-arg_contract_notes": "required: signal, time; do not use args.depth or args.clk_period",
   "x-description-zh": "展开 active driver 链。",
   "x-agent": {
     "use_when": [
@@ -141,7 +137,7 @@
       }
     ],
     "constraints": [
-      "required: signal, time; do not use args.depth"
+      "required: signal, time; do not use args.depth or args.clk_period"
     ]
   }
 }

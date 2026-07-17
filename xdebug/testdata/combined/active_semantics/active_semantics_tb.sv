@@ -19,13 +19,18 @@ module active_semantics_dut (
   output logic [7:0] mux_y,
   output logic [7:0] handshake_q,
   output logic [7:0] arb_q,
-  output logic [7:0] chain_out
+  output logic [7:0] chain_out,
+  output logic [7:0] ambiguous_rhs_out,
+  output wire  [7:0] multiple_driver_out
 );
 
   logic [7:0] chain_mid;
 
   assign chain_mid = chain_src;       // CHAIN_MID_ASSIGN
   assign chain_out = chain_mid;       // CHAIN_OUT_ASSIGN
+  assign ambiguous_rhs_out = data_a ^ data_b; // AMBIGUOUS_RHS_ASSIGN
+  assign multiple_driver_out = data_a;        // MULTIPLE_DRIVER_A
+  assign multiple_driver_out = data_b ^ 8'h10; // MULTIPLE_DRIVER_B
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n)
@@ -64,6 +69,14 @@ module active_semantics_dut (
   end
 endmodule
 
+module active_semantics_missing_rhs_probe (
+  input  logic [7:0] recorded_rhs,
+  input  logic [7:0] undumped_rhs,
+  output logic [7:0] result
+);
+  assign result = recorded_rhs ^ undumped_rhs; // MISSING_RHS_ASSIGN
+endmodule
+
 module active_semantics_tb;
   logic       clk;
   logic       rst_n;
@@ -84,6 +97,9 @@ module active_semantics_tb;
   logic [7:0] handshake_q;
   logic [7:0] arb_q;
   logic [7:0] chain_out;
+  logic [7:0] ambiguous_rhs_out;
+  wire  [7:0] multiple_driver_out;
+  logic [7:0] missing_rhs_out;
 
   active_semantics_dut u_dut (
     .clk(clk),
@@ -104,7 +120,15 @@ module active_semantics_tb;
     .mux_y(mux_y),
     .handshake_q(handshake_q),
     .arb_q(arb_q),
-    .chain_out(chain_out)
+    .chain_out(chain_out),
+    .ambiguous_rhs_out(ambiguous_rhs_out),
+    .multiple_driver_out(multiple_driver_out)
+  );
+
+  active_semantics_missing_rhs_probe u_missing_probe (
+    .recorded_rhs(data_a),
+    .undumped_rhs(data_b),
+    .result(missing_rhs_out)
   );
 
   initial begin
@@ -142,7 +166,7 @@ module active_semantics_tb;
     req0 = 1'b0;
     req1 = 1'b1;         // arb_q captures payload1 at 25ns
     data_a = 8'hA1;
-    data_b = 8'hB1;
+    data_b = 8'hB2;
     payload = 8'h11;
     payload0 = 8'hC1;
     payload1 = 8'hD1;
@@ -154,8 +178,8 @@ module active_semantics_tb;
     ready = 1'b1;        // handshake_q captures new payload at 35ns
     req0 = 1'b0;
     req1 = 1'b0;         // arb_q takes idle at 35ns
-    data_a = 8'hA2;
-    data_b = 8'hB2;
+    data_a = 8'hx2;
+    data_b = 8'hB3;
     payload = 8'h12;
     payload1 = 8'hD2;
     chain_src = 8'h32;
