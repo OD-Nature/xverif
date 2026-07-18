@@ -564,6 +564,30 @@ action 默认返回 compact summary/evidence。需要 action schema 明确定义
 
 `value.batch_at` 对部分信号缺失仍返回整体 ok，并在 `summary.missing_by_reason` 和每个 row 的 `status/reason/suggested_next_actions` 里说明原因。常见状态包括 `signal_not_found`、`not_dumped_or_unreadable`、`time_out_of_range`、`unsupported_format`。
 
+`value.at` / `value.batch_at` 的 `clock` 是可选参数。省略时直接读取 `time` 对应的
+FSDB 最终值并返回 `sampling_mode:"raw_time"`；传入时保持原有 clock-sampled 行为并
+返回 `sampling_mode:"clock_sampled"` 和 `clock_context`。无 `clock` 时传 `edge` 或
+`sample_point` 会返回 `INVALID_ARGUMENT`。默认显示为十六进制，hex/bin/decimal 值
+分别使用 `'h` / `'b` / `'d` 前缀。
+
+查询点已经出现 X 时，可在 combined session 里一键反向追踪：
+
+```json
+{
+  "api_version": "xdebug.v1",
+  "action": "trace.x",
+  "target": {"session_id": "case_a"},
+  "args": {"signal": "top.u.data", "time": "100ns"},
+  "limits": {"max_depth": 8, "max_nodes": 256, "max_time_steps": 128, "max_chains": 8}
+}
+```
+
+`trace.x` 会先证明查询值是否含 X，再按 DFS 同等追踪传播时刻含 X 的 RHS 与 control，
+并穿过 module port、interface/modport。每个分支的每一跳都会重新定位该信号连续 X
+区间的起点，因此时间可以多次向更早位置推进。`limits.max_chains` 默认 8；超额依赖
+保留在 `pending_x_dependencies`。因 `max_depth` 停止时，`data.depth_frontiers` 和
+`suggested_next_actions` 会给出从 frontier 续查或提高深度重跑所需的完整参数。
+
 unpacked/聚合数组可显式请求结构化显示：
 
 ```json

@@ -56,6 +56,21 @@ fixtures:
       - argv: [python3, "{repo}/testinfra/leaf/probe_fixture.py", --resources, "{resources}", --xdebug, "{repo}/tools/xdebug", --fsdb-glob, out/waves.fsdb, --daidir-glob, out/simv.daidir]
     tool_env: [VERDI_HOME]
 
+  - id: xdebug.trace_x_xprop
+    source_dir: xdebug/testdata/combined/trace_x_xprop
+    inputs: [Makefile, "*.sv", "*.tcl"]
+    builder:
+      argv: [make, fixture, "RUN_DIR={resources}/out"]
+      cwd: "{source}"
+      timeout_sec: 600
+    outputs:
+      - {name: fsdb, path: out/waves.fsdb, kind: file, min_bytes: 1024}
+      - {name: daidir, path: out/simv.daidir, kind: dir}
+      - {name: xprop_log, path: out/xprop.log, kind: file, min_bytes: 1}
+    probes:
+      - argv: [python3, "{repo}/testinfra/leaf/probe_fixture.py", --resources, "{resources}", --xdebug, "{repo}/tools/xdebug", --fsdb-glob, out/waves.fsdb, --daidir-glob, out/simv.daidir, --text-glob, out/xprop.log]
+    tool_env: [VERDI_HOME]
+
   - id: xdebug.ai_complex_wave
     source_dir: xdebug/testdata/waveform/ai_complex_wave
     inputs: [Makefile, "tb/**/*.sv", "*.tcl"]

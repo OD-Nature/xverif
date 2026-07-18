@@ -6,8 +6,9 @@
     "signal": "top.u.out",
     "time": "26ns",
     "hop_count": 2,
-    "termination": "primary_input",
-    "truncated": false
+    "termination": "limit",
+    "termination_detail": "max_depth",
+    "truncated": true
   },
   "data": {
     "requested_time": "26ns",
@@ -20,6 +21,12 @@
     "hops": [
       {
         "index": 0,
+        "chain_id": "c0",
+        "signal": "top.u.out",
+        "time": "26ns",
+        "active_time": "25ns",
+        "value": "8'hxx",
+        "relation": "root",
         "file": "rtl/top.sv",
         "line": 88,
         "source_context": [
@@ -36,6 +43,12 @@
       },
       {
         "index": 1,
+        "chain_id": "c0",
+        "signal": "top.u.mid",
+        "time": "25ns",
+        "active_time": "20ns",
+        "value": "8'hxx",
+        "relation": "driver",
         "file": "rtl/top.sv",
         "line": 73,
         "source_context": [
@@ -50,7 +63,31 @@
           "top.u.mid"
         ]
       }
+    ],
+    "depth_frontiers": [
+      {
+        "chain_id": "c0",
+        "signal": "top.u.src",
+        "time": "20ns",
+        "value": "8'hxx",
+        "stopped_after_depth": 1
+      }
     ]
   },
+  "suggested_next_actions": [
+    {
+      "action": "trace.active_driver_chain",
+      "reason": "continue_from_depth_frontier",
+      "chain_id": "c0",
+      "args": {"signal": "top.u.src", "time": "20ns"},
+      "limits": {"max_depth": 1}
+    },
+    {
+      "action": "trace.active_driver_chain",
+      "reason": "rerun_from_root_with_higher_depth",
+      "args": {"signal": "top.u.out", "time": "26ns"},
+      "limits": {"max_depth": 2}
+    }
+  ],
   "error": null
 }

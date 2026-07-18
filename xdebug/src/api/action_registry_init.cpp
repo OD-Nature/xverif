@@ -130,10 +130,11 @@ void apply_arg_contract(ActionSpec& spec) {
         {"stream.export", {"stream"}, 1},
         {"trace.active_driver", {"signal", "time"}, 2},
         {"trace.active_driver_chain", {"signal", "time"}, 2},
+        {"trace.x", {"signal", "time"}, 2},
         {"trace.driver", {"signal"}, 1},
         {"trace.load", {"signal"}, 1},
-        {"value.at", {"signal", "time", "clock"}, 3},
-        {"value.batch_at", {"signals", "time", "clock"}, 3},
+        {"value.at", {"signal", "time"}, 2},
+        {"value.batch_at", {"signals", "time"}, 2},
         {"verify.conditions", {"conditions", "time", "clock", "signals"}, 4},
         {"window.verify", {"clock", "conditions", "signals"}, 3}
     };
@@ -285,6 +286,10 @@ void register_combined(ActionRegistry& r) {
     ActionSpec chain = stable_spec("trace.active_driver_chain", "combined",
                                     ResourceRequirement::Combined, "engine_forward");
     register_spec(r, chain);
+
+    ActionSpec trace_x = make_spec("trace.x", "combined", ActionStatus::Experimental,
+                                   ResourceRequirement::Combined, "engine_forward");
+    register_spec(r, trace_x);
 }
 
 void register_removed(ActionRegistry& r) {

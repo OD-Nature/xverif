@@ -44,8 +44,7 @@
         "signal",
         "time",
         "hop_count",
-        "termination",
-        "truncated"
+        "termination"
       ],
       "properties": {
         "signal": {
@@ -117,6 +116,10 @@
         "ambiguity_evidence": {
           "$ref": "#/$defs/ambiguity_evidence"
         },
+        "depth_frontiers": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/depth_frontier"}
+        },
         "truncated": {
           "type": "boolean"
         },
@@ -127,6 +130,10 @@
       "additionalProperties": false
     },
     "error": {},
+    "suggested_next_actions": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/next_action"}
+    },
     "meta": {
       "type": "object"
     }
@@ -248,10 +255,59 @@
             "index": {
               "type": "integer",
               "minimum": 0
-            }
+            },
+            "chain_id": {"type": "string"},
+            "signal": {"type": "string"},
+            "time": {"type": "string"},
+            "active_time": {"type": "string"},
+            "value": {"type": "string"},
+            "relation": {"type": "string"}
           }
         }
       ]
+    },
+    "depth_frontier": {
+      "type": "object",
+      "required": ["chain_id", "signal", "time", "value", "stopped_after_depth"],
+      "properties": {
+        "chain_id": {"type": "string"},
+        "signal": {"type": "string"},
+        "time": {"type": "string"},
+        "value": {"type": "string"},
+        "stopped_after_depth": {"type": "integer", "minimum": 1}
+      },
+      "additionalProperties": false
+    },
+    "next_action": {
+      "type": "object",
+      "required": ["action", "reason", "args", "limits"],
+      "properties": {
+        "action": {"type": "string", "enum": ["trace.active_driver_chain"]},
+        "reason": {
+          "type": "string",
+          "enum": ["continue_from_depth_frontier", "rerun_from_root_with_higher_depth"]
+        },
+        "chain_id": {"type": "string"},
+        "args": {
+          "type": "object",
+          "required": ["signal", "time"],
+          "properties": {
+            "signal": {"type": "string"},
+            "time": {"type": "string"}
+          },
+          "additionalProperties": false
+        },
+        "limits": {
+          "type": "object",
+          "properties": {
+            "max_depth": {"type": "integer", "minimum": 1},
+            "max_nodes": {"type": "integer", "minimum": 1},
+            "max_trace_signals": {"type": "integer", "minimum": 1}
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
     },
     "source_path": {
       "type": "object",

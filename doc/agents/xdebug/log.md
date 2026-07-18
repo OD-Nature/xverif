@@ -1,5 +1,20 @@
 # xdebug 架构说明书维护日志
 
+## 2026-07-18
+
+- `trace.x` 升级为受 `max_chains` 约束的多分支 DFS：RHS/control 同等按 X 可见性
+  追踪，每个分支逐跳重新定位 X onset；XOUT 复用 source grouping 并在末尾列出 chain。
+- `trace.x` 与 `trace.active_driver_chain` 在 max-depth frontier 返回 signal/time/value
+  和可直接调用的续查/增深建议；含 X 的值统一使用带宽与 `'h`/`'b`/`'d` 前缀。
+
+- 新增 experimental combined action `trace.x`：查询点含 X 时复用 active-trace 图穿过
+  assignment、module port、interface/modport 和更早 active time；控制 X、动态 select
+  等候选原因保持 `best_effort` 证据等级。
+- `value.at` / `value.batch_at` 的 clock 改为可选：无 clock 直接点读精确 FSDB time，
+  有 clock 保持原采样上下文；默认 hex，公开值统一使用 `'h` / `'b` / `'d` 前缀。
+- 新增正式 VCS `-xprop=tmerge` fixture 与 regression suite，覆盖跨 always/module/
+  interface、控制 X、直接 driver X、越界 bit-select 和 temporal active trace。
+
 ## 2026-07-16
 
 - 建立分析缓存 Phase 0 test-only probe、APB/AXI/stream size estimator 与 nightly

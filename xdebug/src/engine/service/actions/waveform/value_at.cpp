@@ -92,9 +92,16 @@ public:
                 signal.empty() ? "args.signal" : "args.time",
                 "args.signal and args.time are required");
 
+        const bool clock_sampled = args.contains("clock");
+        if (!clock_sampled && (args.contains("edge") || args.contains("sample_point"))) {
+            return waveform_invalid_arg_error(
+                action_name(), args.contains("edge") ? "args.edge" : "args.sample_point",
+                "edge and sample_point require args.clock",
+                "omit edge/sample_point for a raw-time read, or provide args.clock");
+        }
         xdebug_waveform::ClockSampleSpec clock_spec;
         Json clock_error;
-        if (!parse_point_clock_args(args, clock_spec, clock_error)) return clock_error;
+        if (clock_sampled && !parse_point_clock_args(args, clock_spec, clock_error)) return clock_error;
 
         if (args.value("format", std::string()) == "array_indexed") {
             return make_handler_error("UNSUPPORTED_AGGREGATE_QUERY",
@@ -139,27 +146,43 @@ public:
 
         std::string formatted_time = xdebug_core::format_time(g_fsdb_file, fsdb_time);
         Json out;
-        ClockPointQueryResult point;
-        Json point_error;
-        if (!build_clock_point_query(g_fsdb_file,
-                                     clock_spec,
-                                     fsdb_time,
-                                     formatted_time,
-                                     std::vector<PointSignalSpec>{{signal, signal}},
-                                     vtype,
-                                     read_format,
-                                     point,
-                                     point_error)) {
-            return point_error;
+        Json middle_value;
+        std::string status = "ok";
+        if (clock_sampled) {
+            ClockPointQueryResult point;
+            Json point_error;
+            if (!build_clock_point_query(g_fsdb_file,
+                                         clock_spec,
+                                         fsdb_time,
+                                         formatted_time,
+                                         std::vector<PointSignalSpec>{{signal, signal}},
+                                         vtype,
+                                         read_format,
+                                         point,
+                                         point_error)) {
+                return point_error;
+            }
+            Json middle_cell = point.rows.empty() ? Json() : point.rows[0].value("middle", Json::object());
+            if (middle_cell.value("status", std::string()) == "signal_not_found")
+                return waveform_signal_not_found_error(action_name(), signal);
+            middle_value = middle_cell.value("value", Json());
+            status = middle_cell.value("status", std::string("unknown"));
+            out["clock_context"] = point.clock_context;
+        } else {
+            npiFsdbSigHandle signal_handle = npi_fsdb_sig_by_name(g_fsdb_file, signal.c_str(), nullptr);
+            if (!signal_handle) return waveform_signal_not_found_error(action_name(), signal);
+            std::string raw_value;
+            if (!npi_fsdb_sig_hdl_value_at(signal_handle, fsdb_time, raw_value, vtype)) {
+                return make_handler_error("VALUE_NOT_AVAILABLE",
+                    "failed to read value for signal at requested time",
+                    {{"signal", signal}, {"time", formatted_time}});
+            }
+            middle_value = xdebug_waveform::logic_value_json(
+                xdebug_waveform::logic_value_from_fsdb_raw(raw_value, read_format));
         }
-        Json middle_cell = point.rows.empty() ? Json() : point.rows[0].value("middle", Json::object());
-        if (middle_cell.value("status", std::string()) == "signal_not_found")
-            return waveform_signal_not_found_error(action_name(), signal);
-        Json middle_value = middle_cell.value("value", Json());
-        std::string status = middle_cell.value("status", std::string("unknown"));
         out["value"] = middle_value;
+        const std::string sampling_mode = clock_sampled ? "clock_sampled" : "raw_time";
         bool known = middle_value.is_object() ? !contains_xz(middle_value.value("value", std::string())) : false;
-        out["clock_context"] = point.clock_context;
         // xbit hints require the raw FSDB scalar. Keep the old direct middle read for hints only.
         std::string raw;
         if (npi_fsdb_sig_value_at(g_fsdb_file, signal.c_str(), fsdb_time, raw, vtype)) {
@@ -168,6 +191,7 @@ public:
             if (!hints.is_null()) out["xbit_hints"] = hints;
         }
         out["summary"] = {{"signal", signal}, {"time", formatted_time},
+                          {"sampling_mode", sampling_mode},
                           {"known", known}, {"status", status}};
         return out;
     }

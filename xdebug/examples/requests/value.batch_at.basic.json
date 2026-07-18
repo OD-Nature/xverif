@@ -9,7 +9,6 @@
       "top.u.valid",
       "top.u.ready"
     ],
-    "clock": "top.u.clk",
     "time": "100ns",
     "format": "hex"
   }

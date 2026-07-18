@@ -100,8 +100,7 @@
       "additionalProperties": false,
       "required": [
         "signal",
-        "time",
-        "clock"
+        "time"
       ]
     },
     "limits": {
@@ -124,15 +123,15 @@
     }
   },
   "additionalProperties": false,
-  "description": "Read one signal value at a sampled waveform time.",
+  "description": "Read one signal at an exact waveform time, optionally using clock-sampled context.",
   "x-purpose": "读取单个信号在指定时间的值。",
-  "x-how_it_works": "解析 time/clock，定位 FSDB signal handle，读取该时刻值并格式化。",
+  "x-how_it_works": "无 clock 时直接点读 time；有 clock 时返回同一 clock/time 的采样上下文。",
   "x-when_to_use": "回答某个时间点信号是什么。",
-  "x-arg_contract_notes": "required: signal, time, clock",
+  "x-arg_contract_notes": "required: signal, time; optional: clock, edge, sample_point",
   "x-description-zh": "读取单个信号在指定时间的值。",
   "x-agent": {
     "use_when": [
-      "需要一个最终叶子信号在单一采样时刻的值。"
+      "需要一个最终叶子信号在精确时间的 raw 值，或显式 clock 采样上下文。"
     ],
     "do_not_use_when": [
       "需要原始值变化时间线。",
@@ -149,7 +148,7 @@
       }
     ],
     "constraints": [
-      "required: signal, time, clock"
+      "required: signal, time; optional: clock, edge, sample_point"
     ]
   }
 }

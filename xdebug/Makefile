@@ -79,6 +79,7 @@ ENGINE_SRCS = src/engine/main.cpp \
               src/engine/service/actions/combined/register_combined_handlers.cpp \
               src/engine/service/actions/combined/trace_active_driver.cpp \
               src/engine/service/actions/combined/trace_active_driver_chain.cpp \
+              src/engine/service/actions/combined/trace_x.cpp \
               src/engine/service/actions/design/expr_normalize.cpp \
               src/engine/service/actions/design/register_design_handlers.cpp \
               src/engine/service/actions/design/signal_canonicalize.cpp \

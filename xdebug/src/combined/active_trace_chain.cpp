@@ -70,6 +70,13 @@ struct ChainStats {
     int temporal_boundaries = 0;
 };
 
+struct DepthFrontier {
+    std::string signal;
+    std::string time;
+    std::string value;
+    int stopped_after_depth = 0;
+};
+
 struct ChainResult {
     std::vector<ChainNode> chain;
     AmbiguityEvidence ambiguity_evidence;
@@ -82,7 +89,27 @@ struct ChainResult {
     int active_check_count = 0;
     ChainStats stats;
     bool truncated = false;
+    DepthFrontier depth_frontier;
+    bool has_depth_frontier = false;
 };
+
+void stop_at_depth_frontier(ChainResult& result,
+                            npiFsdbFileHandle fsdb,
+                            const std::string& signal,
+                            const std::string& time,
+                            npiFsdbTime tick,
+                            int max_depth) {
+    result.truncated = true;
+    result.termination = "limit";
+    result.termination_detail = "max_depth";
+    result.depth_frontier.signal = signal;
+    result.depth_frontier.time = time;
+    result.depth_frontier.value = format_value(fsdb_value_at(fsdb, signal, tick));
+    result.depth_frontier.stopped_after_depth = max_depth;
+    result.has_depth_frontier = true;
+    result.limitations.push_back(
+        "trace truncated by limits.max_depth; continue from " + signal + " at " + time);
+}
 
 bool is_signal_like_rhs_type(int type) {
     return type == npiNet || type == npiNetBit ||
@@ -206,7 +233,7 @@ ChainResult build_chain(npiFsdbFileHandle fsdb,
     trcOption_t opt = trcOptionDefault;
     opt.reportControl = true;
 
-    while (depth <= max_depth && static_cast<int>(result.chain.size()) < max_nodes) {
+    while (static_cast<int>(result.chain.size()) < max_nodes) {
         // ── trace ──
         NpiHandleGuard hdl(npi_handle_by_name(cur_sig.c_str(), nullptr));
         if (!hdl) {
@@ -283,6 +310,12 @@ ChainResult build_chain(npiFsdbFileHandle fsdb,
                     break;
                 }
                 visited.insert(vkey(input_port.target_signal, active_time));
+                if (depth >= max_depth) {
+                    stop_at_depth_frontier(
+                        result, fsdb, input_port.target_signal, active_time, active_tick,
+                        max_depth);
+                    break;
+                }
                 cur_sig = input_port.target_signal;
                 cur_time = active_time;
                 depth++;
@@ -384,16 +417,21 @@ ChainResult build_chain(npiFsdbFileHandle fsdb,
             break;
         }
         visited.insert(vkey(next_signal, active_time));
+        if (depth >= max_depth) {
+            stop_at_depth_frontier(
+                result, fsdb, next_signal, active_time, active_tick, max_depth);
+            break;
+        }
         cur_sig = next_signal;
         cur_time = active_time;
         depth++;
     }
 
     if (result.termination == "unresolved"
-        && (depth > max_depth || static_cast<int>(result.chain.size()) >= max_nodes)) {
+        && static_cast<int>(result.chain.size()) >= max_nodes) {
         result.truncated = true;
         result.termination = "limit";
-        result.termination_detail = depth > max_depth ? "max_depth" : "max_nodes";
+        result.termination_detail = "max_nodes";
         result.limitations.push_back("trace limit reached");
     }
     return result;
@@ -422,6 +460,15 @@ Json chain_to_json(const ChainResult& r) {
     st["temporal_boundaries"] = r.stats.temporal_boundaries;
 
     Json data; data["chain"] = arr;
+    if (r.has_depth_frontier) {
+        data["depth_frontiers"] = Json::array({{
+            {"chain_id", "c0"},
+            {"signal", r.depth_frontier.signal},
+            {"time", r.depth_frontier.time},
+            {"value", r.depth_frontier.value},
+            {"stopped_after_depth", r.depth_frontier.stopped_after_depth}
+        }});
+    }
     if (r.has_ambiguity_evidence) {
         const auto& evidence = r.ambiguity_evidence;
         Json statements = Json::array();
@@ -532,6 +579,28 @@ nlohmann::ordered_json build_active_driver_chain_payload(const Json& request,
         }}
     };
     resp["chain"] = chain_to_json(result);
+    if (result.has_depth_frontier) {
+        Json continued_limits = limits_j;
+        continued_limits["max_depth"] = max_depth;
+        Json deeper_limits = limits_j;
+        deeper_limits["max_depth"] = max_depth * 2;
+        resp["suggested_next_actions"] = Json::array({
+            {
+                {"action", "trace.active_driver_chain"},
+                {"reason", "continue_from_depth_frontier"},
+                {"chain_id", "c0"},
+                {"args", {{"signal", result.depth_frontier.signal},
+                           {"time", result.depth_frontier.time}}},
+                {"limits", continued_limits}
+            },
+            {
+                {"action", "trace.active_driver_chain"},
+                {"reason", "rerun_from_root_with_higher_depth"},
+                {"args", {{"signal", signal}, {"time", req_time}}},
+                {"limits", deeper_limits}
+            }
+        });
+    }
     resp["truncated"] = result.truncated;
     append_common_blocks_to_payload(resp);
     return resp;

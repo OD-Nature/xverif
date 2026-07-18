@@ -193,10 +193,11 @@ EXTRA_ARGS_BY_ACTION: dict[str, set[str]] = {
         "limits",
     },
     "trace.active_driver_chain": set(),
+    "trace.x": {"value_format"},
     "trace.driver": {"line_limit", "no_statement_only", "role"},
     "trace.load": {"line_limit", "no_statement_only", "role"},
-    "value.at": {"edge", "sample_point", "slice_hint", "value_format"},
-    "value.batch_at": {"edge", "sample_point", "slice_hint", "value_format"},
+    "value.at": {"clock", "edge", "sample_point", "slice_hint", "value_format"},
+    "value.batch_at": {"clock", "edge", "sample_point", "slice_hint", "value_format"},
     "list.value_at": {"edge", "format", "sample_point", "value_format"},
     "verify.conditions": {"edge", "sample_point", "signals", "value_format"},
     "window.verify": {"edge", "line_limit", "max_samples", "sample_point", "signals", "time_range"},
@@ -695,6 +696,20 @@ def sync_schema(schema: dict[str, Any], spec: dict[str, Any], arg_schemas: dict[
             "type": "array",
             "items": {"type": "string"},
             "description": PARAM_DESCRIPTIONS["signals"],
+        }
+    if action == "trace.x" and "value_format" in selected_props:
+        selected_props["value_format"]["default"] = "hex"
+    if action == "trace.x":
+        properties["limits"] = {
+            "type": "object",
+            "properties": {
+                "max_depth": {"type": "integer", "minimum": 1, "default": 8},
+                "max_nodes": {"type": "integer", "minimum": 1, "default": 50},
+                "max_time_steps": {"type": "integer", "minimum": 1, "default": 128},
+                "max_trace_signals": {"type": "integer", "minimum": 1, "default": 64},
+                "max_chains": {"type": "integer", "minimum": 1, "default": 8},
+            },
+            "additionalProperties": False,
         }
     if action in {"verify.conditions", "window.verify"} and "conditions" in selected_props:
         selected_props["conditions"] = {

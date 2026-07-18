@@ -530,6 +530,15 @@ if (spec.name == "trace.active_driver_chain") {
     spec.preferred_alternative = Json::object();
     return;
 }
+if (spec.name == "trace.x") {
+    spec.description_en = "Trace an X value backward through bounded DFS branches to its sources or observability boundaries.";
+    spec.description_zh = "从指定信号和时间按受限 DFS 多分支追溯 X 的产生位置或不可见边界。";
+    spec.purposes = {"trace"};
+    spec.use_for = {"Trace simultaneous X RHS and control dependencies through active drivers, hierarchy, interfaces, and per-branch X onset times."};
+    spec.do_not_use_for = {"Static driver enumeration without a waveform X symptom."};
+    spec.preferred_alternative = Json::object();
+    return;
+}
 if (spec.name == "trace.driver") {
     spec.description_en = "Find static drivers of a design signal.";
     spec.description_zh = "查找信号直接 driver。";
@@ -558,19 +567,19 @@ if (spec.name == "rc.generate") {
     return;
 }
 if (spec.name == "value.at") {
-    spec.description_en = "Read one signal value at a sampled waveform time.";
+    spec.description_en = "Read one signal at an exact waveform time, optionally using clock-sampled context.";
     spec.description_zh = "读取单个信号在指定时间的值。";
     spec.purposes = {"query"};
-    spec.use_for = {"Read one signal value at a sampled waveform time."};
+    spec.use_for = {"Read one signal at an exact waveform time, optionally using clock-sampled context."};
     spec.do_not_use_for = {"Tasks outside this action's documented contract."};
     spec.preferred_alternative = Json::object();
     return;
 }
 if (spec.name == "value.batch_at") {
-    spec.description_en = "Read multiple signal values at one sampled waveform time.";
+    spec.description_en = "Read multiple signals at one exact waveform time, optionally using clock-sampled context.";
     spec.description_zh = "批量读取多个信号值。";
     spec.purposes = {"query"};
-    spec.use_for = {"Read multiple signal values at one sampled waveform time."};
+    spec.use_for = {"Read multiple signals at one exact waveform time, optionally using clock-sampled context."};
     spec.do_not_use_for = {"Tasks outside this action's documented contract."};
     spec.preferred_alternative = Json::object();
     return;

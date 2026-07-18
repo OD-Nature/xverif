@@ -32,7 +32,9 @@ def test_mcp_projection_exposes_compact_schema_without_native_envelope() -> None
     result = project("value.at", "request", "mcp", _native_request())
     payload = result["data"]
     assert payload["call_with"] == "xverif_debug_query"
-    assert payload["purpose_en"] == "Read one signal value at a sampled waveform time."
+    assert payload["purpose_en"] == (
+        "Read one signal at an exact waveform time, optionally using clock-sampled context."
+    )
     assert payload["purpose_zh"] == "读取单个信号在指定时间的值。"
     assert "api_version" not in payload["args_schema"]["properties"]
     assert payload["minimal_call"]["action"] == "value.at"

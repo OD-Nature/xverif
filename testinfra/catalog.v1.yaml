@@ -469,6 +469,18 @@ suites:
     deterministic: true
     cost: {class: medium, estimate_sec: 20}
 
+  - id: xdebug.trace_x_xprop
+    owner: xdebug
+    level: integration
+    intent: [contract, semantics]
+    domains: [combined, active-trace, waveform]
+    runner: {kind: pytest, path: xdebug/tests/combined/test_trace_x_xprop.py}
+    fixtures: [xdebug.trace_x_xprop]
+    capabilities: [npi, fsdb, daidir]
+    hermetic: false
+    deterministic: true
+    cost: {class: medium, estimate_sec: 30}
+
   - id: xdebug.active_zero_evidence
     owner: xdebug
     level: integration

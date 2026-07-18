@@ -2057,6 +2057,44 @@
       "preferred_alternative": {}
     },
     {
+      "name": "trace.x",
+      "category": "combined",
+      "status": "experimental",
+      "requires": "combined",
+      "handler_kind": "engine_forward",
+      "schemas": {
+        "request": "schemas/v1/actions/trace.x.request.schema.json",
+        "response": "schemas/v1/actions/trace.x.response.schema.json"
+      },
+      "examples": {
+        "request": [
+          "examples/requests/trace.x.basic.json"
+        ],
+        "response": [
+          "examples/responses/trace.x.basic.json"
+        ]
+      },
+      "required_args": [
+        "signal",
+        "time"
+      ],
+      "required_target": [
+        "session_id"
+      ],
+      "description_en": "Trace an X value backward through bounded DFS branches to its sources or observability boundaries.",
+      "description_zh": "从指定信号和时间按受限 DFS 多分支追溯 X 的产生位置或不可见边界。",
+      "purposes": [
+        "trace"
+      ],
+      "use_for": [
+        "Trace simultaneous X RHS and control dependencies through active drivers, hierarchy, interfaces, and per-branch X onset times."
+      ],
+      "do_not_use_for": [
+        "Static driver enumeration without a waveform X symptom."
+      ],
+      "preferred_alternative": {}
+    },
+    {
       "name": "trace.driver",
       "category": "design",
       "status": "stable",
@@ -2179,16 +2217,15 @@
       },
       "required_args": [
         "signal",
-        "time",
-        "clock"
+        "time"
       ],
-      "description_en": "Read one signal value at a sampled waveform time.",
+      "description_en": "Read one signal at an exact waveform time, optionally using clock-sampled context.",
       "description_zh": "读取单个信号在指定时间的值。",
       "purposes": [
         "query"
       ],
       "use_for": [
-        "Read one signal value at a sampled waveform time."
+        "Read one signal at an exact waveform time, optionally using clock-sampled context."
       ],
       "do_not_use_for": [
         "Tasks outside this action's documented contract."
@@ -2215,16 +2252,15 @@
       },
       "required_args": [
         "signals",
-        "time",
-        "clock"
+        "time"
       ],
-      "description_en": "Read multiple signal values at one sampled waveform time.",
+      "description_en": "Read multiple signals at one exact waveform time, optionally using clock-sampled context.",
       "description_zh": "批量读取多个信号值。",
       "purposes": [
         "query"
       ],
       "use_for": [
-        "Read multiple signal values at one sampled waveform time."
+        "Read multiple signals at one exact waveform time, optionally using clock-sampled context."
       ],
       "do_not_use_for": [
         "Tasks outside this action's documented contract."

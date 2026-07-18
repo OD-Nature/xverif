@@ -107,8 +107,7 @@
       "additionalProperties": false,
       "required": [
         "signals",
-        "time",
-        "clock"
+        "time"
       ]
     },
     "limits": {
@@ -131,27 +130,32 @@
     }
   },
   "additionalProperties": false,
-  "description": "Read multiple signal values at one sampled waveform time.",
+  "description": "Read multiple signals at one exact waveform time, optionally using clock-sampled context.",
   "x-purpose": "批量读取多个信号值。",
-  "x-how_it_works": "对 signals 列表按同一 clock/time 执行 FSDB 读取。",
+  "x-how_it_works": "无 clock 时直接批量点读 time；有 clock 时返回同一 clock/time 的采样上下文。",
   "x-when_to_use": "减少多信号同一时刻检查的开销。",
-  "x-arg_contract_notes": "required: signals, time, clock",
+  "x-arg_contract_notes": "required: signals, time; optional: clock, edge, sample_point",
   "x-description-zh": "批量读取多个信号值。",
   "x-agent": {
     "use_when": [
-      "批量读取多个信号值。"
+      "需要多个最终叶子信号在同一精确时间的 raw 值，或显式 clock 采样上下文。"
     ],
     "do_not_use_when": [
-      "不要把本 action 用于 value.at 的业务目标；请改用列出的同域 action。"
+      "需要原始值变化时间线。",
+      "需要跨时间窗口验证条件。"
     ],
     "alternatives": [
       {
-        "action": "value.at",
-        "when": "读取单个信号在指定时间的值。"
+        "action": "signal.changes",
+        "when": "需要每次原始值变化。"
+      },
+      {
+        "action": "window.verify",
+        "when": "需要跨 clock 窗口证明条件。"
       }
     ],
     "constraints": [
-      "required: signals, time, clock"
+      "required: signals, time; optional: clock, edge, sample_point"
     ]
   }
 }

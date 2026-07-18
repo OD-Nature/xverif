@@ -3,11 +3,18 @@
   "ok": true,
   "action": "value.at",
   "summary": {
-    "signal": "top.clk",
-    "time": "10ns"
+    "signal": "top.u.ready",
+    "time": "100ns",
+    "sampling_mode": "raw_time",
+    "known": true,
+    "status": "ok"
   },
   "data": {
-    "value": "'h1",
-    "known": true
+    "value": {
+      "value": "1'h1",
+      "known": true,
+      "width": 1,
+      "bits": "1"
+    }
   }
 }

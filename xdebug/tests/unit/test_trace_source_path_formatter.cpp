@@ -91,17 +91,35 @@ int main() {
     assert(xdebug_design::trace_result_limit_from_request(
                Json{{"args", Json{{"line_limit", 0}}}, {"limits", Json{{"max_results", 6}}}}) == 6);
 
+    Json next_action = {
+        {"chain_id", "c0"}, {"reason", "continue_from_depth_frontier"},
+        {"action", "trace.active_driver_chain"},
+        {"args", Json{{"signal", "top.c"}, {"time", "10ns"}}},
+        {"limits", Json{{"max_depth", 2}}}
+    };
+    Json chain_data = {
+        {"hops", Json::array({
+            Json{{"index", 1}, {"chain_id", "c0"}, {"time", "20ns"}, {"relation", "root"},
+                 {"file", file}, {"line", 5}, {"signal_path", Json::array({"top.a", "top.b"})}},
+            Json{{"index", 2}, {"chain_id", "c0"}, {"time", "10ns"}, {"relation", "driver"},
+                 {"file", file}, {"line", 9}, {"signal_path", Json::array({"top.b", "top.c"})}},
+        })},
+        {"depth_frontiers", Json::array({Json{{"chain_id", "c0"}, {"signal", "top.c"},
+            {"time", "10ns"}, {"value", "8'hxx"}, {"stopped_after_depth", 2}}})},
+        {"suggested_next_actions", Json::array({next_action})}
+    };
     Json chain_response = {
         {"summary", Json{{"signal", "top.out"}, {"hop_count", 2}}},
-        {"data", Json{{"hops", Json::array({
-            Json{{"index", 1}, {"file", file}, {"line", 5}, {"signal_path", Json::array({"top.a", "top.b"})}},
-            Json{{"index", 2}, {"file", file}, {"line", 9}, {"signal_path", Json::array({"top.b", "top.c"})}},
-        })}}},
+        {"data", chain_data},
     };
     std::string chain_text = xdebug_design::render_source_path_xout("trace.active_driver_chain", chain_response);
-    assert(chain_text.find("hop  line  signal_path") != std::string::npos);
-    assert(chain_text.find("1    5     top.a -> top.b") != std::string::npos);
-    assert(chain_text.find("2    9     top.b -> top.c") != std::string::npos);
+    assert(chain_text.find("chain  hop  time") != std::string::npos);
+    assert(chain_text.find("c0     1    20ns  root") != std::string::npos);
+    assert(chain_text.find("c0     2    10ns  driver") != std::string::npos);
+    assert(chain_text.find("\ndepth_frontiers:\n") != std::string::npos);
+    assert(chain_text.find("top.c   10ns  8'hxx") != std::string::npos);
+    assert(chain_text.find("\nnext:\n") != std::string::npos);
+    assert(chain_text.find("trace.active_driver_chain  top.c   10ns  2") != std::string::npos);
 
     Json ambiguous_response = {
         {"summary", Json{{"signal", "top.out"}, {"termination", "ambiguous"}}},

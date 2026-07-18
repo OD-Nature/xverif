@@ -958,6 +958,11 @@ bool Dispatcher::send_to_socket(const std::string& session_id,
         result_summary.erase("truncated");
     }
     if (result_summary.is_object() && !result_summary.empty()) response["summary"] = result_summary;
+    if (data_payload.is_object() && data_payload.contains("suggested_next_actions") &&
+        data_payload["suggested_next_actions"].is_array()) {
+        response["suggested_next_actions"] = data_payload["suggested_next_actions"];
+        data_payload.erase("suggested_next_actions");
+    }
     if (truncated) response["meta"] = {{"truncated", true}};
     if (engine_resp.contains("text") && engine_resp["text"].is_string()) {
         response["text"] = engine_resp["text"];

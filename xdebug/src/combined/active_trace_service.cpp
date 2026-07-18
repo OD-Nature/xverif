@@ -144,6 +144,7 @@ Json value_map(npiFsdbFileHandle fsdb,
 struct ActiveTraceLimits {
     int max_depth = 8;
     int max_nodes = 50;
+    int max_time_steps = 128;
     int max_alias_candidates = 8;
     int max_trace_signals = 64;
 };
@@ -282,6 +283,9 @@ ActiveTraceLimits parse_limits(const Json& request, const Json& args) {
     }
     if (limits_json.contains("max_nodes") && limits_json["max_nodes"].is_number()) {
         limits.max_nodes = std::max(1, limits_json["max_nodes"].get<int>());
+    }
+    if (limits_json.contains("max_time_steps") && limits_json["max_time_steps"].is_number()) {
+        limits.max_time_steps = std::max(1, limits_json["max_time_steps"].get<int>());
     }
     if (limits_json.contains("max_alias_candidates") && limits_json["max_alias_candidates"].is_number()) {
         limits.max_alias_candidates = std::max(0, limits_json["max_alias_candidates"].get<int>());
@@ -748,10 +752,25 @@ TraceBuildResult build_active_trace(
     auto vkey = [](const std::string& sig, const std::string& t) { return sig + "\x1f" + t; };
     std::set<std::string> visited;
     visited.insert(vkey(root_signal, requested_time));
+    std::set<std::string> visited_times;
 
     while (!queue.empty()) {
         QueueItem current = queue.front();
         queue.erase(queue.begin());  // BFS-style pop front
+
+        // A temporal step is one distinct active-trace time point.  Count the
+        // query time as the first step and stop before processing a new time
+        // once the public max_time_steps budget has been exhausted.
+        if (visited_times.find(current.time) == visited_times.end()) {
+            if (static_cast<int>(visited_times.size()) >= limits.max_time_steps) {
+                result.truncated = true;
+                result.termination = "limit";
+                result.termination_detail = "max_time_steps";
+                result.limitations.push_back("trace truncated by limits.max_time_steps");
+                break;
+            }
+            visited_times.insert(current.time);
+        }
 
         // Check depth limit
         if (current.depth > limits.max_depth) {

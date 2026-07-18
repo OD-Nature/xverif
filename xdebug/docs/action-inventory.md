@@ -36,6 +36,7 @@ example 和 contract test 迁移使用。状态定义：
 | `session.gc` | session | stable | none | dispatcher + waveform gc | partial |
 | `trace.active_driver` | combined | stable | combined | unified engine handler + combined helper | regression |
 | `trace.active_driver_chain` | combined | stable | combined | unified engine handler + combined helper | partial |
+| `trace.x` | combined | experimental | combined | unified engine handler + per-branch X-onset DFS | regression |
 
 ## Design Actions
 

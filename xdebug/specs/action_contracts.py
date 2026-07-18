@@ -78,6 +78,7 @@ FIELD_DESCRIPTIONS = {
     "line": "源码中的 1-based 行号。",
     "line_limit": "只限制返回 evidence 行数；不限制扫描、聚合或 verdict，必须结合 completeness 解读。",
     "max_depth": "递归 scope 或 trace 展开的最大层数；达到上限时 response 标记截断范围。",
+    "max_chains": "trace.x 可同时保留的最大分支 chain 数；省略时默认为 8。",
     "max_events": "允许处理或写出的事件预算；耗尽会影响 analysis/file completeness。",
     "max_samples": "允许扫描的时钟采样预算；耗尽表示分析不完整而非仅 response 截断。",
     "mode": "该 action 的处理或返回模式；合法值、默认值和参数交互由本 action schema 定义。",
@@ -124,6 +125,19 @@ ACTION_GUIDANCE: dict[str, Json] = {
     "batch": {"use_when": ["需要按顺序执行多个相互独立的 native xdebug request。"],
               "do_not_use_when": ["需要一个 MCP session 中的单个 action 查询或跨请求共享结果。"],
               "alternatives": [{"action": "schema", "when": "需要先验证单个 request 合同。"}]},
+    "trace.active_driver_chain": {
+        "use_when": ["需要从指定 signal/time 递归展开单条 active-driver chain。"],
+        "do_not_use_when": ["查询点是 X，且需要同时追踪多个 X RHS/control 分支。"],
+        "alternatives": [{"action": "trace.x", "when": "需要按 X 可见性进行多分支追踪。"}],
+    },
+    "trace.x": {
+        "use_when": ["查询点含 X，需要按 DFS 同时追踪 RHS、control、端口和时间边界。"],
+        "do_not_use_when": ["只需要静态 driver 枚举，或查询点不含 X。"],
+        "alternatives": [
+            {"action": "trace.active_driver", "when": "只需要指定时刻的单级 active driver。"},
+            {"action": "trace.active_driver_chain", "when": "需要传统单链 active-driver 展开。"},
+        ],
+    },
     "counter.statistics": {"use_when": ["需要按采样 clock 统计一个 counter 的增量、回绕或活动。"],
                            "do_not_use_when": ["需要多个一般信号的活动统计或原始变化列表。"],
                            "alternatives": [{"action": "signal.statistics", "when": "需要一般信号而非 counter 语义的统计。"}]},
@@ -146,11 +160,19 @@ ACTION_GUIDANCE: dict[str, Json] = {
                       "do_not_use_when": ["只需要单个采样时刻的条件结果或单个信号稳定性。"],
                       "alternatives": [{"action": "verify.conditions", "when": "需要单个时刻的条件验证。"}, {"action": "signal.stability", "when": "需要单信号稳定性检查。"}]},
     "value.at": {
-        "use_when": ["需要一个最终叶子信号在单一采样时刻的值。"],
+        "use_when": ["需要一个最终叶子信号在精确时间的 raw 值，或显式 clock 采样上下文。"],
         "do_not_use_when": ["需要原始值变化时间线。", "需要多信号布尔表达式求值。"],
         "alternatives": [
             {"action": "signal.changes", "when": "需要每次原始值变化。"},
             {"action": "expr.eval_at", "when": "需要在同一采样时刻求多信号表达式。"},
+        ],
+    },
+    "value.batch_at": {
+        "use_when": ["需要多个最终叶子信号在同一精确时间的 raw 值，或显式 clock 采样上下文。"],
+        "do_not_use_when": ["需要原始值变化时间线。", "需要跨时间窗口验证条件。"],
+        "alternatives": [
+            {"action": "signal.changes", "when": "需要每次原始值变化。"},
+            {"action": "window.verify", "when": "需要跨 clock 窗口证明条件。"},
         ],
     },
     "signal.changes": {

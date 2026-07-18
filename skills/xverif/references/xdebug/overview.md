@@ -52,6 +52,10 @@ tools/xdebug --json -
 | 验证窗口条件 | `window.verify` | 保留 pass/fail/evidence |
 | 查 driver | `trace.driver` | 设计侧 |
 | 查当前生效 driver | `trace.active_driver` | 需要 daidir + fsdb + time |
+| 从 X 反向追到候选来源 | `trace.x` | 需要 daidir + fsdb + signal + time；best-effort 要保留证据等级 |
 | 查源码证据 | `source.context` | 控制上下文行数 |
 | APB/AXI 异常 | `apb.config.load` / `axi.config.load` 后 query/analysis | 先注册信号映射 |
 | 生成波形证据 | `rc.generate` | 见 rc reference |
+
+`value.at` / `value.batch_at` 默认不需要 clock，直接点读指定 time；只有需要
+clock-sampled context 时才传 `clock`。值默认十六进制并带 `'h` 前缀。

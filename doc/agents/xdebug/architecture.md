@@ -270,7 +270,7 @@ frontend 不直接承载 NPI 重逻辑；NPI/FSDB/engine 能力集中在内部 e
 职责：
 
 - 同时使用 daidir 和 fsdb，把波形时间点的现象连接到当前生效 RTL driver。
-- 支持 active driver、active driver chain 等 combined action。
+- 支持 active driver、active driver chain 和 `trace.x` 等 combined action。
 
 修改要求：
 
@@ -282,6 +282,12 @@ frontend 不直接承载 NPI 重逻辑；NPI/FSDB/engine 能力集中在内部 e
 - active chain 不接受 `clk_period`，也不得重新引入半周期窗口、邻近时钟沿或其它
   waveform heuristic/fallback。RHS evidence 截断必须通过 `limits.max_trace_signals`
   的完整性字段显式表达。
+- active chain 因 `max_depth` 停止时必须点读尚未处理的下一信号，并通过
+  `depth_frontiers` 与 `suggested_next_actions` 发布可直接续查的 signal/time/value。
+- `trace.x` 必须先确认查询点任一 bit 为 X，再按 DFS 同等处理含 X 的 RHS/control，
+  穿过 port/interface，并为每一跳重新定位连续 X 区间起点；Z 不等同于 X。
+  `limits.max_chains` 默认 8，超额分支保留 pending 现场。控制 X、动态 select 等无法
+  严格证明的原因只能标为 `best_effort`；所有 limit 必须明确保留 chain 当前状态。
 
 ## Runtime/Work Dir 层
 

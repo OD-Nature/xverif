@@ -283,6 +283,9 @@ struct SourceRenderItem {
     int line = 0;
     int hop = 0;
     bool has_hop = false;
+    std::string chain_id;
+    std::string time;
+    std::string relation;
     std::string signal_path;
 };
 
@@ -305,6 +308,9 @@ std::vector<SourceRenderItem> collect_source_items(const Json& items, bool chain
         render_item.signal_path = signal_path_text(item);
         render_item.has_hop = chain;
         render_item.hop = item.value("index", static_cast<int>(out.size()));
+        render_item.chain_id = scalar_text(item, "chain_id");
+        render_item.time = scalar_text(item, "time");
+        render_item.relation = scalar_text(item, "relation");
         if (render_item.file.empty() || render_item.line <= 0 || render_item.signal_path.empty()) continue;
         out.push_back(render_item);
     }
@@ -359,11 +365,13 @@ std::string active_signals_table(const SourceRenderGroup& group) {
     std::set<std::string> seen;
     for (const auto& item : group.items) {
         std::ostringstream key;
-        if (item.has_hop) key << item.hop << "|";
+        if (item.has_hop) key << item.chain_id << "|" << item.hop << "|";
         key << item.line << "|" << item.signal_path;
         if (!seen.insert(key.str()).second) continue;
         if (item.has_hop) {
-            rows.push_back({std::to_string(item.hop), std::to_string(item.line), item.signal_path});
+            rows.push_back({item.chain_id.empty() ? "c0" : item.chain_id,
+                            std::to_string(item.hop), item.time, item.relation,
+                            std::to_string(item.line), item.signal_path});
         } else {
             rows.push_back({std::to_string(item.line), item.signal_path});
         }
@@ -372,7 +380,7 @@ std::string active_signals_table(const SourceRenderGroup& group) {
     if (group.items.empty() || !group.items.front().has_hop) {
         out.emit_table({"line", "signal_path"}, rows);
     } else {
-        out.emit_table({"hop", "line", "signal_path"}, rows);
+        out.emit_table({"chain", "hop", "time", "relation", "line", "signal_path"}, rows);
     }
     return out.str();
 }
@@ -399,6 +407,66 @@ void emit_source_group_xout(std::string& text, const SourceRenderGroup& group, i
         text.push_back('\n');
         text += table;
     }
+}
+
+void append_depth_frontiers_xout(std::string& text, const Json& frontiers) {
+    if (!frontiers.is_array() || frontiers.empty()) return;
+    xdebug::TextResponseBuilder out("xdebug");
+    out.emit_section("depth_frontiers");
+    std::vector<std::vector<std::string>> rows;
+    for (const auto& item : frontiers) {
+        if (!item.is_object()) continue;
+        rows.push_back({scalar_text(item, "chain_id"), scalar_text(item, "signal"),
+                        scalar_text(item, "time"), scalar_text(item, "value"),
+                        scalar_text(item, "x_mask"),
+                        scalar_text(item, "stopped_after_depth")});
+    }
+    if (rows.empty()) return;
+    out.emit_table({"chain", "signal", "time", "value", "x_mask",
+                    "stopped_after_depth"}, rows);
+    while (!text.empty() && text.back() == '\n') text.pop_back();
+    text += "\n\n" + out.str();
+}
+
+void append_next_actions_xout(std::string& text, const Json& actions) {
+    if (!actions.is_array() || actions.empty()) return;
+    xdebug::TextResponseBuilder out("xdebug");
+    out.emit_section("next");
+    std::vector<std::vector<std::string>> rows;
+    for (const auto& item : actions) {
+        if (!item.is_object()) continue;
+        Json args = item.value("args", Json::object());
+        Json limits = item.value("limits", Json::object());
+        rows.push_back({scalar_text(item, "chain_id"), scalar_text(item, "reason"),
+                        scalar_text(item, "action"), scalar_text(args, "signal"),
+                        scalar_text(args, "time"), scalar_text(limits, "max_depth"),
+                        scalar_text(limits, "max_chains")});
+    }
+    if (rows.empty()) return;
+    out.emit_table({"chain", "mode", "action", "signal", "time", "max_depth",
+                    "max_chains"}, rows);
+    while (!text.empty() && text.back() == '\n') text.pop_back();
+    text += "\n\n" + out.str();
+}
+
+void append_chain_states_xout(std::string& text, const Json& chains) {
+    if (!chains.is_array() || chains.empty()) return;
+    xdebug::TextResponseBuilder out("xdebug");
+    out.emit_section("chains");
+    std::vector<std::vector<std::string>> rows;
+    for (const auto& chain : chains) {
+        if (!chain.is_object()) continue;
+        Json current = chain.value("current", Json::object());
+        std::string reason = scalar_text(chain, "termination_detail");
+        if (reason.empty()) reason = scalar_text(chain, "status");
+        rows.push_back({scalar_text(chain, "chain_id"), scalar_text(chain, "status"),
+                        scalar_text(current, "signal"), scalar_text(current, "time"),
+                        scalar_text(current, "value"), reason});
+    }
+    if (rows.empty()) return;
+    out.emit_table({"chain", "status", "current_signal", "current_time", "value", "reason"}, rows);
+    while (!text.empty() && text.back() == '\n') text.pop_back();
+    text += "\n\n" + out.str();
 }
 
 } // namespace
@@ -575,6 +643,12 @@ Json simplify_active_driver_chain_payload(const Json& raw,
             Json hop = make_source_path_item_from_location(file, line, path);
             if (hop.empty()) continue;
             hop["index"] = node.value("index", static_cast<int>(hops.size()));
+            hop["chain_id"] = "c0";
+            hop["signal"] = scalar_text(node, "signal");
+            hop["time"] = scalar_text(node, "time");
+            hop["active_time"] = scalar_text(node, "active_time");
+            hop["value"] = scalar_text(node, "value");
+            hop["relation"] = hop["index"].get<int>() == 0 ? "root" : "driver";
             hops.push_back(hop);
         }
     }
@@ -596,9 +670,17 @@ Json simplify_active_driver_chain_payload(const Json& raw,
     };
     add_limit_hint(out["summary"], limit_truncated, max_results);
     out["hops"] = hops;
+    Json depth_frontiers = chain_object.value("depth_frontiers", Json::array());
+    if (depth_frontiers.is_array() && !depth_frontiers.empty()) {
+        out["depth_frontiers"] = depth_frontiers;
+    }
     Json ambiguity_evidence = chain_object.value("ambiguity_evidence", Json());
     if (ambiguity_evidence.is_object()) {
         out["ambiguity_evidence"] = ambiguity_evidence;
+    }
+    Json suggested_next_actions = raw.value("suggested_next_actions", Json::array());
+    if (suggested_next_actions.is_array() && !suggested_next_actions.empty()) {
+        out["suggested_next_actions"] = suggested_next_actions;
     }
     out["truncated"] = truncated;
     return out;
@@ -616,6 +698,18 @@ std::string render_source_path_xout(const std::string& action, const Json& respo
     }
     const Json data = response.value("data", Json::object());
     std::string text = out.str();
+    const Json query = data.value("query", Json());
+    if (query.is_object() && !query.empty()) {
+        xdebug::TextResponseBuilder query_out("xdebug");
+        query_out.emit_section("query");
+        Json value = query.value("value", Json());
+        if (value.is_object() && value.contains("value")) {
+            query_out.emit_kv("value", value["value"]);
+        }
+        if (query.contains("x_mask")) query_out.emit_kv("x_mask", query["x_mask"]);
+        while (!text.empty() && text.back() == '\n') text.pop_back();
+        text += "\n\n" + query_out.str();
+    }
     const Json paths = data.value("paths", Json::array());
     int context_lines = xdebug_core::xdebug_trace_source_context_lines();
     int merge_threshold_lines = xdebug_core::xdebug_trace_source_merge_threshold_lines();
@@ -630,11 +724,41 @@ std::string render_source_path_xout(const std::string& action, const Json& respo
             group_source_items(collect_source_items(hops, true), merge_threshold_lines);
         for (const auto& group : groups) emit_source_group_xout(text, group, context_lines);
     }
+    const Json chains = data.value("chains", Json::array());
+    if (chains.is_array()) {
+        Json chain_hops = Json::array();
+        for (const auto& chain : chains) {
+            if (!chain.is_object()) continue;
+            Json items = chain.value("hops", Json::array());
+            if (!items.is_array()) continue;
+            for (auto item : items) {
+                if (!item.is_object()) continue;
+                if (!item.contains("chain_id")) item["chain_id"] = chain.value("chain_id", "");
+                chain_hops.push_back(item);
+            }
+        }
+        std::vector<SourceRenderGroup> groups =
+            group_source_items(collect_source_items(chain_hops, true), merge_threshold_lines);
+        for (const auto& group : groups) emit_source_group_xout(text, group, context_lines);
+    }
     const Json ambiguity = data.value("ambiguity_evidence", Json());
     if (ambiguity.is_object()) {
         std::string ambiguity_text = render_ambiguous_rhs_xout(ambiguity);
         while (!text.empty() && text.back() == '\n') text.pop_back();
         text += "\n\n" + ambiguity_text;
+    }
+    append_chain_states_xout(text, chains);
+    append_depth_frontiers_xout(text, data.value("depth_frontiers", Json::array()));
+    append_next_actions_xout(text, data.value("suggested_next_actions", Json::array()));
+    Json limitations = data.value("limitations", Json::array());
+    if (limitations.is_array() && !limitations.empty()) {
+        xdebug::TextResponseBuilder limitations_out("xdebug");
+        limitations_out.emit_section("limitations");
+        for (const auto& item : limitations) {
+            if (item.is_string()) limitations_out.emit_row({item.get<std::string>()});
+        }
+        while (!text.empty() && text.back() == '\n') text.pop_back();
+        text += "\n\n" + limitations_out.str();
     }
     while (!text.empty() && text.back() == '\n') text.pop_back();
     text.push_back('\n');

@@ -403,7 +403,8 @@ def test_active_trace_semantic_branches_and_gates(
         assert "\nsummary:\n" in chain_xout
         assert "\nsource: " in chain_xout
         assert "\nactive_signals:\n" in chain_xout
-        assert "hop  line  signal_path" in chain_xout
+        assert "chain  hop  time" in chain_xout
+        assert "relation  line  signal_path" in chain_xout
         assert "termination       : assignment" in chain_xout
         assert "termination_detail: constant_or_no_rhs_signal" in chain_xout
         assert "\n>" in chain_xout

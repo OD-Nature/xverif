@@ -92,9 +92,16 @@ public:
                 (!signals_j.is_array() || signals_j.empty()) ? "args.signals" : "args.time",
                 "args.signals[] and args.time are required");
 
+        const bool clock_sampled = args.contains("clock");
+        if (!clock_sampled && (args.contains("edge") || args.contains("sample_point"))) {
+            return waveform_invalid_arg_error(
+                action_name(), args.contains("edge") ? "args.edge" : "args.sample_point",
+                "edge and sample_point require args.clock",
+                "omit edge/sample_point for a raw-time read, or provide args.clock");
+        }
         xdebug_waveform::ClockSampleSpec clock_spec;
         Json clock_error;
-        if (!parse_point_clock_args(args, clock_spec, clock_error)) return clock_error;
+        if (clock_sampled && !parse_point_clock_args(args, clock_spec, clock_error)) return clock_error;
 
         if (args.value("format", std::string()) == "array_indexed") {
             return make_handler_error("UNSUPPORTED_AGGREGATE_QUERY",
@@ -141,17 +148,39 @@ public:
         std::vector<PointSignalSpec> specs;
         for (const auto& name : names) specs.push_back({name, name});
         ClockPointQueryResult point;
-        Json point_error;
-        if (!build_clock_point_query(g_fsdb_file,
-                                     clock_spec,
-                                     fsdb_time,
-                                     formatted_time,
-                                     specs,
-                                     xdebug_waveform::parse_format(read_format),
-                                     read_format,
-                                     point,
-                                     point_error)) {
-            return point_error;
+        if (clock_sampled) {
+            Json point_error;
+            if (!build_clock_point_query(g_fsdb_file,
+                                         clock_spec,
+                                         fsdb_time,
+                                         formatted_time,
+                                         specs,
+                                         xdebug_waveform::parse_format(read_format),
+                                         read_format,
+                                         point,
+                                         point_error)) {
+                return point_error;
+            }
+        } else {
+            point.rows = Json::array();
+            for (const auto& name : names) {
+                Json row = {{"signal", name}, {"path", name}};
+                npiFsdbSigHandle signal_handle = npi_fsdb_sig_by_name(g_fsdb_file, name.c_str(), nullptr);
+                std::string raw_value;
+                if (!signal_handle) {
+                    row["middle"] = {{"status", "signal_not_found"}, {"value", nullptr}};
+                } else if (!npi_fsdb_sig_hdl_value_at(signal_handle, fsdb_time, raw_value,
+                                                       xdebug_waveform::parse_format(read_format))) {
+                    row["middle"] = {{"status", "not_dumped_or_unreadable"}, {"value", nullptr}};
+                } else {
+                    row["middle"] = {
+                        {"status", "ok"},
+                        {"value", xdebug_waveform::logic_value_json(
+                            xdebug_waveform::logic_value_from_fsdb_raw(raw_value, read_format))}
+                    };
+                }
+                point.rows.push_back(row);
+            }
         }
         Json batch = Json::array();
         Json missing_by_reason = Json::object();
@@ -182,8 +211,10 @@ public:
             batch.push_back(item);
         }
         out["values"] = batch;
-        out["clock_context"] = point.clock_context;
+        if (clock_sampled) out["clock_context"] = point.clock_context;
+        const std::string sampling_mode = clock_sampled ? "clock_sampled" : "raw_time";
         out["summary"] = {{"time", formatted_time}, {"signal_count", batch.size()},
+                          {"sampling_mode", sampling_mode},
                           {"unknown_count", unknown_count},
                           {"missing_count", missing_count},
                           {"missing_by_reason", missing_by_reason}};

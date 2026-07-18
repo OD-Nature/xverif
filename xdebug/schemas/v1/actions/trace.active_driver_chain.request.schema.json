@@ -115,25 +115,21 @@
   "additionalProperties": false,
   "description": "Trace an active-driver chain across multiple levels.",
   "x-purpose": "展开 active driver 链。",
-  "x-how_it_works": "从 signal/time 递归追溯 active driver；深度限制写 top-level limits.max_depth。遇到多个 active assignments 或多个 RHS sources 时在精确 active_time 返回前后值证据并停止，不用波形变化猜下一跳。",
+  "x-how_it_works": "从 signal/time 递归追溯 active driver；深度限制写 top-level limits.max_depth。遇到多个 active assignments 或多个 RHS sources 时在精确 active_time 返回前后值证据并停止。因 max_depth 停止时读取 data.depth_frontiers 与 suggested_next_actions，可从 frontier 续查或提高深度重跑。",
   "x-when_to_use": "给出跨级根因链及 ambiguous RHS 现场。",
   "x-arg_contract_notes": "required: signal, time; do not use args.depth or args.clk_period",
   "x-description-zh": "展开 active driver 链。",
   "x-agent": {
     "use_when": [
-      "展开 active driver 链。"
+      "需要从指定 signal/time 递归展开单条 active-driver chain。"
     ],
     "do_not_use_when": [
-      "不要把本 action 用于 trace.active_driver、trace.driver 的业务目标；请改用列出的同域 action。"
+      "查询点是 X，且需要同时追踪多个 X RHS/control 分支。"
     ],
     "alternatives": [
       {
-        "action": "trace.active_driver",
-        "when": "在指定时间找 active driver。"
-      },
-      {
-        "action": "trace.driver",
-        "when": "查找信号直接 driver。"
+        "action": "trace.x",
+        "when": "需要按 X 可见性进行多分支追踪。"
       }
     ],
     "constraints": [

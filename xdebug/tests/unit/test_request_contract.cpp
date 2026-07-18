@@ -21,8 +21,9 @@ int main() {
     assert(value_spec && trace_spec && active_spec && actions_spec && abnormal_spec &&
            stream_show_spec);
     Json value_descriptor = action_spec_descriptor(*value_spec);
-    assert(value_descriptor["required_args"].size() == 3);
-    assert(value_descriptor["required_args"][2] == "clock");
+    assert(value_descriptor["required_args"].size() == 2);
+    assert(value_descriptor["required_args"][0] == "signal");
+    assert(value_descriptor["required_args"][1] == "time");
     assert(value_descriptor["allowed_values"]["format"].is_array());
 
     Json value_json = {
@@ -50,6 +51,12 @@ int main() {
     assert(!validation.ok);
     assert(validation.code == "INVALID_REQUEST");
     assert(validation.error["invalid_arg"] == "args.time");
+
+    Json without_clock_json = value_json;
+    without_clock_json["args"].erase("clock");
+    RequestEnvelope without_clock = RequestEnvelope::from_json(without_clock_json);
+    validation = validator.validate(without_clock, *value_spec);
+    assert(validation.ok);
 
     Json wrong_version_json = value_json;
     wrong_version_json["api_version"] = "xdebug.v0";

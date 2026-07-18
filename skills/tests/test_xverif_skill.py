@@ -38,7 +38,7 @@ def test_generated_action_inventory_matches_canonical_registry() -> None:
     generated = (SKILL / "references/generated/xdebug-actions.md").read_text()
     documented = set(re.findall(r"^\| `([^`]+)` \|", generated, re.MULTILINE))
     assert documented == expected
-    assert len(expected) == 72
+    assert len(expected) == 73
 
 
 def test_generated_references_are_current() -> None:
