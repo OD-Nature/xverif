@@ -73,6 +73,7 @@ class NativeNpiCoverageBackend(CoverageBackend):
                 stderr=None,
                 text=True,
                 bufsize=1,
+                env=self._worker_env(),
             )
         except OSError as exc:
             raise XcovError("NATIVE_WORKER_START_FAILED", str(exc), worker=str(worker)) from exc
@@ -99,6 +100,29 @@ class NativeNpiCoverageBackend(CoverageBackend):
                 str(ready.get("error") or "native worker initialization failed"),
             )
         self._summary_cache = dict(self._request("summary") or {})
+
+    def _worker_env(self) -> Dict[str, str]:
+        """为 2018 worker 子进程准备 NPI 运行环境。
+
+        npi_init 会在 LD_LIBRARY_PATH 各条目下查找 NPI 资源目录 etc/；rpath 只
+        负责动态库加载，不覆盖该查找。注入仅作用于 worker 子进程，不污染宿主
+        shell（见 xcov/docs/npi_2018_debug_notes.md 第 6 节）。
+        """
+        env = dict(os.environ)
+        verdi_home = env.get("XVERIF_XCOV_VERDI_HOME") or env.get("VERDI_HOME", "")
+        if not verdi_home:
+            return env
+        for relative in ("share/NPI/lib/LINUX64", "share/NPI/lib/linux64"):
+            npi_lib = Path(verdi_home) / relative
+            if not npi_lib.is_dir():
+                continue
+            entries = [str(npi_lib)]
+            entries.extend(
+                value for value in env.get("LD_LIBRARY_PATH", "").split(os.pathsep) if value
+            )
+            env["LD_LIBRARY_PATH"] = os.pathsep.join(dict.fromkeys(entries))
+            break
+        return env
 
     def _readline(self, timeout: float, phase: str) -> str:
         if not self._proc.stdout:
@@ -224,7 +248,40 @@ class NativeNpiCoverageBackend(CoverageBackend):
         return out
 
     def scope_metrics(self) -> Dict[str, Json]:
-        self._unsupported("scope_metrics")
+        """按 instance scope 聚合 score 行，映射到上游 canonical 指标合同。
+
+        functional 不在 2018 worker 的 items 协议内，聚合结果天然不含该指标；
+        上游 action 对缺失指标按 null 处理。
+        """
+        from .coverage_contract import coverage_row_kind
+
+        rows = self.items()
+        aggregated: Dict[str, Dict[str, Dict[str, int]]] = {}
+        for row in rows:
+            if coverage_row_kind(row) != "score":
+                continue
+            scope = row.get("scope")
+            metric = row.get("metric")
+            if not scope or metric not in METRICS:
+                continue
+            per_metric = aggregated.setdefault(str(scope), {})
+            agg = per_metric.setdefault(metric, {"covered": 0, "coverable": 0})
+            agg["covered"] += max(0, int(row.get("covered") or 0))
+            agg["coverable"] += max(0, int(row.get("coverable") or 0))
+        out: Dict[str, Json] = {}
+        for scope, per_metric in aggregated.items():
+            metrics: Json = {}
+            for metric, agg in per_metric.items():
+                covered = agg["covered"]
+                coverable = agg["coverable"]
+                metrics[metric] = {
+                    "covered": covered,
+                    "coverable": coverable,
+                    "missing": coverable - covered,
+                    "pct": round(100.0 * covered / coverable, 4) if coverable else None,
+                }
+            out[scope] = metrics
+        return out
 
     def scope_functional_from_urg(self) -> List[Json]:
         self._unsupported("scope_functional_from_urg")
@@ -276,5 +333,4 @@ class NativeNpiCoverageBackend(CoverageBackend):
             "the Verdi 2018 native NPI worker does not implement this "
             "operation; it requires the upstream pynpi/URG backend path",
             operation=operation,
-            worker_kind=self.worker_kind,
         )

@@ -4,6 +4,8 @@
 CanonicalCoverageBackend 委托合同的静态契约。
 """
 
+import json
+
 import pytest
 
 from xcov.backend import CoverageBackend
@@ -95,7 +97,6 @@ def test_summary_after_close_uses_cached_projection():
 
 
 @pytest.mark.parametrize("operation, call_args", [
-    ("scope_metrics", ()),
     ("scope_functional_from_urg", ()),
     ("scope_assert_from_urg", ()),
     ("gap_items", ("line",)),
@@ -114,7 +115,35 @@ def test_unsupported_operations_raise_structured_error(operation, call_args):
         method(*call_args)
     assert excinfo.value.code == "NATIVE_BACKEND_UNSUPPORTED"
     assert excinfo.value.detail["operation"] == operation
-    assert excinfo.value.detail["worker_kind"] == "npi_native_2018"
+
+
+def test_scope_metrics_aggregates_score_rows_per_scope():
+    backend = _backend_without_worker()
+    backend._items_cache = {}
+    rows = [
+        {"metric": "line", "type": "npiCovStmtBin", "scope": "top.u_dut",
+         "covered": 1, "coverable": 2, "missing": 1, "status": ["not_covered"]},
+        {"metric": "line", "type": "npiCovStmtBin", "scope": "top.u_dut",
+         "covered": 1, "coverable": 1, "missing": 0, "status": ["covered"]},
+        # context 行与 assert 计数行不参与聚合
+        {"metric": "line", "type": "npiCovBlock", "scope": "top.u_dut",
+         "covered": -1, "coverable": -1, "missing": 0, "status": ["covered"]},
+        {"metric": "assert", "type": "npiCovAttemptBin", "scope": "top.u_dut",
+         "covered": -1, "coverable": -1, "missing": 0, "count": 3,
+         "status": ["attempted"]},
+        {"metric": "assert", "type": "npiCovAssert", "scope": "top.u_dut.u_ctrl",
+         "covered": 0, "coverable": 1, "missing": 1, "status": ["not_covered"]},
+    ]
+    backend._request = lambda action, args=None: [dict(row) for row in rows]
+    result = backend.scope_metrics()
+    assert result["top.u_dut"]["line"] == {
+        "covered": 2, "coverable": 3, "missing": 1, "pct": 66.6667,
+    }
+    assert result["top.u_dut.u_ctrl"]["assert"] == {
+        "covered": 0, "coverable": 1, "missing": 1, "pct": 0.0,
+    }
+    assert "functional" not in result["top.u_dut"]
+    assert "attempt" not in json.dumps(result)
 
 
 def test_items_strips_non_contract_fields_from_worker_rows():

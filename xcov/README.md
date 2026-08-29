@@ -71,7 +71,9 @@ XVERIF_TEST_EXECUTION_ENV=host .conda-xverif/bin/pytest --xverif-gate nightly --
 后端选择与 2018 兼容：
 
 - `XVERIF_EDA_PROFILE=verdi-2018`：xcov 使用常驻 C++ native NPI worker
-  （`make -C xcov native` 构建，二进制通过 rpath 链接 2018 NPI 库）。
+  （`make -C xcov native` 构建，二进制通过 rpath 链接 2018 NPI 库；
+  native backend 在 worker 子进程内注入 NPI 资源路径，供 `npi_init`
+  完成 etc/ 资源查找，不污染宿主 shell）。
 - `XVERIF_EDA_PROFILE=verdi-2023`：使用上游 URG 读取后端（排除阶段惰性 NPI）。
 - `auto`：从版本化 `VERDI_HOME` 自动判断；无法判断时明确报错。
 - `XVERIF_XCOV_BACKEND=native|python` 可显式覆盖；不会静默 fallback。

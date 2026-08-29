@@ -5,6 +5,7 @@ import io
 import os
 from pathlib import Path
 import subprocess
+import sys
 
 import pytest
 
@@ -47,8 +48,42 @@ def _exclusion_vdb() -> str:
     pytest.skip("exclusion VDB not found; run: pytest --xverif-prepare xcov.exclusion")
 
 
+_PYnpi_COV_AVAILABLE: bool | None = None
+
+
+def _pynpi_cov_available() -> bool:
+    """探测当前 VERDI_HOME 是否提供 pynpi.cov coverage API（子进程内探测）.
+
+    Verdi 2018 的 pynpi 只有 wave 接口、没有 cov 子模块；exclusion 流程依赖
+    pynpi coverage API，缺失时这些用例属于环境能力边界，应显式 skip。
+    """
+    global _PYnpi_COV_AVAILABLE
+    if _PYnpi_COV_AVAILABLE is None:
+        from xcov.eda import get_npi_python_path
+
+        probe = "import pynpi.cov"
+        result = subprocess.run(
+            [sys.executable, "-c", probe],
+            env={
+                **os.environ,
+                "PYTHONPATH": get_npi_python_path() + os.pathsep
+                + os.environ.get("PYTHONPATH", ""),
+            },
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        _PYnpi_COV_AVAILABLE = result.returncode == 0
+    return _PYnpi_COV_AVAILABLE
+
+
 def _npi_dispatcher(policy: str = "default") -> Dispatcher:
     """创建使用 NPI 后端的 dispatcher（进程级单例，避免 NPI 重复 init）."""
+    if not _pynpi_cov_available():
+        pytest.skip(
+            "pynpi.cov coverage API unavailable in the configured VERDI_HOME; "
+            "exclusion flows require the pynpi coverage backend"
+        )
     global _NPI_DISPATCHER
     if _NPI_DISPATCHER is not None:
         sess = _NPI_DISPATCHER.sessions.get("cov")
@@ -383,6 +418,11 @@ def test_session_close_rejects_unsaved_reasons_and_requires_explicit_discard():
 
 
 def test_strict_policy_rejects_covered_object():
+    if not _pynpi_cov_available():
+        pytest.skip(
+            "pynpi.cov coverage API unavailable in the configured VERDI_HOME; "
+            "exclusion flows require the pynpi coverage backend"
+        )
     import json
     import subprocess
     import sys
