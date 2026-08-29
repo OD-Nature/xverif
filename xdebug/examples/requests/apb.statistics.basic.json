@@ -1,0 +1,17 @@
+{
+  "api_version": "xdebug.v1",
+  "action": "apb.statistics",
+  "target": {
+    "session_id": "case_a"
+  },
+  "args": {
+    "name": "apb0",
+    "filter": {
+      "direction": "all",
+      "address": {
+        "mode": "exact",
+        "values": ["'h0", "'h4"]
+      }
+    }
+  }
+}

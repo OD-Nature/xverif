@@ -1,9 +1,14 @@
 #include "service/trace_source_path_formatter.h"
+#include "service/contract_bound_request.h"
+#include "design/trace/trace_completeness.h"
+#include "test_temp_path.h"
 
 #include <cassert>
 #include <cstdlib>
 #include <fcntl.h>
 #include <fstream>
+#include <limits>
+#include <stdexcept>
 #include <string>
 #include <unistd.h>
 
@@ -12,7 +17,8 @@ namespace {
 using Json = nlohmann::ordered_json;
 
 std::string make_source_file() {
-    char path[] = "/tmp/xdebug-trace-source-XXXXXX";
+    std::vector<char> path_storage = test_temp_template("xdebug-trace-source-XXXXXX");
+    char* path = path_storage.data();
     int fd = mkstemp(path);
     assert(fd >= 0);
     close(fd);
@@ -39,6 +45,9 @@ Json path_item(const std::string& file, int line, Json signal_path) {
 
 Json trace_raw_with_edges(const std::string& file, int count) {
     Json raw;
+    raw["scan_complete"] = true;
+    raw["analysis_complete"] = true;
+    raw["truncation_scopes"] = Json::array();
     raw["dependency_edges"] = Json::array();
     for (int i = 1; i <= count; ++i) {
         raw["dependency_edges"].push_back({
@@ -57,6 +66,22 @@ int main() {
     std::string file = make_source_file();
     setenv("XDEBUG_TRACE_SOURCE_CONTEXT_LINES", "1", 1);
     setenv("XDEBUG_TRACE_SOURCE_MERGE_THRESHOLD_LINES", "10", 1);
+
+    assert(xdebug_design::trace_analysis_complete(
+        xdebug_design::TraceCompletenessFacts()));
+    assert(!xdebug_design::trace_analysis_complete(
+        xdebug_design::TraceCompletenessFacts(true, false, true, false, false)));
+    assert(!xdebug_design::trace_analysis_complete(
+        xdebug_design::TraceCompletenessFacts(true, false, false, true, false)));
+    assert(!xdebug_design::trace_analysis_complete(
+        xdebug_design::TraceCompletenessFacts(true, false, false, false, true)));
+    assert(!xdebug_design::trace_analysis_complete(
+        xdebug_design::TraceCompletenessFacts(true, true, false, false, false)));
+    assert(!xdebug_design::trace_analysis_complete(
+        xdebug_design::TraceCompletenessFacts(false, false, false, false, false)));
+    assert(!xdebug_design::trace_analysis_complete(
+        xdebug_design::TraceCompletenessFacts(
+            true, false, false, false, false, true)));
 
     Json response = {
         {"summary", Json{{"signal", "top.out"}, {"mode", "load"}, {"path_count", 4}}},
@@ -83,48 +108,274 @@ int main() {
     assert(count_substr(text, "9     top.b -> top.c") == 1);
     assert(text.find("\nsignal_path: ") == std::string::npos);
 
-    assert(xdebug_design::trace_result_limit_from_request(Json::object()) == 10);
-    assert(xdebug_design::trace_result_limit_from_request(
+    auto trace_limit = [](Json request) {
+        xdebug_design::ContractBoundRequest bound(
+            request, "trace.test", true);
+        const int result =
+            xdebug_design::trace_result_limit_from_request(bound);
+        assert(bound.unconsumed_paths().empty());
+        return result;
+    };
+    assert(trace_limit(Json::object()) == 10);
+    assert(trace_limit(
                Json{{"limits", Json{{"max_results", 6}}}}) == 6);
-    assert(xdebug_design::trace_result_limit_from_request(
-               Json{{"args", Json{{"line_limit", 4}}}, {"limits", Json{{"max_results", 6}}}}) == 4);
-    assert(xdebug_design::trace_result_limit_from_request(
-               Json{{"args", Json{{"line_limit", 0}}}, {"limits", Json{{"max_results", 6}}}}) == 6);
+    assert(trace_limit(
+               Json{{"limits", Json{{"max_results",
+                   std::numeric_limits<int>::max()}}}}) ==
+           std::numeric_limits<int>::max());
 
+    auto assert_trace_limit_rejected = [&](const Json& request) {
+        bool rejected = false;
+        try {
+            (void)trace_limit(request);
+        } catch (const std::out_of_range&) {
+            rejected = true;
+        }
+        assert(rejected);
+    };
+    const Json::number_unsigned_t int_max_plus_one =
+        static_cast<Json::number_unsigned_t>(
+            std::numeric_limits<int>::max()) + 1U;
+    assert_trace_limit_rejected(
+        Json{{"limits", Json{{"max_results", int_max_plus_one}}}});
+    assert_trace_limit_rejected(
+        Json{{"limits", Json{{"max_results",
+            std::numeric_limits<Json::number_unsigned_t>::max()}}}});
+
+    Json next_action = {
+        {"chain_id", "c0"}, {"reason", "continue_from_depth_frontier"},
+        {"action", "trace.active_driver_chain"},
+        {"args", Json{{"signal", "top.c"}, {"time", "10ns"}}},
+        {"limits", Json{{"max_depth", 2}}}
+    };
+    Json chain_data = {
+        {"hops", Json::array({
+            Json{{"index", 1}, {"chain_id", "c0"}, {"time", "20ns"}, {"relation", "root"},
+                 {"file", file}, {"line", 5}, {"signal_path", Json::array({"top.a", "top.b"})}},
+            Json{{"index", 2}, {"chain_id", "c0"}, {"time", "10ns"}, {"relation", "driver"},
+                 {"file", file}, {"line", 9}, {"signal_path", Json::array({"top.b", "top.c"})}},
+        })},
+        {"depth_frontiers", Json::array({Json{{"chain_id", "c0"}, {"signal", "top.c"},
+            {"time", "10ns"}, {"value", "8'hxx"}, {"stopped_after_depth", 2}}})},
+        {"suggested_next_actions", Json::array({next_action})}
+    };
     Json chain_response = {
-        {"summary", Json{{"signal", "top.out"}, {"hop_count", 2}}},
-        {"data", Json{{"hops", Json::array({
-            Json{{"index", 1}, {"file", file}, {"line", 5}, {"signal_path", Json::array({"top.a", "top.b"})}},
-            Json{{"index", 2}, {"file", file}, {"line", 9}, {"signal_path", Json::array({"top.b", "top.c"})}},
-        })}}},
+        {"summary", Json{{"signal", "top.out"}, {"time", "20ns"},
+            {"termination", "control_only"}, {"termination_detail", "control_only"},
+            {"scan_complete", true}, {"analysis_complete", true},
+            {"response_truncated", false}, {"total_count", 2},
+            {"returned_count", 2}, {"truncation_scopes", Json::array()},
+            {"value_width_complete", false},
+            {"width_diagnostics", Json::array({Json{{"signal", "top.out"},
+                {"role", "hops[0].value"}, {"reason", "width unavailable"}}})}}},
+        {"data", chain_data},
     };
     std::string chain_text = xdebug_design::render_source_path_xout("trace.active_driver_chain", chain_response);
-    assert(chain_text.find("hop  line  signal_path") != std::string::npos);
-    assert(chain_text.find("1    5     top.a -> top.b") != std::string::npos);
-    assert(chain_text.find("2    9     top.b -> top.c") != std::string::npos);
+    assert(chain_text.find("chain  hop  time") != std::string::npos);
+    assert(chain_text.find("c0     1    20ns  root") != std::string::npos);
+    assert(chain_text.find("c0     2    10ns  driver") != std::string::npos);
+    assert(chain_text.find("\ndepth_frontiers:\n") != std::string::npos);
+    assert(chain_text.find("top.c   10ns  8'hxx") != std::string::npos);
+    assert(chain_text.find("\nnext:\n") != std::string::npos);
+    assert(chain_text.find("trace.active_driver_chain  top.c   10ns  2") != std::string::npos);
+    assert(chain_text.find("truncation_scopes") != std::string::npos);
+    assert(chain_text.find("[empty]") != std::string::npos);
+    assert(chain_text.find("width_diagnostics") == std::string::npos);
+    assert(chain_text.find("width unavailable") == std::string::npos);
+    assert(chain_text.find("{") == std::string::npos);
+    assert(chain_text.find("XOUT_BEGIN") == std::string::npos);
+    assert(!chain_text.empty() && chain_text.back() == '\n');
+
+    Json ambiguous_response = {
+        {"summary", Json{{"signal", "top.out"}, {"termination", "ambiguous"}}},
+        {"data", Json{{"ambiguity_evidence", Json{
+            {"kind", "multiple_rhs_sources"},
+            {"signal", "top.out"},
+            {"active_time", "10ns"},
+            {"complete", true},
+            {"rhs_signal_count", 1},
+            {"returned_rhs_signal_count", 1},
+            {"omitted_rhs_signal_count", 0},
+            {"truncation_scope", nullptr},
+            {"statements", Json::array({Json{
+                {"file", "rtl/top.sv"},
+                {"line", 12},
+                {"rhs_samples", Json::array({
+                    Json{
+                        {"signal", "top.raw_bin"},
+                        {"before", Json{{"status", "ok"}, {"value", "1010"}}},
+                        {"after", Json{{"status", "ok"}, {"value", "0011"}}},
+                        {"changed", true}
+                    },
+                    Json{
+                        {"signal", "top.prefixed_hex"},
+                        {"before", Json{{"status", "ok"}, {"value", "8'ha0"}}},
+                        {"after", Json{{"status", "ok"}, {"value", "8'ha1"}}},
+                        {"changed", true}
+                    },
+                    Json{
+                        {"signal", "top.raw_xz"},
+                        {"before", Json{{"status", "ok"}, {"value", "xxxx0010"}}},
+                        {"after", Json{{"status", "ok"}, {"value", "zzzz0011"}}},
+                        {"changed", true}
+                    },
+                    Json{
+                        {"signal", "top.prefixed_bin"},
+                        {"before", Json{{"status", "ok"}, {"value", "8'b10100000"}}},
+                        {"after", Json{{"status", "ok"}, {"value", "8'b10100001"}}},
+                        {"changed", true}
+                    },
+                    Json{
+                        {"signal", "top.prefixed_dec"},
+                        {"before", Json{{"status", "ok"}, {"value", "8'd160"}}},
+                        {"after", Json{{"status", "missing_value"}, {"value", nullptr}}},
+                        {"changed", nullptr}
+                    }
+                })}
+            }})}
+        }}, {"hops", Json::array({
+            Json{{"index", 0}, {"file", file}, {"line", 5},
+                 {"signal_path", Json::array({"top.out"})}}
+        })}}}
+    };
+    std::string ambiguous_text = xdebug_design::render_source_path_xout(
+        "trace.active_driver_chain", ambiguous_response);
+    size_t active_signals_pos = ambiguous_text.find("\nactive_signals:\n");
+    size_t ambiguity_pos = ambiguous_text.find("\nambiguous_rhs_samples:\n");
+    assert(active_signals_pos != std::string::npos);
+    assert(ambiguity_pos != std::string::npos);
+    assert(ambiguity_pos > active_signals_pos);
+    assert(ambiguous_text.find("signal            time  before", ambiguity_pos) != std::string::npos);
+    assert(ambiguous_text.find("top.raw_bin       10ns  4'ha", ambiguity_pos) != std::string::npos);
+    assert(ambiguous_text.find("4'h3", ambiguity_pos) != std::string::npos);
+    assert(ambiguous_text.find("top.raw_xz        10ns  8'hx2", ambiguity_pos) != std::string::npos);
+    assert(ambiguous_text.find("8'hz3", ambiguity_pos) != std::string::npos);
+    assert(ambiguous_text.find("8'ha0", ambiguity_pos) != std::string::npos);
+    assert(ambiguous_text.find("8'b10100000", ambiguity_pos) != std::string::npos);
+    assert(ambiguous_text.find("8'd160", ambiguity_pos) != std::string::npos);
+    assert(ambiguous_text.find("null", ambiguity_pos) != std::string::npos);
+    assert(ambiguous_text.find("statement", ambiguity_pos) == std::string::npos);
+    assert(ambiguous_text.find("changed", ambiguity_pos) == std::string::npos);
+    assert(ambiguous_text.find("status", ambiguity_pos) == std::string::npos);
+
+    Json canonical_raw = {
+        {"summary", Json{{"termination", "control_only"},
+            {"termination_detail", "control_only"},
+            {"analysis_complete", true}}},
+        {"chain", Json{{"chain", Json::array({Json{
+            {"index", 0}, {"signal", "top.a"}, {"next", "top.b"},
+            {"time", "20ns"}, {"active_time", "20ns"},
+            {"value", Json{{"value", "'h1"}, {"known", true}}},
+            {"file", file}, {"line", 5}
+        }})}}}
+    };
+    Json canonical = xdebug_design::simplify_active_driver_chain_payload(
+        canonical_raw, "top.b", "20ns", 10);
+    assert(canonical["summary"]["scan_complete"] == true);
+    assert(canonical["summary"]["analysis_complete"] == true);
+    assert(canonical["summary"]["response_truncated"] == false);
+    assert(canonical["summary"]["total_count"] == 1);
+    assert(canonical["summary"]["returned_count"] == 1);
+    assert(canonical["summary"]["truncation_scopes"].empty());
+    assert(!canonical["summary"].contains("hop_count"));
+    assert(!canonical["summary"].contains("truncated"));
+    assert(canonical["hops"][0]["value"].is_object());
+    assert(canonical["hops"][0]["value"]["value"] == "'h1");
+
+    Json incomplete_chain_raw = canonical_raw;
+    incomplete_chain_raw["summary"]["analysis_complete"] = false;
+    Json incomplete_chain = xdebug_design::simplify_active_driver_chain_payload(
+        incomplete_chain_raw, "top.b", "20ns", 10);
+    assert(incomplete_chain["summary"]["scan_complete"] == false);
+    assert(incomplete_chain["summary"]["analysis_complete"] == false);
+    assert(incomplete_chain["summary"]["response_truncated"] == false);
+    assert(incomplete_chain["summary"]["truncation_scopes"] ==
+           Json::array({"analysis_trace"}));
 
     Json default_limited = xdebug_design::simplify_trace_driver_load_payload(
         trace_raw_with_edges(file, 12), "trace.load", "top.out", "load");
-    assert(default_limited["summary"]["path_count"] == 10);
-    assert(default_limited["summary"]["truncated"] == true);
+    assert(default_limited["summary"]["scan_complete"] == true);
+    assert(default_limited["summary"]["analysis_complete"] == true);
+    assert(default_limited["summary"]["response_truncated"] == true);
+    assert(default_limited["summary"]["total_count"] == 12);
+    assert(default_limited["summary"]["returned_count"] == 10);
+    assert(default_limited["summary"]["truncation_scopes"] ==
+           Json::array({"response_paths"}));
     assert(default_limited["summary"]["limit_hint"] ==
            "returned first 10 trace entries; increase limits.max_results to return all results");
     assert(default_limited["paths"].size() == 10);
 
     Json explicit_limited = xdebug_design::simplify_trace_driver_load_payload(
         trace_raw_with_edges(file, 12), "trace.load", "top.out", "load", 3);
-    assert(explicit_limited["summary"]["path_count"] == 3);
-    assert(explicit_limited["summary"]["truncated"] == true);
+    assert(explicit_limited["summary"]["scan_complete"] == true);
+    assert(explicit_limited["summary"]["analysis_complete"] == true);
+    assert(explicit_limited["summary"]["response_truncated"] == true);
+    assert(explicit_limited["summary"]["total_count"] == 12);
+    assert(explicit_limited["summary"]["returned_count"] == 3);
+    assert(explicit_limited["summary"]["truncation_scopes"] ==
+           Json::array({"response_paths"}));
     assert(explicit_limited["summary"]["limit_hint"] ==
            "returned first 3 trace entries; increase limits.max_results to return all results");
     assert(explicit_limited["paths"].size() == 3);
+
+    Json incomplete_raw = trace_raw_with_edges(file, 1);
+    incomplete_raw["analysis_complete"] = false;
+    incomplete_raw["truncation_scopes"] =
+        Json::array({"analysis_trace_resolution"});
+    Json incomplete = xdebug_design::simplify_trace_driver_load_payload(
+        incomplete_raw, "trace.driver", "top.out", "driver");
+    assert(incomplete["summary"]["scan_complete"] == true);
+    assert(incomplete["summary"]["analysis_complete"] == false);
+    assert(incomplete["summary"]["response_truncated"] == false);
+    assert(incomplete["summary"]["truncation_scopes"] ==
+           Json::array({"analysis_trace_resolution"}));
+
+    Json parse_incomplete_raw = trace_raw_with_edges(file, 1);
+    parse_incomplete_raw["analysis_complete"] = false;
+    parse_incomplete_raw["truncation_scopes"] =
+        Json::array({"analysis_internal_json"});
+    parse_incomplete_raw["diagnostics"] = Json::array({Json{
+        {"code", "TRACE_INTERNAL_JSON_PARSE_FAILED"},
+        {"stage", "render_dependency_edge"},
+        {"artifact_kind", "dependency_edge"},
+        {"first_index", 0},
+        {"failure_count", 2},
+        {"message", "internal trace evidence could not be decoded"},
+    }});
+    Json parse_incomplete =
+        xdebug_design::simplify_trace_driver_load_payload(
+            parse_incomplete_raw, "trace.driver", "top.out", "driver");
+    assert(parse_incomplete["summary"]["scan_complete"] == true);
+    assert(parse_incomplete["summary"]["analysis_complete"] == false);
+    assert(parse_incomplete["summary"]["truncation_scopes"] ==
+           Json::array({"analysis_internal_json"}));
+    assert(parse_incomplete["diagnostics"].size() == 1);
+    assert(parse_incomplete["diagnostics"][0]["failure_count"] == 2);
+    Json parse_incomplete_response = {
+        {"summary", parse_incomplete["summary"]},
+        {"data", Json{
+            {"paths", parse_incomplete["paths"]},
+            {"diagnostics", parse_incomplete["diagnostics"]},
+        }},
+    };
+    const std::string parse_incomplete_text =
+        xdebug_design::render_source_path_xout(
+            "trace.driver", parse_incomplete_response);
+    assert(parse_incomplete_text.find("diagnostics") != std::string::npos);
+    assert(parse_incomplete_text.find(
+               "TRACE_INTERNAL_JSON_PARSE_FAILED") != std::string::npos);
+    assert(parse_incomplete_text.find(
+               "render_dependency_edge") != std::string::npos);
 
     Json limited_response = {
         {"summary", default_limited["summary"]},
         {"data", Json{{"paths", default_limited["paths"]}}},
     };
     std::string limited_text = xdebug_design::render_source_path_xout("trace.load", limited_response);
-    assert(limited_text.find("limit_hint: returned first 10 trace entries; increase limits.max_results to return all results") != std::string::npos);
+    assert(count_substr(limited_text, "limit_hint") == 1);
+    assert(limited_text.find(
+               "returned first 10 trace entries; increase limits.max_results to return all results") !=
+           std::string::npos);
 
     unlink(file.c_str());
     unsetenv("XDEBUG_TRACE_SOURCE_CONTEXT_LINES");

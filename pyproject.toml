@@ -18,19 +18,18 @@ dependencies = [
 xverif = "testinfra.xverif_test.plugin"
 
 [tool.setuptools.packages.find]
-where = [".", "xverif_mcp/src"]
-include = ["testinfra*", "xverif_mcp*", "xverif_loop*"]
+where = ["."]
+include = ["testinfra*"]
 namespaces = false
 
 [tool.pytest.ini_options]
-addopts = "-ra --strict-markers --dist=loadgroup"
+addopts = "-ra --strict-markers --dist=loadgroup --capture=tee-sys"
 pythonpath = [
   "xbit/src",
   "xentry/src",
   "xcov",
   "xwaveform/src",
   "xsva/src",
-  "xeda_runner/src",
   "xverif_mcp/src",
   "xdebug/tests",
 ]
@@ -43,7 +42,6 @@ testpaths = [
   "xcov/tests",
   "xwaveform/tests",
   "xsva/tests",
-  "xeda_runner/tests",
   "xverif_mcp/tests",
   "xdebug/tests",
 ]

@@ -277,7 +277,9 @@ findings:
 summary:
   stream: ready_packet
   packet_enabled: true
-  packet_count: 5000
+  complete_packet_count: 5000
+  partial_packet_count: 0
+  packet_count_status: exact
 
 packet:
   packet_index: 3
@@ -286,7 +288,7 @@ packet:
   start_time: 185ns
   end_time: 215ns
   beat_count: 4
-  stable_fields: opcode=8'ha3
+  packet_stable_fields: opcode=8'ha3
   first_fields: data=32'h4000000c seq=16'h000c
   last_fields: data=32'h4000000f seq=16'h000f
 
@@ -304,7 +306,7 @@ head:
 
 ```text
 packets:
-  packet_index start_time end_time beat_count stable_fields first_fields last_fields
+  packet_index start_time end_time beat_count packet_stable_fields first_fields last_fields
   0 65ns 95ns 4 opcode=8'ha0 data=32'h40000000 data=32'h40000003
   1 105ns 135ns 4 opcode=8'ha1 data=32'h40000004 data=32'h40000007
 ```
@@ -313,7 +315,7 @@ packets:
 
 ```text
 rows:
-  cycle time packet_index beat_index fields stable_fields
+  cycle time packet_index beat_index fields packet_stable_fields
   42 425ns 9 2 data=32'h00001000 seq=16'h002a opcode=8'ha9
 ```
 

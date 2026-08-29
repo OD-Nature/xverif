@@ -1,0 +1,13 @@
+{
+  "clk": "apb_vip_fixture_top.clk",
+  "rst_n": "apb_vip_fixture_top.rst_n",
+  "edge": "negedge",
+  "paddr": "apb_vip_fixture_top.apb_if.paddr",
+  "pwdata": "apb_vip_fixture_top.apb_if.pwdata",
+  "prdata": "apb_vip_fixture_top.apb_if.prdata[0]",
+  "pwrite": "apb_vip_fixture_top.apb_if.pwrite",
+  "penable": "apb_vip_fixture_top.apb_if.penable",
+  "psel": "apb_vip_fixture_top.apb_if.psel[0]",
+  "pready": "apb_vip_fixture_top.apb_if.pready[0]",
+  "pslverr": "apb_vip_fixture_top.apb_if.pslverr[0]"
+}

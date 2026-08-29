@@ -9,17 +9,21 @@ inline Json list_action_example(const std::string& action) {
     if (action == "list.create") {
         args = {{"name", "debug_list"},
                 {"signals", Json::array({"top.u.valid", "top.u.ready"})}};
+    } else if (action == "list.load") {
+        args = {{"config",
+                 {{"lists",
+                   Json::array({Json{{"name", "debug_list"},
+                                     {"signals", Json::array(
+                                         {"top.u.valid", "top.u.ready"})}}})}}}};
     } else if (action == "list.add") {
         args = {{"name", "debug_list"}, {"signal", "top.u.valid"}};
     } else if (action == "list.delete") {
         args = {{"name", "debug_list"}, {"index", 1}};
-    } else if (action == "list.value_at") {
-        args = {{"name", "debug_list"}, {"clock", "top.u.clk"}, {"time", "10ns"}};
-    } else if (action == "list.diff" || action == "list.export") {
+    } else if (action == "list.first_change" || action == "list.export") {
         args = {{"name", "debug_list"},
                 {"time_range", {{"begin", "0ns"}, {"end", "500ns"}}}};
         if (action == "list.export") {
-            args["output"] = {{"path", "/tmp/xdebug-list-export"}, {"file_format", "u64bin"}};
+            args["output"] = {{"path", "xdebug-list-export"}, {"file_format", "u64bin"}};
         }
     } else {
         args = {{"name", "debug_list"}};

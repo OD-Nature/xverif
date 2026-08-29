@@ -6,7 +6,8 @@
   "required": [
     "api_version",
     "action",
-    "args"
+    "args",
+    "target"
   ],
   "properties": {
     "api_version": {
@@ -16,7 +17,8 @@
       ]
     },
     "request_id": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "action": {
       "type": "string",
@@ -25,46 +27,120 @@
       ]
     },
     "target": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fsdb": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "session_id"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "fsdb"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "session_id"
+            ]
+          },
+          "required": [
+            "fsdb"
+          ]
+        }
+      ],
+      "additionalProperties": false
     },
     "args": {
       "type": "object",
+      "required": [
+        "expr"
+      ],
       "properties": {
-        "aggregate": {
-          "type": "object"
-        },
         "clock": {
           "type": "string",
           "description": "采样、统计或协议检查使用的 clock 信号路径。"
         },
         "edge": {
           "type": "string",
-          "description": "clock sampling 使用的边沿：posedge、negedge 或 dual。"
-        },
-        "events": {
-          "type": "boolean"
+          "description": "Clock sampling edge. The schema default is authoritative; negedge often matches monitor semantics."
         },
         "expr": {
           "type": "string",
-          "description": "需要求值或匹配的布尔表达式。"
-        },
-        "group_by": {
-          "type": "array"
+          "description": "在指定采样语义下求值或匹配的表达式。"
         },
         "line_limit": {
           "type": "integer",
           "minimum": 1,
-          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
+          "description": "Limits returned evidence rows only, not scanning, aggregation, or the verdict; read completeness fields as well."
+        },
+        "max_samples": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum number of clock samples to inspect. Exhaustion makes analysis incomplete; it is not a response-row limit."
         },
         "mode": {
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "first",
+            "last",
+            "all"
+          ],
+          "default": "first",
+          "description": "first and last return the chronologically first or last match; all returns multiple matches. line_limit is valid only with all."
         },
         "name": {
           "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。"
+          "description": "Saved-object name in this action namespace; do not assume names are shared by cursors, lists, and protocol configs."
         },
-        "rst_n": {
-          "type": "string"
+        "render_time_unit": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "ps",
+            "ns",
+            "us"
+          ],
+          "description": "Controls only canonical response time rendering: auto, ps, ns, or us. It never changes input parsing, sampling, filtering, or ordering."
+        },
+        "reset": {
+          "type": "object",
+          "required": [
+            "signal",
+            "polarity"
+          ],
+          "properties": {
+            "signal": {
+              "type": "string",
+              "minLength": 1,
+              "description": "One-bit final waveform signal path used as reset."
+            },
+            "polarity": {
+              "type": "string",
+              "enum": [
+                "active_low",
+                "active_high"
+              ],
+              "description": "Level that asserts reset. X, Z, and unavailable samples are conservatively treated as asserted."
+            }
+          },
+          "additionalProperties": false,
+          "description": "Optional reset signal. Samples while reset is asserted do not participate in event matching."
         },
         "sample_point": {
           "type": "string",
@@ -72,55 +148,54 @@
             "before",
             "after"
           ],
-          "description": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。"
+          "description": "Before/after observation point for posedge or dual sampling; it does not change the raw waveform range."
         },
         "signals": {
-          "oneOf": [
-            {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              }
-            }
-          ],
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1
+          },
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Value for a caller-defined signal alias key. Supply the real signal path or the action-supported expression for that alias."
+          },
+          "x-dynamic-map": true,
+          "x-dynamic-contract": "Each property key is an alias referenced by this action; each value resolves that alias to a signal path or supported expression.",
           "description": "信号列表，或 alias 到信号路径的映射。"
         },
         "time_range": {
           "type": "object",
+          "minProperties": 1,
           "properties": {
             "begin": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1,
+              "description": "闭区间起点；省略时使用可用波形窗口起点。"
             },
             "end": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1,
+              "description": "闭区间终点；省略时使用可用波形窗口终点。"
             }
           },
           "additionalProperties": false,
-          "description": "查询或分析的时间窗口。"
+          "description": "Closed analysis interval. begin and end may be omitted independently to use the available waveform bounds."
         },
-        "time_unit": {
+        "value_format": {
           "type": "string",
           "enum": [
-            "auto",
-            "fs",
-            "ps",
-            "ns",
-            "us",
-            "ms",
-            "s"
-          ]
+            "hex",
+            "bin",
+            "dec"
+          ],
+          "default": "hex",
+          "description": "返回 LogicValue 的显示格式；不改变比较、采样或底层四态值。"
         }
       },
       "additionalProperties": false,
-      "required": [
-        "expr"
-      ],
       "anyOf": [
         {
           "required": [
@@ -133,31 +208,102 @@
             "signals"
           ]
         }
+      ],
+      "allOf": [
+        {
+          "anyOf": [
+            {
+              "required": [
+                "mode"
+              ],
+              "properties": {
+                "mode": {
+                  "const": "all"
+                }
+              }
+            },
+            {
+              "not": {
+                "required": [
+                  "line_limit"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "name",
+                  "clock"
+                ]
+              },
+              {
+                "required": [
+                  "name",
+                  "signals"
+                ]
+              },
+              {
+                "required": [
+                  "name",
+                  "edge"
+                ]
+              },
+              {
+                "required": [
+                  "name",
+                  "sample_point"
+                ]
+              },
+              {
+                "required": [
+                  "name",
+                  "reset"
+                ]
+              }
+            ]
+          }
+        }
       ]
     },
     "limits": {
-      "type": "object"
-    },
-    "auth_token": {
-      "type": "string"
-    },
-    "id": {
-      "type": "string"
-    },
-    "trace_id": {
-      "type": "string"
-    },
-    "span_id": {
-      "type": "string"
-    },
-    "parent_span_id": {
-      "type": "string"
+      "type": "object",
+      "properties": {
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647,
+          "description": "Positive public frontend-to-engine request timeout in milliseconds. Omit limits.timeout_ms to disable the public watchdog."
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false,
-  "description": "event.find: 查找满足表达式的事件样例。",
+  "description": "Find sampled events that match an expression.",
   "x-purpose": "查找满足表达式的事件样例。",
   "x-how_it_works": "用 name 配置或 inline clock/signals 构建 EventQuery，按 clock sampling 模式扫描表达式命中；表达式支持布尔组合、相等比较和大小比较。",
   "x-when_to_use": "快速找到协议条件发生的时间。",
-  "x-arg_contract_notes": "required: expr; also one of: name / clock + signals"
+  "x-arg_contract_notes": "required: expr; also one of: name / clock + signals",
+  "x-description-zh": "查找满足表达式的事件样例。",
+  "x-agent": {
+    "use_when": [
+      "需要按 clock edge 查找满足表达式的采样事件。"
+    ],
+    "do_not_use_when": [
+      "需要原始 value-change timeline 或标准 AXI/APB transaction。"
+    ],
+    "alternatives": [
+      {
+        "action": "signal.changes",
+        "when": "需要原始跳变。"
+      }
+    ],
+    "constraints": [
+      "required: expr; also one of: name / clock + signals"
+    ]
+  }
 }

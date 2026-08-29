@@ -7,7 +7,9 @@ from pathlib import Path
 import yaml
 
 
-CASE_DOC = yaml.safe_load((Path(__file__).with_name("cases.v1.yaml")).read_text())
+CASE_DOC = yaml.safe_load(
+    (Path(__file__).with_name("cases.v1.yaml")).read_text(encoding="utf-8")
+)
 
 
 def cases(group: str) -> list[dict[str, object]]:
@@ -35,6 +37,7 @@ def run_case(
         argv,
         cwd=work_dir,
         text=True,
+        encoding="utf-8",
         capture_output=True,
         timeout=180,
     )

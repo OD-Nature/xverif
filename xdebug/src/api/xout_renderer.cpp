@@ -96,21 +96,28 @@ void render_data_value(TextResponseBuilder& out, const std::string& key,
     } else if (value.is_array() && !value.empty() &&
                xdebug::is_xout_scalar_json(value[0])) {
         out.emit_section(key);
-        int n = std::min(20, static_cast<int>(value.size()));
-        for (int i = 0; i < n; ++i) out.emit_row({json_to_xout_value(value[i])});
-        if (static_cast<int>(value.size()) > n) {
-            out.emit_kv("(+ " + std::to_string(value.size() - n) + " more)", "");
-        }
+        for (const auto& item : value)
+            out.emit_row({json_to_xout_value(item)});
     } else if (value.is_array() && !value.empty() && value[0].is_object()) {
-        int count = static_cast<int>(value.size());
         out.emit_section(key);
-        int n = std::min(20, count);
-        out.emit_json_table(value, n);
-        if (count > n) out.emit_kv("(+ " + std::to_string(count - n) + " more)", "");
+        out.emit_json_table(value, static_cast<int>(value.size()));
     } else if (value.is_object()) {
-        out.emit_section(key);
+        bool has_direct_fields = false;
         for (auto it = value.begin(); it != value.end(); ++it) {
-            render_data_value(out, it.key(), it.value());
+            if (should_emit_scalar_key(it.key(), it.value()) ||
+                (it.value().is_array() && it.value().empty())) {
+                if (!has_direct_fields) out.emit_section(key);
+                if (should_emit_scalar_key(it.key(), it.value()))
+                    out.emit_kv(it.key(), it.value());
+                else
+                    out.emit_kv(it.key(), "[empty]");
+                has_direct_fields = true;
+            }
+        }
+        for (auto it = value.begin(); it != value.end(); ++it) {
+            if (should_emit_scalar_key(it.key(), it.value()) ||
+                (it.value().is_array() && it.value().empty())) continue;
+            render_data_value(out, key + "." + it.key(), it.value());
         }
     }
 }
@@ -133,7 +140,14 @@ void render_generic(TextResponseBuilder& out, const Json& response) {
 
 } // namespace
 
-std::string render_xout_response(const Json& response) {
+std::string render_xout_response(const Json& response,
+                                 const std::string& handler_xout) {
+    if (response.value("ok", false) && !handler_xout.empty()) {
+        std::string text = handler_xout;
+        while (!text.empty() && text.back() == '\n') text.pop_back();
+        text.push_back('\n');
+        return text;
+    }
     if (response.value("ok", false) && response.contains("text") &&
         response["text"].is_string()) {
         std::string text = response["text"].get<std::string>();
@@ -171,6 +185,21 @@ std::string render_xout_response(const Json& response) {
         }
         if (response.contains("error") && response["error"].is_object()) {
             const Json& error = response["error"];
+            if (error.contains("validation_issues") &&
+                error["validation_issues"].is_array()) {
+                const Json& issues = error["validation_issues"];
+                const size_t rendered = std::min<size_t>(20, issues.size());
+                out.emit_section("validation_issues");
+                out.emit_kv("issue_count", Json(static_cast<unsigned long long>(issues.size())));
+                out.emit_kv("issues_truncated", rendered < issues.size());
+                std::vector<std::vector<std::string>> rows;
+                rows.reserve(rendered);
+                for (size_t i = 0; i < rendered; ++i) {
+                    rows.push_back({scalar_text(issues[i], "path"),
+                                    scalar_text(issues[i], "message")});
+                }
+                out.emit_table({"path", "message"}, rows);
+            }
             if (error.contains("candidates") && error["candidates"].is_array()) {
                 out.emit_section("candidates");
                 for (const auto& item : error["candidates"])
@@ -190,6 +219,19 @@ std::string render_xout_response(const Json& response) {
     emit_suggestions(out, response);
     emit_common_blocks(out, response);
     return out.str();
+}
+
+std::string render_xout_response(const Json& response) {
+    return render_xout_response(response, std::string());
+}
+
+std::string render_xout_transport_payload(const Json& response,
+                                          const std::string& handler_xout) {
+    return render_xout_response(response, handler_xout);
+}
+
+std::string render_xout_transport_payload(const Json& response) {
+    return render_xout_response(response);
 }
 
 } // namespace xdebug

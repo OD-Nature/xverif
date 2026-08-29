@@ -4,8 +4,10 @@ TC               ?= apb_vip_test
 VCS              ?= vcs
 VLOGAN           ?= vlogan
 NPROC            ?= 4
-SVT_VIP_INCDIR   ?=
-SVT_VIP_SRCDIR   ?=
+SVT_VIP_INCDIR    ?= $(SVT_AMBA_VIP_HOME)/sverilog/include
+SVT_VIP_SRCDIR    ?= $(SVT_AMBA_VIP_HOME)/sverilog/src/vcs
+SVT_COMMON_INCDIR ?= $(SVT_COMMON_HOME)/sverilog/include
+SVT_COMMON_SRCDIR ?= $(SVT_COMMON_HOME)/sverilog/src/vcs
 
 SEED             ?= 11
 VERBOSITY        ?= UVM_MEDIUM
@@ -22,6 +24,9 @@ VCS_SHARED := -full64 -sverilog -ntb_opts uvm-1.2 \
 	+define+SVT_UVM_TECHNOLOGY \
 	+define+UVM_PACKER_MAX_BYTES=1500000 \
 	+define+UVM_DISABLE_AUTO_ITEM_RECORDING \
+	+define+SYNOPSYS_SV \
+	+define+DESIGNWARE_INCDIR=$(DESIGNWARE_HOME) \
+	+define+SVT_LOADER_UTIL_ENABLE_DWHOME_INCDIRS \
 	+define+SVT_APB_MAX_ADDR_WIDTH=32 \
 	+define+SVT_APB_MAX_DATA_WIDTH=32 \
 	+incdir+$(ROOT_DIR)/env \
@@ -30,6 +35,8 @@ VCS_SHARED := -full64 -sverilog -ntb_opts uvm-1.2 \
 	+incdir+$(ROOT_DIR)/tb \
 	+incdir+$(SVT_VIP_INCDIR) \
 	+incdir+$(SVT_VIP_SRCDIR) \
+	+incdir+$(SVT_COMMON_INCDIR) \
+	+incdir+$(SVT_COMMON_SRCDIR) \
 	-timescale=1ns/1ps -kdb -lca
 
 SIM_OPTS := +UVM_TESTNAME=$(TC) \
@@ -41,9 +48,15 @@ SIM_OPTS := +UVM_TESTNAME=$(TC) \
 .PHONY: check-env vlog_com vlog_rtl vlog_tb elab cmp ncrun run clean
 
 check-env:
+	@test -n "$(DESIGNWARE_HOME)" || { echo "DESIGNWARE_HOME is required"; exit 2; }
+	@test -n "$(SVT_AMBA_VIP_HOME)" || { echo "SVT_AMBA_VIP_HOME is required"; exit 2; }
+	@test -n "$(SVT_COMMON_HOME)" || { echo "SVT_COMMON_HOME is required"; exit 2; }
+	@test -d "$(DESIGNWARE_HOME)/vip/svt" || { echo "DESIGNWARE_HOME must contain vip/svt"; exit 2; }
 	@test -f "$(SVT_VIP_INCDIR)/svt_apb_if.svi" || { echo "SVT_VIP_INCDIR must contain svt_apb_if.svi"; exit 2; }
 	@test -f "$(SVT_VIP_INCDIR)/svt_apb.uvm.pkg" || { echo "SVT_VIP_INCDIR must contain svt_apb.uvm.pkg"; exit 2; }
 	@test -d "$(SVT_VIP_SRCDIR)" || { echo "SVT_VIP_SRCDIR is required"; exit 2; }
+	@test -f "$(SVT_COMMON_INCDIR)/svt_defines.svi" || { echo "SVT_COMMON_INCDIR must contain svt_defines.svi"; exit 2; }
+	@test -d "$(SVT_COMMON_SRCDIR)" || { echo "SVT_COMMON_SRCDIR is required"; exit 2; }
 
 vlog_com: check-env
 	@mkdir -p $(ANDB_DIR)
@@ -58,8 +71,8 @@ vlog_rtl: check-env
 vlog_tb: check-env
 	@mkdir -p $(ANDB_DIR)
 	cd $(ANDB_DIR) && $(VLOGAN) $(VCS_SHARED) \
-		$(SVT_VIP_INCDIR)/svt_apb_if.svi \
 		$(SVT_VIP_INCDIR)/svt_apb.uvm.pkg \
+		$(SVT_VIP_INCDIR)/svt_apb_if.svi \
 		$(ROOT_DIR)/apb_vip_pkg.sv \
 		$(ROOT_DIR)/tb/apb_vip_fixture_top.sv \
 		-l $(BUILD_DIR)/vlog_tb.log

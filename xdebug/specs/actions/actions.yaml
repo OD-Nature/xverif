@@ -13,12 +13,31 @@
       },
       "examples": {
         "request": [
-          "examples/requests/actions.basic.json"
+          "examples/requests/actions.basic.json",
+          "examples/requests/actions.guide.json"
         ],
         "response": [
-          "examples/responses/actions.basic.json"
+          "examples/responses/actions.basic.json",
+          "examples/responses/actions.guide.json"
         ]
-      }
+      },
+      "description_en": "List the public xdebug action catalog.",
+      "description_zh": "列出当前运行时公开 action catalog。",
+      "purposes": [
+        "discover"
+      ],
+      "use_when": [
+        "需要发现当前 runtime 公开的 action、状态和适用资源。"
+      ],
+      "do_not_use_when": [
+        "已经知道 action 且需要它的字段、枚举或 response 合同。"
+      ],
+      "alternatives": [
+        {
+          "action": "schema",
+          "when": "需要一个已知 action 的完整调用合同。"
+        }
+      ]
     },
     {
       "name": "apb.config.list",
@@ -37,7 +56,28 @@
         "response": [
           "examples/responses/apb.config.list.basic.json"
         ]
-      }
+      },
+      "description_en": "List saved APB interface configurations.",
+      "description_zh": "列出 APB 配置。",
+      "purposes": [
+        "discover"
+      ],
+      "use_when": [
+        "Need to discover saved APB interface names before selecting one, without decoding transfers."
+      ],
+      "do_not_use_when": [
+        "Do not use it to register a configuration or inspect APB transfers."
+      ],
+      "alternatives": [
+        {
+          "action": "apb.config.load",
+          "when": "Register or replace an APB interface configuration."
+        },
+        {
+          "action": "apb.query",
+          "when": "Inspect decoded APB transfers."
+        }
+      ]
     },
     {
       "name": "apb.config.load",
@@ -67,29 +107,125 @@
         [
           "config_path"
         ]
+      ],
+      "recommended_actions": [
+        "value.at",
+        "apb.query",
+        "apb.export",
+        "apb.transaction.cursor",
+        "apb.statistics",
+        "apb.transfer_window"
+      ],
+      "description_en": "Load and validate an APB interface configuration.",
+      "description_zh": "加载 APB 配置。",
+      "purposes": [
+        "configure"
+      ],
+      "use_when": [
+        "Have an inline APB signal mapping or config file that must be registered and validated before querying transfers."
+      ],
+      "do_not_use_when": [
+        "Do not use it to enumerate saved names or query decoded APB activity."
+      ],
+      "alternatives": [
+        {
+          "action": "apb.config.list",
+          "when": "Discover saved APB configuration names."
+        },
+        {
+          "action": "apb.query",
+          "when": "Inspect transfers from a loaded interface."
+        }
       ]
     },
     {
-      "name": "apb.cursor",
+      "name": "apb.transaction.cursor",
       "category": "waveform",
       "status": "stable",
       "requires": "waveform",
       "handler_kind": "engine_forward",
       "schemas": {
-        "request": "schemas/v1/actions/apb.cursor.request.schema.json",
-        "response": "schemas/v1/actions/apb.cursor.response.schema.json"
+        "request": "schemas/v1/actions/apb.transaction.cursor.request.schema.json",
+        "response": "schemas/v1/actions/apb.transaction.cursor.response.schema.json"
       },
       "examples": {
         "request": [
-          "examples/requests/apb.cursor.basic.json"
+          "examples/requests/apb.transaction.cursor.basic.json"
         ],
         "response": [
-          "examples/responses/apb.cursor.basic.json"
+          "examples/responses/apb.transaction.cursor.basic.json"
         ]
       },
       "required_args": [
         "name",
         "op"
+      ],
+      "description_en": "Move a cursor across APB transfers.",
+      "description_zh": "在 APB transfer 间移动游标。",
+      "purposes": [
+        "query"
+      ],
+      "use_when": [
+        "Need stateful begin/next/prev navigation through decoded APB transfers one item at a time."
+      ],
+      "do_not_use_when": [
+        "Do not use it for arbitrary waveform time bookmarks or bulk APB filtering."
+      ],
+      "alternatives": [
+        {
+          "action": "waveform.cursor.set",
+          "when": "Store an arbitrary waveform time bookmark."
+        },
+        {
+          "action": "apb.query",
+          "when": "Filter or enumerate APB transfers."
+        }
+      ]
+    },
+    {
+      "name": "apb.export",
+      "category": "waveform",
+      "status": "stable",
+      "requires": "waveform",
+      "handler_kind": "engine_forward",
+      "schemas": {
+        "request": "schemas/v1/actions/apb.export.request.schema.json",
+        "response": "schemas/v1/actions/apb.export.response.schema.json"
+      },
+      "examples": {
+        "request": [
+          "examples/requests/apb.export.basic.json",
+          "examples/requests/apb.export.written.json"
+        ],
+        "response": [
+          "examples/responses/apb.export.basic.json",
+          "examples/responses/apb.export.written.json"
+        ]
+      },
+      "required_args": [
+        "name",
+        "time_range"
+      ],
+      "description_en": "Preview or export filtered APB transactions from one complete time range.",
+      "description_zh": "预览或导出完整时间范围内过滤后的 APB 事务。",
+      "purposes": [
+        "export"
+      ],
+      "use_when": [
+        "Need a bounded in-response APB preview or one complete TSV/CSV transaction artifact plus metadata."
+      ],
+      "do_not_use_when": [
+        "Do not use it for aggregate-only APB counts, interactive transaction selection, AXI semantics, or generic valid-ready streams."
+      ],
+      "alternatives": [
+        {
+          "action": "apb.query",
+          "when": "Interactively select or inspect APB transactions without creating an artifact."
+        },
+        {
+          "action": "apb.statistics",
+          "when": "Need only aggregate APB counts and unresolved-filter diagnostics."
+        }
       ]
     },
     {
@@ -112,6 +248,31 @@
       },
       "required_args": [
         "name"
+      ],
+      "description_en": "Query completed APB transfers with direction and exact, range, or mask address filters.",
+      "description_zh": "按方向以及 exact、range 或 mask 地址条件查询已完成 APB transfer。",
+      "purposes": [
+        "query"
+      ],
+      "use_when": [
+        "Need completed APB transfer counts or rows filtered by direction and a canonical exact/range/mask address object."
+      ],
+      "do_not_use_when": [
+        "Do not use it for AXI channel semantics, custom valid-ready fields, or a focused signal window around one APB transfer."
+      ],
+      "alternatives": [
+        {
+          "action": "apb.export",
+          "when": "Persist the complete filtered APB transaction set as TSV or CSV."
+        },
+        {
+          "action": "apb.statistics",
+          "when": "Need aggregate APB counts and unresolved-filter diagnostics without transaction rows."
+        },
+        {
+          "action": "apb.transfer_window",
+          "when": "Inspect signal evidence around one APB transfer."
+        }
       ]
     },
     {
@@ -134,6 +295,77 @@
       },
       "required_args": [
         "name"
+      ],
+      "description_en": "Inspect the waveform window around an APB transfer.",
+      "description_zh": "实验性 APB 窗口分析。",
+      "purposes": [
+        "analyze"
+      ],
+      "use_when": [
+        "Have one APB transfer index and need the surrounding raw-signal timing evidence."
+      ],
+      "do_not_use_when": [
+        "Do not use it to enumerate many APB transfers or return aggregate protocol counts."
+      ],
+      "alternatives": [
+        {
+          "action": "apb.query",
+          "when": "Select APB transfers by direction, address, or index."
+        },
+        {
+          "action": "apb.statistics",
+          "when": "Return aggregate APB counts."
+        }
+      ]
+    },
+    {
+      "name": "apb.statistics",
+      "category": "waveform",
+      "status": "stable",
+      "requires": "waveform",
+      "handler_kind": "engine_forward",
+      "schemas": {
+        "request": "schemas/v1/actions/apb.statistics.request.schema.json",
+        "response": "schemas/v1/actions/apb.statistics.response.schema.json"
+      },
+      "examples": {
+        "request": [
+          "examples/requests/apb.statistics.basic.json"
+        ],
+        "response": [
+          "examples/responses/apb.statistics.basic.json"
+        ]
+      },
+      "required_args": [
+        "name"
+      ],
+      "required_target": [
+        "session_id"
+      ],
+      "description_en": "Count completed APB transactions with optional direction and address filters.",
+      "description_zh": "按方向和地址过滤统计已完成 APB 事务。",
+      "purposes": [
+        "analyze"
+      ],
+      "use_when": [
+        "Count completed APB read and write transactions after applying protocol filters."
+      ],
+      "do_not_use_when": [
+        "Inspecting individual APB transaction payloads or pending transfers."
+      ],
+      "alternatives": [
+        {
+          "action": "apb.query",
+          "when": "Inspect individual filtered APB transactions and payloads."
+        },
+        {
+          "action": "apb.export",
+          "when": "Persist the complete filtered APB transaction set as TSV or CSV."
+        },
+        {
+          "action": "apb.transfer_window",
+          "when": "Inspect raw signal evidence around one selected APB transfer."
+        }
       ]
     },
     {
@@ -156,6 +388,31 @@
       },
       "required_args": [
         "name"
+      ],
+      "description_en": "Analyze AXI latency, pending transactions, and outstanding activity.",
+      "description_zh": "汇总 AXI 行为。",
+      "purposes": [
+        "analyze"
+      ],
+      "use_when": [
+        "Need a derived latency, pending, or outstanding analysis across reconstructed AXI transactions rather than raw rows."
+      ],
+      "do_not_use_when": [
+        "Do not use it for a raw transaction listing, a single outlier ranking, or aggregate filtered counts."
+      ],
+      "alternatives": [
+        {
+          "action": "axi.query",
+          "when": "Inspect selected AXI channels or reconstructed transactions."
+        },
+        {
+          "action": "axi.latency_outlier",
+          "when": "Rank or threshold abnormal-latency transactions."
+        },
+        {
+          "action": "axi.statistics",
+          "when": "Count completed AXI transactions after filters."
+        }
       ]
     },
     {
@@ -183,6 +440,23 @@
         [
           "time_range"
         ]
+      ],
+      "description_en": "Export AXI transactions for external analysis.",
+      "description_zh": "导出 AXI 数据。",
+      "purposes": [
+        "export"
+      ],
+      "use_when": [
+        "Need selected AXI transaction evidence persisted to the declared artifact path and file format."
+      ],
+      "do_not_use_when": [
+        "Do not use it when the result should remain only in the response or when no artifact is required."
+      ],
+      "alternatives": [
+        {
+          "action": "axi.query",
+          "when": "Inspect AXI evidence in the response without creating an artifact."
+        }
       ]
     },
     {
@@ -205,6 +479,27 @@
       },
       "required_args": [
         "name"
+      ],
+      "description_en": "Inspect AXI channel stall windows.",
+      "description_zh": "实验性 AXI stall 分析。",
+      "purposes": [
+        "query"
+      ],
+      "use_when": [
+        "Need intervals and counts where one AXI channel keeps VALID asserted while READY is deasserted."
+      ],
+      "do_not_use_when": [
+        "Do not use it for generic non-AXI valid-ready interfaces or whole-transaction latency analysis."
+      ],
+      "alternatives": [
+        {
+          "action": "protocol.handshake.inspect",
+          "when": "Inspect a generic valid-ready handshake."
+        },
+        {
+          "action": "axi.latency_outlier",
+          "when": "Find end-to-end AXI transaction latency outliers."
+        }
       ]
     },
     {
@@ -224,7 +519,28 @@
         "response": [
           "examples/responses/axi.config.list.basic.json"
         ]
-      }
+      },
+      "description_en": "List saved AXI interface configurations.",
+      "description_zh": "列出 AXI 配置。",
+      "purposes": [
+        "discover"
+      ],
+      "use_when": [
+        "Need to discover saved AXI interface names before selecting one, without decoding traffic."
+      ],
+      "do_not_use_when": [
+        "Do not use it to register a configuration or inspect AXI traffic."
+      ],
+      "alternatives": [
+        {
+          "action": "axi.config.load",
+          "when": "Register or replace an AXI interface configuration."
+        },
+        {
+          "action": "axi.query",
+          "when": "Inspect decoded AXI traffic."
+        }
+      ]
     },
     {
       "name": "axi.config.load",
@@ -254,29 +570,83 @@
         [
           "config_path"
         ]
+      ],
+      "recommended_actions": [
+        "value.at",
+        "axi.query",
+        "axi.transaction.cursor",
+        "axi.analysis",
+        "axi.statistics",
+        "axi.export",
+        "axi.channel_stall",
+        "axi.latency_outlier",
+        "axi.outstanding_timeline",
+        "axi.request_response_pair"
+      ],
+      "description_en": "Load and validate an AXI interface configuration.",
+      "description_zh": "加载 AXI 配置。",
+      "purposes": [
+        "configure"
+      ],
+      "use_when": [
+        "Have an inline AXI channel mapping or config file that must be registered and validated before traffic analysis."
+      ],
+      "do_not_use_when": [
+        "Do not use it to enumerate saved names or query decoded AXI activity."
+      ],
+      "alternatives": [
+        {
+          "action": "axi.config.list",
+          "when": "Discover saved AXI configuration names."
+        },
+        {
+          "action": "axi.query",
+          "when": "Inspect traffic from a loaded interface."
+        }
       ]
     },
     {
-      "name": "axi.cursor",
+      "name": "axi.transaction.cursor",
       "category": "waveform",
       "status": "stable",
       "requires": "waveform",
       "handler_kind": "engine_forward",
       "schemas": {
-        "request": "schemas/v1/actions/axi.cursor.request.schema.json",
-        "response": "schemas/v1/actions/axi.cursor.response.schema.json"
+        "request": "schemas/v1/actions/axi.transaction.cursor.request.schema.json",
+        "response": "schemas/v1/actions/axi.transaction.cursor.response.schema.json"
       },
       "examples": {
         "request": [
-          "examples/requests/axi.cursor.basic.json"
+          "examples/requests/axi.transaction.cursor.basic.json"
         ],
         "response": [
-          "examples/responses/axi.cursor.basic.json"
+          "examples/responses/axi.transaction.cursor.basic.json"
         ]
       },
       "required_args": [
         "name",
         "op"
+      ],
+      "description_en": "Move a cursor across AXI transactions.",
+      "description_zh": "在 AXI transfer 间移动游标。",
+      "purposes": [
+        "query"
+      ],
+      "use_when": [
+        "Need stateful begin/next/prev navigation through reconstructed AXI transactions one item at a time."
+      ],
+      "do_not_use_when": [
+        "Do not use it for arbitrary waveform time bookmarks or bulk AXI filtering."
+      ],
+      "alternatives": [
+        {
+          "action": "waveform.cursor.set",
+          "when": "Store an arbitrary waveform time bookmark."
+        },
+        {
+          "action": "axi.query",
+          "when": "Filter or enumerate AXI transactions."
+        }
       ]
     },
     {
@@ -299,6 +669,27 @@
       },
       "required_args": [
         "name"
+      ],
+      "description_en": "Find AXI transactions with abnormal latency.",
+      "description_zh": "实验性 AXI latency 异常。",
+      "purposes": [
+        "analyze"
+      ],
+      "use_when": [
+        "Need to rank or threshold reconstructed AXI transactions by end-to-end latency."
+      ],
+      "do_not_use_when": [
+        "Do not use it for the complete transaction list or outstanding-depth evolution."
+      ],
+      "alternatives": [
+        {
+          "action": "axi.query",
+          "when": "Inspect the complete selected transaction evidence."
+        },
+        {
+          "action": "axi.outstanding_timeline",
+          "when": "Inspect outstanding-depth changes over time."
+        }
       ]
     },
     {
@@ -321,6 +712,27 @@
       },
       "required_args": [
         "name"
+      ],
+      "description_en": "Analyze the AXI pending-transaction timeline.",
+      "description_zh": "实验性 AXI outstanding 时间线。",
+      "purposes": [
+        "analyze"
+      ],
+      "use_when": [
+        "Need the time-ordered evolution of AXI pending or outstanding depth, including peak intervals."
+      ],
+      "do_not_use_when": [
+        "Do not use it to inspect payload beats or rank individual transaction latency."
+      ],
+      "alternatives": [
+        {
+          "action": "axi.query",
+          "when": "Inspect transaction or channel payload evidence."
+        },
+        {
+          "action": "axi.latency_outlier",
+          "when": "Find individual latency outliers."
+        }
       ]
     },
     {
@@ -343,6 +755,31 @@
       },
       "required_args": [
         "name"
+      ],
+      "description_en": "Query reconstructed AXI transactions by channel handshake or direction, address, ID, and address-handshake time filters.",
+      "description_zh": "按通道握手，或按方向、地址、ID 与地址握手时间查询重建后的 AXI transaction。",
+      "purposes": [
+        "query"
+      ],
+      "use_when": [
+        "Need reconstructed AXI transaction evidence, first-beat data, per-channel handshake times, or a precise channel-handshake lookup."
+      ],
+      "do_not_use_when": [
+        "Do not use it for custom valid-ready fields, artifact generation, or latency/outstanding aggregation."
+      ],
+      "alternatives": [
+        {
+          "action": "axi.statistics",
+          "when": "Return filtered AXI counts."
+        },
+        {
+          "action": "axi.export",
+          "when": "Write AXI transaction artifacts."
+        },
+        {
+          "action": "axi.analysis",
+          "when": "Run latency, pending, or outstanding analysis."
+        }
       ]
     },
     {
@@ -365,6 +802,77 @@
       },
       "required_args": [
         "name"
+      ],
+      "description_en": "Pair AXI requests with their responses.",
+      "description_zh": "实验性 AXI 请求响应配对。",
+      "purposes": [
+        "analyze"
+      ],
+      "use_when": [
+        "Need explicit request-to-response correlation and pairing evidence for reconstructed AXI transactions."
+      ],
+      "do_not_use_when": [
+        "Do not use it for unrelated channel handshakes or an unpaired transaction listing."
+      ],
+      "alternatives": [
+        {
+          "action": "axi.query",
+          "when": "Inspect arbitrary AXI channels or transactions."
+        },
+        {
+          "action": "axi.analysis",
+          "when": "Analyze protocol-wide pending or latency behavior."
+        }
+      ]
+    },
+    {
+      "name": "axi.statistics",
+      "category": "waveform",
+      "status": "stable",
+      "requires": "waveform",
+      "handler_kind": "engine_forward",
+      "schemas": {
+        "request": "schemas/v1/actions/axi.statistics.request.schema.json",
+        "response": "schemas/v1/actions/axi.statistics.response.schema.json"
+      },
+      "examples": {
+        "request": [
+          "examples/requests/axi.statistics.basic.json"
+        ],
+        "response": [
+          "examples/responses/axi.statistics.basic.json"
+        ]
+      },
+      "required_args": [
+        "name"
+      ],
+      "required_target": [
+        "session_id"
+      ],
+      "description_en": "Count completed AXI transactions with optional direction, ID, and address filters.",
+      "description_zh": "按方向、ID 和地址过滤统计已完成 AXI 事务。",
+      "purposes": [
+        "analyze"
+      ],
+      "use_when": [
+        "Count completed AXI read and write transactions after applying protocol filters."
+      ],
+      "do_not_use_when": [
+        "Inspecting individual AXI payload beats or pending transactions."
+      ],
+      "alternatives": [
+        {
+          "action": "axi.query",
+          "when": "Inspect filtered AXI transactions, channels, or payload beats."
+        },
+        {
+          "action": "axi.analysis",
+          "when": "Analyze AXI pending transactions, latency, or outstanding activity."
+        },
+        {
+          "action": "axi.export",
+          "when": "Persist selected AXI transaction evidence as an artifact."
+        }
       ]
     },
     {
@@ -387,6 +895,23 @@
       },
       "required_args": [
         "requests"
+      ],
+      "description_en": "Execute multiple xdebug requests as one ordered batch.",
+      "description_zh": "批量执行多个 xdebug request。",
+      "purposes": [
+        "orchestrate"
+      ],
+      "use_when": [
+        "需要按顺序执行多个相互独立的 native xdebug request。"
+      ],
+      "do_not_use_when": [
+        "需要一个 MCP session 中的单个 action 查询或跨请求共享结果。"
+      ],
+      "alternatives": [
+        {
+          "action": "schema",
+          "when": "需要先验证单个 request 合同。"
+        }
       ]
     },
     {
@@ -401,10 +926,12 @@
       },
       "examples": {
         "request": [
-          "examples/requests/counter.statistics.basic.json"
+          "examples/requests/counter.statistics.basic.json",
+          "examples/requests/counter.statistics.no_value.json"
         ],
         "response": [
-          "examples/responses/counter.statistics.basic.json"
+          "examples/responses/counter.statistics.basic.json",
+          "examples/responses/counter.statistics.no_value.json"
         ]
       },
       "required_args": [
@@ -412,136 +939,291 @@
         "time_range",
         "vld",
         "cnt"
+      ],
+      "description_en": "Analyze sampled counter behavior and statistics.",
+      "description_zh": "统计计数器行为。",
+      "purposes": [
+        "analyze"
+      ],
+      "use_when": [
+        "需要按采样 clock 统计一个 counter 的增量、回绕或活动。"
+      ],
+      "do_not_use_when": [
+        "需要多个一般信号的活动统计或原始变化列表。"
+      ],
+      "alternatives": [
+        {
+          "action": "signal.statistics",
+          "when": "需要一般信号而非 counter 语义的统计。"
+        }
       ]
     },
     {
-      "name": "cursor.delete",
+      "name": "waveform.cursor.delete",
       "category": "waveform",
       "status": "stable",
       "requires": "waveform",
       "handler_kind": "engine_forward",
       "schemas": {
-        "request": "schemas/v1/actions/cursor.delete.request.schema.json",
-        "response": "schemas/v1/actions/cursor.delete.response.schema.json"
+        "request": "schemas/v1/actions/waveform.cursor.delete.request.schema.json",
+        "response": "schemas/v1/actions/waveform.cursor.delete.response.schema.json"
       },
       "examples": {
         "request": [
-          "examples/requests/cursor.delete.basic.json"
+          "examples/requests/waveform.cursor.delete.basic.json"
         ],
         "response": [
-          "examples/responses/cursor.delete.basic.json"
+          "examples/responses/waveform.cursor.delete.basic.json"
         ]
       },
       "required_args": [
         "name"
+      ],
+      "description_en": "Delete a named waveform cursor.",
+      "description_zh": "删除游标。",
+      "purposes": [
+        "manage"
+      ],
+      "use_when": [
+        "Know the waveform cursor name and need to remove that saved time bookmark."
+      ],
+      "do_not_use_when": [
+        "Do not use it to delete protocol transaction state or to move a cursor."
+      ],
+      "alternatives": [
+        {
+          "action": "waveform.cursor.list",
+          "when": "Discover waveform cursor names before deletion."
+        },
+        {
+          "action": "waveform.cursor.set",
+          "when": "Create or replace a waveform cursor."
+        }
       ]
     },
     {
-      "name": "cursor.get",
+      "name": "waveform.cursor.get",
       "category": "waveform",
       "status": "stable",
       "requires": "waveform",
       "handler_kind": "engine_forward",
       "schemas": {
-        "request": "schemas/v1/actions/cursor.get.request.schema.json",
-        "response": "schemas/v1/actions/cursor.get.response.schema.json"
+        "request": "schemas/v1/actions/waveform.cursor.get.request.schema.json",
+        "response": "schemas/v1/actions/waveform.cursor.get.response.schema.json"
       },
       "examples": {
         "request": [
-          "examples/requests/cursor.get.basic.json"
+          "examples/requests/waveform.cursor.get.basic.json"
         ],
         "response": [
-          "examples/responses/cursor.get.basic.json"
+          "examples/responses/waveform.cursor.get.basic.json"
         ]
       },
       "required_args": [
         "name"
+      ],
+      "description_en": "Read a named waveform cursor.",
+      "description_zh": "读取命名游标。",
+      "purposes": [
+        "query",
+        "manage"
+      ],
+      "use_when": [
+        "Know the waveform cursor name and need its stored time without changing the active cursor."
+      ],
+      "do_not_use_when": [
+        "Do not use it to activate a cursor or navigate APB/AXI transactions."
+      ],
+      "alternatives": [
+        {
+          "action": "waveform.cursor.use",
+          "when": "Activate a saved waveform cursor."
+        },
+        {
+          "action": "apb.transaction.cursor",
+          "when": "Navigate APB transactions."
+        },
+        {
+          "action": "axi.transaction.cursor",
+          "when": "Navigate AXI transactions."
+        }
       ]
     },
     {
-      "name": "cursor.list",
+      "name": "waveform.cursor.list",
       "category": "waveform",
       "status": "stable",
       "requires": "waveform",
       "handler_kind": "engine_forward",
       "schemas": {
-        "request": "schemas/v1/actions/cursor.list.request.schema.json",
-        "response": "schemas/v1/actions/cursor.list.response.schema.json"
+        "request": "schemas/v1/actions/waveform.cursor.list.request.schema.json",
+        "response": "schemas/v1/actions/waveform.cursor.list.response.schema.json"
       },
       "examples": {
         "request": [
-          "examples/requests/cursor.list.basic.json"
+          "examples/requests/waveform.cursor.list.basic.json"
         ],
         "response": [
-          "examples/responses/cursor.list.basic.json"
+          "examples/responses/waveform.cursor.list.basic.json"
         ]
-      }
+      },
+      "description_en": "List named waveform cursors.",
+      "description_zh": "列出游标。",
+      "purposes": [
+        "discover",
+        "manage"
+      ],
+      "use_when": [
+        "Need to discover available waveform time-bookmark names before reading or activating one."
+      ],
+      "do_not_use_when": [
+        "Do not use it to read one cursor time or enumerate protocol transactions."
+      ],
+      "alternatives": [
+        {
+          "action": "waveform.cursor.get",
+          "when": "Read one saved waveform cursor."
+        },
+        {
+          "action": "apb.query",
+          "when": "Enumerate APB transactions."
+        },
+        {
+          "action": "axi.query",
+          "when": "Enumerate AXI transactions."
+        }
+      ]
     },
     {
-      "name": "cursor.set",
+      "name": "waveform.cursor.set",
       "category": "waveform",
       "status": "stable",
       "requires": "waveform",
       "handler_kind": "engine_forward",
       "schemas": {
-        "request": "schemas/v1/actions/cursor.set.request.schema.json",
-        "response": "schemas/v1/actions/cursor.set.response.schema.json"
+        "request": "schemas/v1/actions/waveform.cursor.set.request.schema.json",
+        "response": "schemas/v1/actions/waveform.cursor.set.response.schema.json"
       },
       "examples": {
         "request": [
-          "examples/requests/cursor.set.basic.json"
+          "examples/requests/waveform.cursor.set.basic.json"
         ],
         "response": [
-          "examples/responses/cursor.set.basic.json"
+          "examples/responses/waveform.cursor.set.basic.json"
         ]
       },
       "required_args": [
         "name",
         "time"
+      ],
+      "description_en": "Save a named waveform cursor.",
+      "description_zh": "保存命名时间游标。",
+      "purposes": [
+        "configure",
+        "manage"
+      ],
+      "use_when": [
+        "Need to create or replace an arbitrary waveform time bookmark under a stable name."
+      ],
+      "do_not_use_when": [
+        "Do not use it to navigate decoded protocol transactions."
+      ],
+      "alternatives": [
+        {
+          "action": "apb.transaction.cursor",
+          "when": "Move across APB transfers."
+        },
+        {
+          "action": "axi.transaction.cursor",
+          "when": "Move across AXI transactions."
+        }
       ]
     },
     {
-      "name": "cursor.use",
+      "name": "waveform.cursor.use",
       "category": "waveform",
       "status": "stable",
       "requires": "waveform",
       "handler_kind": "engine_forward",
       "schemas": {
-        "request": "schemas/v1/actions/cursor.use.request.schema.json",
-        "response": "schemas/v1/actions/cursor.use.response.schema.json"
+        "request": "schemas/v1/actions/waveform.cursor.use.request.schema.json",
+        "response": "schemas/v1/actions/waveform.cursor.use.response.schema.json"
       },
       "examples": {
         "request": [
-          "examples/requests/cursor.use.basic.json"
+          "examples/requests/waveform.cursor.use.basic.json"
         ],
         "response": [
-          "examples/responses/cursor.use.basic.json"
+          "examples/responses/waveform.cursor.use.basic.json"
         ]
       },
       "required_args": [
         "name"
+      ],
+      "description_en": "Activate a named waveform cursor.",
+      "description_zh": "激活游标。",
+      "purposes": [
+        "configure",
+        "manage"
+      ],
+      "use_when": [
+        "Need to make one existing waveform time bookmark the active cursor without changing its saved time."
+      ],
+      "do_not_use_when": [
+        "Do not use it to create a cursor or navigate decoded protocol transactions."
+      ],
+      "alternatives": [
+        {
+          "action": "waveform.cursor.set",
+          "when": "Create or replace a waveform cursor."
+        },
+        {
+          "action": "apb.transaction.cursor",
+          "when": "Navigate APB transfers."
+        },
+        {
+          "action": "axi.transaction.cursor",
+          "when": "Navigate AXI transactions."
+        }
       ]
     },
     {
-      "name": "detect_abnormal",
+      "name": "signal.anomaly.inspect",
       "category": "waveform",
       "status": "stable",
       "requires": "waveform",
       "handler_kind": "engine_forward",
       "schemas": {
-        "request": "schemas/v1/actions/detect_abnormal.request.schema.json",
-        "response": "schemas/v1/actions/detect_abnormal.response.schema.json"
+        "request": "schemas/v1/actions/signal.anomaly.inspect.request.schema.json",
+        "response": "schemas/v1/actions/signal.anomaly.inspect.response.schema.json"
       },
       "examples": {
         "request": [
-          "examples/requests/detect_abnormal.basic.json"
+          "examples/requests/signal.anomaly.inspect.basic.json"
         ],
         "response": [
-          "examples/responses/detect_abnormal.basic.json"
+          "examples/responses/signal.anomaly.inspect.basic.json"
         ]
       },
       "required_args": [
         "signals"
+      ],
+      "description_en": "Detect waveform glitches, unknown values, and stuck signals.",
+      "description_zh": "扫描常见波形异常。",
+      "purposes": [
+        "inspect"
+      ],
+      "use_when": [
+        "需要在 raw waveform 中检查 X/Z、短脉冲或长时间不变。"
+      ],
+      "do_not_use_when": [
+        "需要证明 valid-ready 协议违规。"
+      ],
+      "alternatives": [
+        {
+          "action": "protocol.handshake.inspect",
+          "when": "需要协议层 stall 或稳定性结论。"
+        }
       ]
     },
     {
@@ -556,12 +1238,35 @@
       },
       "examples": {
         "request": [
-          "examples/requests/event.config.list.basic.json"
+          "examples/requests/event.config.list.basic.json",
+          "examples/requests/event.config.list.all.json"
         ],
         "response": [
-          "examples/responses/event.config.list.basic.json"
+          "examples/responses/event.config.list.basic.json",
+          "examples/responses/event.config.list.all.json"
         ]
-      }
+      },
+      "description_en": "List saved event-query configurations.",
+      "description_zh": "列出事件配置。",
+      "purposes": [
+        "discover"
+      ],
+      "use_when": [
+        "Need to enumerate or inspect saved event-query definitions without executing a waveform search."
+      ],
+      "do_not_use_when": [
+        "Do not use it to load a named event configuration or search waveform events."
+      ],
+      "alternatives": [
+        {
+          "action": "event.config.load",
+          "when": "Load one event-query configuration."
+        },
+        {
+          "action": "event.find",
+          "when": "Search sampled waveform events."
+        }
+      ]
     },
     {
       "name": "event.config.load",
@@ -575,14 +1280,38 @@
       },
       "examples": {
         "request": [
-          "examples/requests/event.config.load.basic.json"
+          "examples/requests/event.config.load.basic.json",
+          "examples/requests/event.config.load.negedge_sample_point.json"
         ],
         "response": [
-          "examples/responses/event.config.load.basic.json"
+          "examples/responses/event.config.load.basic.json",
+          "examples/responses/event.config.load.negedge_sample_point.json"
         ]
       },
       "required_args": [
-        "name"
+        "name",
+        "config_path"
+      ],
+      "description_en": "Load an event-query configuration.",
+      "description_zh": "加载事件查询配置。",
+      "purposes": [
+        "configure"
+      ],
+      "use_when": [
+        "Have a persisted event-query configuration that must be read and registered before event search or export."
+      ],
+      "do_not_use_when": [
+        "Do not use it to enumerate configuration names or execute the configured event search."
+      ],
+      "alternatives": [
+        {
+          "action": "event.config.list",
+          "when": "Discover saved event configuration names."
+        },
+        {
+          "action": "event.find",
+          "when": "Execute an event search."
+        }
       ]
     },
     {
@@ -597,10 +1326,16 @@
       },
       "examples": {
         "request": [
-          "examples/requests/event.export.basic.json"
+          "examples/requests/event.export.basic.json",
+          "examples/requests/event.export.zero.json",
+          "examples/requests/event.export.aggregate_only.json",
+          "examples/requests/event.export.artifact.json"
         ],
         "response": [
-          "examples/responses/event.export.basic.json"
+          "examples/responses/event.export.basic.json",
+          "examples/responses/event.export.zero.json",
+          "examples/responses/event.export.aggregate_only.json",
+          "examples/responses/event.export.artifact.json"
         ]
       },
       "required_args": [
@@ -614,6 +1349,23 @@
           "clock",
           "signals"
         ]
+      ],
+      "description_en": "Export sampled events that match an expression.",
+      "description_zh": "导出满足表达式的事件。",
+      "purposes": [
+        "export"
+      ],
+      "use_when": [
+        "Need all matching sampled-event evidence written to a declared artifact rather than returned only inline."
+      ],
+      "do_not_use_when": [
+        "Do not use it when no artifact is required or when only the first/last matching sample is needed."
+      ],
+      "alternatives": [
+        {
+          "action": "event.find",
+          "when": "Return matching sampled events in the response."
+        }
       ]
     },
     {
@@ -628,10 +1380,12 @@
       },
       "examples": {
         "request": [
-          "examples/requests/event.find.basic.json"
+          "examples/requests/event.find.basic.json",
+          "examples/requests/event.find.zero.json"
         ],
         "response": [
-          "examples/responses/event.find.basic.json"
+          "examples/responses/event.find.basic.json",
+          "examples/responses/event.find.zero.json"
         ]
       },
       "required_args": [
@@ -645,6 +1399,23 @@
           "clock",
           "signals"
         ]
+      ],
+      "description_en": "Find sampled events that match an expression.",
+      "description_zh": "查找满足表达式的事件样例。",
+      "purposes": [
+        "query"
+      ],
+      "use_when": [
+        "需要按 clock edge 查找满足表达式的采样事件。"
+      ],
+      "do_not_use_when": [
+        "需要原始 value-change timeline 或标准 AXI/APB transaction。"
+      ],
+      "alternatives": [
+        {
+          "action": "signal.changes",
+          "when": "需要原始跳变。"
+        }
       ]
     },
     {
@@ -659,10 +1430,14 @@
       },
       "examples": {
         "request": [
-          "examples/requests/expr.eval_at.basic.json"
+          "examples/requests/expr.eval_at.basic.json",
+          "examples/requests/expr.eval_at.false.json",
+          "examples/requests/expr.eval_at.unknown.json"
         ],
         "response": [
-          "examples/responses/expr.eval_at.basic.json"
+          "examples/responses/expr.eval_at.basic.json",
+          "examples/responses/expr.eval_at.false.json",
+          "examples/responses/expr.eval_at.unknown.json"
         ]
       },
       "required_args": [
@@ -670,6 +1445,27 @@
         "time",
         "signals",
         "clock"
+      ],
+      "description_en": "Evaluate an expression at a sampled waveform time.",
+      "description_zh": "在指定时间求布尔/表达式值。",
+      "purposes": [
+        "transform"
+      ],
+      "use_when": [
+        "Have a waveform-backed Boolean or value expression and need its sampled result at one canonical time."
+      ],
+      "do_not_use_when": [
+        "Do not use it to rewrite expression syntax or inspect assignment structure without sampling."
+      ],
+      "alternatives": [
+        {
+          "action": "expr.normalize",
+          "when": "Normalize expression text or a design assignment without waveform evaluation."
+        },
+        {
+          "action": "value.at",
+          "when": "Read one raw leaf signal value."
+        }
       ]
     },
     {
@@ -690,32 +1486,96 @@
           "examples/responses/expr.normalize.basic.json"
         ]
       },
-      "required_args": [
-        "expr"
+      "resource_variants": [
+        {
+          "name": "expression",
+          "requires": "none",
+          "required_args": [
+            "expr"
+          ],
+          "forbidden_args": [
+            "signal",
+            "line_limit",
+            "no_statement_only",
+            "role"
+          ]
+        },
+        {
+          "name": "design_signal",
+          "requires": "design",
+          "required_args": [
+            "signal"
+          ],
+          "forbidden_args": [
+            "expr"
+          ]
+        }
+      ],
+      "description_en": "Normalize an expression for deterministic processing.",
+      "description_zh": "规范化表达式。",
+      "purposes": [
+        "transform"
+      ],
+      "use_when": [
+        "Need a deterministic parsed expression AST, or a design assignment normalized from one exact signal, without waveform sampling."
+      ],
+      "do_not_use_when": [
+        "Do not use it to evaluate an expression at waveform time or to resolve a signal name to candidates."
+      ],
+      "alternatives": [
+        {
+          "action": "expr.eval_at",
+          "when": "Evaluate an expression at a sampled waveform time."
+        },
+        {
+          "action": "signal.resolve",
+          "when": "Find matching design signal objects."
+        }
       ]
     },
     {
-      "name": "handshake.inspect",
+      "name": "protocol.handshake.inspect",
       "category": "waveform",
       "status": "stable",
       "requires": "waveform",
       "handler_kind": "engine_forward",
       "schemas": {
-        "request": "schemas/v1/actions/handshake.inspect.request.schema.json",
-        "response": "schemas/v1/actions/handshake.inspect.response.schema.json"
+        "request": "schemas/v1/actions/protocol.handshake.inspect.request.schema.json",
+        "response": "schemas/v1/actions/protocol.handshake.inspect.response.schema.json"
       },
       "examples": {
         "request": [
-          "examples/requests/handshake.inspect.basic.json"
+          "examples/requests/protocol.handshake.inspect.basic.json",
+          "examples/requests/protocol.handshake.inspect.intervals.json",
+          "examples/requests/protocol.handshake.inspect.all.json"
         ],
         "response": [
-          "examples/responses/handshake.inspect.basic.json"
+          "examples/responses/protocol.handshake.inspect.basic.json",
+          "examples/responses/protocol.handshake.inspect.intervals.json",
+          "examples/responses/protocol.handshake.inspect.all.json"
         ]
       },
       "required_args": [
         "clock",
         "valid",
         "ready"
+      ],
+      "description_en": "Inspect valid-ready transfers, stalls, and stability violations.",
+      "description_zh": "检查 valid/ready 握手。",
+      "purposes": [
+        "inspect"
+      ],
+      "use_when": [
+        "需要检查通用 valid-ready transfer、stall 或数据稳定性。"
+      ],
+      "do_not_use_when": [
+        "需要 AXI/APB 专用 transaction 关联。"
+      ],
+      "alternatives": [
+        {
+          "action": "axi.query",
+          "when": "接口是标准 AXI。"
+        }
       ]
     },
     {
@@ -739,6 +1599,32 @@
       "required_args": [
         "name",
         "signal"
+      ],
+      "description_en": "Add a signal to a named waveform list.",
+      "description_zh": "向信号列表追加一个信号。",
+      "purposes": [
+        "configure",
+        "manage"
+      ],
+      "use_when": [
+        "Have an existing named waveform list and need to append one specific signal path."
+      ],
+      "do_not_use_when": [
+        "Do not use it to create the list, delete entries, or inspect waveform values."
+      ],
+      "alternatives": [
+        {
+          "action": "list.create",
+          "when": "Create the named list first."
+        },
+        {
+          "action": "list.delete",
+          "when": "Remove an entry."
+        },
+        {
+          "action": "value.at",
+          "when": "Sample all list signals at one or more times."
+        }
       ]
     },
     {
@@ -761,6 +1647,86 @@
       },
       "required_args": [
         "name"
+      ],
+      "description_en": "Create a named waveform signal list.",
+      "description_zh": "创建命名信号列表。",
+      "purposes": [
+        "configure",
+        "manage"
+      ],
+      "use_when": [
+        "Need a new or replaced named collection of waveform signal paths for repeated multi-signal operations."
+      ],
+      "do_not_use_when": [
+        "Do not use it to append to an existing list or load protocol/stream configuration."
+      ],
+      "alternatives": [
+        {
+          "action": "list.add",
+          "when": "Append one signal to an existing list."
+        },
+        {
+          "action": "stream.config.load",
+          "when": "Load a valid-ready stream definition."
+        }
+      ]
+    },
+    {
+      "name": "list.load",
+      "category": "waveform",
+      "status": "stable",
+      "requires": "waveform",
+      "handler_kind": "engine_forward",
+      "schemas": {
+        "request": "schemas/v1/actions/list.load.request.schema.json",
+        "response": "schemas/v1/actions/list.load.response.schema.json"
+      },
+      "examples": {
+        "request": [
+          "examples/requests/list.load.basic.json",
+          "examples/requests/list.load.file.json"
+        ],
+        "response": [
+          "examples/responses/list.load.basic.json",
+          "examples/responses/list.load.file.json"
+        ]
+      },
+      "required_arg_groups": [
+        [
+          "config"
+        ],
+        [
+          "config_path"
+        ]
+      ],
+      "recommended_actions": [
+        "value.at",
+        "list.show",
+        "list.validate",
+        "list.first_change",
+        "list.export"
+      ],
+      "description_en": "Load and validate one or more named waveform signal lists from JSON configuration.",
+      "description_zh": "从 JSON 配置加载并验证一个或多个命名波形信号列表。",
+      "purposes": [
+        "configure",
+        "manage"
+      ],
+      "use_when": [
+        "Have a schema-valid inline or file-backed JSON configuration for key signals that must be loaded atomically before repeated multi-signal inspection."
+      ],
+      "do_not_use_when": [
+        "Do not use it for one ad-hoc list that can be created directly with list.create, or for protocol interface configuration."
+      ],
+      "alternatives": [
+        {
+          "action": "list.create",
+          "when": "Create one temporary named list directly from a signals array."
+        },
+        {
+          "action": "stream.config.load",
+          "when": "Load a valid-ready stream definition with sampling semantics."
+        }
       ]
     },
     {
@@ -791,29 +1757,72 @@
         [
           "index"
         ]
+      ],
+      "description_en": "Delete a signal or index from a waveform list.",
+      "description_zh": "从信号列表删除信号或 index。",
+      "purposes": [
+        "configure",
+        "manage"
+      ],
+      "use_when": [
+        "Know a stored signal path or one-based list index and need to remove only that entry."
+      ],
+      "do_not_use_when": [
+        "Do not use it to remove the whole list or inspect list contents."
+      ],
+      "alternatives": [
+        {
+          "action": "list.show",
+          "when": "Inspect current one-based indexes and signal paths."
+        },
+        {
+          "action": "list.create",
+          "when": "Replace the named list with a new definition."
+        }
       ]
     },
     {
-      "name": "list.diff",
+      "name": "list.first_change",
       "category": "waveform",
       "status": "stable",
       "requires": "waveform",
       "handler_kind": "engine_forward",
       "schemas": {
-        "request": "schemas/v1/actions/list.diff.request.schema.json",
-        "response": "schemas/v1/actions/list.diff.response.schema.json"
+        "request": "schemas/v1/actions/list.first_change.request.schema.json",
+        "response": "schemas/v1/actions/list.first_change.response.schema.json"
       },
       "examples": {
         "request": [
-          "examples/requests/list.diff.basic.json"
+          "examples/requests/list.first_change.basic.json"
         ],
         "response": [
-          "examples/responses/list.diff.basic.json"
+          "examples/responses/list.first_change.basic.json"
         ]
       },
       "required_args": [
         "name",
         "time_range"
+      ],
+      "description_en": "Find the first difference in a waveform list over a time range.",
+      "description_zh": "查找 list 在时间窗口内的首次差异。",
+      "purposes": [
+        "analyze"
+      ],
+      "use_when": [
+        "Need the earliest time any member of a saved waveform list diverges within a closed interval."
+      ],
+      "do_not_use_when": [
+        "Do not use it for a full change timeline or point sampling."
+      ],
+      "alternatives": [
+        {
+          "action": "signal.changes",
+          "when": "Return every raw change of one signal."
+        },
+        {
+          "action": "value.at",
+          "when": "Sample all list signals at one or more times."
+        }
       ]
     },
     {
@@ -836,6 +1845,27 @@
       },
       "required_args": [
         "name"
+      ],
+      "description_en": "Export waveform-list data.",
+      "description_zh": "导出 list 数据。",
+      "purposes": [
+        "export"
+      ],
+      "use_when": [
+        "Need multi-signal values from a saved list written to a declared artifact or returned as an export preview."
+      ],
+      "do_not_use_when": [
+        "Do not use it when no file or multi-signal preview is needed, or for a single point read."
+      ],
+      "alternatives": [
+        {
+          "action": "value.at",
+          "when": "Read list values at one or more times."
+        },
+        {
+          "action": "list.load",
+          "when": "Load a reusable signal set from JSON configuration before point reads."
+        }
       ]
     },
     {
@@ -855,7 +1885,31 @@
         "response": [
           "examples/responses/list.show.basic.json"
         ]
-      }
+      },
+      "required_args": [
+        "name"
+      ],
+      "description_en": "Show the contents of a waveform signal list.",
+      "description_zh": "显示信号列表内容。",
+      "purposes": [
+        "query"
+      ],
+      "use_when": [
+        "Know the list name and need its stored one-based entries without waveform validation or sampling."
+      ],
+      "do_not_use_when": [
+        "Do not use it to validate design existence or sample waveform values."
+      ],
+      "alternatives": [
+        {
+          "action": "list.validate",
+          "when": "Check every stored path against the active waveform."
+        },
+        {
+          "action": "value.at",
+          "when": "Sample the list at one or more times."
+        }
+      ]
     },
     {
       "name": "list.validate",
@@ -877,53 +1931,75 @@
       },
       "required_args": [
         "name"
+      ],
+      "description_en": "Validate signal paths stored in a waveform list.",
+      "description_zh": "验证 list 中信号是否存在。",
+      "purposes": [
+        "verify"
+      ],
+      "use_when": [
+        "Need to prove every stored list entry resolves against the active waveform before sampling or export."
+      ],
+      "do_not_use_when": [
+        "Do not use it merely to display stored names or to evaluate their waveform values."
+      ],
+      "alternatives": [
+        {
+          "action": "list.show",
+          "when": "Display stored list contents."
+        },
+        {
+          "action": "value.at",
+          "when": "Read waveform values after validation."
+        }
       ]
     },
     {
-      "name": "list.value_at",
-      "category": "waveform",
-      "status": "stable",
-      "requires": "waveform",
-      "handler_kind": "engine_forward",
-      "schemas": {
-        "request": "schemas/v1/actions/list.value_at.request.schema.json",
-        "response": "schemas/v1/actions/list.value_at.response.schema.json"
-      },
-      "examples": {
-        "request": [
-          "examples/requests/list.value_at.basic.json"
-        ],
-        "response": [
-          "examples/responses/list.value_at.basic.json"
-        ]
-      },
-      "required_args": [
-        "name",
-        "time",
-        "clock"
-      ]
-    },
-    {
-      "name": "sampled_pulse.inspect",
+      "name": "signal.sampled_pulse.inspect",
       "category": "waveform",
       "status": "experimental",
       "requires": "waveform",
       "handler_kind": "engine_forward",
       "schemas": {
-        "request": "schemas/v1/actions/sampled_pulse.inspect.request.schema.json",
-        "response": "schemas/v1/actions/sampled_pulse.inspect.response.schema.json"
+        "request": "schemas/v1/actions/signal.sampled_pulse.inspect.request.schema.json",
+        "response": "schemas/v1/actions/signal.sampled_pulse.inspect.response.schema.json"
       },
       "examples": {
         "request": [
-          "examples/requests/sampled_pulse.inspect.basic.json"
+          "examples/requests/signal.sampled_pulse.inspect.basic.json",
+          "examples/requests/signal.sampled_pulse.inspect.boundary_payload.json",
+          "examples/requests/signal.sampled_pulse.inspect.sampled_high.json"
         ],
         "response": [
-          "examples/responses/sampled_pulse.inspect.basic.json"
+          "examples/responses/signal.sampled_pulse.inspect.basic.json",
+          "examples/responses/signal.sampled_pulse.inspect.boundary_payload.json",
+          "examples/responses/signal.sampled_pulse.inspect.sampled_high.json"
         ]
       },
       "required_args": [
         "clock",
         "valid"
+      ],
+      "description_en": "Inspect valid pulses that were not observed at sampling edges.",
+      "description_zh": "检查未被 clock 采到的 valid 短脉冲。",
+      "purposes": [
+        "inspect"
+      ],
+      "use_when": [
+        "需要发现未被指定 clock sample 捕获的 valid 短脉冲。"
+      ],
+      "do_not_use_when": [
+        "需要 raw glitch/stuck 扫描或 valid-ready 协议违规结论。"
+      ],
+      "alternatives": [
+        {
+          "action": "signal.anomaly.inspect",
+          "when": "需要 raw pulse/glitch/stuck 异常。"
+        },
+        {
+          "action": "protocol.handshake.inspect",
+          "when": "需要 valid-ready 协议检查。"
+        }
       ]
     },
     {
@@ -937,19 +2013,41 @@
         "response": "schemas/v1/actions/schema.response.schema.json"
       },
       "examples": {
-        "request": [
-          "examples/requests/schema.basic.json"
-        ],
-        "response": [
-          "examples/responses/schema.basic.json"
-        ]
-      }
+    "request": [
+      "examples/requests/schema.basic.json",
+      "examples/requests/schema.batch-child.json"
+    ],
+    "response": [
+      "examples/responses/schema.basic.json",
+      "examples/responses/schema.batch-child.json"
+    ]
+      },
+      "required_args": [
+        "action"
+      ],
+      "description_en": "Return the request or response schema for an action.",
+      "description_zh": "返回指定 action 的 request/response JSON schema。",
+      "purposes": [
+        "discover"
+      ],
+      "use_when": [
+        "已知 action 名称，需要其 request 或 response 合同。"
+      ],
+      "do_not_use_when": [
+        "尚未知道 action 名称，或需要实际执行一个 debug 查询。"
+      ],
+      "alternatives": [
+        {
+          "action": "actions",
+          "when": "需要先发现 action catalog。"
+        }
+      ]
     },
     {
       "name": "scope.list",
       "category": "waveform",
       "status": "stable",
-      "requires": "waveform",
+      "requires": "any",
       "handler_kind": "engine_forward",
       "schemas": {
         "request": "schemas/v1/actions/scope.list.request.schema.json",
@@ -957,12 +2055,37 @@
       },
       "examples": {
         "request": [
-          "examples/requests/scope.list.basic.json"
+          "examples/requests/scope.list.basic.json",
+          "examples/requests/scope.list.design.json",
+          "examples/requests/scope.list.merged.json"
         ],
         "response": [
-          "examples/responses/scope.list.basic.json"
+          "examples/responses/scope.list.basic.json",
+          "examples/responses/scope.list.design.json",
+          "examples/responses/scope.list.merged.json"
         ]
-      }
+      },
+      "description_en": "List bounded waveform, design, or merged hierarchy objects with source and capability evidence.",
+      "description_zh": "有界列出 waveform、design 或 merged 层级对象，并保留来源与可查询/可追踪能力证据。",
+      "purposes": [
+        "discover"
+      ],
+      "use_when": [
+        "Need bounded hierarchy discovery from waveform, design, or both, including generate scopes, interfaces, interface arrays, modports, and mpports."
+      ],
+      "do_not_use_when": [
+        "Do not use it when only database roots are needed or one known leaf signal must be resolved."
+      ],
+      "alternatives": [
+        {
+          "action": "scope.roots",
+          "when": "Return only waveform/design roots."
+        },
+        {
+          "action": "signal.resolve",
+          "when": "Resolve one design signal query."
+        }
+      ]
     },
     {
       "name": "scope.roots",
@@ -976,12 +2099,33 @@
       },
       "examples": {
         "request": [
-          "examples/requests/scope.roots.basic.json"
+          "examples/requests/scope.roots.basic.json",
+          "examples/requests/scope.roots.mismatch.json",
+          "examples/requests/scope.roots.wave_only.json"
         ],
         "response": [
-          "examples/responses/scope.roots.basic.json"
+          "examples/responses/scope.roots.basic.json",
+          "examples/responses/scope.roots.mismatch.json",
+          "examples/responses/scope.roots.wave_only.json"
         ]
-      }
+      },
+      "description_en": "Discover waveform and design hierarchy roots.",
+      "description_zh": "发现 waveform/design 根。",
+      "purposes": [
+        "discover"
+      ],
+      "use_when": [
+        "Need only the database root scopes as entry points before choosing a narrower hierarchy query."
+      ],
+      "do_not_use_when": [
+        "Do not use it for module hierarchy contents or module/port/signal filtering."
+      ],
+      "alternatives": [
+        {
+          "action": "scope.list",
+          "when": "List module-relative modules, ports, signals, and interface instances with level and glob filters."
+        }
+      ]
     },
     {
       "name": "session.close",
@@ -995,14 +2139,36 @@
       },
       "examples": {
         "request": [
-          "examples/requests/session.close.basic.json"
+          "examples/requests/session.close.basic.json",
+          "examples/requests/session.close.force.json",
+          "examples/requests/session.close.managed.json"
         ],
         "response": [
-          "examples/responses/session.close.basic.json"
+          "examples/responses/session.close.basic.json",
+          "examples/responses/session.close.all.json"
         ]
       },
       "required_target": [
         "session_id"
+      ],
+      "description_en": "Close one or all debug sessions gracefully or forcibly.",
+      "description_zh": "以 graceful 或 force 模式关闭一个或全部 session。",
+      "purposes": [
+        "manage"
+      ],
+      "use_when": [
+        "Use the default graceful mode for a healthy session, or explicit force mode for stale or unhealthy state that cannot complete graceful shutdown.",
+        "Use target.session_id=all to close all registered sessions and receive per-session retained failure details."
+      ],
+      "do_not_use_when": [
+        "Do not use force mode merely to inspect session health.",
+        "Do not provide args.ownership_token except for force cleanup of one exact session id; it is a managed-wrapper match precondition, not authorization, and is forbidden with target.session_id=all."
+      ],
+      "alternatives": [
+        {
+          "action": "session.doctor",
+          "when": "Diagnose the session without changing it."
+        }
       ]
     },
     {
@@ -1022,7 +2188,28 @@
         "response": [
           "examples/responses/session.doctor.basic.json"
         ]
-      }
+      },
+      "description_en": "Diagnose debug-session resources and accessibility.",
+      "description_zh": "诊断当前 session。",
+      "purposes": [
+        "manage"
+      ],
+      "use_when": [
+        "Know a session identifier and need read-only health, resource, process, and accessibility diagnostics."
+      ],
+      "do_not_use_when": [
+        "Do not use it to open, close, or garbage-collect sessions."
+      ],
+      "alternatives": [
+        {
+          "action": "session.list",
+          "when": "Discover session identifiers."
+        },
+        {
+          "action": "session.close",
+          "when": "Gracefully close one session."
+        }
+      ]
     },
     {
       "name": "session.gc",
@@ -1041,35 +2228,34 @@
         "response": [
           "examples/responses/session.gc.basic.json"
         ]
-      }
-    },
-    {
-      "name": "session.kill",
-      "category": "session",
-      "status": "stable",
-      "requires": "session",
-      "handler_kind": "session",
-      "schemas": {
-        "request": "schemas/v1/actions/session.kill.request.schema.json",
-        "response": "schemas/v1/actions/session.kill.response.schema.json"
       },
-      "examples": {
-        "request": [
-          "examples/requests/session.kill.basic.json"
-        ],
-        "response": [
-          "examples/responses/session.kill.basic.json"
-        ]
-      },
-      "required_target": [
-        "session_id"
+      "description_en": "Garbage-collect expired debug sessions.",
+      "description_zh": "清理过期 session。",
+      "purposes": [
+        "manage"
+      ],
+      "use_when": [
+        "Need policy-driven cleanup of all expired session records rather than mutation of one named active session."
+      ],
+      "do_not_use_when": [
+        "Do not use it to remove a specific active session or diagnose one session."
+      ],
+      "alternatives": [
+        {
+          "action": "session.close",
+          "when": "Close one explicit session with args.mode=force."
+        },
+        {
+          "action": "session.doctor",
+          "when": "Diagnose one explicit session."
+        }
       ]
     },
     {
       "name": "session.list",
       "category": "session",
       "status": "stable",
-      "requires": "session",
+      "requires": "none",
       "handler_kind": "session",
       "schemas": {
         "request": "schemas/v1/actions/session.list.request.schema.json",
@@ -1080,9 +2266,32 @@
           "examples/requests/session.list.basic.json"
         ],
         "response": [
-          "examples/responses/session.list.basic.json"
+          "examples/responses/session.list.basic.json",
+          "examples/responses/session.list.verbose.json"
         ]
-      }
+      },
+      "description_en": "List active debug sessions.",
+      "description_zh": "列出当前 session。",
+      "purposes": [
+        "discover",
+        "manage"
+      ],
+      "use_when": [
+        "Need to discover session identifiers and lifecycle states without probing resources or mutating them."
+      ],
+      "do_not_use_when": [
+        "Do not use it to diagnose resources or mutate session lifecycle."
+      ],
+      "alternatives": [
+        {
+          "action": "session.doctor",
+          "when": "Inspect one session's health and resources."
+        },
+        {
+          "action": "session.open",
+          "when": "Create a new session."
+        }
+      ]
     },
     {
       "name": "session.open",
@@ -1099,12 +2308,36 @@
       ],
       "examples": {
         "request": [
-          "examples/requests/session.open.basic.json"
+          "examples/requests/session.open.basic.json",
+          "examples/requests/session.open.managed.json"
         ],
         "response": [
-          "examples/responses/session.open.basic.json"
+          "examples/responses/session.open.basic.json",
+          "examples/responses/session.open.duplicate_resource.json"
         ]
-      }
+      },
+      "description_en": "Open a design, waveform, or combined debug session.",
+      "description_zh": "打开 design/waveform session。",
+      "purposes": [
+        "manage"
+      ],
+      "use_when": [
+        "Need a new managed session bound to explicit design, waveform, or combined resources."
+      ],
+      "do_not_use_when": [
+        "Do not use it when an existing session already owns the required resources or when only discovery is needed.",
+        "Do not treat public args.ownership_token as authorization; ordinary CLI callers omit it, while the frontend still binds a fail-closed internally generated cleanup token before every backend open unless a managed wrapper supplied its own. The key must never be exposed or logged."
+      ],
+      "alternatives": [
+        {
+          "action": "session.list",
+          "when": "Discover existing sessions."
+        },
+        {
+          "action": "session.doctor",
+          "when": "Verify an existing session's health."
+        }
+      ]
     },
     {
       "name": "signal.canonicalize",
@@ -1121,11 +2354,33 @@
           "examples/requests/signal.canonicalize.basic.json"
         ],
         "response": [
-          "examples/responses/signal.canonicalize.basic.json"
+          "examples/responses/signal.canonicalize.basic.json",
+          "examples/responses/signal.canonicalize.ambiguous.json"
         ]
       },
       "required_args": [
         "signal"
+      ],
+      "description_en": "Return the canonical design path for a signal.",
+      "description_zh": "返回信号 canonical 名称。",
+      "purposes": [
+        "transform"
+      ],
+      "use_when": [
+        "Need one unique exact design match followed through static port connectivity to a canonical path."
+      ],
+      "do_not_use_when": [
+        "Do not use it when multiple candidate discovery is desired or when waveform values are required."
+      ],
+      "alternatives": [
+        {
+          "action": "signal.resolve",
+          "when": "Return design candidates without selecting a canonical connectivity path."
+        },
+        {
+          "action": "value.at",
+          "when": "Read the waveform value of a known leaf path."
+        }
       ]
     },
     {
@@ -1148,6 +2403,23 @@
       },
       "required_args": [
         "signal"
+      ],
+      "description_en": "List raw waveform value changes for a signal.",
+      "description_zh": "读取信号变化点。",
+      "purposes": [
+        "query"
+      ],
+      "use_when": [
+        "需要一个信号的原始波形变化时间线，或通过 mode=summary 读取不含逐项变化的聚合事实。"
+      ],
+      "do_not_use_when": [
+        "需要按 clock edge 的协议语义采样。"
+      ],
+      "alternatives": [
+        {
+          "action": "event.find",
+          "when": "需要按 clock 对表达式采样。"
+        }
       ]
     },
     {
@@ -1170,6 +2442,27 @@
       },
       "required_args": [
         "signal"
+      ],
+      "description_en": "Resolve a design signal to canonical candidates.",
+      "description_zh": "解析设计信号。",
+      "purposes": [
+        "transform"
+      ],
+      "use_when": [
+        "Need the complete candidate set for a design signal query and do not want implicit selection."
+      ],
+      "do_not_use_when": [
+        "Do not use it to follow static port connectivity to one canonical path or to sample waveform values."
+      ],
+      "alternatives": [
+        {
+          "action": "signal.canonicalize",
+          "when": "Require one unambiguous canonical connectivity result."
+        },
+        {
+          "action": "value.at",
+          "when": "Read a known waveform path."
+        }
       ]
     },
     {
@@ -1192,6 +2485,27 @@
       },
       "required_args": [
         "signal"
+      ],
+      "description_en": "Check whether a signal stays stable in a time range.",
+      "description_zh": "检查信号窗口内是否稳定。",
+      "purposes": [
+        "analyze"
+      ],
+      "use_when": [
+        "Need a yes/no stability verdict and violating intervals for one signal over a closed time range."
+      ],
+      "do_not_use_when": [
+        "Do not use it for a complete raw-change timeline or aggregate activity statistics."
+      ],
+      "alternatives": [
+        {
+          "action": "signal.changes",
+          "when": "Return raw value changes."
+        },
+        {
+          "action": "signal.statistics",
+          "when": "Compute sampled activity statistics."
+        }
       ]
     },
     {
@@ -1206,37 +2520,88 @@
       },
       "examples": {
         "request": [
-          "examples/requests/signal.statistics.basic.json"
+          "examples/requests/signal.statistics.basic.json",
+          "examples/requests/signal.statistics.raw.json",
+          "examples/requests/signal.statistics.clock_unknown.json",
+          "examples/requests/signal.statistics.clock_no_transition.json",
+          "examples/requests/signal.statistics.raw_empty.json"
         ],
         "response": [
-          "examples/responses/signal.statistics.basic.json"
+          "examples/responses/signal.statistics.basic.json",
+          "examples/responses/signal.statistics.raw.json",
+          "examples/responses/signal.statistics.clock_unknown.json",
+          "examples/responses/signal.statistics.clock_no_transition.json",
+          "examples/responses/signal.statistics.raw_empty.json"
         ]
       },
       "required_args": [
         "signal"
+      ],
+      "description_en": "Measure waveform signal activity and sampled values.",
+      "description_zh": "统计信号活动。",
+      "purposes": [
+        "analyze"
+      ],
+      "use_when": [
+        "Need aggregate sampled activity counts or value distributions for one signal under a clock/condition contract."
+      ],
+      "do_not_use_when": [
+        "Do not use it for a raw change-by-change timeline or a yes/no stability verdict."
+      ],
+      "alternatives": [
+        {
+          "action": "signal.changes",
+          "when": "Return every raw change."
+        },
+        {
+          "action": "signal.stability",
+          "when": "Check whether a signal remains stable."
+        }
       ]
     },
     {
-      "name": "source.context",
-      "category": "design",
-      "status": "stable",
-      "requires": "none",
+      "name": "signal.xz_verify",
+      "category": "waveform",
+      "status": "experimental",
+      "requires": "waveform",
       "handler_kind": "engine_forward",
       "schemas": {
-        "request": "schemas/v1/actions/source.context.request.schema.json",
-        "response": "schemas/v1/actions/source.context.response.schema.json"
+        "request": "schemas/v1/actions/signal.xz_verify.request.schema.json",
+        "response": "schemas/v1/actions/signal.xz_verify.response.schema.json"
       },
       "examples": {
         "request": [
-          "examples/requests/source.context.basic.json"
+          "examples/requests/signal.xz_verify.basic.json"
         ],
         "response": [
-          "examples/responses/source.context.basic.json"
+          "examples/responses/signal.xz_verify.basic.json"
         ]
       },
       "required_args": [
-        "file",
-        "line"
+        "signal",
+        "expected_state",
+        "time_range"
+      ],
+      "description_en": "Verify that every raw waveform value in a closed time window matches an X or Z state.",
+      "description_zh": "检查信号在闭合时间窗口内是否始终满足指定的 X 或 Z 状态。",
+      "purposes": [
+        "verify"
+      ],
+      "use_when": [
+        "需要证明 raw waveform 在整个闭区间内始终为指定 X/Z 状态。"
+      ],
+      "do_not_use_when": [
+        "只需要寻找一次 X/Z，或需要 clock-edge 表达式验证。"
+      ],
+      "alternatives": [
+        {
+          "action": "signal.anomaly.inspect",
+          "when": "只需要发现窗口内是否曾出现 X/Z。"
+        },
+        {
+          "action": "window.verify",
+          "when": "需要按 clock edge 验证已知值表达式。"
+        }
       ]
     },
     {
@@ -1253,13 +2618,40 @@
         "request": [
           "examples/requests/trace.active_driver.basic.json"
         ],
-        "response": [
-          "examples/responses/trace.active_driver.basic.json"
-        ]
+      "response": [
+        "examples/responses/trace.active_driver.basic.json",
+        "examples/responses/trace.active_driver.exact_assignment.json",
+        "examples/responses/trace.active_driver.control_only.json"
+      ]
       },
       "required_args": [
         "signal",
         "time"
+      ],
+      "description_en": "Find active driver evidence at a specific waveform time.",
+      "description_zh": "在指定时间找 active driver。",
+      "purposes": [
+        "trace"
+      ],
+      "use_when": [
+        "Need to identify which static driver is actually controlling a signal at one waveform time, with dynamic evidence."
+      ],
+      "do_not_use_when": [
+        "Do not use it for static driver enumeration or recursive root-cause traversal."
+      ],
+      "alternatives": [
+        {
+          "action": "trace.driver",
+          "when": "Enumerate static design drivers."
+        },
+        {
+          "action": "trace.active_driver_chain",
+          "when": "Recursively follow one active-driver chain."
+        },
+        {
+          "action": "trace.x_origin",
+          "when": "Trace multiple X-producing branches."
+        }
       ]
     },
     {
@@ -1274,15 +2666,81 @@
       },
       "examples": {
         "request": [
-          "examples/requests/trace.active_driver_chain.basic.json"
+          "examples/requests/trace.active_driver_chain.basic.json",
+          "examples/requests/trace.active_driver_chain.ambiguous.json"
         ],
         "response": [
-          "examples/responses/trace.active_driver_chain.basic.json"
+          "examples/responses/trace.active_driver_chain.basic.json",
+          "examples/responses/trace.active_driver_chain.ambiguous.json"
         ]
       },
       "required_args": [
         "signal",
         "time"
+      ],
+      "description_en": "Trace an active-driver chain across multiple levels.",
+      "description_zh": "展开 active driver 链。",
+      "purposes": [
+        "trace"
+      ],
+      "use_when": [
+        "需要从指定 signal/time 递归展开单条 active-driver chain；limits.max_depth 默认 8。"
+      ],
+      "do_not_use_when": [
+        "查询点是 X，且需要同时追踪多个 X RHS/control 分支。"
+      ],
+      "alternatives": [
+        {
+          "action": "trace.x_origin",
+          "when": "需要按 X 可见性进行多分支追踪。"
+        }
+      ]
+    },
+    {
+      "name": "trace.x_origin",
+      "category": "combined",
+      "status": "experimental",
+      "requires": "combined",
+      "handler_kind": "engine_forward",
+      "schemas": {
+        "request": "schemas/v1/actions/trace.x_origin.request.schema.json",
+        "response": "schemas/v1/actions/trace.x_origin.response.schema.json"
+      },
+      "examples": {
+        "request": [
+          "examples/requests/trace.x_origin.basic.json"
+        ],
+        "response": [
+          "examples/responses/trace.x_origin.basic.json"
+        ]
+      },
+      "required_args": [
+        "signal",
+        "time"
+      ],
+      "required_target": [
+        "session_id"
+      ],
+      "description_en": "Trace an X value backward through effective semantic DFS branches to its sources or observability boundaries.",
+      "description_zh": "从指定信号和时间按有效语义 DFS 多分支追溯 X 的产生位置或不可见边界。",
+      "purposes": [
+        "trace"
+      ],
+      "use_when": [
+        "查询点含 X，需要按 DFS 同时追踪 RHS、control、端口和时间边界；纯 port/interface/modport/ref alias 路径会归并，响应会区分 query_time、x_onset_time 与 active_time。"
+      ],
+      "do_not_use_when": [
+        "只需要静态 driver 枚举，或查询点不含 X。"
+      ],
+      "alternatives": [
+        {
+          "action": "trace.active_driver",
+          "when": "只需要指定时刻的单级 active driver。"
+        },
+        {
+          "action": "trace.active_driver_chain",
+          "when": "需要传统单链 active-driver 展开。"
+        }
       ]
     },
     {
@@ -1300,11 +2758,33 @@
           "examples/requests/trace.driver.basic.json"
         ],
         "response": [
-          "examples/responses/trace.driver.basic.json"
+          "examples/responses/trace.driver.basic.json",
+          "examples/responses/trace.driver.internal_parse_incomplete.json"
         ]
       },
       "required_args": [
         "signal"
+      ],
+      "description_en": "Find static drivers of a design signal.",
+      "description_zh": "查找信号直接 driver。",
+      "purposes": [
+        "trace"
+      ],
+      "use_when": [
+        "Need all structural driver pins or assignments for a design signal without evaluating waveform activity."
+      ],
+      "do_not_use_when": [
+        "Do not use it to decide which driver is active at a waveform time."
+      ],
+      "alternatives": [
+        {
+          "action": "trace.active_driver",
+          "when": "Find active driver evidence at one time."
+        },
+        {
+          "action": "trace.load",
+          "when": "Enumerate static consumers instead of drivers."
+        }
       ]
     },
     {
@@ -1327,29 +2807,67 @@
       },
       "required_args": [
         "signal"
+      ],
+      "description_en": "Find static loads of a design signal.",
+      "description_zh": "查找信号 load。",
+      "purposes": [
+        "trace"
+      ],
+      "use_when": [
+        "Need all structural consumer pins and fanout endpoints for a design signal without waveform evaluation."
+      ],
+      "do_not_use_when": [
+        "Do not use it to enumerate drivers or decide waveform-time activity."
+      ],
+      "alternatives": [
+        {
+          "action": "trace.driver",
+          "when": "Enumerate static drivers."
+        },
+        {
+          "action": "trace.active_driver",
+          "when": "Find the active driver at one time."
+        }
       ]
     },
     {
-      "name": "rc.generate",
+      "name": "nwave.rc.generate",
       "category": "waveform",
       "status": "stable",
       "requires": "waveform",
       "handler_kind": "engine_forward",
       "schemas": {
-        "request": "schemas/v1/actions/rc.generate.request.schema.json",
-        "response": "schemas/v1/actions/rc.generate.response.schema.json"
+        "request": "schemas/v1/actions/nwave.rc.generate.request.schema.json",
+        "response": "schemas/v1/actions/nwave.rc.generate.response.schema.json"
       },
       "examples": {
         "request": [
-          "examples/requests/rc.generate.basic.json"
+          "examples/requests/nwave.rc.generate.basic.json"
         ],
         "response": [
-          "examples/responses/rc.generate.basic.json"
+          "examples/responses/nwave.rc.generate.basic.json"
         ]
       },
       "required_args": [
         "config_path",
         "output"
+      ],
+      "description_en": "Generate a grouped waveform-view RC file.",
+      "description_zh": "根据分组生成波形 rc。",
+      "purposes": [
+        "export"
+      ],
+      "use_when": [
+        "需要从分组信号生成可复用 waveform rc 配置。"
+      ],
+      "do_not_use_when": [
+        "需要直接导出当前 waveform evidence 或查询一个信号。"
+      ],
+      "alternatives": [
+        {
+          "action": "list.export",
+          "when": "需要导出 list 的当前数据。"
+        }
       ]
     },
     {
@@ -1364,40 +2882,45 @@
       },
       "examples": {
         "request": [
-          "examples/requests/value.at.basic.json"
+          "examples/requests/value.at.basic.json",
+          "examples/requests/value.at.clock.json",
+          "examples/requests/value.at.unknown.json",
+          "examples/requests/value.at.clock_unknown.json",
+          "examples/requests/value.at.missing_value.json",
+          "examples/requests/value.at.xbit.json",
+          "examples/requests/value.at.list.json"
         ],
         "response": [
-          "examples/responses/value.at.basic.json"
+          "examples/responses/value.at.basic.json",
+          "examples/responses/value.at.clock.json",
+          "examples/responses/value.at.unknown.json",
+          "examples/responses/value.at.clock_unknown.json",
+          "examples/responses/value.at.missing_value.json",
+          "examples/responses/value.at.xbit.json",
+          "examples/responses/value.at.list.json"
         ]
       },
-      "required_args": [
-        "signal",
-        "time",
-        "clock"
-      ]
-    },
-    {
-      "name": "value.batch_at",
-      "category": "waveform",
-      "status": "stable",
-      "requires": "waveform",
-      "handler_kind": "engine_forward",
-      "schemas": {
-        "request": "schemas/v1/actions/value.batch_at.request.schema.json",
-        "response": "schemas/v1/actions/value.batch_at.response.schema.json"
-      },
-      "examples": {
-        "request": [
-          "examples/requests/value.batch_at.basic.json"
-        ],
-        "response": [
-          "examples/responses/value.batch_at.basic.json"
-        ]
-      },
-      "required_args": [
-        "signals",
-        "time",
-        "clock"
+      "description_en": "Read a signal or every value maintained by a named list, APB, stream, or AXI configuration at one or more exact waveform times.",
+      "description_zh": "按一个或多个指定时间读取单信号、命名信号列表或接口配置维护的值。",
+      "purposes": [
+        "query"
+      ],
+      "use_when": [
+        "需要在一个或多个精确时间批量读取单信号、list、APB、stream 或 AXI 配置中的值，或显式 clock 采样上下文。"
+      ],
+      "do_not_use_when": [
+        "需要原始值变化时间线或连续时间范围导出。",
+        "需要未加载的临时多信号布尔表达式求值。"
+      ],
+      "alternatives": [
+        {
+          "action": "signal.changes",
+          "when": "需要每次原始值变化。"
+        },
+        {
+          "action": "expr.eval_at",
+          "when": "需要在同一采样时刻求多信号表达式。"
+        }
       ]
     },
     {
@@ -1412,10 +2935,12 @@
       },
       "examples": {
         "request": [
-          "examples/requests/verify.conditions.basic.json"
+          "examples/requests/verify.conditions.basic.json",
+          "examples/requests/verify.conditions.unknown.json"
         ],
         "response": [
-          "examples/responses/verify.conditions.basic.json"
+          "examples/responses/verify.conditions.basic.json",
+          "examples/responses/verify.conditions.unknown.json"
         ]
       },
       "required_args": [
@@ -1423,6 +2948,27 @@
         "time",
         "clock",
         "signals"
+      ],
+      "description_en": "Verify multiple conditions at one sampled time.",
+      "description_zh": "在单个时间验证条件集合。",
+      "purposes": [
+        "verify"
+      ],
+      "use_when": [
+        "需要在一个采样时刻验证命名条件集合。"
+      ],
+      "do_not_use_when": [
+        "需要跨时间窗口的持续性结论或原始表达式求值。"
+      ],
+      "alternatives": [
+        {
+          "action": "window.verify",
+          "when": "需要跨时间窗口验证。"
+        },
+        {
+          "action": "expr.eval_at",
+          "when": "需要一个表达式在一个时刻的值。"
+        }
       ]
     },
     {
@@ -1437,16 +2983,41 @@
       },
       "examples": {
         "request": [
-          "examples/requests/window.verify.basic.json"
+          "examples/requests/window.verify.basic.json",
+          "examples/requests/window.verify.incomplete.json",
+          "examples/requests/window.verify.empty.json"
         ],
         "response": [
-          "examples/responses/window.verify.basic.json"
+          "examples/responses/window.verify.basic.json",
+          "examples/responses/window.verify.incomplete.json",
+          "examples/responses/window.verify.empty.json"
         ]
       },
       "required_args": [
         "clock",
         "conditions",
         "signals"
+      ],
+      "description_en": "Verify conditions across a clock-sampled time window.",
+      "description_zh": "按 clock 在窗口内验证条件。",
+      "purposes": [
+        "verify"
+      ],
+      "use_when": [
+        "需要在时间窗口内按 clock sample 验证多个条件。"
+      ],
+      "do_not_use_when": [
+        "只需要单个采样时刻的条件结果或单个信号稳定性。"
+      ],
+      "alternatives": [
+        {
+          "action": "verify.conditions",
+          "when": "需要单个时刻的条件验证。"
+        },
+        {
+          "action": "signal.stability",
+          "when": "需要单信号稳定性检查。"
+        }
       ]
     },
     {
@@ -1469,17 +3040,43 @@
       },
       "required_arg_groups": [
         [
-          "streams"
-        ],
-        [
           "config"
         ],
         [
           "config_path"
-        ],
-        [
-          "file"
         ]
+      ],
+      "recommended_actions": [
+        "value.at",
+        "stream.describe",
+        "stream.validate",
+        "stream.query",
+        "stream.export"
+      ],
+      "description_en": "Load and validate valid-ready stream configurations.",
+      "description_zh": "加载 stream 配置。",
+      "purposes": [
+        "configure"
+      ],
+      "use_when": [
+        "Have one or more raw valid-ready stream definitions that must be registered and statically validated."
+      ],
+      "do_not_use_when": [
+        "Do not use it to list/read an existing definition or analyze observed transfers."
+      ],
+      "alternatives": [
+        {
+          "action": "stream.config.list",
+          "when": "List saved stream names."
+        },
+        {
+          "action": "stream.config.get",
+          "when": "Read one raw saved definition."
+        },
+        {
+          "action": "stream.query",
+          "when": "Analyze observed stream activity."
+        }
       ]
     },
     {
@@ -1499,28 +3096,109 @@
         "response": [
           "examples/responses/stream.config.list.basic.json"
         ]
-      }
+      },
+      "description_en": "List saved stream configurations.",
+      "description_zh": "列出 stream 配置。",
+      "purposes": [
+        "discover"
+      ],
+      "use_when": [
+        "Need only the names and inventory of saved stream configurations before choosing one."
+      ],
+      "do_not_use_when": [
+        "Do not use it to retrieve one raw definition or resolve signals against a waveform."
+      ],
+      "alternatives": [
+        {
+          "action": "stream.config.get",
+          "when": "Read one exact persisted definition."
+        },
+        {
+          "action": "stream.describe",
+          "when": "Resolve and describe a stream against the active waveform."
+        }
+      ]
     },
     {
-      "name": "stream.show",
+      "name": "stream.describe",
       "category": "waveform",
       "status": "stable",
       "requires": "waveform",
       "handler_kind": "engine_forward",
       "schemas": {
-        "request": "schemas/v1/actions/stream.show.request.schema.json",
-        "response": "schemas/v1/actions/stream.show.response.schema.json"
+        "request": "schemas/v1/actions/stream.describe.request.schema.json",
+        "response": "schemas/v1/actions/stream.describe.response.schema.json"
       },
       "examples": {
         "request": [
-          "examples/requests/stream.show.basic.json"
+          "examples/requests/stream.describe.basic.json"
         ],
         "response": [
-          "examples/responses/stream.show.basic.json"
+          "examples/responses/stream.describe.basic.json"
         ]
       },
       "required_args": [
         "stream"
+      ],
+      "description_en": "Show a stream definition and its resolved signal metadata.",
+      "description_zh": "显示 stream 定义和摘要。",
+      "purposes": [
+        "query"
+      ],
+      "use_when": [
+        "Know a saved stream name and need its signals resolved against the active waveform with static and activity metadata."
+      ],
+      "do_not_use_when": [
+        "Do not use it to return the untouched persisted object or analyze dynamic transfers."
+      ],
+      "alternatives": [
+        {
+          "action": "stream.config.get",
+          "when": "Read the raw persisted configuration."
+        },
+        {
+          "action": "stream.query",
+          "when": "Analyze observed transfers, stalls, or packets."
+        }
+      ]
+    },
+    {
+      "name": "stream.config.get",
+      "category": "waveform",
+      "status": "stable",
+      "requires": "waveform",
+      "handler_kind": "engine_forward",
+      "schemas": {
+        "request": "schemas/v1/actions/stream.config.get.request.schema.json",
+        "response": "schemas/v1/actions/stream.config.get.response.schema.json"
+      },
+      "examples": {
+        "request": [
+          "examples/requests/stream.config.get.basic.json"
+        ],
+        "response": [
+          "examples/responses/stream.config.get.basic.json"
+        ]
+      },
+      "required_args": [
+        "name"
+      ],
+      "description_en": "Read one saved stream configuration without resolving waveform metadata.",
+      "description_zh": "读取一个已保存的原始 stream 配置，不解析波形元数据。",
+      "purposes": [
+        "query"
+      ],
+      "use_when": [
+        "Read the persisted definition for one exact stream configuration name."
+      ],
+      "do_not_use_when": [
+        "Listing all stream names or resolving the configuration against the active waveform."
+      ],
+      "alternatives": [
+        {
+          "action": "stream.describe",
+          "when": "Resolved signals and static validation against the active waveform are required."
+        }
       ]
     },
     {
@@ -1543,6 +3221,27 @@
       },
       "required_args": [
         "stream"
+      ],
+      "description_en": "Validate stream configuration and observed behavior; dynamic validation supports explicit full or range base-cache scope.",
+      "description_zh": "验证 stream 配置；动态验证可显式选择 full 或 range 基础分析缓存范围。",
+      "purposes": [
+        "verify"
+      ],
+      "use_when": [
+        "Validate stream configuration statically, or reuse an explicit full/range base analysis for dynamic validation."
+      ],
+      "do_not_use_when": [
+        "Do not use it to return transfer evidence or export artifacts."
+      ],
+      "alternatives": [
+        {
+          "action": "stream.query",
+          "when": "Return observed stream evidence."
+        },
+        {
+          "action": "stream.export",
+          "when": "Write stream artifacts."
+        }
       ]
     },
     {
@@ -1566,6 +3265,31 @@
       "required_args": [
         "stream",
         "query"
+      ],
+      "description_en": "Query generic valid-ready transfers, stalls, and packets with multi-field exact, range, or mask filters.",
+      "description_zh": "查询通用 valid-ready transfer、stall 或 packet，并对多个自定义字段执行 exact、range 或 mask 过滤。",
+      "purposes": [
+        "query"
+      ],
+      "use_when": [
+        "接口不是标准 APB/AXI 专用事务，且已加载通用 stream 配置，需要查询 transfer、stall、packet 或任意命名字段。"
+      ],
+      "do_not_use_when": [
+        "接口是标准 AXI/APB，且需要地址、ID、通道握手或协议 transaction 专用语义。"
+      ],
+      "alternatives": [
+        {
+          "action": "event.find",
+          "when": "只需一次性表达式找点。"
+        },
+        {
+          "action": "apb.query",
+          "when": "查询标准 APB completed transfer。"
+        },
+        {
+          "action": "axi.query",
+          "when": "查询标准 AXI channel 或 reconstructed transaction。"
+        }
       ]
     },
     {
@@ -1588,16 +3312,24 @@
       },
       "required_args": [
         "stream"
+      ],
+      "description_en": "Export stream transfers or packet data from an explicit full or range base-cache scope.",
+      "description_zh": "从显式 full 或 range 基础分析缓存范围导出 stream 查询结果。",
+      "purposes": [
+        "export"
+      ],
+      "use_when": [
+        "Export stream transfers or packet data while reusing an explicit full/range base analysis."
+      ],
+      "do_not_use_when": [
+        "Do not use it when no artifact/preview export is required or when applying interactive query filters."
+      ],
+      "alternatives": [
+        {
+          "action": "stream.query",
+          "when": "Return filtered stream evidence in the response."
+        }
       ]
-    },
-    {
-      "name": "signal.search",
-      "category": "design",
-      "status": "removed",
-      "requires": "design",
-      "handler_kind": "removed",
-      "schemas": {},
-      "examples": {}
     }
   ]
 }

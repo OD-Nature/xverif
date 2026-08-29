@@ -1,24 +1,48 @@
 #include "stream_config.h"
 
+#include "core/common/sha256.h"
+
 #include <cctype>
 #include <set>
+#include <utility>
 
 namespace xdebug_waveform {
 
 namespace {
 
-bool get_string(const Json& obj, const char* key, std::string& out) {
+bool get_nonempty_string_if_present(
+    const Json& obj,
+    const std::string& stream_name,
+    const char* key,
+    std::string& out,
+    std::string& error) {
     auto it = obj.find(key);
-    if (it == obj.end()) return false;
-    if (!it->is_string()) return false;
+    if (it == obj.end()) {
+        out.clear();
+        return true;
+    }
+    if (!it->is_string() || it->get<std::string>().empty()) {
+        error = "stream " + stream_name + " " + key +
+                " must be a non-empty string when present";
+        return false;
+    }
     out = it->get<std::string>();
     return true;
 }
 
-bool get_bool(const Json& obj, const char* key, bool& out) {
+bool get_bool_if_present(
+    const Json& obj,
+    const std::string& stream_name,
+    const char* key,
+    bool& out,
+    std::string& error) {
     auto it = obj.find(key);
-    if (it == obj.end()) return false;
-    if (!it->is_boolean()) return false;
+    if (it == obj.end()) return true;
+    if (!it->is_boolean()) {
+        error = "stream " + stream_name + " " + key +
+                " must be boolean when present";
+        return false;
+    }
     out = it->get<bool>();
     return true;
 }
@@ -32,6 +56,11 @@ bool parse_field_map(const Json& item,
     if (fields_it == item.end()) return true;
     if (!fields_it->is_object()) {
         error = "stream " + stream_name + " " + key + " must be an object";
+        return false;
+    }
+    if (fields_it->empty()) {
+        error = "stream " + stream_name + " " + key +
+                " must be non-empty when present";
         return false;
     }
     for (auto it = fields_it->begin(); it != fields_it->end(); ++it) {
@@ -111,6 +140,26 @@ bool parse_stream_config_json(const Json& item, StreamConfig& config, std::strin
         error = "stream config must be an object";
         return false;
     }
+    if (item.contains("stable_fields")) {
+        error = "stream config field stable_fields is not supported; use packet_stable_fields";
+        return false;
+    }
+    if (item.contains("data_fields")) {
+        error = "stream config field data_fields is not supported; use beat_fields";
+        return false;
+    }
+    static const std::set<std::string> allowed_fields = {
+        "name", "signals", "clock", "edge", "sample_point", "reset",
+        "vld", "rdy", "bp", "sop", "eop", "data", "beat_fields",
+        "packet_stable_fields", "channel_id", "channel_id_valid",
+        "allow_interleaving", "description"
+    };
+    for (auto it = item.begin(); it != item.end(); ++it) {
+        if (allowed_fields.find(it.key()) == allowed_fields.end()) {
+            error = "stream config contains unknown field: " + it.key();
+            return false;
+        }
+    }
     config = StreamConfig();
     static const char* legacy[] = {"clk", "sampling", "clock_edge", "posedge", "sample_offset", nullptr};
     for (int i = 0; legacy[i]; ++i) {
@@ -120,33 +169,66 @@ bool parse_stream_config_json(const Json& item, StreamConfig& config, std::strin
             return false;
         }
     }
-    get_string(item, "name", config.name);
+    if (!get_nonempty_string_if_present(
+            item, "<unnamed>", "name", config.name, error)) {
+        return false;
+    }
     if (!stream_name_valid(config.name)) {
         error = "invalid stream name: " + config.name;
         return false;
     }
     if (!parse_signal_map(item, config.name, config.signals, error)) return false;
-    get_string(item, "clock", config.clock_sample.clock);
-    get_string(item, "reset", config.reset);
-    get_string(item, "vld", config.vld);
-    get_string(item, "rdy", config.rdy);
-    get_string(item, "bp", config.bp);
-    get_string(item, "sop", config.sop);
-    get_string(item, "eop", config.eop);
-    get_string(item, "data", config.data);
-    get_string(item, "channel_id", config.channel_id);
-    get_string(item, "channel_id_valid", config.channel_id_valid);
-    get_bool(item, "allow_interleaving", config.allow_interleaving);
-    get_string(item, "description", config.description);
+    if (!get_nonempty_string_if_present(
+            item, config.name, "clock", config.clock_sample.clock, error)) {
+        return false;
+    }
+    config.has_reset = item.contains("reset");
+    if (config.has_reset && !parse_reset_config(item["reset"], config.reset, error)) {
+        error = "invalid stream reset for " + config.name + ": " + error;
+        return false;
+    }
+    const std::pair<const char*, std::string*> string_fields[] = {
+        {"vld", &config.vld}, {"rdy", &config.rdy},
+        {"bp", &config.bp}, {"sop", &config.sop},
+        {"eop", &config.eop}, {"data", &config.data},
+        {"channel_id", &config.channel_id},
+        {"channel_id_valid", &config.channel_id_valid},
+        {"description", &config.description},
+    };
+    for (const auto& field : string_fields) {
+        if (!get_nonempty_string_if_present(
+                item, config.name, field.first, *field.second, error)) {
+            return false;
+        }
+    }
+    if (!get_bool_if_present(
+            item,
+            config.name,
+            "allow_interleaving",
+            config.allow_interleaving,
+            error)) {
+        return false;
+    }
 
     std::string edge;
-    get_string(item, "edge", edge);
+    if (!get_nonempty_string_if_present(
+            item, config.name, "edge", edge, error)) {
+        return false;
+    }
     if (!parse_clock_edge_kind(edge.empty() ? "negedge" : edge, config.clock_sample.edge, error)) {
         error = "invalid stream edge for " + config.name + ": " + error;
         return false;
     }
     std::string sample_point;
-    if (get_string(item, "sample_point", sample_point)) {
+    if (item.contains("sample_point")) {
+        if (!get_nonempty_string_if_present(
+                item,
+                config.name,
+                "sample_point",
+                sample_point,
+                error)) {
+            return false;
+        }
         config.clock_sample.has_sample_point = true;
         if (!parse_clock_sample_point_kind(sample_point,
                                            config.clock_sample.sample_point,
@@ -177,33 +259,24 @@ bool parse_stream_config_json(const Json& item, StreamConfig& config, std::strin
         error = "stream " + config.name + " channel_id_valid must be sop, eop, or every_beat";
         return false;
     }
-    if (!parse_field_map(item, config.name, "data_fields", config.data_fields, error)) return false;
-    if (!parse_field_map(item, config.name, "stable_fields", config.stable_fields, error)) return false;
+    if (!parse_field_map(item, config.name, "packet_stable_fields", config.packet_stable_fields, error)) return false;
     if (!parse_field_map(item, config.name, "beat_fields", config.beat_fields, error)) return false;
-    for (const auto& kv : config.data_fields) {
-        if (config.beat_fields.find(kv.first) != config.beat_fields.end()) {
-            error = "duplicate legacy data_fields and beat_fields field name: " + kv.first;
-            return false;
-        }
-    }
     if (!config.data.empty()) {
-        if (config.beat_fields.find("data") != config.beat_fields.end() ||
-            config.data_fields.find("data") != config.data_fields.end()) {
-            error = "duplicate legacy data field name: data";
+        if (config.beat_fields.find("data") != config.beat_fields.end()) {
+            error = "data and beat_fields must not share field name: data";
             return false;
         }
     }
-    for (const auto& kv : config.stable_fields) {
+    for (const auto& kv : config.packet_stable_fields) {
         if (config.beat_fields.find(kv.first) != config.beat_fields.end() ||
-            config.data_fields.find(kv.first) != config.data_fields.end() ||
             (!config.data.empty() && kv.first == "data")) {
-            error = "stable_fields and beat_fields must not share field name: " + kv.first;
+            error = "packet_stable_fields and beat_fields must not share field name: " + kv.first;
             return false;
         }
     }
-    if (config.data.empty() && config.data_fields.empty() &&
-        config.beat_fields.empty() && config.stable_fields.empty()) {
-        error = "stream " + config.name + " requires data, data_fields, stable_fields, or beat_fields";
+    if (config.data.empty() && config.beat_fields.empty() &&
+        config.packet_stable_fields.empty()) {
+        error = "stream " + config.name + " requires data, packet_stable_fields, or beat_fields";
         return false;
     }
     if ((config.sop.empty()) != (config.eop.empty())) {
@@ -244,20 +317,16 @@ Json stream_config_json(const StreamConfig& c) {
     j["edge"] = clock_edge_kind_text(c.clock_sample.edge);
     if (c.clock_sample.edge != ClockEdgeKind::Negedge)
         j["sample_point"] = clock_sample_point_text(c.clock_sample.sample_point);
-    if (!c.reset.empty()) j["reset"] = c.reset;
+    if (c.has_reset) j["reset"] = reset_config_json(c.reset);
     j["vld"] = c.vld;
     if (!c.rdy.empty()) j["rdy"] = c.rdy;
     if (!c.bp.empty()) j["bp"] = c.bp;
     if (!c.sop.empty()) j["sop"] = c.sop;
     if (!c.eop.empty()) j["eop"] = c.eop;
     if (!c.data.empty()) j["data"] = c.data;
-    if (!c.data_fields.empty()) {
-        j["data_fields"] = Json::object();
-        for (const auto& kv : c.data_fields) j["data_fields"][kv.first] = kv.second;
-    }
-    if (!c.stable_fields.empty()) {
-        j["stable_fields"] = Json::object();
-        for (const auto& kv : c.stable_fields) j["stable_fields"][kv.first] = kv.second;
+    if (!c.packet_stable_fields.empty()) {
+        j["packet_stable_fields"] = Json::object();
+        for (const auto& kv : c.packet_stable_fields) j["packet_stable_fields"][kv.first] = kv.second;
     }
     if (!c.beat_fields.empty()) {
         j["beat_fields"] = Json::object();
@@ -279,6 +348,17 @@ std::string stream_handshake_text(const StreamConfig& c) {
 
 bool stream_packet_enabled(const StreamConfig& c) {
     return !c.sop.empty() && !c.eop.empty();
+}
+
+std::string normalized_stream_config_semantics(const StreamConfig& config) {
+    Json normalized = stream_config_json(config);
+    normalized.erase("name");
+    normalized.erase("description");
+    return normalized.dump();
+}
+
+std::string stream_config_semantic_fingerprint(const StreamConfig& config) {
+    return xdebug_core::sha256_text(normalized_stream_config_semantics(config));
 }
 
 } // namespace xdebug_waveform

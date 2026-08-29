@@ -1,0 +1,25 @@
+{
+  "api_version": "xdebug.v1",
+  "ok": true,
+  "action": "actions",
+  "tool": {
+    "name": "xdebug",
+    "version": "0.1.0"
+  },
+  "session": null,
+  "summary": {
+    "action_count": 1,
+    "total_action_count": 73,
+    "filtered": true,
+    "view": "guide",
+    "guide_bytes": 114,
+    "guide_limit_bytes": 10000
+  },
+  "data": {
+    "guide": "xdebug actions: 1. Select one, then query its schema.\nschema: Return the request or response schema for an action.",
+    "filters": {
+      "keyword": "schema"
+    }
+  },
+  "error": null
+}

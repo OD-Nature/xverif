@@ -147,7 +147,7 @@ skill 文档中这些 action 的 required 描述或示例没有 `clock`：
 ```bash
 diff -qr skills/xverif ~/.codex/skills/xverif
 
-~/miniconda3/bin/python - <<'PY'
+python3 - <<'PY'
 import json, pathlib
 for p in sorted(pathlib.Path('xdebug/schemas/v1/actions').glob('*.request.schema.json')):
     data = json.load(open(p))
@@ -484,10 +484,10 @@ APB/AXI 文档正文又常用 read/write 语义描述 transaction，这与 schem
 
 已验证：
 
-- `~/miniconda3/bin/python xdebug/tools/validate_examples.py`：通过，145 examples。
-- `~/miniconda3/bin/python xdebug/tools/sync_runtime_request_schemas.py --check`：通过。
-- `~/miniconda3/bin/python xdebug/tools/sync_action_schema_hints.py --check`：通过。
-- `~/miniconda3/bin/python xdebug/tools/check_action_contract.py`：通过，71 action specs。
+- `python3 xdebug/tools/validate_examples.py`：通过，145 examples。
+- `python3 xdebug/tools/sync_runtime_request_schemas.py --check`：通过。
+- `python3 xdebug/tools/sync_action_schema_hints.py --check`：通过。
+- `python3 xdebug/tools/check_action_contract.py`：通过，71 action specs。
 - `make -C xdebug schema-test`：通过。
 - `make -C xdebug contract-test`：通过。
 - 自定义 request schema 探针：通过，覆盖 `clock` 必填、`session.kill target.session_id`、stream `name` 拒绝、AXI `rd` 拒绝、`output_dir/requested_time` 拒绝。

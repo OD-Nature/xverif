@@ -5,7 +5,6 @@
     "session_id": "case_a"
   },
   "args": {
-    "signal": "top.u.ready",
-    "line_limit": 20
+    "signal": "top.u.ready"
   }
 }

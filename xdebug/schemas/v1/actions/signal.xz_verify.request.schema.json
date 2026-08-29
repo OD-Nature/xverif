@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "xdebug.signal.xz_verify.request.v1",
+  "title": "signal.xz_verify request",
+  "type": "object",
+  "properties": {
+    "api_version": {
+      "type": "string",
+      "enum": [
+        "xdebug.v1"
+      ]
+    },
+    "request_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "action": {
+      "type": "string",
+      "enum": [
+        "signal.xz_verify"
+      ]
+    },
+    "target": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fsdb": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "session_id"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "fsdb"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "session_id"
+            ]
+          },
+          "required": [
+            "fsdb"
+          ]
+        }
+      ],
+      "additionalProperties": false
+    },
+    "args": {
+      "type": "object",
+      "required": [
+        "signal",
+        "expected_state",
+        "time_range"
+      ],
+      "properties": {
+        "expected_state": {
+          "type": "string",
+          "enum": [
+            "x",
+            "z"
+          ],
+          "description": "四态检查期望集合；用于区分已知、X、Z 或 action schema 声明的组合状态。"
+        },
+        "match_mode": {
+          "type": "string",
+          "enum": [
+            "exact",
+            "contains"
+          ],
+          "default": "exact",
+          "description": "四态匹配模式；exact 区分 0/1/X/Z，已声明的宽松模式仅按 schema 所述集合比较。"
+        },
+        "render_time_unit": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "ps",
+            "ns",
+            "us"
+          ],
+          "description": "Controls only canonical response time rendering: auto, ps, ns, or us. It never changes input parsing, sampling, filtering, or ordering."
+        },
+        "signal": {
+          "type": "string",
+          "description": "Final leaf signal path. Aggregate, array, and struct roots are not expanded automatically."
+        },
+        "time_range": {
+          "type": "object",
+          "minProperties": 1,
+          "properties": {
+            "begin": {
+              "type": "string",
+              "minLength": 1,
+              "description": "闭区间起点；省略时使用可用波形窗口起点。"
+            },
+            "end": {
+              "type": "string",
+              "minLength": 1,
+              "description": "闭区间终点；省略时使用可用波形窗口终点。"
+            }
+          },
+          "additionalProperties": false,
+          "description": "Closed analysis interval. begin and end may be omitted independently to use the available waveform bounds."
+        },
+        "value_format": {
+          "type": "string",
+          "enum": [
+            "hex",
+            "bin",
+            "dec"
+          ],
+          "default": "hex",
+          "description": "返回 LogicValue 的显示格式；不改变比较、采样或底层四态值。"
+        }
+      },
+      "additionalProperties": false
+    },
+    "limits": {
+      "type": "object",
+      "properties": {
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647,
+          "description": "Positive public frontend-to-engine request timeout in milliseconds. Omit limits.timeout_ms to disable the public watchdog."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "description": "Verify that every raw waveform value in a closed time window matches an X or Z state.",
+  "x-description-zh": "检查信号在闭合时间窗口内是否始终满足指定的 X 或 Z 状态。",
+  "required": [
+    "api_version",
+    "action",
+    "args",
+    "target"
+  ],
+  "x-purpose": "检查信号在窗口内是否始终满足指定 X/Z 状态。",
+  "x-how_it_works": "扫描 raw waveform 闭区间；exact 要求整向量全为目标态，contains 要求每个值至少含一位目标态。",
+  "x-when_to_use": "证明信号持续全 X、全 Z，或持续包含指定未知态。",
+  "x-arg_contract_notes": "required: signal, expected_state, time_range; optional: match_mode(default exact)",
+  "x-agent": {
+    "use_when": [
+      "需要证明 raw waveform 在整个闭区间内始终为指定 X/Z 状态。"
+    ],
+    "do_not_use_when": [
+      "只需要寻找一次 X/Z，或需要 clock-edge 表达式验证。"
+    ],
+    "alternatives": [
+      {
+        "action": "signal.anomaly.inspect",
+        "when": "只需要发现窗口内是否曾出现 X/Z。"
+      },
+      {
+        "action": "window.verify",
+        "when": "需要按 clock edge 验证已知值表达式。"
+      }
+    ],
+    "constraints": [
+      "required: signal, expected_state, time_range; optional: match_mode(default exact)"
+    ]
+  }
+}

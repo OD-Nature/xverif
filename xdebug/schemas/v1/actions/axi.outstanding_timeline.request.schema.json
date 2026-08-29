@@ -6,7 +6,8 @@
   "required": [
     "api_version",
     "action",
-    "args"
+    "args",
+    "target"
   ],
   "properties": {
     "api_version": {
@@ -16,7 +17,8 @@
       ]
     },
     "request_id": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "action": {
       "type": "string",
@@ -25,74 +27,139 @@
       ]
     },
     "target": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fsdb": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "session_id"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "fsdb"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "session_id"
+            ]
+          },
+          "required": [
+            "fsdb"
+          ]
+        }
+      ],
+      "additionalProperties": false
     },
     "args": {
       "type": "object",
+      "required": [
+        "name"
+      ],
       "properties": {
+        "direction": {
+          "type": "string",
+          "enum": [
+            "write",
+            "read",
+            "all"
+          ],
+          "description": "协议 transaction 的方向过滤；read/write/all 的可用性以本 action enum 为准。"
+        },
         "line_limit": {
           "type": "integer",
           "minimum": 1,
-          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
+          "description": "Limits returned evidence rows only, not scanning, aggregation, or the verdict; read completeness fields as well."
         },
         "name": {
           "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。"
+          "description": "Saved-object name in this action namespace; do not assume names are shared by cursors, lists, and protocol configs."
         },
-        "time_range": {
-          "type": "object",
-          "properties": {
-            "begin": {
-              "type": "string"
-            },
-            "end": {
-              "type": "string"
-            }
-          },
-          "additionalProperties": false,
-          "description": "查询或分析的时间窗口。"
-        },
-        "time_unit": {
+        "render_time_unit": {
           "type": "string",
           "enum": [
             "auto",
-            "fs",
             "ps",
             "ns",
-            "us",
-            "ms",
-            "s"
-          ]
+            "us"
+          ],
+          "description": "Controls only canonical response time rendering: auto, ps, ns, or us. It never changes input parsing, sampling, filtering, or ordering."
+        },
+        "time_range": {
+          "type": "object",
+          "minProperties": 1,
+          "properties": {
+            "begin": {
+              "type": "string",
+              "minLength": 1,
+              "description": "闭区间起点；省略时使用可用波形窗口起点。"
+            },
+            "end": {
+              "type": "string",
+              "minLength": 1,
+              "description": "闭区间终点；省略时使用可用波形窗口终点。"
+            }
+          },
+          "additionalProperties": false,
+          "description": "Closed analysis interval. begin and end may be omitted independently to use the available waveform bounds."
         }
       },
-      "additionalProperties": false,
-      "required": [
-        "name"
-      ]
+      "additionalProperties": false
     },
     "limits": {
-      "type": "object"
-    },
-    "auth_token": {
-      "type": "string"
-    },
-    "id": {
-      "type": "string"
-    },
-    "trace_id": {
-      "type": "string"
-    },
-    "span_id": {
-      "type": "string"
-    },
-    "parent_span_id": {
-      "type": "string"
+      "type": "object",
+      "properties": {
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647,
+          "description": "Positive public frontend-to-engine request timeout in milliseconds. Omit limits.timeout_ms to disable the public watchdog."
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false,
-  "description": "axi.outstanding_timeline: 实验性 AXI outstanding 时间线。",
+  "description": "Analyze the AXI pending-transaction timeline.",
   "x-purpose": "实验性 AXI outstanding 时间线。",
   "x-how_it_works": "跟踪请求和响应，统计未完成事务数量随时间变化。",
   "x-when_to_use": "发现 outstanding 积压或乱序风险。",
-  "x-arg_contract_notes": "required: name"
+  "x-arg_contract_notes": "required: name",
+  "x-description-zh": "实验性 AXI outstanding 时间线。",
+  "x-agent": {
+    "use_when": [
+      "Need the time-ordered evolution of AXI pending or outstanding depth, including peak intervals."
+    ],
+    "do_not_use_when": [
+      "Do not use it to inspect payload beats or rank individual transaction latency."
+    ],
+    "alternatives": [
+      {
+        "action": "axi.query",
+        "when": "Inspect transaction or channel payload evidence."
+      },
+      {
+        "action": "axi.latency_outlier",
+        "when": "Find individual latency outliers."
+      }
+    ],
+    "constraints": [
+      "required: name"
+    ]
+  }
 }

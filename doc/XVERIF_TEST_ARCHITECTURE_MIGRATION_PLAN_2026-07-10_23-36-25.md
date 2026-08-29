@@ -17,9 +17,9 @@
 5. fixture 生命周期不一致：AXI/APB VIP 已能在资源存在时复用，`active_semantics`、`active_zero_evidence`、stream 等仍执行 `make clean fixture/run`；部分 full regression 无条件重建 active-driver 和 UART daidir。
 6. fixture 有的只检查路径存在，无法判断 RTL、TB、filelist、生成脚本、工具 ABI 或 schema 变化，存在陈旧数据库假通过风险。
 7. suite 在 `xdebug/tests`、`xverif_mcp/tests`、各组件 `tests/`、`regression/` 和大量 fixture Makefile 中分散；active-trace 单独包含大量 case Makefile。
-8. 当前顶层常规门禁没有统一纳入 `xsva` 与 `xeda_runner`，全仓“通过”的含义不完整。
+8. 当前顶层常规门禁没有统一纳入 `xsva`，全仓“通过”的含义不完整。
 9. 环境缺失有时由 shell `exit 0`、pytest skip 或调用者条件分支处理，required 覆盖可能退化为绿色 SKIP。
-10. full regression 主要把日志放在 `/tmp`；不同 runner 对 timeout、process cleanup、stderr/stdout 和 artifact 路径的处理不一致。
+10. full regression 主要把日志放在 `<repo>/tmp`；不同 runner 对 timeout、process cleanup、stderr/stdout 和 artifact 路径的处理不一致。
 
 ## 2. 已确认的架构原则
 
@@ -236,7 +236,7 @@ pytest --xverif-results-clean
 
 - 自动保留最近 20 个成功 run；FAIL/ERROR run 保留 30 天。
 - results 默认容量上限 10 GiB，按“最旧成功、过期失败”顺序清理；活动 run、被 rerun 引用的父报告和用户显式 pin 的 run 不回收。
-- 达到容量上限但没有可安全回收对象时，新 run 在执行前 ERROR，不删除 fixture、不覆盖旧报告、不改写到 `/tmp` fallback。
+- 达到容量上限但没有可安全回收对象时，新 run 在执行前 ERROR，不删除 fixture、不覆盖旧报告、不改写到 `<repo>/tmp` fallback。
 - fixture cache 默认不自动回收；仅显式 fixture prune/clean 改变已发布资产。
 
 ## 7. 全仓 Suite 迁移台账
@@ -254,7 +254,6 @@ pytest --xverif-results-clean
 | `xwaveform.unit` / `xwaveform.cli` | unittest + Make smoke | fast/regression | 删除 Make test target |
 | `xsva.parser` / `lowering` / `semantics` / `golden` / `cli` | `xsva/tests` | fast/regression | 统一 root collection 与 golden artifacts |
 | `xsva.vcs` | `xsva/tests/vcs` | nightly/system | 生成 fixture 与断言执行分离 |
-| `xeda_runner.unit` | `xeda_runner/tests` | fast | 补入此前顶层遗漏 |
 | `xverif_mcp.import_contract` | import/adapter tests | fast/component | 无外部进程集合 |
 | `xverif_mcp.session_unit` | capability/error/backend wiring | fast/component | 统一 pytest config |
 | `xverif_mcp.direct` | loop/UDS/SDK/direct output | regression/integration | external process + timeout/cleanup |
@@ -286,7 +285,7 @@ pytest --xverif-results-clean
 - 记录当前所有 test 文件、Make target、pytest marker、shell runner、fixture generator、环境条件和实际 gate 覆盖。
 - 生成 machine-readable legacy inventory，仅用于迁移 parity，不成为新事实源。
 - 为每个旧入口标注 `migrate/delete/leaf-runner`。
-- 建立“未登记测试源”静态扫描，防止迁移过程中遗漏 xsva、xeda_runner、active-trace case。
+- 建立“未登记测试源”静态扫描，防止迁移过程中遗漏 xsva、active-trace case。
 
 退出条件：每个现存测试或 fixture builder 都有目标 suite/fixture ID 与迁移批次。
 
@@ -301,7 +300,7 @@ pytest --xverif-results-clean
 
 ### 阶段 2：fast gate 与纯测试迁移
 
-- 迁移 testinfra 自测、xbit/xentry/xloc/xcov/xwaveform/xsva/xeda_runner 纯 unit/static。
+- 迁移 testinfra 自测、xbit/xentry/xloc/xcov/xwaveform/xsva 纯 unit/static。
 - 迁移 xdebug schema/static；完成 C++ unit catalog/item 迁移，但把执行归入 regression。
 - 迁移 xverif_mcp import/capability/error 纯测试。
 - 统一 root pytest config，删除已迁移组件的测试 Make target/局部 pytest.ini。
@@ -428,7 +427,7 @@ pytest --xverif-results-clean
 - [x] 无自动 retry；rerun 不改写原 gate。
 - [x] `.xverif-test-results` 保留完整可移动 run evidence。
 - [x] 所有 Makefile 测试 target、重复 gate shell、局部公共 pytest 配置已删除。
-- [x] `xsva` 与 `xeda_runner` 纳入全仓 gate。
+- [x] `xsva` 纳入全仓 gate。
 - [x] README、xdebug agent 文档、AGENTS.md、skills 与新入口一致。
 - [x] clean build 后 fast、regression、nightly required 全通过。
 - [x] 外部 realdata/real LSF 缺失仅形成明确 optional SKIP，无 fake fallback。

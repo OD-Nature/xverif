@@ -67,7 +67,7 @@ object:
   full_name: if_root_tb.u_src
 
 location:
-  file: ~/xverif/xdebug/testdata/combined/interface_port_root/if_root_tb.sv
+  file: <xverif-repo>/xdebug/testdata/combined/interface_port_root/if_root_tb.sv
   line: 50
   name: u_src
   npi_type: 32
@@ -117,7 +117,7 @@ instance:
   full_name: if_root_tb.u_src
 
 location:
-  file: ~/xverif/xdebug/testdata/combined/interface_port_root/if_root_tb.sv
+  file: <xverif-repo>/xdebug/testdata/combined/interface_port_root/if_root_tb.sv
   line: 50
   name: u_src
   npi_type: 32
@@ -172,7 +172,7 @@ object:
   full_name: if_root_tb.link
 
 location:
-  file: ~/xverif/xdebug/testdata/combined/interface_port_root/if_root_tb.sv
+  file: <xverif-repo>/xdebug/testdata/combined/interface_port_root/if_root_tb.sv
   line: 48
   name: link
   npi_type: 601

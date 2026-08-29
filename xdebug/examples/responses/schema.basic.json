@@ -2,12 +2,22 @@
   "api_version": "xdebug.v1",
   "ok": true,
   "action": "schema",
+  "tool": {
+    "name": "xdebug",
+    "version": "0.1.0"
+  },
+  "session": null,
   "summary": {
     "action": "signal.statistics",
-    "kind": "request"
+    "kind": "request",
+    "response_detail": "full",
+    "selected_child": null
   },
   "data": {
     "schema_path": "schemas/v1/actions/signal.statistics.request.schema.json",
+    "examples": [],
+    "constraints": [],
+    "relation": null,
     "schema": {
       "$id": "xdebug.signal.statistics.request.v1",
       "title": "signal.statistics request",
@@ -18,5 +28,6 @@
         "args"
       ]
     }
-  }
+  },
+  "error": null
 }

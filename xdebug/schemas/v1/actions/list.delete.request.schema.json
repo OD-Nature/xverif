@@ -6,7 +6,8 @@
   "required": [
     "api_version",
     "action",
-    "args"
+    "args",
+    "target"
   ],
   "properties": {
     "api_version": {
@@ -16,7 +17,8 @@
       ]
     },
     "request_id": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "action": {
       "type": "string",
@@ -25,83 +27,130 @@
       ]
     },
     "target": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fsdb": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "session_id"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "fsdb"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "session_id"
+            ]
+          },
+          "required": [
+            "fsdb"
+          ]
+        }
+      ],
+      "additionalProperties": false
     },
     "args": {
       "type": "object",
-      "properties": {
-        "index": {
-          "oneOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "string"
-            }
-          ],
-          "description": "列表中要删除的信号序号。"
-        },
-        "name": {
-          "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。"
-        },
-        "signal": {
-          "type": "string",
-          "description": "目标信号路径。"
-        },
-        "time_unit": {
-          "type": "string",
-          "enum": [
-            "auto",
-            "fs",
-            "ps",
-            "ns",
-            "us",
-            "ms",
-            "s"
-          ]
-        }
-      },
-      "additionalProperties": false,
       "required": [
         "name"
       ],
-      "anyOf": [
+      "properties": {
+        "index": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "One-based query, cursor, or list position; the action schema defines its exact reference set."
+        },
+        "name": {
+          "type": "string",
+          "description": "Non-empty saved waveform-list name in the current session.",
+          "minLength": 1
+        },
+        "signal": {
+          "type": "string",
+          "description": "Non-empty exact signal path to remove; numeric-looking paths remain paths.",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "oneOf": [
         {
           "required": [
             "signal"
-          ]
+          ],
+          "not": {
+            "required": [
+              "index"
+            ]
+          }
         },
         {
           "required": [
             "index"
-          ]
+          ],
+          "not": {
+            "required": [
+              "signal"
+            ]
+          }
         }
       ]
     },
     "limits": {
-      "type": "object"
-    },
-    "auth_token": {
-      "type": "string"
-    },
-    "id": {
-      "type": "string"
-    },
-    "trace_id": {
-      "type": "string"
-    },
-    "span_id": {
-      "type": "string"
-    },
-    "parent_span_id": {
-      "type": "string"
+      "type": "object",
+      "properties": {
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647,
+          "description": "Positive public frontend-to-engine request timeout in milliseconds. Omit limits.timeout_ms to disable the public watchdog."
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false,
-  "description": "list.delete: 从信号列表删除信号或 index。",
+  "description": "Delete a signal or index from a waveform list.",
   "x-purpose": "从信号列表删除信号或 index。",
   "x-how_it_works": "按 name 找 list，再用 signal 或 index 删除条目。",
   "x-when_to_use": "维护已保存观察列表。",
-  "x-arg_contract_notes": "required: name; also one of: signal / index"
+  "x-arg_contract_notes": "required: name; also one of: signal / index",
+  "x-description-zh": "从信号列表删除信号或 index。",
+  "x-agent": {
+    "use_when": [
+      "Know a stored signal path or one-based list index and need to remove only that entry."
+    ],
+    "do_not_use_when": [
+      "Do not use it to remove the whole list or inspect list contents."
+    ],
+    "alternatives": [
+      {
+        "action": "list.show",
+        "when": "Inspect current one-based indexes and signal paths."
+      },
+      {
+        "action": "list.create",
+        "when": "Replace the named list with a new definition."
+      }
+    ],
+    "constraints": [
+      "required: name; also one of: signal / index"
+    ]
+  }
 }

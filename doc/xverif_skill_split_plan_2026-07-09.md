@@ -4,7 +4,7 @@
 
 将当前混合型 `skills/xverif` 拆成两个独立 skill：
 
-- `skills/xverif-cli`：专注原生命令行与 JSON envelope，讲 `tools/xdebug --json -`、`tools/xcov --json -`、`tools/xbit`、`tools/xentry`、`tools/xloc`、`tools/xsva`、`xeda-runner` 等 CLI 参数。
+- `skills/xverif-cli`：专注原生命令行与 JSON envelope，讲 `tools/xdebug --json -`、`tools/xcov --json -`、`tools/xbit`、`tools/xentry`、`tools/xloc`、`tools/xsva` 等 CLI 参数。
 - `skills/xverif-mcp`：专注 MCP tool 参数，讲 `xverif_debug_query`、`xverif_cov_query`、`xverif_batch`、stateless MCP tools、MCP session、MCP raw request 壳子。
 - 两边都保留完整 API 说明、action 能力说明、字段说明、错误响应说明和 recipes；区别只在入口参数形态：CLI 版给原生 CLI/raw JSON，MCP 版给 MCP tool 壳子。
 - 删除旧 `skills/xverif`，并删除已安装 mirror 中的旧 `xverif`，避免 agent 同时加载旧入口和新入口。

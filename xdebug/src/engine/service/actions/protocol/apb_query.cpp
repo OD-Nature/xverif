@@ -2,66 +2,55 @@
 #include "service/engine_action_registry.h"
 #include "service/engine_globals.h"
 #include "protocol_action_helpers.h"
+#include "protocol_query_filter.h"
 
-#include "waveform/apb/apb_manager.h"
-#include "waveform/apb/apb_analyzer.h"
-#include "waveform/axi/axi_manager.h"
-#include "waveform/axi/axi_analyzer.h"
-#include "waveform/axi/axi_exporter.h"
-#include "waveform/common/xdebug_waveform_paths.h"
-#include "waveform/value/logic_value.h"
 #include "core/npi/time_contract.h"
+#include "core/output/completeness.h"
+#include "core/value/logic_value.h"
+#include "waveform/apb/apb_analyzer.h"
+#include "waveform/apb/apb_manager.h"
 
-#include <fstream>
+#include <algorithm>
 #include <memory>
-#include <ctime>
-#include <sstream>
+#include <vector>
 
 namespace xdebug_design {
 namespace {
 
-static bool ensure_apb_analyzed(const std::string& name,
-                                 xdebug_waveform::ApbConfig& cfg,
-                                 std::string& err) {
-    xdebug_waveform::ApbManager am;
-    if (!am.get_apb(xdebug_waveform::g_session_id, name, cfg)) {
-        err = "APB config not found: " + name;
-        return false;
-    }
-    if (!xdebug_waveform::g_apb_analyzer.analyze(name,
-            xdebug_waveform::g_fsdb_file, cfg)) {
-        err = "Failed to analyze APB: " + name;
-        return false;
-    }
-    return true;
+Json apb_transaction_json(const xdebug_waveform::ApbTransaction& txn) {
+    Json out;
+    out["time"] = xdebug_core::format_time(
+        xdebug_waveform::g_fsdb_file, txn.time);
+    out["addr"] = xdebug_core::render_logic_value(
+        xdebug_core::logic_value_from_fsdb_raw(
+            txn.addr, 'h', txn.addr_width));
+    out["data"] = xdebug_core::render_logic_value(
+        xdebug_core::logic_value_from_fsdb_raw(
+            txn.data, 'h', txn.data_width));
+    out["is_write"] = txn.is_write;
+    out["has_error"] = txn.has_error;
+    return out;
 }
-static bool parse_user_uint64_literal(const std::string& text,
-                                      uint64_t& out,
-                                      std::string& err) {
-    xdebug_waveform::LogicValue value = xdebug_waveform::parse_user_logic_literal(text);
-    if (!value.valid) {
-        err = value.error;
-        return false;
-    }
-    if (xdebug_waveform::logic_value_has_xz(value) || value.bits.size() > 64) {
-        err = "value literal must be known and at most 64 bits: " + text;
-        return false;
-    }
-    out = 0;
-    for (char c : value.bits) {
-        out <<= 1ULL;
-        if (c == '1') out |= 1ULL;
-    }
-    return true;
-}
-static Json apb_transaction_json(const xdebug_waveform::ApbTransaction& txn) {
-    Json tj;
-    tj["time"] = xdebug_core::format_time(xdebug_waveform::g_fsdb_file, txn.time);
-    tj["addr"] = txn.addr;
-    tj["data"] = txn.data;
-    tj["is_write"] = txn.is_write;
-    tj["has_error"] = txn.has_error;
-    return tj;
+
+void set_query_summary(
+    Json& summary,
+    const xdebug_waveform::ApbDiagnostics& diagnostics,
+    size_t total_count,
+    size_t returned_count,
+    bool response_truncated) {
+    std::vector<std::string> scopes;
+    if (!diagnostics.analysis_complete)
+        scopes.push_back("analysis_transactions");
+    if (response_truncated)
+        scopes.push_back("response_transactions");
+    xdebug_core::set_completeness(
+        summary,
+        diagnostics.analysis_complete,
+        diagnostics.analysis_complete,
+        response_truncated,
+        total_count,
+        returned_count,
+        scopes);
 }
 
 class ApbQueryHandler : public EngineActionHandler {
@@ -69,92 +58,145 @@ public:
     const char* action_name() const override { return "apb.query"; }
     bool needs_design() const override { return false; }
     bool needs_waveform() const override { return true; }
-    Json run(const Json& r, EngineActionContext& ctx) const override {
+
+    Json run(
+        ContractBoundRequest& request,
+        EngineActionContext&) const override {
         using namespace xdebug_waveform;
-        Json a = r.value("args", Json::object());
-        std::string name = a.value("name", "");
-        if (name.empty()) return protocol_missing_name_error(action_name(), "apb");
+        auto args = request.args();
+        const std::string name = args.value("name", std::string());
+        if (name.empty())
+            return protocol_missing_name_error(action_name(), "apb");
 
-        ApbConfig cfg; std::string err;
-        if (!ensure_apb_analyzed(name, cfg, err))
-            return err.rfind("APB config not found:", 0) == 0
-                ? protocol_config_not_found_error(action_name(), "apb", name)
-                : protocol_analyze_error(action_name(), "apb", name, err);
+        const std::string direction =
+            args.value("direction", std::string("all"));
+        Json address;
+        if (args["address"].exists()) {
+            address = args["address"].consume_subtree(
+                "apb_query_address_filter");
+        }
+        ProtocolQueryFilter filter;
+        ProtocolQueryFilterError filter_error;
+        if (!parse_protocol_query_filter(
+                address, Json(), false, filter, filter_error)) {
+            return protocol_invalid_arg_error(
+                action_name(), filter_error.invalid_arg,
+                filter_error.message, filter_error.expected);
+        }
 
-        std::string dir = a.value("direction", "write");
-        bool is_write = (dir != "read");
-        std::string addr_str = a.value("address", a.value("addr", ""));
-        Json query = a.value("query", Json::object());
-        int num = query.value("index", -1);
-        int limit = query.value("line_limit", -1);
-        bool last = a.value("last", false);
+        ApbConfig config;
+        ProtocolEnsureResult ensured = ensure_apb_analyzed(name, config);
+        if (!ensured.ok()) {
+            if (ensured.status == ProtocolEnsureStatus::ConfigNotFound)
+                return protocol_config_not_found_error(
+                    action_name(), "apb", name);
+            if (ensured.status == ProtocolEnsureStatus::StoreError)
+                return make_config_store_error(ensured.store);
+            if (!g_apb_analyzer.last_cache_error().empty())
+                return make_analysis_cache_error(
+                    g_apb_analyzer.last_cache_error());
+            return protocol_analyze_error(
+                action_name(), "apb", name, ensured.message);
+        }
 
-        const ApbTransaction* txn = nullptr;
-        bool found = false;
-        if (!addr_str.empty()) {
-            uint64_t addr = 0;
-            std::string parse_err;
-            if (!parse_user_uint64_literal(addr_str, addr, parse_err))
-                return protocol_invalid_arg_error(action_name(), "args.address",
-                                                  parse_err,
-                                                  "known integer or SystemVerilog literal address");
-            if (num >= 0) {
-                found = is_write ? g_apb_analyzer.get_write_by_addr_num(name, addr, (size_t)num, txn)
-                                 : g_apb_analyzer.get_read_by_addr_num(name, addr, (size_t)num, txn);
-            } else if (limit > 0) {
-                Json transactions = Json::array();
-                for (int i = 1; i <= limit; ++i) {
-                    const ApbTransaction* item = nullptr;
-                    bool ok = is_write ? g_apb_analyzer.get_write_by_addr_num(name, addr, (size_t)i, item)
-                                       : g_apb_analyzer.get_read_by_addr_num(name, addr, (size_t)i, item);
-                    if (!ok || !item) break;
-                    transactions.push_back(apb_transaction_json(*item));
+        const ApbResult* result = g_apb_analyzer.get_result(name);
+        if (!result)
+            return protocol_analyze_error(
+                action_name(), "apb", name,
+                "canonical APB result unavailable");
+
+        auto query = args["query"];
+        const int index = query.value("index", -1);
+        const int line_limit = query.value("line_limit", -1);
+        const bool last = args.value("last", false);
+        const size_t begin = index > 0
+            ? static_cast<size_t>(index - 1) : 0;
+        const size_t keep_limit = line_limit > 0
+            ? static_cast<size_t>(line_limit) : 0;
+        size_t matched_count = 0;
+        const ApbTransaction* selected = nullptr;
+        std::vector<const ApbTransaction*> page;
+        if (keep_limit > 0) page.reserve(keep_limit);
+        for (const ApbTransaction* transaction : result->all) {
+            if (!transaction ||
+                !protocol_direction_matches(transaction->is_write, direction)) {
+                continue;
+            }
+            if (match_protocol_query_filter(
+                filter, transaction->addr,
+                    transaction->addr_width) ==
+                ValueFilterMatch::Yes) {
+                const size_t match_index = matched_count++;
+                if (last) {
+                    selected = transaction;
+                } else if (index > 0 && line_limit < 0) {
+                    if (match_index == begin) selected = transaction;
+                } else if (keep_limit > 0 && match_index >= begin &&
+                           page.size() < keep_limit) {
+                    page.push_back(transaction);
                 }
-                Json out;
-                out["summary"] = {{"name",name},{"direction",dir},{"count",(int)transactions.size()}};
-                out["transactions"] = transactions;
-                return out;
-            } else if (last) {
-                found = is_write ? g_apb_analyzer.get_write_by_addr_last(name, addr, txn)
-                                 : g_apb_analyzer.get_read_by_addr_last(name, addr, txn);
-            } else {
-                found = is_write ? g_apb_analyzer.get_write_by_addr(name, addr, txn)
-                                 : g_apb_analyzer.get_read_by_addr(name, addr, txn);
             }
-        } else if (num >= 0) {
-            found = is_write ? g_apb_analyzer.get_write_by_num(name, (size_t)num, txn)
-                             : g_apb_analyzer.get_read_by_num(name, (size_t)num, txn);
-        } else if (limit > 0) {
-            Json transactions = Json::array();
-            for (int i = 1; i <= limit; ++i) {
-                const ApbTransaction* item = nullptr;
-                bool ok = is_write ? g_apb_analyzer.get_write_by_num(name, (size_t)i, item)
-                                   : g_apb_analyzer.get_read_by_num(name, (size_t)i, item);
-                if (!ok || !item) break;
-                transactions.push_back(apb_transaction_json(*item));
-            }
-            Json out;
-            out["summary"] = {{"name",name},{"direction",dir},{"count",(int)transactions.size()}};
-            out["transactions"] = transactions;
-            return out;
-        } else if (last) {
-            found = is_write ? g_apb_analyzer.get_write_last(name, txn)
-                             : g_apb_analyzer.get_read_last(name, txn);
-        } else {
-            // No filter — return count
-            size_t cnt = is_write ? g_apb_analyzer.get_write_count(name)
-                                  : g_apb_analyzer.get_read_count(name);
-            Json out;
-            out["summary"] = {{"name",name},{"direction",dir},{"count",(int)cnt}};
+        }
+        Json out;
+        out["summary"] = {
+            {"name", name},
+            {"direction", direction},
+        };
+        out["filter"] = {{"direction", direction}};
+        if (filter.has_address)
+            out["filter"]["address"] = filter.address_json;
+
+        if (last) {
+            const bool found = selected != nullptr;
+            out["summary"]["query_mode"] = "last";
+            out["summary"]["found"] = found;
+            if (found)
+                out["transaction"] =
+                    apb_transaction_json(*selected);
+            set_query_summary(
+                out["summary"], result->diagnostics,
+                matched_count, found ? 1 : 0, false);
             return out;
         }
 
-        Json out;
-        out["summary"] = {{"name",name},{"direction",dir},{"found",found}};
-        if (found && txn) {
-            out["transaction"] = apb_transaction_json(*txn);
+        if (index > 0 && line_limit < 0) {
+            const bool found = selected != nullptr;
+            out["summary"]["query_mode"] = "index";
+            out["summary"]["found"] = found;
+            if (found)
+                out["transaction"] =
+                    apb_transaction_json(*selected);
+            set_query_summary(
+                out["summary"], result->diagnostics,
+                matched_count, found ? 1 : 0, false);
+            return out;
         }
+
+        if (line_limit > 0) {
+            Json transactions = Json::array();
+            for (const ApbTransaction* transaction : page) {
+                transactions.push_back(
+                    apb_transaction_json(*transaction));
+            }
+            const bool truncated =
+                begin + transactions.size() < matched_count;
+            out["summary"]["query_mode"] = "list";
+            out["transactions"] = std::move(transactions);
+            set_query_summary(
+                out["summary"], result->diagnostics,
+                matched_count, out["transactions"].size(), truncated);
+            return out;
+        }
+
+        out["summary"]["query_mode"] = "count";
+        set_query_summary(
+            out["summary"], result->diagnostics,
+            matched_count, 0, false);
         return out;
+    }
+
+    std::string render_xout(const Json& response) const override {
+        return render_tabular_xout(action_name(), response);
     }
 };
 

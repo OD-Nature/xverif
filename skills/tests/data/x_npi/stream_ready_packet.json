@@ -1,0 +1,15 @@
+{
+  "clock": "stream_v1_top.clk",
+  "rst_n": "stream_v1_top.rst_n",
+  "edge": "posedge",
+  "sample_point": "after",
+  "valid": "stream_v1_top.rpkt_vld",
+  "ready": "stream_v1_top.rpkt_rdy",
+  "sop": "stream_v1_top.rpkt_sop",
+  "eop": "stream_v1_top.rpkt_eop",
+  "data": "stream_v1_top.rpkt_data",
+  "fields": {
+    "opcode": "stream_v1_top.rpkt_opcode",
+    "seq": "stream_v1_top.rpkt_seq"
+  }
+}

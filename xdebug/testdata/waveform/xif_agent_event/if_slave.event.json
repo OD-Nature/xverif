@@ -1,6 +1,6 @@
 {
   "clock": "xif_tb_top.clk",
-  "rst_n": "xif_tb_top.rst_n",
+  "reset": {"signal": "xif_tb_top.rst_n", "polarity": "active_low"},
   "edge": "posedge",
   "signals": {
     "vld": "xif_tb_top.if_slave.vld",

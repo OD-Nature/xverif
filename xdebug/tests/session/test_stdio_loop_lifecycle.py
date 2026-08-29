@@ -18,7 +18,11 @@ def _read_ndjson(path: Path) -> list[dict]:
 
 
 def _stdio_events(home: Path, session_prefix: str = "adhoc") -> list[dict]:
-    matches = sorted((home / ".xdebug" / "sessions").glob(f"{session_prefix}_*/logs/stdio.ndjson"))
+    matches = sorted(
+        (home / ".xdebug" / "sessions").glob(
+            f"{session_prefix}_*/owners/*/logs/stdio.ndjson"
+        )
+    )
     assert matches, f"missing stdio.ndjson for {session_prefix}"
     rows: list[dict] = []
     for path in matches:
@@ -104,6 +108,9 @@ def test_stdio_loop_multiple_requests_keep_ids_and_xout_mode(
     second = stdio_loop.request(
         {
             "id": "xout-2",
+            "trace_id": "trace-xout-2",
+            "span_id": "span-xout-2",
+            "payload_format": "xout",
             "api_version": "xdebug.v1",
             "action": "schema",
             "args": {"action": "actions", "kind": "request"},
@@ -125,6 +132,35 @@ def test_stdio_loop_multiple_requests_keep_ids_and_xout_mode(
     assert second.response.startswith("@xdebug.schema.v1")
     assert third.envelope["id"] == "xout-3"
     assert third.envelope["payload_format"] == "xout"
+
+
+@pytest.mark.session
+@pytest.mark.stdio_loop
+def test_stdio_loop_rejects_invalid_or_legacy_transport_metadata(
+    stdio_loop: StdioLoopRunner,
+) -> None:
+    invalid_trace = stdio_loop.request(
+        {
+            "request_id": "bad-trace",
+            "trace_id": 7,
+            "api_version": "xdebug.v1",
+            "action": "actions",
+        }
+    )
+    assert not invalid_trace.ok
+    assert invalid_trace.envelope["error"]["code"] == "INVALID_REQUEST"
+    assert "trace_id" in invalid_trace.envelope["error"]["message"]
+
+    legacy_marker = stdio_loop.request(
+        {
+            "request_id": "legacy-marker",
+            "__xverif_loop_payload_format": "json",
+            "api_version": "xdebug.v1",
+            "action": "actions",
+        }
+    )
+    assert not legacy_marker.ok
+    assert legacy_marker.envelope["error"]["code"] == "INVALID_REQUEST"
 
 
 @pytest.mark.session

@@ -1,9 +1,12 @@
 #include "fsdb_value_reader.h"
+
+#include <algorithm>
 #include "npi_fsdb.h"
 #include "npi_L1.h"
 #include "fsdb_scan_utils.h"
 #include <set>
 #include <map>
+#include <unordered_map>
 
 namespace xdebug_waveform {
 
@@ -13,6 +16,44 @@ npiFsdbValType parse_format(char fmt) {
         case 'D': case 'd': return npiFsdbDecStrVal;
         case 'H': case 'h': default: return npiFsdbHexStrVal;
     }
+}
+
+FsdbSignalWidth fsdb_signal_width(npiFsdbSigHandle signal) {
+    static std::unordered_map<npiFsdbSigHandle, FsdbSignalWidth> cache;
+    auto found = cache.find(signal);
+    if (found != cache.end()) return found->second;
+
+    FsdbSignalWidth result;
+    if (!signal) {
+        result.reason = "signal_not_found";
+    } else {
+        NPI_INT32 width = 0;
+        if (npi_fsdb_sig_property(npiFsdbSigRangeSize, signal, &width) &&
+            width > 0) {
+            result.width = static_cast<int>(width);
+            result.reliable = true;
+        } else {
+            result.reason = "npi_range_size_unavailable";
+        }
+    }
+    cache[signal] = result;
+    return result;
+}
+
+FsdbSignalWidth fsdb_signal_width(npiFsdbFileHandle file,
+                                  const std::string& signal_path) {
+    return fsdb_signal_width(
+        file ? npi_fsdb_sig_by_name(file, signal_path.c_str(), nullptr)
+             : nullptr);
+}
+
+xdebug_core::LogicValue logic_value_from_fsdb_signal(
+    npiFsdbSigHandle signal,
+    const std::string& raw,
+    char radix) {
+    FsdbSignalWidth metadata = fsdb_signal_width(signal);
+    return xdebug_core::logic_value_from_fsdb_raw(
+        raw, radix, metadata.reliable ? metadata.width : 0);
 }
 
 bool read_sig_value_at(npiFsdbFileHandle file,
@@ -65,11 +106,11 @@ bool read_sig_vec_value_at_with_status(npiFsdbFileHandle file,
     return all_found;
 }
 
-bool find_list_diff(npiFsdbFileHandle file,
-                    const std::vector<std::string>& signals,
-                    npiFsdbTime begin_time,
-                    npiFsdbTime end_time,
-                    npiFsdbTime& diff_time) {
+bool find_list_first_change(npiFsdbFileHandle file,
+                            const std::vector<std::string>& signals,
+                            npiFsdbTime begin_time,
+                            npiFsdbTime end_time,
+                            npiFsdbTime& diff_time) {
     if (signals.empty()) return false;
 
     // Get handles for all signals
@@ -151,6 +192,62 @@ bool find_list_diff(npiFsdbFileHandle file,
     }
 
     return found;
+}
+
+bool find_list_first_changes(npiFsdbFileHandle file,
+                             const std::vector<std::string>& signals,
+                             npiFsdbTime begin_time,
+                             npiFsdbTime end_time,
+                             npiFsdbTime& first_change_time,
+                             std::vector<ListFirstChange>& changes) {
+    changes.clear();
+    if (signals.empty()) return false;
+    std::vector<npiFsdbSigHandle> handles;
+    for (const auto& path : signals) {
+        npiFsdbSigHandle sig = npi_fsdb_sig_by_name(file, path.c_str(), NULL);
+        if (!sig) return false;
+        handles.push_back(sig);
+    }
+    std::vector<std::string> current;
+    if (!read_sig_vec_value_at(file, signals, begin_time, 'H', current)) return false;
+
+    TimeBasedVcIterGuard guard;
+    npiFsdbTimeBasedVcIter& iter = guard.iter();
+    for (auto sig : handles) iter.add(sig);
+    guard.start(begin_time, end_time);
+    npiFsdbTime t = 0;
+    npiFsdbSigHandle changed = nullptr;
+    bool found = false;
+    while (iter.iter_next(t, changed) > 0) {
+        int index = -1;
+        for (size_t i = 0; i < handles.size(); ++i) {
+            if (handles[i] == changed) { index = static_cast<int>(i); break; }
+        }
+        if (index < 0) continue;
+        npiFsdbValue val;
+        val.format = npiFsdbHexStrVal;
+        if (!iter.get_value(val) || !val.value.str) continue;
+        std::string next = val.value.str;
+        if (!found) {
+            if (next == current[index]) continue;
+            found = true;
+            first_change_time = t;
+        } else if (t != first_change_time) {
+            break;
+        }
+        if (next != current[index]) {
+            auto existing = std::find_if(changes.begin(), changes.end(),
+                [&](const ListFirstChange& item) {
+                    return item.signal == signals[index];
+                });
+            if (existing == changes.end())
+                changes.push_back({signals[index], current[index], next});
+            else
+                existing->after = next;
+            current[index] = next;
+        }
+    }
+    return found && !changes.empty();
 }
 
 } // namespace xdebug_waveform

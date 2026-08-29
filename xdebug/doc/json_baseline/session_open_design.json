@@ -3,7 +3,7 @@
     "api_version": "xdebug.v1",
     "action": "session.open",
     "target": {
-      "daidir": "~/xverif/xdebug/testdata/design/uart/simv.daidir"
+      "daidir": "<xverif-repo>/xdebug/testdata/design/uart/simv.daidir"
     },
     "args": {
       "name": "sample_design"
@@ -24,10 +24,10 @@
       "id": "sample_design",
       "session_id": "sample_design",
       "mode": "design",
-      "daidir": "~/xverif/xdebug/testdata/design/uart/simv.daidir",
-      "socket_path": "/tmp/xdebug_action_sampling/home/.xdebug/engine/sessions/sample_design_fd39ca23820dcca4/socket",
+      "daidir": "<xverif-repo>/xdebug/testdata/design/uart/simv.daidir",
+      "socket_path": "<repo>/tmp/xdebug_action_sampling/home/.xdebug/engine/sessions/sample_design_fd39ca23820dcca4/socket",
       "transport": "uds",
-      "file_dir": "/tmp/xdebug_action_sampling/home/.xdebug/engine/sessions/sample_design_fd39ca23820dcca4/transport",
+      "file_dir": "<repo>/tmp/xdebug_action_sampling/home/.xdebug/engine/sessions/sample_design_fd39ca23820dcca4/transport",
       "server_host": "localhost.localdomain"
     },
     "summary": {
@@ -39,10 +39,10 @@
         "id": "sample_design",
         "session_id": "sample_design",
         "mode": "design",
-        "daidir": "~/xverif/xdebug/testdata/design/uart/simv.daidir",
-        "socket_path": "/tmp/xdebug_action_sampling/home/.xdebug/engine/sessions/sample_design_fd39ca23820dcca4/socket",
+        "daidir": "<xverif-repo>/xdebug/testdata/design/uart/simv.daidir",
+        "socket_path": "<repo>/tmp/xdebug_action_sampling/home/.xdebug/engine/sessions/sample_design_fd39ca23820dcca4/socket",
         "transport": "uds",
-        "file_dir": "/tmp/xdebug_action_sampling/home/.xdebug/engine/sessions/sample_design_fd39ca23820dcca4/transport",
+        "file_dir": "<repo>/tmp/xdebug_action_sampling/home/.xdebug/engine/sessions/sample_design_fd39ca23820dcca4/transport",
         "server_host": "localhost.localdomain"
       }
     },

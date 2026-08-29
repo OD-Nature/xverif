@@ -1,7 +1,10 @@
 #include "service/trace_source_path_formatter.h"
+#include "service/contract_bound_request.h"
 
 #include "api/text_response_builder.h"
 #include "common/env_config.h"
+#include "core/output/completeness.h"
+#include "core/value/logic_value.h"
 
 #include "npi.h"
 #include "npi_hdl.h"
@@ -11,8 +14,10 @@
 #include <cstdlib>
 #include <fstream>
 #include <iomanip>
+#include <limits>
 #include <set>
 #include <sstream>
+#include <stdexcept>
 
 namespace xdebug_design {
 
@@ -25,6 +30,68 @@ std::string scalar_text(const Json& object, const char* key) {
     const Json& value = object[key];
     if (!xdebug::is_xout_scalar_json(value)) return std::string();
     return xdebug::json_to_xout_value(value);
+}
+
+std::string ambiguous_xout_value(const Json& value) {
+    if (value.is_null()) return "null";
+    if (!value.is_string()) return xdebug::json_to_xout_value(value);
+
+    std::string text = value.get<std::string>();
+    size_t tick = text.find('\'');
+    if (tick != std::string::npos && tick + 1 < text.size()) {
+        char radix = static_cast<char>(std::tolower(
+            static_cast<unsigned char>(text[tick + 1])));
+        bool valid_width = tick == 0;
+        if (tick > 0) {
+            valid_width = true;
+            for (size_t i = 0; i < tick; ++i) {
+                if (!std::isdigit(static_cast<unsigned char>(text[i]))) {
+                    valid_width = false;
+                    break;
+                }
+            }
+        }
+        if (valid_width && (radix == 'h' || radix == 'b' || radix == 'd')) return text;
+    }
+
+    std::string bits;
+    bits.reserve(text.size());
+    for (char ch : text) {
+        char lower = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+        if (lower == '_' || std::isspace(static_cast<unsigned char>(lower))) continue;
+        if (lower != '0' && lower != '1' && lower != 'x' && lower != 'z') return text;
+        bits.push_back(lower);
+    }
+    if (bits.empty()) return text;
+    return xdebug_core::logic_value_compact_string(
+        xdebug_core::logic_value_from_bits(bits, static_cast<int>(bits.size())));
+}
+
+std::string render_ambiguous_rhs_xout(const Json& ambiguity) {
+    if (!ambiguity.is_object()) return std::string();
+    std::vector<std::vector<std::string>> rows;
+    const std::string active_time = ambiguity.value("active_time", std::string());
+    const Json statements = ambiguity.value("statements", Json::array());
+    if (statements.is_array()) {
+        for (const auto& statement : statements) {
+            const Json samples = statement.value("rhs_samples", Json::array());
+            if (!samples.is_array()) continue;
+            for (const auto& sample : samples) {
+                const Json before = sample.value("before", Json::object());
+                const Json after = sample.value("after", Json::object());
+                rows.push_back({
+                    sample.value("signal", std::string()),
+                    active_time,
+                    ambiguous_xout_value(before.value("value", Json())),
+                    ambiguous_xout_value(after.value("value", Json()))
+                });
+            }
+        }
+    }
+    xdebug::TextResponseBuilder out("xdebug");
+    out.emit_section("ambiguous_rhs_samples");
+    out.emit_table({"signal", "time", "before", "after"}, rows);
+    return out.str();
 }
 
 std::string trim_copy(const std::string& input) {
@@ -175,6 +242,32 @@ void add_limit_hint(Json& summary, bool truncated, int max_results) {
     summary["limit_hint"] = limit_hint(max_results);
 }
 
+std::vector<std::string> trace_analysis_truncation_scopes(const Json& raw,
+                                                          bool analysis_complete) {
+    const Json& scopes = raw.at("truncation_scopes");
+    if (!scopes.is_array()) {
+        throw std::logic_error("trace truncation_scopes must be an array");
+    }
+    std::vector<std::string> out;
+    for (const auto& scope : scopes) {
+        if (!scope.is_string()) {
+            throw std::logic_error("trace truncation_scopes entries must be strings");
+        }
+        append_unique(out, scope.get<std::string>());
+    }
+    const bool has_analysis_scope =
+        std::find(out.begin(), out.end(), "analysis_trace_resolution") != out.end() ||
+        std::find(out.begin(), out.end(), "analysis_internal_json") != out.end();
+    if (analysis_complete && !out.empty()) {
+        throw std::logic_error("complete trace analysis cannot declare a truncation scope");
+    }
+    if (!analysis_complete && !has_analysis_scope) {
+        throw std::logic_error(
+            "incomplete trace analysis must declare an analysis truncation scope");
+    }
+    return out;
+}
+
 Json source_lines_from_file(const std::string& file, int line, int context_lines) {
     std::set<int> active_lines;
     active_lines.insert(line);
@@ -220,6 +313,11 @@ struct SourceRenderItem {
     int line = 0;
     int hop = 0;
     bool has_hop = false;
+    std::string chain_id;
+    std::string time;
+    std::string active_time;
+    bool has_x_onset_time = false;
+    std::string relation;
     std::string signal_path;
 };
 
@@ -242,6 +340,12 @@ std::vector<SourceRenderItem> collect_source_items(const Json& items, bool chain
         render_item.signal_path = signal_path_text(item);
         render_item.has_hop = chain;
         render_item.hop = item.value("index", static_cast<int>(out.size()));
+        render_item.chain_id = scalar_text(item, "chain_id");
+        render_item.has_x_onset_time = item.contains("x_onset_time");
+        render_item.time = render_item.has_x_onset_time
+            ? scalar_text(item, "x_onset_time") : scalar_text(item, "time");
+        render_item.active_time = scalar_text(item, "active_time");
+        render_item.relation = scalar_text(item, "relation");
         if (render_item.file.empty() || render_item.line <= 0 || render_item.signal_path.empty()) continue;
         out.push_back(render_item);
     }
@@ -281,9 +385,9 @@ void append_source_context_text(std::string& text, const Json& context) {
         for (const auto& row : context) {
             if (!row.is_object()) continue;
             int row_line = scalar_int(row, "line");
-            bool active = row.value("active", false);
             std::ostringstream prefix;
-            prefix << (active ? ">" : " ") << std::setw(4) << row_line << " | ";
+            prefix << (row.value("active", false) ? ">" : " ")
+                   << std::setw(4) << row_line << " | ";
             text += prefix.str() + row.value("text", std::string()) + "\n";
         }
     }
@@ -294,13 +398,29 @@ std::string active_signals_table(const SourceRenderGroup& group) {
     out.emit_section("active_signals");
     std::vector<std::vector<std::string>> rows;
     std::set<std::string> seen;
+    bool x_time_semantics = false;
+    for (const auto& item : group.items) {
+        if (item.has_x_onset_time) {
+            x_time_semantics = true;
+            break;
+        }
+    }
     for (const auto& item : group.items) {
         std::ostringstream key;
-        if (item.has_hop) key << item.hop << "|";
+        if (item.has_hop) key << item.chain_id << "|" << item.hop << "|";
         key << item.line << "|" << item.signal_path;
         if (!seen.insert(key.str()).second) continue;
         if (item.has_hop) {
-            rows.push_back({std::to_string(item.hop), std::to_string(item.line), item.signal_path});
+            if (x_time_semantics) {
+                rows.push_back({item.chain_id.empty() ? "c0" : item.chain_id,
+                                std::to_string(item.hop), item.time,
+                                item.active_time, item.relation,
+                                std::to_string(item.line), item.signal_path});
+            } else {
+                rows.push_back({item.chain_id.empty() ? "c0" : item.chain_id,
+                                std::to_string(item.hop), item.time, item.relation,
+                                std::to_string(item.line), item.signal_path});
+            }
         } else {
             rows.push_back({std::to_string(item.line), item.signal_path});
         }
@@ -308,8 +428,11 @@ std::string active_signals_table(const SourceRenderGroup& group) {
     if (rows.empty()) return std::string();
     if (group.items.empty() || !group.items.front().has_hop) {
         out.emit_table({"line", "signal_path"}, rows);
+    } else if (x_time_semantics) {
+        out.emit_table({"chain", "hop", "x_onset_time", "active_time",
+                        "relation", "line", "signal_path"}, rows);
     } else {
-        out.emit_table({"hop", "line", "signal_path"}, rows);
+        out.emit_table({"chain", "hop", "time", "relation", "line", "signal_path"}, rows);
     }
     return out.str();
 }
@@ -338,20 +461,109 @@ void emit_source_group_xout(std::string& text, const SourceRenderGroup& group, i
     }
 }
 
+void append_depth_frontiers_xout(std::string& text, const Json& frontiers) {
+    if (!frontiers.is_array() || frontiers.empty()) return;
+    xdebug::TextResponseBuilder out("xdebug");
+    out.emit_section("depth_frontiers");
+    std::vector<std::vector<std::string>> rows;
+    bool has_continue_time = false;
+    for (const auto& item : frontiers) {
+        if (!item.is_object()) continue;
+        has_continue_time = has_continue_time || item.contains("continue_time");
+        rows.push_back({scalar_text(item, "chain_id"), scalar_text(item, "signal"),
+                        item.contains("continue_time")
+                            ? scalar_text(item, "continue_time") : scalar_text(item, "time"),
+                        scalar_text(item, "value"),
+                        scalar_text(item, "x_mask"),
+                        scalar_text(item, "stopped_after_depth")});
+    }
+    if (rows.empty()) return;
+    out.emit_table({"chain", "signal", has_continue_time ? "continue_time" : "time",
+                    "value", "x_mask", "stopped_after_depth"}, rows);
+    while (!text.empty() && text.back() == '\n') text.pop_back();
+    text += "\n\n" + out.str();
+}
+
+void append_next_actions_xout(std::string& text, const Json& actions) {
+    if (!actions.is_array() || actions.empty()) return;
+    xdebug::TextResponseBuilder out("xdebug");
+    out.emit_section("next");
+    std::vector<std::vector<std::string>> rows;
+    for (const auto& item : actions) {
+        if (!item.is_object()) continue;
+        Json args = item.value("args", Json::object());
+        Json limits = item.value("limits", Json::object());
+        rows.push_back({scalar_text(item, "chain_id"), scalar_text(item, "reason"),
+                        scalar_text(item, "action"), scalar_text(args, "signal"),
+                        scalar_text(args, "time"), scalar_text(limits, "max_depth"),
+                        scalar_text(limits, "max_chains")});
+    }
+    if (rows.empty()) return;
+    out.emit_table({"chain", "mode", "action", "signal", "time", "max_depth",
+                    "max_chains"}, rows);
+    while (!text.empty() && text.back() == '\n') text.pop_back();
+    text += "\n\n" + out.str();
+}
+
+void append_chain_states_xout(std::string& text, const Json& chains) {
+    if (!chains.is_array() || chains.empty()) return;
+    xdebug::TextResponseBuilder out("xdebug");
+    out.emit_section("chains");
+    std::vector<std::vector<std::string>> rows;
+    bool has_x_onset_time = false;
+    for (const auto& chain : chains) {
+        if (!chain.is_object()) continue;
+        Json current = chain.value("current", Json::object());
+        has_x_onset_time = has_x_onset_time || current.contains("x_onset_time");
+        std::string reason = scalar_text(chain, "termination_detail");
+        if (reason.empty()) reason = scalar_text(chain, "status");
+        rows.push_back({scalar_text(chain, "chain_id"), scalar_text(chain, "status"),
+                        scalar_text(current, "signal"),
+                        current.contains("x_onset_time")
+                            ? scalar_text(current, "x_onset_time") : scalar_text(current, "time"),
+                        scalar_text(current, "value"), reason});
+    }
+    if (rows.empty()) return;
+    out.emit_table({"chain", "status", "current_signal",
+                    has_x_onset_time ? "current_x_onset_time" : "current_time",
+                    "value", "reason"}, rows);
+    while (!text.empty() && text.back() == '\n') text.pop_back();
+    text += "\n\n" + out.str();
+}
+
 } // namespace
 
-int trace_result_limit_from_request(const Json& request) {
-    Json args = request.value("args", Json::object());
-    if (args.is_object() && args.contains("line_limit") && args["line_limit"].is_number_integer()) {
-        int limit = args["line_limit"].get<int>();
-        if (limit > 0) return limit;
+int trace_result_limit_from_request(ContractBoundRequest& request) {
+    auto limits = request.limits();
+    ContractJsonView max_results = limits["max_results"];
+    if (!max_results.exists()) return kDefaultTraceResultLimit;
+
+    const Json value = max_results.consume_subtree(
+        "trace_result_limit_parser");
+    const Json::number_unsigned_t maximum =
+        static_cast<Json::number_unsigned_t>(
+            std::numeric_limits<int>::max());
+    if (value.is_number_unsigned()) {
+        const Json::number_unsigned_t parsed =
+            value.get<Json::number_unsigned_t>();
+        if (parsed == 0 || parsed > maximum) {
+            throw std::out_of_range(
+                "limits.max_results must be within the positive int range");
+        }
+        return static_cast<int>(parsed);
     }
-    Json limits = request.value("limits", Json::object());
-    if (limits.is_object() && limits.contains("max_results") && limits["max_results"].is_number_integer()) {
-        int limit = limits["max_results"].get<int>();
-        if (limit > 0) return limit;
+    if (value.is_number_integer()) {
+        const Json::number_integer_t parsed =
+            value.get<Json::number_integer_t>();
+        if (parsed <= 0 ||
+            static_cast<Json::number_unsigned_t>(parsed) > maximum) {
+            throw std::out_of_range(
+                "limits.max_results must be within the positive int range");
+        }
+        return static_cast<int>(parsed);
     }
-    return kDefaultTraceResultLimit;
+    throw std::invalid_argument(
+        "limits.max_results must be a positive integer");
 }
 
 Json source_window_from_location(const std::string& file, int line, int context_lines) {
@@ -413,19 +625,34 @@ Json simplify_trace_driver_load_payload(const Json& raw,
         }
     }
 
-    bool limit_truncated = apply_result_limit(paths, max_results);
-    bool truncated = raw.value("truncated", false) || limit_truncated;
+    const std::size_t total_count = paths.size();
+    const bool response_truncated = apply_result_limit(paths, max_results);
+    const bool scan_complete = raw.at("scan_complete").get<bool>();
+    const bool analysis_complete = raw.at("analysis_complete").get<bool>();
 
     Json out;
     out["summary"] = {
         {"signal", signal},
-        {"mode", mode},
-        {"path_count", static_cast<int>(paths.size())},
-        {"truncated", truncated}
+        {"mode", mode}
     };
-    add_limit_hint(out["summary"], limit_truncated, max_results);
+    std::vector<std::string> truncation_scopes =
+        trace_analysis_truncation_scopes(raw, analysis_complete);
+    if (response_truncated) truncation_scopes.push_back("response_paths");
+    xdebug_core::set_completeness(
+        out["summary"],
+        scan_complete,
+        analysis_complete,
+        response_truncated,
+        total_count,
+        paths.size(),
+        truncation_scopes);
+    add_limit_hint(out["summary"], response_truncated, max_results);
     out["paths"] = paths;
-    out["truncated"] = truncated;
+    const Json diagnostics = raw.value("diagnostics", Json::array());
+    if (!diagnostics.is_array()) {
+        throw std::logic_error("trace diagnostics must be an array");
+    }
+    if (!diagnostics.empty()) out["diagnostics"] = diagnostics;
     (void)action;
     return out;
 }
@@ -436,7 +663,8 @@ Json simplify_active_driver_payload(const Json& raw,
                                     int max_results) {
     Json paths = Json::array();
     std::set<std::string> seen;
-    std::string active_time = raw.value("summary", Json::object()).value("active_time", std::string());
+    Json raw_summary = raw.value("summary", Json::object());
+    std::string active_time = raw_summary.value("active_time", std::string());
     Json trace_nodes = raw.value("trace", Json::object()).value("nodes", Json::array());
     if (trace_nodes.is_array()) {
         for (const auto& node : trace_nodes) {
@@ -468,20 +696,33 @@ Json simplify_active_driver_payload(const Json& raw,
         }
     }
 
-    bool limit_truncated = apply_result_limit(paths, max_results);
-    bool truncated = raw.value("truncated", false) || limit_truncated;
+    const std::size_t total_count = paths.size();
+    const bool response_truncated = apply_result_limit(paths, max_results);
+    const bool analysis_complete =
+        raw_summary.at("analysis_complete").get<bool>();
 
     Json out;
     out["summary"] = {
         {"signal", signal},
         {"time", requested_time},
         {"active_time", active_time},
-        {"path_count", static_cast<int>(paths.size())},
-        {"truncated", truncated}
+        {"termination", raw_summary.value("termination", std::string("unresolved"))},
+        {"termination_detail", raw_summary.value(
+            "termination_detail", raw_summary.value("termination", std::string("unresolved")))}
     };
-    add_limit_hint(out["summary"], limit_truncated, max_results);
+    std::vector<std::string> truncation_scopes;
+    if (!analysis_complete) truncation_scopes.push_back("analysis_trace");
+    if (response_truncated) truncation_scopes.push_back("response_paths");
+    xdebug_core::set_completeness(
+        out["summary"],
+        analysis_complete,
+        analysis_complete,
+        response_truncated,
+        total_count,
+        paths.size(),
+        truncation_scopes);
+    add_limit_hint(out["summary"], response_truncated, max_results);
     out["paths"] = paths;
-    out["truncated"] = truncated;
     return out;
 }
 
@@ -508,25 +749,56 @@ Json simplify_active_driver_chain_payload(const Json& raw,
             Json hop = make_source_path_item_from_location(file, line, path);
             if (hop.empty()) continue;
             hop["index"] = node.value("index", static_cast<int>(hops.size()));
+            hop["chain_id"] = "c0";
+            hop["signal"] = scalar_text(node, "signal");
+            hop["time"] = scalar_text(node, "time");
+            hop["active_time"] = scalar_text(node, "active_time");
+            if (node.contains("value")) hop["value"] = node["value"];
+            hop["relation"] = hop["index"].get<int>() == 0 ? "root" : "driver";
             hops.push_back(hop);
         }
     }
 
-    bool limit_truncated = apply_result_limit(hops, max_results);
-    bool truncated = raw.value("truncated", false) || limit_truncated;
+    const std::size_t total_count = hops.size();
+    const bool response_truncated = apply_result_limit(hops, max_results);
 
     Json summary = raw.value("summary", Json::object());
+    const bool analysis_complete =
+        summary.at("analysis_complete").get<bool>();
     Json out;
     out["summary"] = {
         {"signal", signal},
         {"time", start_time},
-        {"hop_count", static_cast<int>(hops.size())},
         {"termination", summary.value("termination", raw.value("termination", std::string("unresolved")))},
-        {"truncated", truncated}
+        {"termination_detail", summary.value(
+            "termination_detail",
+            summary.value("termination", raw.value("termination", std::string("unresolved"))))}
     };
-    add_limit_hint(out["summary"], limit_truncated, max_results);
+    std::vector<std::string> truncation_scopes;
+    if (!analysis_complete) truncation_scopes.push_back("analysis_trace");
+    if (response_truncated) truncation_scopes.push_back("response_hops");
+    xdebug_core::set_completeness(
+        out["summary"],
+        analysis_complete,
+        analysis_complete,
+        response_truncated,
+        total_count,
+        hops.size(),
+        truncation_scopes);
+    add_limit_hint(out["summary"], response_truncated, max_results);
     out["hops"] = hops;
-    out["truncated"] = truncated;
+    Json depth_frontiers = chain_object.value("depth_frontiers", Json::array());
+    if (depth_frontiers.is_array() && !depth_frontiers.empty()) {
+        out["depth_frontiers"] = depth_frontiers;
+    }
+    Json ambiguity_evidence = chain_object.value("ambiguity_evidence", Json());
+    if (ambiguity_evidence.is_object()) {
+        out["ambiguity_evidence"] = ambiguity_evidence;
+    }
+    Json suggested_next_actions = raw.value("suggested_next_actions", Json::array());
+    if (suggested_next_actions.is_array() && !suggested_next_actions.empty()) {
+        out["suggested_next_actions"] = suggested_next_actions;
+    }
     return out;
 }
 
@@ -539,10 +811,59 @@ std::string render_source_path_xout(const std::string& action, const Json& respo
         for (auto it = summary.begin(); it != summary.end(); ++it) {
             if (xdebug::is_xout_scalar_json(it.value())) out.emit_kv(it.key(), it.value());
         }
+        const Json truncation_scopes = summary.value("truncation_scopes", Json());
+        if (truncation_scopes.is_array() && truncation_scopes.empty()) {
+            out.emit_kv("truncation_scopes", "[empty]");
+        } else if (truncation_scopes.is_array()) {
+            out.emit_section("truncation_scopes");
+            for (const auto& scope : truncation_scopes) {
+                if (scope.is_string()) out.emit_row({scope.get<std::string>()});
+            }
+        }
     }
-    std::string text = out.str();
     const Json data = response.value("data", Json::object());
+    std::string text = out.str();
+    const Json query = data.value("query", Json());
+    if (query.is_object() && !query.empty()) {
+        xdebug::TextResponseBuilder query_out("xdebug");
+        query_out.emit_section("query");
+        if (query.contains("query_time")) {
+            query_out.emit_kv("query_time", query["query_time"]);
+        }
+        Json value = query.value("value", Json());
+        if (value.is_object() && value.contains("value")) {
+            query_out.emit_kv("value", value["value"]);
+        }
+        if (query.contains("x_mask")) query_out.emit_kv("x_mask", query["x_mask"]);
+        while (!text.empty() && text.back() == '\n') text.pop_back();
+        text += "\n\n" + query_out.str();
+    }
     const Json paths = data.value("paths", Json::array());
+    const Json diagnostics = data.value("diagnostics", Json::array());
+    if (diagnostics.is_array() && !diagnostics.empty()) {
+        xdebug::TextResponseBuilder diagnostic_out("xdebug");
+        diagnostic_out.emit_section("diagnostics");
+        diagnostic_out.emit_table(
+            {"code", "stage", "artifact_kind", "first_index",
+             "failure_count", "message"},
+            [&]() {
+                std::vector<std::vector<std::string> > rows;
+                for (const auto& diagnostic : diagnostics) {
+                    if (!diagnostic.is_object()) continue;
+                    rows.push_back({
+                        diagnostic.value("code", std::string()),
+                        diagnostic.value("stage", std::string()),
+                        diagnostic.value("artifact_kind", std::string()),
+                        std::to_string(diagnostic.value("first_index", 0U)),
+                        std::to_string(diagnostic.value("failure_count", 0U)),
+                        diagnostic.value("message", std::string()),
+                    });
+                }
+                return rows;
+            }());
+        while (!text.empty() && text.back() == '\n') text.pop_back();
+        text += "\n\n" + diagnostic_out.str();
+    }
     int context_lines = xdebug_core::xdebug_trace_source_context_lines();
     int merge_threshold_lines = xdebug_core::xdebug_trace_source_merge_threshold_lines();
     if (paths.is_array()) {
@@ -555,6 +876,42 @@ std::string render_source_path_xout(const std::string& action, const Json& respo
         std::vector<SourceRenderGroup> groups =
             group_source_items(collect_source_items(hops, true), merge_threshold_lines);
         for (const auto& group : groups) emit_source_group_xout(text, group, context_lines);
+    }
+    const Json chains = data.value("chains", Json::array());
+    if (chains.is_array()) {
+        Json chain_hops = Json::array();
+        for (const auto& chain : chains) {
+            if (!chain.is_object()) continue;
+            Json items = chain.value("hops", Json::array());
+            if (!items.is_array()) continue;
+            for (auto item : items) {
+                if (!item.is_object()) continue;
+                if (!item.contains("chain_id")) item["chain_id"] = chain.value("chain_id", "");
+                chain_hops.push_back(item);
+            }
+        }
+        std::vector<SourceRenderGroup> groups =
+            group_source_items(collect_source_items(chain_hops, true), merge_threshold_lines);
+        for (const auto& group : groups) emit_source_group_xout(text, group, context_lines);
+    }
+    const Json ambiguity = data.value("ambiguity_evidence", Json());
+    if (ambiguity.is_object()) {
+        std::string ambiguity_text = render_ambiguous_rhs_xout(ambiguity);
+        while (!text.empty() && text.back() == '\n') text.pop_back();
+        text += "\n\n" + ambiguity_text;
+    }
+    append_chain_states_xout(text, chains);
+    append_depth_frontiers_xout(text, data.value("depth_frontiers", Json::array()));
+    append_next_actions_xout(text, data.value("suggested_next_actions", Json::array()));
+    Json limitations = data.value("limitations", Json::array());
+    if (limitations.is_array() && !limitations.empty()) {
+        xdebug::TextResponseBuilder limitations_out("xdebug");
+        limitations_out.emit_section("limitations");
+        for (const auto& item : limitations) {
+            if (item.is_string()) limitations_out.emit_row({item.get<std::string>()});
+        }
+        while (!text.empty() && text.back() == '\n') text.pop_back();
+        text += "\n\n" + limitations_out.str();
     }
     while (!text.empty() && text.back() == '\n') text.pop_back();
     text.push_back('\n');

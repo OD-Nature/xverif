@@ -6,7 +6,8 @@
   "required": [
     "api_version",
     "action",
-    "args"
+    "args",
+    "target"
   ],
   "properties": {
     "api_version": {
@@ -16,7 +17,8 @@
       ]
     },
     "request_id": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "action": {
       "type": "string",
@@ -25,10 +27,53 @@
       ]
     },
     "target": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fsdb": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "session_id"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "fsdb"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "session_id"
+            ]
+          },
+          "required": [
+            "fsdb"
+          ]
+        }
+      ],
+      "additionalProperties": false
     },
     "args": {
       "type": "object",
+      "required": [
+        "expr",
+        "time",
+        "signals",
+        "clock"
+      ],
       "properties": {
         "clock": {
           "type": "string",
@@ -36,16 +81,21 @@
         },
         "edge": {
           "type": "string",
-          "description": "clock sampling 使用的边沿：posedge、negedge 或 dual。"
+          "description": "Clock sampling edge. The schema default is authoritative; negedge often matches monitor semantics."
         },
         "expr": {
           "type": "string",
-          "description": "需要求值或匹配的布尔表达式。"
+          "description": "在指定采样语义下求值或匹配的表达式。"
         },
-        "line_limit": {
-          "type": "integer",
-          "minimum": 1,
-          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
+        "render_time_unit": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "ps",
+            "ns",
+            "us"
+          ],
+          "description": "Controls only canonical response time rendering: auto, ps, ns, or us. It never changes input parsing, sampling, filtering, or ordering."
         },
         "sample_point": {
           "type": "string",
@@ -53,86 +103,98 @@
             "before",
             "after"
           ],
-          "description": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。"
+          "description": "Before/after observation point for posedge or dual sampling; it does not change the raw waveform range."
         },
         "signals": {
-          "oneOf": [
-            {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              }
-            }
-          ],
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1
+          },
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Value for a caller-defined signal alias key. Supply the real signal path or the action-supported expression for that alias."
+          },
+          "x-dynamic-map": true,
+          "x-dynamic-contract": "Each property key is an alias referenced by this action; each value resolves that alias to a signal path or supported expression.",
           "description": "信号列表，或 alias 到信号路径的映射。"
         },
         "time": {
           "type": "string",
-          "description": "查询或验证的目标时间点。"
+          "description": "Target sample time. Prefer a canonical string with a unit; a bare number is interpreted as nanoseconds."
         },
         "time_range": {
           "type": "object",
+          "minProperties": 1,
           "properties": {
             "begin": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1,
+              "description": "闭区间起点；省略时使用可用波形窗口起点。"
             },
             "end": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1,
+              "description": "闭区间终点；省略时使用可用波形窗口终点。"
             }
           },
           "additionalProperties": false,
-          "description": "查询或分析的时间窗口。"
+          "description": "Closed analysis interval. begin and end may be omitted independently to use the available waveform bounds."
         },
-        "time_unit": {
+        "value_format": {
           "type": "string",
           "enum": [
-            "auto",
-            "fs",
-            "ps",
-            "ns",
-            "us",
-            "ms",
-            "s"
-          ]
+            "hex",
+            "bin",
+            "dec"
+          ],
+          "default": "hex",
+          "description": "返回 LogicValue 的显示格式；不改变比较、采样或底层四态值。"
         }
       },
-      "additionalProperties": false,
-      "required": [
-        "expr",
-        "time",
-        "signals",
-        "clock"
-      ]
+      "additionalProperties": false
     },
     "limits": {
-      "type": "object"
-    },
-    "auth_token": {
-      "type": "string"
-    },
-    "id": {
-      "type": "string"
-    },
-    "trace_id": {
-      "type": "string"
-    },
-    "span_id": {
-      "type": "string"
-    },
-    "parent_span_id": {
-      "type": "string"
+      "type": "object",
+      "properties": {
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647,
+          "description": "Positive public frontend-to-engine request timeout in milliseconds. Omit limits.timeout_ms to disable the public watchdog."
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false,
-  "description": "expr.eval_at: 在指定时间求布尔/表达式值。",
+  "description": "Evaluate an expression at a sampled waveform time.",
   "x-purpose": "在指定时间求布尔/表达式值。",
   "x-how_it_works": "把 signals alias 映射到 FSDB 信号，按 clock/time 采样后交给表达式求值器。",
   "x-when_to_use": "用自然表达式检查组合条件。",
-  "x-arg_contract_notes": "required: expr, time, signals, clock"
+  "x-arg_contract_notes": "required: expr, time, signals, clock",
+  "x-description-zh": "在指定时间求布尔/表达式值。",
+  "x-agent": {
+    "use_when": [
+      "Have a waveform-backed Boolean or value expression and need its sampled result at one canonical time."
+    ],
+    "do_not_use_when": [
+      "Do not use it to rewrite expression syntax or inspect assignment structure without sampling."
+    ],
+    "alternatives": [
+      {
+        "action": "expr.normalize",
+        "when": "Normalize expression text or a design assignment without waveform evaluation."
+      },
+      {
+        "action": "value.at",
+        "when": "Read one raw leaf signal value."
+      }
+    ],
+    "constraints": [
+      "required: expr, time, signals, clock"
+    ]
+  }
 }

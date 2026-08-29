@@ -1,0 +1,232 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "xdebug.signal.sampled_pulse.inspect.request.v1",
+  "title": "signal.sampled_pulse.inspect request",
+  "type": "object",
+  "required": [
+    "api_version",
+    "action",
+    "args",
+    "target"
+  ],
+  "properties": {
+    "api_version": {
+      "type": "string",
+      "enum": [
+        "xdebug.v1"
+      ]
+    },
+    "request_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "action": {
+      "type": "string",
+      "enum": [
+        "signal.sampled_pulse.inspect"
+      ]
+    },
+    "target": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fsdb": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "session_id"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "fsdb"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "session_id"
+            ]
+          },
+          "required": [
+            "fsdb"
+          ]
+        }
+      ],
+      "additionalProperties": false
+    },
+    "args": {
+      "type": "object",
+      "required": [
+        "clock",
+        "valid"
+      ],
+      "properties": {
+        "clock": {
+          "type": "string",
+          "description": "采样、统计或协议检查使用的 clock 信号路径。"
+        },
+        "edge": {
+          "type": "string",
+          "description": "Clock sampling edge. The schema default is authoritative; negedge often matches monitor semantics."
+        },
+        "line_limit": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Limits returned evidence rows only, not scanning, aggregation, or the verdict; read completeness fields as well."
+        },
+        "payloads": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "payload 信号列表；每项按同一采样合同检查。"
+          },
+          "description": "Non-empty payload signal list inspected under one sampling contract."
+        },
+        "render_time_unit": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "ps",
+            "ns",
+            "us"
+          ],
+          "description": "Controls only canonical response time rendering: auto, ps, ns, or us. It never changes input parsing, sampling, filtering, or ordering."
+        },
+        "rules": {
+          "type": "object",
+          "properties": {
+            "payload_changed_without_sampled_valid": {
+              "type": "string",
+              "enum": [
+                "off",
+                "summary",
+                "all"
+              ],
+              "default": "summary",
+              "description": "payload 在 sampled valid 未成立时发生变化的报告粒度：off 禁用，summary 仅汇总，all 返回逐项 evidence。"
+            }
+          },
+          "additionalProperties": false,
+          "description": "Protocol or check-rule object. Nested fields define each rule default and applicability."
+        },
+        "sample_point": {
+          "type": "string",
+          "enum": [
+            "before",
+            "after"
+          ],
+          "description": "Before/after observation point for posedge or dual sampling; it does not change the raw waveform range."
+        },
+        "time_range": {
+          "type": "object",
+          "minProperties": 1,
+          "properties": {
+            "begin": {
+              "type": "string",
+              "minLength": 1,
+              "description": "闭区间起点；省略时使用可用波形窗口起点。"
+            },
+            "end": {
+              "type": "string",
+              "minLength": 1,
+              "description": "闭区间终点；省略时使用可用波形窗口终点。"
+            }
+          },
+          "additionalProperties": false,
+          "description": "Closed analysis interval. begin and end may be omitted independently to use the available waveform bounds."
+        },
+        "valid": {
+          "type": "string",
+          "description": "valid-ready 握手中的 valid 信号路径。"
+        },
+        "value_format": {
+          "type": "string",
+          "enum": [
+            "hex",
+            "bin",
+            "dec"
+          ],
+          "default": "hex",
+          "description": "返回 LogicValue 的显示格式；不改变比较、采样或底层四态值。"
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "rules"
+            ],
+            "properties": {
+              "rules": {
+                "required": [
+                  "payload_changed_without_sampled_valid"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "payloads"
+            ]
+          }
+        }
+      ]
+    },
+    "limits": {
+      "type": "object",
+      "properties": {
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647,
+          "description": "Positive public frontend-to-engine request timeout in milliseconds. Omit limits.timeout_ms to disable the public watchdog."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "description": "Inspect valid pulses that were not observed at sampling edges.",
+  "x-purpose": "检查未被 clock 采到的 valid 短脉冲。",
+  "x-how_it_works": "按 clock 采样 valid，同时扫描 valid 原始变化；若 valid 在两个采样边沿间拉高但没有采样边沿看到高电平，则报 unsampled_valid_pulse。可选 payloads 用于补风险现场。",
+  "x-when_to_use": "解释仿真里“波形有脉冲但 DUT 没采到”的问题。",
+  "x-arg_contract_notes": "required: clock, valid",
+  "x-description-zh": "检查未被 clock 采到的 valid 短脉冲。",
+  "x-agent": {
+    "use_when": [
+      "需要发现未被指定 clock sample 捕获的 valid 短脉冲。"
+    ],
+    "do_not_use_when": [
+      "需要 raw glitch/stuck 扫描或 valid-ready 协议违规结论。"
+    ],
+    "alternatives": [
+      {
+        "action": "signal.anomaly.inspect",
+        "when": "需要 raw pulse/glitch/stuck 异常。"
+      },
+      {
+        "action": "protocol.handshake.inspect",
+        "when": "需要 valid-ready 协议检查。"
+      }
+    ],
+    "constraints": [
+      "required: clock, valid"
+    ]
+  }
+}

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
-from typing import Any, Dict, Iterable, List, Tuple
+from typing import Any, Dict, Iterable, IO, List, Tuple
 
 
 Json = Dict[str, Any]
@@ -27,9 +27,11 @@ def error(action: str, code: str, message: str, **extra: Any) -> Json:
     return out
 
 
-def print_json(obj: Any) -> None:
-    json.dump(obj, sys.stdout, indent=2, sort_keys=True)
-    sys.stdout.write("\n")
+def print_json(obj: Any, stream: IO[str] | None = None) -> None:
+    target = stream or sys.stdout
+    json.dump(obj, target, indent=2, sort_keys=True)
+    target.write("\n")
+    target.flush()
 
 
 def split_limited(rows: Iterable[Any], limit: int | None) -> Tuple[List[Any], bool]:

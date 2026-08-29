@@ -6,7 +6,8 @@
   "required": [
     "api_version",
     "action",
-    "args"
+    "args",
+    "target"
   ],
   "properties": {
     "api_version": {
@@ -16,7 +17,8 @@
       ]
     },
     "request_id": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "action": {
       "type": "string",
@@ -25,41 +27,166 @@
       ]
     },
     "target": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fsdb": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "session_id"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "fsdb"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "session_id"
+            ]
+          },
+          "required": [
+            "fsdb"
+          ]
+        }
+      ],
+      "additionalProperties": false
     },
     "args": {
       "type": "object",
+      "required": [
+        "name"
+      ],
       "properties": {
         "config": {
           "type": "object",
-          "description": "内联配置对象。"
+          "description": "内联配置对象。",
+          "properties": {
+            "clock": {
+              "type": "string",
+              "minLength": 1,
+              "description": "采样、统计或协议检查使用的 clock 信号路径。"
+            },
+            "edge": {
+              "type": "string",
+              "enum": [
+                "posedge",
+                "negedge",
+                "dual"
+              ],
+              "description": "Clock sampling edge. The schema default is authoritative; negedge often matches monitor semantics."
+            },
+            "sample_point": {
+              "type": "string",
+              "enum": [
+                "before",
+                "after"
+              ],
+              "description": "Before/after observation point for posedge or dual sampling; it does not change the raw waveform range."
+            },
+            "paddr": {
+              "type": "string",
+              "minLength": 1,
+              "description": "APB PADDR 信号路径。"
+            },
+            "psel": {
+              "type": "string",
+              "minLength": 1,
+              "description": "APB PSEL 信号路径。"
+            },
+            "penable": {
+              "type": "string",
+              "minLength": 1,
+              "description": "APB PENABLE 信号路径。"
+            },
+            "pwrite": {
+              "type": "string",
+              "minLength": 1,
+              "description": "APB PWRITE 方向信号路径。"
+            },
+            "pwdata": {
+              "type": "string",
+              "minLength": 1,
+              "description": "APB PWDATA 写数据总线信号路径。"
+            },
+            "prdata": {
+              "type": "string",
+              "minLength": 1,
+              "description": "APB PRDATA 读数据总线信号路径。"
+            },
+            "pready": {
+              "type": "string",
+              "minLength": 1,
+              "description": "可选 APB PREADY 信号路径；省略表示该接口没有 PREADY，access phase 按 APB2 语义完成。"
+            },
+            "pslverr": {
+              "type": "string",
+              "minLength": 1,
+              "description": "APB PSLVERR 信号路径；接口不实现错误响应时可按 config schema 省略。"
+            },
+            "reset": {
+              "type": "object",
+              "required": [
+                "signal",
+                "polarity"
+              ],
+              "properties": {
+                "signal": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "One-bit final waveform signal path used as reset."
+                },
+                "polarity": {
+                  "type": "string",
+                  "enum": [
+                    "active_low",
+                    "active_high"
+                  ],
+                  "description": "Level that asserts reset. X, Z, and unavailable samples are conservatively treated as asserted."
+                }
+              },
+              "additionalProperties": false,
+              "description": "Reset definition. Both signal and polarity are required when reset is supplied."
+            }
+          },
+          "required": [
+            "clock",
+            "paddr",
+            "psel",
+            "penable",
+            "pwrite",
+            "pwdata",
+            "prdata",
+            "reset"
+          ],
+          "additionalProperties": false
         },
         "config_path": {
           "type": "string",
+          "minLength": 1,
           "description": "输入配置文件路径。"
         },
         "name": {
           "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。"
-        },
-        "time_unit": {
-          "type": "string",
-          "enum": [
-            "auto",
-            "fs",
-            "ps",
-            "ns",
-            "us",
-            "ms",
-            "s"
-          ]
+          "description": "Saved-object name in this action namespace; do not assume names are shared by cursors, lists, and protocol configs."
         }
       },
       "additionalProperties": false,
-      "required": [
-        "name"
-      ],
-      "anyOf": [
+      "oneOf": [
         {
           "required": [
             "config"
@@ -73,28 +200,44 @@
       ]
     },
     "limits": {
-      "type": "object"
-    },
-    "auth_token": {
-      "type": "string"
-    },
-    "id": {
-      "type": "string"
-    },
-    "trace_id": {
-      "type": "string"
-    },
-    "span_id": {
-      "type": "string"
-    },
-    "parent_span_id": {
-      "type": "string"
+      "type": "object",
+      "properties": {
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647,
+          "description": "Positive public frontend-to-engine request timeout in milliseconds. Omit limits.timeout_ms to disable the public watchdog."
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false,
-  "description": "apb.config.load: 加载 APB 配置。",
+  "description": "Load and validate an APB interface configuration.",
   "x-purpose": "加载 APB 配置。",
   "x-how_it_works": "保存 APB interface 信号映射。",
   "x-when_to_use": "定义后续 APB 查询对象。",
-  "x-arg_contract_notes": "required: name; also one of: config / config_path"
+  "x-arg_contract_notes": "required: name; also one of: config / config_path",
+  "x-description-zh": "加载 APB 配置。",
+  "x-agent": {
+    "use_when": [
+      "Have an inline APB signal mapping or config file that must be registered and validated before querying transfers."
+    ],
+    "do_not_use_when": [
+      "Do not use it to enumerate saved names or query decoded APB activity."
+    ],
+    "alternatives": [
+      {
+        "action": "apb.config.list",
+        "when": "Discover saved APB configuration names."
+      },
+      {
+        "action": "apb.query",
+        "when": "Inspect transfers from a loaded interface."
+      }
+    ],
+    "constraints": [
+      "required: name; also one of: config / config_path"
+    ]
+  }
 }

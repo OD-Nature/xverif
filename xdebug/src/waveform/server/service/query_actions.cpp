@@ -15,8 +15,10 @@ int direction_filter(const Json& args) {
 
 bool ensure_apb_analyzed_for_ai(const std::string& name, std::string& error) {
     xdebug_waveform::ApbConfig config;
-    if (!read_apb_from_registry(g_session_id, name.c_str(), config)) {
-        error = "APB config not found: " + name;
+    StoreResult loaded =
+        read_apb_from_registry(g_session_id, name.c_str(), config);
+    if (!loaded.ok()) {
+        error = store_error_text(loaded);
         return false;
     }
     if (!g_apb_analyzer.analyze(name, g_fsdb_file, config)) {
@@ -28,8 +30,10 @@ bool ensure_apb_analyzed_for_ai(const std::string& name, std::string& error) {
 
 bool ensure_axi_analyzed_for_ai(const std::string& name, std::string& error) {
     xdebug_waveform::AxiConfig config;
-    if (!read_axi_from_registry(g_session_id, name.c_str(), config)) {
-        error = "AXI config not found: " + name;
+    StoreResult loaded =
+        read_axi_from_registry(g_session_id, name.c_str(), config);
+    if (!loaded.ok()) {
+        error = store_error_text(loaded);
         return false;
     }
     if (!g_axi_analyzer.analyze(name, g_fsdb_file, config)) {
@@ -51,20 +55,19 @@ Json ai_apb_transfer_window(const Json& args, std::string& error) {
     std::vector<xdebug_waveform::ApbContextTransaction> txns;
     int filter = direction_filter(args);
     int limit = args.value("line_limit", 1000);
-    int fetch_limit = (filter == 0 && limit >= 0) ? limit + 1 : -1;
-    if (!g_apb_analyzer.get_transactions_in_range(name, begin, end, txns, fetch_limit)) {
+    if (!g_apb_analyzer.get_transactions_in_range(name, begin, end, txns, -1)) {
         error = "APB config not analyzed: " + name;
         return Json();
     }
     Json arr = Json::array();
-    bool truncated = false;
+    size_t matched_count = 0;
     for (const auto& item : txns) {
         if (!item.txn) continue;
         if (filter == 1 && !item.txn->is_write) continue;
         if (filter == 2 && item.txn->is_write) continue;
+        ++matched_count;
         if (limit >= 0 && static_cast<int>(arr.size()) >= limit) {
-            truncated = true;
-            break;
+            continue;
         }
         Json txn = apb_txn_to_json(item.txn, true);
         arr.push_back(txn);
@@ -73,11 +76,23 @@ Json ai_apb_transfer_window(const Json& args, std::string& error) {
     Json out;
     out["summary"] = {{"name", name},
                       {"begin", range.first},
-                      {"end", range.second},
-                      {"transaction_count", arr.size()}};
-    if (truncated) out["summary"]["truncated"] = true;
+                      {"end", range.second}};
+    const ApbResult* canonical = g_apb_analyzer.get_result(name);
+    const bool analysis_complete =
+        canonical && canonical->diagnostics.analysis_complete;
+    const bool response_truncated = arr.size() < matched_count;
+    std::vector<std::string> truncation_scopes;
+    if (!analysis_complete) truncation_scopes.push_back("analysis_transactions");
+    if (response_truncated) truncation_scopes.push_back("response_transactions");
+    xdebug_core::set_completeness(
+        out["summary"],
+        analysis_complete,
+        analysis_complete,
+        response_truncated,
+        matched_count,
+        arr.size(),
+        truncation_scopes);
     out["transactions"] = arr;
-    if (truncated) out["truncated"] = true;
     return out;
 }
 
@@ -92,56 +107,137 @@ Json ai_axi_transactions_window(const Json& args, std::string& error) {
     if (!ensure_axi_analyzed_for_ai(name, error)) return Json();
     std::vector<xdebug_waveform::AxiContextTransaction> txns;
     int filter = direction_filter(args);
-    const bool verbose = args.value("output", Json::object()).value("verbose", false);
+    const bool include_data = args.value("output", Json::object()).value("include_data", false);
     int limit = args.value("line_limit", 1000);
-    int fetch_limit = (filter == 0 && limit >= 0) ? limit + 1 : -1;
-    if (!g_axi_analyzer.get_transactions_in_range(name, begin, end, txns, fetch_limit)) {
+    if (!g_axi_analyzer.get_transactions_in_range(name, begin, end, txns, -1)) {
         error = "AXI config not analyzed: " + name;
         return Json();
     }
     Json arr = Json::array();
-    bool truncated = false;
+    size_t matched_count = 0;
     for (const auto& item : txns) {
         if (!item.txn) continue;
         if (filter == 1 && !item.txn->is_write) continue;
         if (filter == 2 && item.txn->is_write) continue;
+        ++matched_count;
         if (limit >= 0 && static_cast<int>(arr.size()) >= limit) {
-            truncated = true;
-            break;
+            continue;
         }
-        Json txn = axi_txn_to_json(item.txn, verbose);
+        Json txn = axi_txn_to_json(item.txn, include_data);
         txn["match_time"] = format_time(item.match_time);
         txn["latency"] = format_duration(
             item.txn->resp_time >= item.txn->addr_time ? item.txn->resp_time - item.txn->addr_time : 0);
         arr.push_back(txn);
     }
     auto range = format_time_range(begin, end);
-    return Json{{"name", name}, {"begin", range.first}, {"end", range.second},
-                {"transaction_count", arr.size()}, {"truncated", truncated}, {"transactions", arr}};
+    const AxiResult* canonical = g_axi_analyzer.get_result(name);
+    Json diagnostics = Json::object();
+    if (canonical) {
+        const AxiDiagnostics& diag = canonical->diagnostics;
+        diagnostics = {{"full_scan_count", diag.full_scan_count},
+                       {"incomplete_write_count", diag.incomplete_write_count},
+                       {"incomplete_read_count", diag.incomplete_read_count},
+                       {"buffered_w_beat_count", diag.buffered_w_beat_count},
+                       {"buffered_w_burst_count", diag.buffered_w_burst_count},
+                       {"orphan_w_beat_count", diag.orphan_w_beat_count},
+                       {"orphan_b_count", diag.orphan_b_count},
+                       {"orphan_r_beat_count", diag.orphan_r_beat_count},
+                       {"response_dependency_violation_count", diag.response_dependency_violation_count}};
+    }
+    Json data = {
+        {"summary", {{"name", name}, {"begin", range.first}, {"end", range.second}}},
+        {"pairing_rule", {{"write_data", "AXI4 W bursts bind in AW acceptance order"},
+                          {"write_response", "BID binds to the oldest data-complete AW with the same ID"},
+                          {"read_response", "RID binds to the oldest AR with the same ID"}}},
+        {"diagnostics", diagnostics},
+        {"transactions", arr}
+    };
+    const bool analysis_complete =
+        canonical && canonical->diagnostics.analysis_complete;
+    const bool response_truncated = arr.size() < matched_count;
+    std::vector<std::string> truncation_scopes;
+    if (!analysis_complete) truncation_scopes.push_back("analysis_transactions");
+    if (response_truncated) truncation_scopes.push_back("response_transactions");
+    xdebug_core::set_completeness(
+        data["summary"],
+        analysis_complete,
+        analysis_complete,
+        response_truncated,
+        matched_count,
+        arr.size(),
+        truncation_scopes);
+    return data;
 }
 
 Json ai_axi_latency_outlier(const Json& args, std::string& error) {
-    Json data = ai_axi_transactions_window(args, error);
-    if (!error.empty()) return Json();
-    Json txns = data["transactions"];
-    std::vector<Json> vec;
-    for (const auto& t : txns) vec.push_back(t);
-    auto latency_key = [](const Json& item) -> npiFsdbTime {
-        const std::string value = item.value("latency", std::string("0ns"));
-        npiFsdbTime time = 0;
-        std::string error;
-        if (!parse_user_time(value.c_str(), false, time, error)) return 0;
-        return time;
+    const std::string name = args.value("name", std::string());
+    if (name.empty()) {
+        error = "axi.latency_outlier requires args.name";
+        return Json();
+    }
+    npiFsdbTime begin = 0, end = 0;
+    if (!json_time_range(args, begin, end, error)) return Json();
+    if (!ensure_axi_analyzed_for_ai(name, error)) return Json();
+    const int filter = direction_filter(args);
+    auto latency_key = [](const xdebug_waveform::AxiContextTransaction& item) -> npiFsdbTime {
+        return item.txn->resp_time >= item.txn->addr_time
+            ? item.txn->resp_time - item.txn->addr_time : 0;
     };
-    std::sort(vec.begin(), vec.end(), [&](const Json& a, const Json& b) {
-        return latency_key(a) > latency_key(b);
-    });
-    int top_n = args.value("top_n", 10);
+    const std::string method = args.value("method", std::string("top_n"));
+    const int top_n = args.value("top_n", 10);
+    const int line_limit = args.value("line_limit", 1000);
+    npiFsdbTime threshold = 0;
+    if (method == "threshold") {
+        const std::string threshold_text = args.value("threshold", std::string());
+        if (threshold_text.empty()) {
+            error = "INVALID_REQUEST: args.threshold is required when args.method is threshold";
+            return Json();
+        }
+        if (!parse_user_time(threshold_text.c_str(), false, threshold, error)) return Json();
+    }
+    std::vector<xdebug_waveform::AxiContextTransaction> candidates;
+    size_t candidate_count = 0;
+    size_t matched_outlier_count = 0;
+    if (!g_axi_analyzer.get_latency_outliers_in_range(
+            name, begin, end, filter, method == "threshold", threshold,
+            static_cast<size_t>(top_n), line_limit, candidates,
+            candidate_count, matched_outlier_count)) {
+        error = "AXI config not analyzed: " + name;
+        return Json();
+    }
     Json out = Json::array();
-    for (size_t i = 0; i < vec.size() && static_cast<int>(i) < top_n; ++i) out.push_back(vec[i]);
-    data["outliers"] = out;
-    data.erase("transactions");
-    data["outlier_count"] = out.size();
+    const bool include_data = args.value("output", Json::object()).value("include_data", false);
+    for (size_t i = 0; i < candidates.size(); ++i) {
+        Json txn = axi_txn_to_json(candidates[i].txn, include_data);
+        txn["match_time"] = format_time(candidates[i].match_time);
+        txn["latency"] = format_duration(latency_key(candidates[i]));
+        out.push_back(std::move(txn));
+    }
+    const size_t returned_outlier_count = out.size();
+    auto range = format_time_range(begin, end);
+    Json data = {{"summary", {{"name", name}, {"begin", range.first}, {"end", range.second},
+                              {"candidate_count", candidate_count}}}};
+    data["outliers"] = std::move(out);
+    data["method"] = method;
+    data["classification"] = method == "threshold" ? "threshold_exceeded" : "slowest_ranking";
+    if (method == "top_n") data["top_n"] = top_n;
+    else data["threshold"] = format_duration(threshold);
+    const AxiResult* canonical = g_axi_analyzer.get_result(name);
+    const bool analysis_complete =
+        canonical && canonical->diagnostics.analysis_complete;
+    const bool response_truncated =
+        returned_outlier_count < matched_outlier_count;
+    std::vector<std::string> truncation_scopes;
+    if (!analysis_complete) truncation_scopes.push_back("analysis_transactions");
+    if (response_truncated) truncation_scopes.push_back("response_outliers");
+    xdebug_core::set_completeness(
+        data["summary"],
+        analysis_complete,
+        analysis_complete,
+        response_truncated,
+        matched_outlier_count,
+        returned_outlier_count,
+        truncation_scopes);
     return data;
 }
 
@@ -154,8 +250,10 @@ Json ai_axi_outstanding_timeline(const Json& args, std::string& error) {
     npiFsdbTime begin = 0, end = 0;
     if (!json_time_range(args, begin, end, error)) return Json();
     AxiConfig cfg;
-    if (!read_axi_from_registry(g_session_id, name.c_str(), cfg)) {
-        error = "AXI config not found: " + name;
+    StoreResult loaded =
+        read_axi_from_registry(g_session_id, name.c_str(), cfg);
+    if (!loaded.ok()) {
+        error = store_error_text(loaded);
         return Json();
     }
     ClockSampleSpec clock_sample = cfg.clock_sample;
@@ -169,11 +267,29 @@ Json ai_axi_outstanding_timeline(const Json& args, std::string& error) {
         return Json();
     }
     Json change_points = Json::array();
+    int previous_read = 0;
+    int previous_write = 0;
+    bool have_previous = false;
     for (const auto& s : result.change_points) {
         Json item;
         item["time"] = format_time(s.time);
         if (filter == 0 || filter == 2) item["read"] = s.read;
         if (filter == 0 || filter == 1) item["write"] = s.write;
+        const int read_delta = have_previous ? s.read - previous_read : s.read;
+        const int write_delta = have_previous ? s.write - previous_write : s.write;
+        if (filter == 0 || filter == 2) {
+            item["read_delta"] = read_delta;
+            item["read_event"] = read_delta > 0 ? "ar_handshake"
+                : read_delta < 0 ? "rlast_handshake" : "none";
+        }
+        if (filter == 0 || filter == 1) {
+            item["write_delta"] = write_delta;
+            item["write_event"] = write_delta > 0 ? "aw_handshake"
+                : write_delta < 0 ? "b_handshake" : "none";
+        }
+        previous_read = s.read;
+        previous_write = s.write;
+        have_previous = true;
         change_points.push_back(item);
     }
     bool truncated = result.change_point_count > result.change_points.size();
@@ -185,17 +301,29 @@ Json ai_axi_outstanding_timeline(const Json& args, std::string& error) {
         {"edge", clock_edge_kind_text(clock_sample.edge)},
         {"sample_time_semantics", "time is sample_time"},
         {"sample_count", result.sample_count},
-        {"change_point_count", result.change_point_count},
-        {"returned_change_point_count", change_points.size()},
         {"peak_read", result.peak_read}, {"peak_write", result.peak_write},
         {"peak_read_time", result.peak_read > 0 ? Json(format_time(result.peak_read_time)) : Json(nullptr)},
         {"peak_write_time", result.peak_write > 0 ? Json(format_time(result.peak_write_time)) : Json(nullptr)},
         {"first_nonzero_time", result.has_first_nonzero
             ? Json(format_time(result.first_nonzero_time)) : Json(nullptr)},
-        {"analysis_complete", true},
-        {"truncated", truncated},
-        {"truncation_scope", truncated ? Json("response_change_points") : Json(nullptr)}
+        {"final_read", result.has_samples ? Json(result.final_read) : Json(nullptr)},
+        {"final_write", result.has_samples ? Json(result.final_write) : Json(nullptr)},
+        {"requested_range", {{"begin", format_time(begin)}, {"end", format_time(end)}}}
     };
+    const AxiResult* canonical = g_axi_analyzer.get_result(name);
+    const bool analysis_complete =
+        canonical && canonical->diagnostics.analysis_complete;
+    std::vector<std::string> truncation_scopes;
+    if (!analysis_complete) truncation_scopes.push_back("analysis_transactions");
+    if (truncated) truncation_scopes.push_back("response_change_points");
+    xdebug_core::set_completeness(
+        data["summary"],
+        analysis_complete,
+        analysis_complete,
+        truncated,
+        result.change_point_count,
+        change_points.size(),
+        truncation_scopes);
     if (clock_sample.edge != ClockEdgeKind::Negedge)
         data["summary"]["sample_point"] = clock_sample_point_text(clock_sample.sample_point);
     data["change_points"] = change_points;
@@ -210,8 +338,10 @@ Json ai_axi_channel_stall(const Json& args, std::string& error) {
         error = "axi.channel_stall requires args.name";
         return Json();
     }
-    if (!read_axi_from_registry(g_session_id, name.c_str(), cfg)) {
-        error = "AXI config not found: " + name;
+    StoreResult loaded =
+        read_axi_from_registry(g_session_id, name.c_str(), cfg);
+    if (!loaded.ok()) {
+        error = store_error_text(loaded);
         return Json();
     }
     npiFsdbTime begin = 0, end = 0;
@@ -307,15 +437,22 @@ Json ai_axi_channel_stall(const Json& args, std::string& error) {
         {"transfer_count", transfers},
         {"max_stall_cycles", max_stall},
         {"ready_without_valid_cycles", ready_only},
-        {"finding_count", finding_count},
-        {"returned_finding_count", findings.size()},
         {"first_activity_time", have_activity ? Json(format_time(first_activity_time)) : Json(nullptr)},
-        {"scanned_range", {{"begin", format_time(begin)}, {"end", format_time(end)}}},
-        {"analysis_complete", !truncated},
-        {"truncated", finding_limit >= 0 && finding_count > finding_limit},
-        {"truncation_scope", finding_limit >= 0 && finding_count > finding_limit
-            ? Json("response_findings") : Json(nullptr)}
+        {"scanned_range", {{"begin", format_time(begin)}, {"end", format_time(end)}}}
     };
+    const bool response_truncated =
+        finding_limit >= 0 && finding_count > finding_limit;
+    std::vector<std::string> truncation_scopes;
+    if (truncated) truncation_scopes.push_back("analysis_samples");
+    if (response_truncated) truncation_scopes.push_back("response_findings");
+    xdebug_core::set_completeness(
+        data["summary"],
+        !truncated,
+        !truncated,
+        response_truncated,
+        static_cast<std::size_t>(finding_count),
+        findings.size(),
+        truncation_scopes);
     if (clock_sample.edge != ClockEdgeKind::Negedge)
         data["summary"]["sample_point"] = clock_sample_point_text(clock_sample.sample_point);
     data["findings"] = findings;
@@ -343,11 +480,11 @@ Json resolved_time_json(const std::string& spec, npiFsdbTime time) {
 
 Json ai_cursor_action(const std::string& action, const Json& args, std::string& error) {
     CursorManager cm;
-    if (action == "cursor.set") {
+    if (action == "waveform.cursor.set") {
         std::string name = args.value("name", std::string());
         std::string spec = args.value("time", args.value("at", std::string()));
         if (name.empty() || spec.empty()) {
-            error = "cursor.set requires args.name and args.time";
+            error = "waveform.cursor.set requires args.name and args.time";
             return Json();
         }
         npiFsdbTime t = 0;
@@ -358,12 +495,22 @@ Json ai_cursor_action(const std::string& action, const Json& args, std::string& 
         c.note = args.value("note", std::string());
         c.origin = args.value("origin", std::string("manual"));
         c.clock = args.value("clock", std::string());
-        if (!cm.set_cursor(g_session_id, c, args.value("active", true))) {
-            error = "failed to save cursor: " + name;
+        StoreResult stored =
+            cm.set_cursor(
+                g_session_id,
+                c,
+                args.value("active", true));
+        if (!stored.ok()) {
+            error = store_error_text(stored);
             return Json();
         }
         Cursor saved;
-        cm.get_cursor(g_session_id, name, saved);
+        StoreResult loaded =
+            cm.get_cursor(g_session_id, name, saved);
+        if (!loaded.ok()) {
+            error = store_error_text(loaded);
+            return Json();
+        }
         Json data;
         data["summary"] = {{"name", name}, {"time", format_time(t)},
                            {"status", "set"}, {"active", args.value("active", true)}};
@@ -371,15 +518,17 @@ Json ai_cursor_action(const std::string& action, const Json& args, std::string& 
         data["metadata"] = {{"note", saved.note}, {"origin", saved.origin}, {"clock", saved.clock}};
         return data;
     }
-    if (action == "cursor.get") {
+    if (action == "waveform.cursor.get") {
         std::string name = args.value("name", std::string());
         if (name.empty()) {
-            error = "cursor.get requires args.name";
+            error = "waveform.cursor.get requires args.name";
             return Json();
         }
         Cursor c;
-        if (!cm.get_cursor(g_session_id, name, c)) {
-            error = "CURSOR_NOT_FOUND: Cursor '" + name + "' does not exist";
+        StoreResult loaded =
+            cm.get_cursor(g_session_id, name, c);
+        if (!loaded.ok()) {
+            error = store_error_text(loaded);
             return Json();
         }
         Json data;
@@ -387,43 +536,67 @@ Json ai_cursor_action(const std::string& action, const Json& args, std::string& 
         data["metadata"] = {{"note", c.note}, {"origin", c.origin}, {"clock", c.clock}};
         return data;
     }
-    if (action == "cursor.list") {
+    if (action == "waveform.cursor.list") {
+        std::vector<Cursor> cursors;
+        StoreResult listed =
+            cm.list_cursors(g_session_id, cursors);
+        if (!listed.ok()) {
+            error = store_error_text(listed);
+            return Json();
+        }
         Json arr = Json::array();
-        for (const auto& c : cm.list_cursors(g_session_id)) arr.push_back(cursor_to_json(c));
+        for (const auto& c : cursors) {
+            arr.push_back(cursor_to_json(c));
+        }
         std::string active;
-        cm.get_active_cursor(g_session_id, active);
+        StoreResult active_result =
+            cm.get_active_cursor(g_session_id, active);
+        if (!active_result.ok() &&
+            active_result.status != StoreStatus::NotFound) {
+            error = store_error_text(active_result);
+            return Json();
+        }
         Json data;
         data["summary"] = {{"cursor_count", arr.size()},
                            {"active_cursor", active.empty() ? Json(nullptr) : Json(active)}};
         data["cursors"] = arr;
         return data;
     }
-    if (action == "cursor.delete") {
+    if (action == "waveform.cursor.delete") {
         std::string name = args.value("name", std::string());
         if (name.empty()) {
-            error = "cursor.delete requires args.name";
+            error = "waveform.cursor.delete requires args.name";
             return Json();
         }
-        if (!cm.delete_cursor(g_session_id, name)) {
-            error = "CURSOR_NOT_FOUND: Cursor '" + name + "' does not exist";
+        StoreResult deleted =
+            cm.delete_cursor(g_session_id, name);
+        if (!deleted.ok()) {
+            error = store_error_text(deleted);
             return Json();
         }
         Json data;
         data["summary"] = {{"status", "deleted"}, {"name", name}, {"deleted", true}};
         return data;
     }
-    if (action == "cursor.use") {
+    if (action == "waveform.cursor.use") {
         std::string name = args.value("name", std::string());
         if (name.empty()) {
-            error = "cursor.use requires args.name";
+            error = "waveform.cursor.use requires args.name";
             return Json();
         }
-        if (!cm.use_cursor(g_session_id, name)) {
-            error = "CURSOR_NOT_FOUND: Cursor '" + name + "' does not exist";
+        StoreResult used =
+            cm.use_cursor(g_session_id, name);
+        if (!used.ok()) {
+            error = store_error_text(used);
             return Json();
         }
         Cursor c;
-        cm.get_cursor(g_session_id, name, c);
+        StoreResult loaded =
+            cm.get_cursor(g_session_id, name, c);
+        if (!loaded.ok()) {
+            error = store_error_text(loaded);
+            return Json();
+        }
         Json data;
         data["summary"] = {{"status", "active"}, {"active_cursor", name},
                            {"time", format_time(c.time)}};
@@ -433,45 +606,5 @@ Json ai_cursor_action(const std::string& action, const Json& args, std::string& 
     error = "Unsupported cursor action: " + action;
     return Json();
 }
-
-Json ai_dispatch_query(const Json& req, std::string& error) {
-    std::string action = req.value("action", std::string());
-    Json args = req.value("args", Json::object());
-    xdebug_core::TimeRenderOptions time_render_options;
-    if (args.contains("time_unit")) {
-        if (!args["time_unit"].is_string()) {
-            error = "TIME_UNIT_INVALID: args.time_unit must be ns, ps, us, or auto";
-            return Json();
-        }
-        if (!xdebug_core::parse_time_render_unit(args["time_unit"].get<std::string>(),
-                                                 time_render_options.unit,
-                                                 error)) {
-            return Json();
-        }
-    }
-    xdebug_core::ScopedTimeRenderOptions time_render_scope(time_render_options);
-    Json limits = req.value("limits", Json::object());
-    for (auto it = limits.begin(); it != limits.end(); ++it) {
-        if (!args.contains(it.key())) args[it.key()] = it.value();
-    }
-    if (action == "expr.eval_at") return ai_expr_eval_at(args, error);
-    if (action == "window.verify") return ai_window_verify(args, error);
-    if (action == "signal.changes") return ai_signal_changes(args, error);
-    if (action == "signal.stability") return ai_signal_stability(args, error);
-    if (action == "signal.statistics") return ai_signal_statistics(args, error);
-    if (action == "counter.statistics") return ai_counter_statistics(args, error);
-    if (action == "sampled_pulse.inspect") return ai_sampled_pulse_inspect(args, error);
-    if (action == "detect_abnormal") return ai_detect_abnormal(args, error);
-    if (action == "handshake.inspect") return ai_handshake_inspect(args, error);
-    if (action == "apb.transfer_window") return ai_apb_transfer_window(args, error);
-    if (action == "axi.request_response_pair") return ai_axi_transactions_window(args, error);
-    if (action == "axi.latency_outlier") return ai_axi_latency_outlier(args, error);
-    if (action == "axi.outstanding_timeline") return ai_axi_outstanding_timeline(args, error);
-    if (action == "axi.channel_stall") return ai_axi_channel_stall(args, error);
-    if (action.compare(0, 7, "cursor.") == 0) return ai_cursor_action(action, args, error);
-    error = "Unsupported AI action in server: " + action;
-    return Json();
-}
-
 
 }  // namespace xdebug_waveform

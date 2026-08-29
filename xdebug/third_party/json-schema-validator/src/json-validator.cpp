@@ -10,7 +10,9 @@
 
 #include "json-patch.hpp"
 
+#include <cmath>
 #include <deque>
+#include <limits>
 #include <memory>
 #include <set>
 #include <sstream>
@@ -431,7 +433,10 @@ class logical_combination_error_handler : public error_handler
 public:
 	struct error_entry {
 		json::json_pointer ptr_;
-		json instance_;
+		// Combination handlers and all nested propagation complete before the
+		// synchronous validate() call returns.  Keep the stable instance tree
+		// by reference instead of copying it for every rejected oneOf branch.
+		const json *instance_;
 		std::string message_;
 	};
 
@@ -439,13 +444,13 @@ public:
 
 	void error(const json::json_pointer &ptr, const json &instance, const std::string &message) override
 	{
-		error_entry_list_.push_back(error_entry{ptr, instance, message});
+		error_entry_list_.push_back(error_entry{ptr, &instance, message});
 	}
 
 	void propagate(error_handler &e, const std::string &prefix) const
 	{
 		for (const error_entry &entry : error_entry_list_)
-			e.error(entry.ptr_, entry.instance_, prefix + entry.message_);
+			e.error(entry.ptr_, *entry.instance_, prefix + entry.message_);
 	}
 
 	operator bool() const { return !error_entry_list_.empty(); }
@@ -513,7 +518,7 @@ template <>
 bool logical_combination<allOf>::is_validate_complete(const json &, const json::json_pointer &, error_handler &e, const logical_combination_error_handler &esub, size_t, size_t current_schema_index)
 {
 	if (esub) {
-		e.error(esub.error_entry_list_.front().ptr_, esub.error_entry_list_.front().instance_, "at least one subschema has failed, but all of them are required to validate - " + esub.error_entry_list_.front().message_);
+		e.error(esub.error_entry_list_.front().ptr_, *esub.error_entry_list_.front().instance_, "at least one subschema has failed, but all of them are required to validate - " + esub.error_entry_list_.front().message_);
 		esub.propagate(e, "[combination: allOf / case#" + std::to_string(current_schema_index) + "] ");
 	}
 	return esub;
@@ -905,8 +910,61 @@ class numeric : public schema
 		return std::fabs(res) > std::fabs(eps);
 	}
 
+	bool violates_multiple_of_unsigned(json::number_unsigned_t x) const
+	{
+		const long double divisor =
+		    static_cast<long double>(multipleOf_.second);
+		long double res =
+		    std::remainder(static_cast<long double>(x), divisor);
+		const long double multiple =
+		    std::fabs(static_cast<long double>(x) / divisor);
+		if (multiple > 1) {
+			res /= multiple;
+		}
+		const long double value = static_cast<long double>(x);
+		const long double eps = std::nextafter(value, 0.0L) - value;
+		return std::fabs(res) > std::fabs(eps);
+	}
+
 	void validate(const json::json_pointer &ptr, const json &instance, json_patch &, error_handler &e) const override
 	{
+		// JSON Schema has one integer domain, while nlohmann::json stores
+		// positive values above INT64_MAX as number_unsigned.  Converting such
+		// an instance to number_integer_t wraps it negative and inverts
+		// minimum/maximum decisions.  Handle that range before the signed
+		// conversion used by the integer validator.
+		if (std::numeric_limits<T>::is_integer &&
+		    instance.is_number_unsigned()) {
+			const json::number_unsigned_t unsigned_value =
+			    instance.get<json::number_unsigned_t>();
+			if (unsigned_value >
+			    static_cast<json::number_unsigned_t>(
+			        std::numeric_limits<T>::max())) {
+				std::ostringstream unsigned_error;
+				if (multipleOf_.first &&
+				    violates_multiple_of_unsigned(unsigned_value)) {
+					unsigned_error << "instance is not a multiple of "
+					               << json(multipleOf_.second);
+				}
+				if (maximum_.first) {
+					if (exclusiveMaximum_) {
+						unsigned_error
+						    << "instance exceeds or equals maximum of "
+						    << json(maximum_.second);
+					} else {
+						unsigned_error << "instance exceeds maximum of "
+						               << json(maximum_.second);
+					}
+				}
+				unsigned_error.seekp(0, std::ios::end);
+				if (unsigned_error.tellp() != 0) {
+					unsigned_error.seekp(0, std::ios::beg);
+					e.error(ptr, instance, unsigned_error.str());
+				}
+				return;
+			}
+		}
+
 		T value = instance; // conversion of json to value_type
 
 		std::ostringstream oss;

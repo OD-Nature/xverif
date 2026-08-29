@@ -98,3 +98,26 @@ coverage evidence；拿不到就报错，不要补假分母或者静默降级成
 5. 检查 close/checkin 后 license 是否回落。
 
 这套顺序基本能把“输入错误、环境错误、license 错误、worker 错误”分开。
+
+## 9. branch/condition term 与表达式树（2018 native worker）
+
+Verdi 2018 官方对象关系为 `branch/condition -> bin -> term`，已在真实 GPIO 单 case
+VDB 上验证：
+
+- typed iterator 可从每个 bin 取得 term 的 name/value，建立 `*_term_values[]`；
+- `-` 表示 NPI 返回的 don't-care 值，必须原样保留；
+- `npi_pst_create_expr_tree` 可把 coverage expression 解析为 opcode/operator/children
+  AST；
+- term 映射来自 coverage 对象，AST 仅用于表达式结构，二者不能相互替代；
+- `source.annotate` 默认去重 expression 和 term 名称，每个 bin 只返回紧凑 value
+  数组；AST 需显式 `include_ast:true`，并且每个 expression 只返回一份。
+
+## 10. exclusion 边界
+
+Verdi 2018 `npi_cov.h` 提供 exclusion 状态查询及 exclude file 的 load/save/unload，
+未提供 reason、comment、author 或 source rule 属性。因此 native worker 只能报告
+`excluded`、`partially_excluded`、`excluded_at_compile_time`、
+`excluded_at_report_time` 等状态，不能直接报告详细排除原因。
+
+同时可以基于 NPI evidence 定位源码文件并读取源码窗口（`source.annotate`）：源码
+文本来自项目文件，coverage annotation 来自 VDB/NPI，不是 URG HTML 解析。

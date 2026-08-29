@@ -12,7 +12,7 @@
         "end": "200ns"
       },
       "format": "u64bin",
-      "output_dir": "/tmp/xdebug_action_sampling/list_export"
+      "output_dir": "<repo>/tmp/xdebug_action_sampling/list_export"
     },
     "limits": {
       "timeout_ms": 120000

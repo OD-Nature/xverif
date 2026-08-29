@@ -29,17 +29,17 @@
 
 ## 证据文件
 
-- `/tmp/xdebug_action_review_20260708/action_metadata.jsonl`
-- `/tmp/xdebug_action_review_20260708/static_review.jsonl`
-- `/tmp/xdebug_action_review_20260708/static_summary.md`
-- `/tmp/xdebug_action_review_20260708/native_evidence.jsonl`
-- `/tmp/xdebug_action_review_20260708/native_summary.md`
-- `/tmp/xdebug_action_review_20260708/native_merged_best.jsonl`
-- `/tmp/xdebug_action_review_20260708/native_retry_evidence.jsonl`
-- `/tmp/xdebug_action_review_20260708/mcp_evidence.jsonl`
-- `/tmp/xdebug_action_review_20260708/mcp_summary.md`
-- `/tmp/xdebug_action_review_20260708/mcp_evidence_review.md`
-- `/tmp/xdebug_action_review_20260708/fresh_agent_review.md`
+- `<repo>/tmp/xdebug_action_review_20260708/action_metadata.jsonl`
+- `<repo>/tmp/xdebug_action_review_20260708/static_review.jsonl`
+- `<repo>/tmp/xdebug_action_review_20260708/static_summary.md`
+- `<repo>/tmp/xdebug_action_review_20260708/native_evidence.jsonl`
+- `<repo>/tmp/xdebug_action_review_20260708/native_summary.md`
+- `<repo>/tmp/xdebug_action_review_20260708/native_merged_best.jsonl`
+- `<repo>/tmp/xdebug_action_review_20260708/native_retry_evidence.jsonl`
+- `<repo>/tmp/xdebug_action_review_20260708/mcp_evidence.jsonl`
+- `<repo>/tmp/xdebug_action_review_20260708/mcp_summary.md`
+- `<repo>/tmp/xdebug_action_review_20260708/mcp_evidence_review.md`
+- `<repo>/tmp/xdebug_action_review_20260708/fresh_agent_review.md`
 
 ## Action 逐项评审
 
@@ -71,7 +71,7 @@
 - 
 - implemented:
 - native key data: {"_bytes": 35246, "_truncated_json": "{\"actions\": [{\"category\": \"builtin\", \"handler_kind\": \"actions\", \"name\": \"actions\", \"request_examples\": [\"examples/requests/actions.basic.json\"], \"request_schema\": \"schemas/v1/actions/actions.request...
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_retry_actions_query_attempt2.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_retry_actions_query_attempt2.xout`
 
 **Retry / Failure Record**：
 - MCP attempt1: xverif_debug_raw_request(request.action=actions, output_format=xout) -> .json engine_forward apb.query waveform stable waveform schemas/v1/actions/apb.query.request.schema.json schemas/v1/actions/apb.query.response.schema.json engine_forward apb.tra...
@@ -120,7 +120,7 @@
 - clock: apb_vip_fixture_top.clk
 - edge: posedge
 - native key data: {"clock": "apb_vip_fixture_top.clk", "edge": "posedge", "name": "apb0", "pready": "apb_vip_fixture_top.apb_if.pready[0]", "pslverr": "apb_vip_fixture_top.apb_if.pslverr[0]", "rst_n": "apb_vip_fixture_top.rst_n", "sample_point": "before", "sampling_mode": "c...
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_apb_config_list_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_apb_config_list_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -178,7 +178,7 @@
 - 
 - data:
 - native key data: {"config": {"clock": "apb_vip_fixture_top.clk", "edge": "posedge", "name": "apb0", "pready": "apb_vip_fixture_top.apb_if.pready[0]", "pslverr": "apb_vip_fixture_top.apb_if.pslverr[0]", "rst_n": "apb_vip_fixture_top.rst_n", "sample_point": "before", "samplin...
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_apb_config_load_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_apb_config_load_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -229,7 +229,7 @@
 - direction: all
 - found: true
 - native key data: {"transaction": {"addr": "00000000", "data": "11223344", "has_error": false, "is_write": true, "time": 125000}}
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_apb_cursor_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_apb_cursor_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -280,7 +280,7 @@
 - found: true
 - addr: 00000000
 - native key data: {"transaction": {"addr": "000000f0", "data": "bad000f0", "has_error": true, "is_write": false, "time": 525000}}
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_retry2_apb_query_target_attempt2.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_retry2_apb_query_target_attempt2.xout`
 
 **Retry / Failure Record**：
 - MCP attempt1: xverif_debug_session_open -> xverif_debug_query(action=apb.query, default xout) -> xverif_debug_session_close -> validation failed for additional property 'limit': instance invalid as per false-schema
@@ -334,7 +334,7 @@
 - end: 1000000ns
 - transaction_count: 2
 - native key data: {"transactions": [{"addr": "'h00000000", "data": "'h11223344", "has_error": false, "time": "125ns", "type": "WR"}, {"addr": "'h00000004", "data": "'h55667788", "has_error": false, "time": "165ns", "type": "WR"}, {"addr": "'h00000008", "data": "'ha5a55a5a", ...
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_apb_transfer_window_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_apb_transfer_window_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -384,7 +384,7 @@
 - analysis: osd
 - max: 134.0
 - min: 0.0
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_retry2_axi_analysis_target_attempt2.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_retry2_axi_analysis_target_attempt2.xout`
 
 **Retry / Failure Record**：
 - MCP attempt1: xverif_debug_session_open -> xverif_debug_query(action=axi.analysis, default xout) -> xverif_debug_session_close -> direct session socket timed out after 30000ms: ~/.xdebug/engine/sessions/mcp_axi_axi_anal_c2c40de945c6a522/socket
@@ -439,7 +439,7 @@
 - edge: posedge
 - sample_time_semantics: time is sample_time
 - native key data: {"channel": "aw", "data_stability_violations": 0, "findings": [], "name": "axi0", "ready_without_valid_cycles": 87}
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_axi_channel_stall_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_axi_channel_stall_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -488,7 +488,7 @@
 - clock: axi_vip_fixture_top.clk
 - edge: posedge
 - native key data: {"clock": "axi_vip_fixture_top.clk", "edge": "posedge", "name": "axi0", "rst_n": "axi_vip_fixture_top.rst_n", "sample_point": "before", "sampling_mode": "clock_edge"}
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_axi_config_list_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_axi_config_list_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -539,7 +539,7 @@
 - 
 - data:
 - native key data: {"config": {"clock": "axi_vip_fixture_top.clk", "edge": "posedge", "name": "axi0", "rst_n": "axi_vip_fixture_top.rst_n", "sample_point": "before", "sampling_mode": "clock_edge"}}
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_axi_config_load_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_axi_config_load_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -590,7 +590,7 @@
 - direction: all
 - found: true
 - native key data: {"transaction": {"addr": "00000000000008c0", "id": "00", "is_write": true, "len": "000", "time": 415000}}
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_axi_cursor_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_axi_cursor_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -620,7 +620,7 @@
     "format": "tsv",
     "name": "axi0",
     "output": {
-      "path": "/tmp/xdebug_action_review_20260708/native_axi_export"
+      "path": "<repo>/tmp/xdebug_action_review_20260708/native_axi_export"
     },
     "time_range": {
       "begin": "0ns",
@@ -646,8 +646,8 @@
 - write_count: 3200
 - read_count: 3200
 - total_count: 6400
-- native key data: {"begin": "0ns", "end": "1000ns", "meta_file": "/tmp/xdebug_action_review_20260708/native_axi_export.meta.json", "read_file": "/tmp/xdebug_action_review_20260708/native_axi_export.read.tsv", "scan_begin": "0ns", "scan_end": "13973275ns", "write_file": "/tmp...
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_axi_export_target_attempt1.xout`
+- native key data: {"begin": "0ns", "end": "1000ns", "meta_file": "<repo>/tmp/xdebug_action_review_20260708/native_axi_export.meta.json", "read_file": "<repo>/tmp/xdebug_action_review_20260708/native_axi_export.read.tsv", "scan_begin": "0ns", "scan_end": "13973275ns", "write_file": "<repo>/tmp...
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_axi_export_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -700,7 +700,7 @@
 - end: 200000000ns
 - transaction_count: 5
 - native key data: {"begin": "0ns", "end": "200000000ns", "name": "axi0", "outlier_count": 5, "outliers": [{"addr": "'h000000000000d4e0", "addr_time": "515ns", "beats": 12, "burst": "'h1", "data": ["'h000000000000000000000000000000000000000000000000000000000000000000000000000...
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_axi_latency_outlier_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_axi_latency_outlier_target_attempt1.xout`
 
 **Retry / Failure Record**：
 有重试计数但未展开失败明细：MCP=0，native=1。
@@ -753,7 +753,7 @@
 - edge: posedge
 - sample_time_semantics: time is sample_time
 - native key data: {"name": "axi0", "samples": [{"read": 0, "time": "205ns", "write": 0}, {"read": 0, "time": "215ns", "write": 0}, {"read": 0, "time": "225ns", "write": 0}, {"read": 0, "time": "235ns", "write": 0}, {"read": 0, "time": "245ns", "write": 0}, {"read": 0, "time"...
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_axi_outstanding_timeline_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_axi_outstanding_timeline_target_attempt1.xout`
 
 **Retry / Failure Record**：
 有重试计数但未展开失败明细：MCP=0，native=1。
@@ -806,7 +806,7 @@
 - found: true
 - addr: 00000000000008c0
 - native key data: {"transaction": {"addr": "00000000000008c0", "burst": "1", "data": ["00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000...
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_retry2_axi_query_target_attempt2.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_retry2_axi_query_target_attempt2.xout`
 
 **Retry / Failure Record**：
 - MCP attempt1: xverif_debug_session_open -> xverif_debug_query(action=axi.query, default xout) -> xverif_debug_session_close -> validation failed for additional property 'limit': instance invalid as per false-schema
@@ -859,7 +859,7 @@
 - end: 1000ns
 - transaction_count: 1
 - native key data: {"begin": "0ns", "end": "200000000ns", "name": "axi0", "transaction_count": 20, "transactions": [{"addr": "'h000000000000ef58", "addr_time": "415ns", "beats": 13, "burst": "'h1", "data": ["'h000000000000000000000000000000000000000000000000000000000000000000...
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_retry3_axi_request_response_pair_target_attempt3.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_retry3_axi_request_response_pair_target_attempt3.xout`
 
 **Retry / Failure Record**：
 - MCP attempt1: xverif_debug_session_open -> xverif_debug_query(action=axi.request_response_pair, default xout) -> xverif_debug_sessi... -> direct session socket timed out after 30000ms: ~/.xdebug/engine/sessions/mcp_axi_axi_requ_3ff04597de88d1c6/socket
@@ -931,7 +931,7 @@
 - 
 - results:
 - native key data: {"results": [{"action": "schema", "api_version": "xdebug.v1", "data": {"schema": {"$id": "xdebug.actions.response.v1", "$schema": "https://json-schema.org/draft/2020-12/schema", "additionalProperties": true, "description": "actions response: 列出当前运行时公开 actio...
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_retry_batch_query_attempt2.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_retry_batch_query_attempt2.xout`
 
 **Retry / Failure Record**：
 - MCP attempt1: xverif_debug_raw_request(request.action=batch, output_format=xout) -> @xdebug.batch.v1 summary: count: 1 all_ok: true results: api_version ok action tool.name tool.version summary.action summary.kind data.schema_path xdebug.v1 true schema xdebug 0...
@@ -994,7 +994,7 @@
 - edge: posedge
 - sample_time_semantics: time is sample_time
 - native key data: {"average_value": "27", "begin": "100ns", "cnt": "ai_complex_top.hs_data", "end": "220ns", "max_count": 1, "max_first_time": "195ns", "max_value": "48", "min_count": 1, "min_first_time": "135ns", "min_value": "16", "valid_false_count": 9, "vld": {"expr": "v...
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_counter_statistics_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_counter_statistics_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -1041,7 +1041,7 @@
 - status: deleted
 - name: cur0
 - native key data: {"name": "mark_a", "status": "deleted"}
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_cursor_delete_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_cursor_delete_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -1090,7 +1090,7 @@
 - origin: manual
 - created_at: 1783502614
 - native key data: {"cursor": {"clock": "", "created_at": 1783502448, "name": "mark_a", "note": "", "origin": "manual", "time": "75ns", "updated_at": 1783502448}}
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_cursor_get_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_cursor_get_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -1137,7 +1137,7 @@
 - active_cursor: cur0
 - cursor_count: 1
 - native key data: {"active_cursor": "mark_a", "cursor_count": 1, "cursors": [{"clock": "", "created_at": 1783502448, "name": "mark_a", "note": "", "origin": "manual", "time": "75ns", "updated_at": 1783502448}]}
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_cursor_list_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_cursor_list_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -1187,7 +1187,7 @@
 - origin: manual
 - created_at: 1783502613
 - native key data: {"cursor": {"clock": "", "created_at": 1783502448, "name": "mark_a", "note": "", "origin": "manual", "time": "75ns", "updated_at": 1783502448}, "resolved_time": {"source": "75ns", "time": "75ns"}, "status": "set"}
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_cursor_set_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_cursor_set_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -1236,7 +1236,7 @@
 - 
 - cursor:
 - native key data: {"active_cursor": "mark_a", "cursor": {"clock": "", "created_at": 1783502448, "name": "mark_a", "note": "", "origin": "manual", "time": "75ns", "updated_at": 1783502448}, "status": "active"}
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_cursor_use_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_cursor_use_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -1305,7 +1305,7 @@
 - 
 - data:
 - native key data: {"findings": [{"pulse_width": "0.2ns", "severity": "info", "signal": "ai_complex_top.glitch_sig", "time": "96ns", "type": "glitch"}, {"severity": "warning", "signal": "ai_complex_top.xz_bus", "time": "85ns", "type": "unknown_xz", "value": {"bits": "xxxxxxxx...
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_detect_abnormal_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_detect_abnormal_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -1354,7 +1354,7 @@
 - clock: ai_complex_top.clk
 - edge: posedge
 - native key data: {"count": 1, "events": ["ev0"]}
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_event_config_list_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_event_config_list_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -1381,7 +1381,7 @@
   "action": "event.config.load",
   "api_version": "xdebug.v1",
   "args": {
-    "config_path": "~/xverif/xdebug/testdata/waveform/ai_complex_wave/config/event0.json",
+    "config_path": "<xverif-repo>/xdebug/testdata/waveform/ai_complex_wave/config/event0.json",
     "name": "ev0"
   },
   "output": {
@@ -1404,7 +1404,7 @@
 - 
 - data:
 - native key data: {"config": {"clock": "ai_complex_top.clk", "edge": "posedge", "fields": {"payload_lo": {"left": 3, "right": 0, "signal": "payload"}}, "name": "ev0", "rst_n": "ai_complex_top.rst_n", "sample_point": "before", "signals": {"payload": "ai_complex_top.event_payl...
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_event_config_load_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_event_config_load_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -1458,7 +1458,7 @@
 - inline: true
 - sampling_mode: clock_edge
 - native key data: {"begin": "0ns", "end": "200ns", "events": [{"fields": {"payload_lo": {"bits": "1010", "known": true, "value": "4'ha", "width": 4}}, "signals": {"payload": {"bits": "01011010", "known": true, "value": "8'h5a", "width": 8}, "rdy": {"bits": "0", "known": true...
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_event_export_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_event_export_target_attempt1.xout`
 
 **Retry / Failure Record**：
 有重试计数但未展开失败明细：MCP=0，native=1。
@@ -1514,7 +1514,7 @@
 - inline: true
 - sampling_mode: clock_edge
 - native key data: {"begin": "0ns", "end": "max", "events": [{"fields": {}, "signals": {"ready": {"bits": "0", "known": true, "value": "1'h0", "width": 1}, "valid": {"bits": "1", "known": true, "value": "1'h1", "width": 1}}, "time": "150ns"}]}
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_event_find_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_event_find_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -1569,7 +1569,7 @@
 - status: true
 - clock_edge_hit: true
 - native key data: {"clock_context": {"bracket_complete": true, "clock": "ai_complex_top.clk", "clock_edge_hit": true, "clock_edge_kind": "negedge", "edge": "negedge", "next_sample_time": "160ns", "previous_sample_time": "140ns", "requested_time": "150ns", "sample_point_appli...
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_expr_eval_at_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_expr_eval_at_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -1618,7 +1618,7 @@
 - confidence: low
 - 
 - native key data: {"confidence": "low", "confidence_reason": "parsed from raw string without NPI handle", "expr": {"args": [{"args": [{"name": "(tx_fifo_empty", "type": "signal"}, {"name": "0)", "type": "signal"}], "op": "eq"}, {"name": "enable", "type": "signal"}], "op": "a...
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_expr_normalize_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_expr_normalize_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -1676,7 +1676,7 @@
 - edge: negedge
 - sample_time_semantics: time is sample_time
 - native key data: {"data_stability_violations": 0, "findings": [], "ready_without_valid_cycles": 3}
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_handshake_inspect_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_handshake_inspect_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -1725,7 +1725,7 @@
 - signal: ai_complex_top.sig_a
 - status: added
 - added: true
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_list_add_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_list_add_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -1776,7 +1776,7 @@
 - name: basic
 - status: created
 - created: true
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_list_create_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_list_create_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -1824,7 +1824,7 @@
 - name: basic
 - deleted: true
 - removed: 2
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_retry2_list_delete_target_attempt2.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_retry2_list_delete_target_attempt2.xout`
 
 **Retry / Failure Record**：
 - MCP attempt1: xverif_debug_session_open -> xverif_debug_query(action=list.delete, default xout) -> xverif_debug_session_close -> unhandled exception while running action list.delete: [json.exception.type_error.302] type must be string, but is number
@@ -1874,7 +1874,7 @@
 - name: basic
 - diff_found: true
 - diff_time: 55ns
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_list_diff_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_list_diff_target_attempt1.xout`
 
 **Retry / Failure Record**：
 有重试计数但未展开失败明细：MCP=0，native=1。
@@ -1904,7 +1904,7 @@
     "format": "u64bin",
     "name": "retry3_basic",
     "output": {
-      "path": "/tmp/xdebug_action_review_20260708/native_retry3_basic_list.u64bin"
+      "path": "<repo>/tmp/xdebug_action_review_20260708/native_retry3_basic_list.u64bin"
     },
     "time_range": {
       "begin": "0ns",
@@ -1929,8 +1929,8 @@
 - signal_count: 2
 - row_count: 6
 - format: u64bin.v1
-- native key data: {"begin": "0ns", "end": "400ns", "manifest_file": "/tmp/xdebug_action_review_20260708/native_retry3_basic_list.u64bin/manifest.json", "output_dir": "/tmp/xdebug_action_review_20260708/native_retry3_basic_list.u64bin", "signals": [{"columns": 3, "file": "000...
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_retry4_list_export_target_attempt4.xout`
+- native key data: {"begin": "0ns", "end": "400ns", "manifest_file": "<repo>/tmp/xdebug_action_review_20260708/native_retry3_basic_list.u64bin/manifest.json", "output_dir": "<repo>/tmp/xdebug_action_review_20260708/native_retry3_basic_list.u64bin", "signals": [{"columns": 3, "file": "000...
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_retry4_list_export_target_attempt4.xout`
 
 **Retry / Failure Record**：
 - MCP attempt1: xverif_debug_session_open -> xverif_debug_query(action=list.export, default xout) -> xverif_debug_session_close -> list.export requires at least 256ns; use list.value_at or value.batch_at for point reads
@@ -1981,7 +1981,7 @@
 - 
 - signals:
 - native key data: {"signals": [{"index": 1, "signal": "ai_complex_top.sig_a"}, {"index": 2, "signal": "ai_complex_top.sig_b"}, {"index": 3, "signal": "ai_complex_top.hs_valid"}]}
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_list_show_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_list_show_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -2030,7 +2030,7 @@
 - 
 - signals:
 - native key data: {"signals": [{"signal": "ai_complex_top.sig_a", "status": "ok"}, {"signal": "ai_complex_top.sig_b", "status": "ok"}, {"signal": "ai_complex_top.hs_valid", "status": "ok"}]}
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_list_validate_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_list_validate_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -2082,7 +2082,7 @@
 - 
 - values:
 - native key data: {"clock_context": {"bracket_complete": true, "clock": "ai_complex_top.clk", "clock_edge_hit": true, "clock_edge_kind": "posedge", "edge": "negedge", "next_sample_time": "80ns", "previous_sample_time": "70ns", "requested_time": "75ns", "sample_point_applied"...
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_list_value_at_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_list_value_at_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -2109,9 +2109,9 @@
   "action": "rc.generate",
   "api_version": "xdebug.v1",
   "args": {
-    "config_path": "/tmp/xdebug_action_review_20260708/native_rc_config.json",
+    "config_path": "<repo>/tmp/xdebug_action_review_20260708/native_rc_config.json",
     "output": {
-      "path": "/tmp/xdebug_action_review_20260708/native_signal.rc"
+      "path": "<repo>/tmp/xdebug_action_review_20260708/native_signal.rc"
     }
   },
   "output": {
@@ -2130,10 +2130,10 @@
 - @xdebug.rc.generate.v1
 - summary:
 - written: true
-- config_path: /tmp/xdebug_action_review_20260708/mcp_rc_config.json
-- rc_path: /tmp/xdebug_action_review_20260708/mcp_generated_signal.rc
+- config_path: <repo>/tmp/xdebug_action_review_20260708/mcp_rc_config.json
+- rc_path: <repo>/tmp/xdebug_action_review_20260708/mcp_generated_signal.rc
 - valid: true
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_rc_generate_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_rc_generate_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -2190,7 +2190,7 @@
 - edge: negedge
 - sample_time_semantics: time is sample_time
 - native key data: {"_bytes": 4084, "_truncated_json": "{\"begin\": \"0ns\", \"end\": \"200ns\", \"findings\": [{\"nearest_sample_edge\": \"95ns\", \"next_sample_edge\": \"105ns\", \"previous_sample_edge\": \"95ns\", \"raw_begin\": \"96ns\", \"raw_end\": \"96.2ns\", \"raw_val...
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_sampled_pulse_inspect_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_sampled_pulse_inspect_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -2237,7 +2237,7 @@
 - 
 - schema:
 - native key data: {"schema": {"$id": "xdebug.value.at.response.v1", "$schema": "https://json-schema.org/draft/2020-12/schema", "additionalProperties": true, "description": "value.at response: 读取单个信号在指定时间的值。", "properties": {"action": {"enum": ["value.at"], "type": "string"},...
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_retry_schema_query_attempt2.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_retry_schema_query_attempt2.xout`
 
 **Retry / Failure Record**：
 - MCP attempt1: xverif_debug_raw_request(request.action=schema, output_format=xout) -> @xdebug.schema.v1 summary: action: signal.statistics kind: request schema: _schema: https://json-schema.org/draft/2020-12/schema _id: xdebug.signal.statistics.request.v1 title: ...
@@ -2287,7 +2287,7 @@
 - returned_signal_count: 23
 - total_signal_count: 23
 - native key data: {"scopes": [], "signals": ["ai_complex_top.clk", "ai_complex_top.rst_n", "ai_complex_top.sig_a", "ai_complex_top.sig_b", "ai_complex_top.xz_bus", "ai_complex_top.stable_sig", "ai_complex_top.stuck_sig", "ai_complex_top.glitch_sig", "ai_complex_top.counter_i...
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_scope_list_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_scope_list_target_attempt1.xout`
 
 **Retry / Failure Record**：
 有重试计数但未展开失败明细：MCP=0，native=1。
@@ -2336,7 +2336,7 @@
 - roots: 1
 - matched: 0
 - native key data: {"design_roots": [], "limitations": ["design roots unavailable: design not loaded"], "roots": [{"design": null, "path": "ai_complex_top", "sources": ["wave"], "status": "wave_only", "wave": {"def_name": "ai_complex_top", "full_name": "ai_complex_top", "name...
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_scope_roots_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_scope_roots_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -2385,7 +2385,7 @@
 - removed: true
 - 
 - native key data: {"backends": {"action": "session.kill", "api_version": "xdebug.v1", "data": {}, "error": null, "ok": true, "request_id": "", "session": null, "summary": {"id": "native_review_20260708_3613710_session_actions", "killed": true, "session_id": "native_review_20...
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_retry_session_close_query_attempt2.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_retry_session_close_query_attempt2.xout`
 
 **Retry / Failure Record**：
 - MCP attempt1: xverif_debug_raw_request(request.action=session.close, output_format=xout) -> @xdebug.session.close.v1 summary: session_id: mcp_raw_session_open_20260708 mode: waveform removed: true session: id: mcp_raw_session_open_20260708 session_id: mcp_raw_session_o...
@@ -2432,7 +2432,7 @@
 - healthy: true
 - 
 - native key data: {"health": {"action": "session.doctor", "api_version": "xdebug.v1", "data": {"health": {"healthy": true, "id": "native_review_20260708_3613710_session_actions", "message": "Session is healthy", "session_id": "native_review_20260708_3613710_session_actions",...
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_retry_session_doctor_query_attempt2.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_retry_session_doctor_query_attempt2.xout`
 
 **Retry / Failure Record**：
 - MCP attempt1: xverif_debug_raw_request(request.action=session.doctor, output_format=xout) -> @xdebug.session.doctor.v1 summary: session_id: mcp_raw_session_open_20260708 mode: waveform healthy: true health: api_version: xdebug.v1 ok: true action: session.doctor tool: na...
@@ -2475,8 +2475,8 @@
 - before_count: 5
 - kept_count: 2
 - removed_count: 3
-- native key data: {"_bytes": 22186, "_truncated_json": "{\"before\": [{\"created_at\": 1783442525, \"file_dir\": \"~/.xdebug/engine/sessions/smoke2_bbea1df62ed711e2/transport\", \"fsdb\": \"~/Documents/Codex/xdv-test-ds/dv/run/out/sanity/test/bsg_cache_nb_smoke_tc_1/waves.fs...
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_retry_session_gc_query_attempt2.xout`
+- native key data: {"_bytes": 22186, "_truncated_json": "{\"before\": [{\"created_at\": 1783442525, \"file_dir\": \"~/.xdebug/engine/sessions/smoke2_bbea1df62ed711e2/transport\", \"fsdb\": \"<design-repo>/dv/run/out/sanity/test/bsg_cache_nb_smoke_tc_1/waves.fs...
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_retry_session_gc_query_attempt2.xout`
 
 **Retry / Failure Record**：
 - MCP attempt1: xverif_debug_raw_request(request.action=session.gc, output_format=xout) -> @xdebug.session.gc.v1 summary: status: completed before_count: 0 kept_count: 0 removed_count: 0 data: before: [empty] kept: [empty] removed: [empty]
@@ -2525,7 +2525,7 @@
 - removed: true
 - 
 - native key data: {"backends": {"action": "session.kill", "api_version": "xdebug.v1", "data": {}, "error": null, "ok": true, "request_id": "", "session": null, "summary": {"id": "native_review_20260708_3613710_session_kill", "killed": true, "session_id": "native_review_20260...
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_retry_session_kill_query_attempt2.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_retry_session_kill_query_attempt2.xout`
 
 **Retry / Failure Record**：
 - MCP attempt1: xverif_debug_raw_request(request.action=session.kill, output_format=xout) -> @xdebug.session.kill.v1 summary: session_id: mcp_raw_session_kill_20260708 mode: waveform removed: true session: id: mcp_raw_session_kill_20260708 session_id: mcp_raw_session_ki...
@@ -2568,8 +2568,8 @@
 - expired_removed_count: 0
 - 
 - sessions:
-- native key data: {"_bytes": 11175, "_truncated_json": "{\"sessions\": [{\"created_at\": 1783442525, \"file_dir\": \"~/.xdebug/engine/sessions/smoke2_bbea1df62ed711e2/transport\", \"fsdb\": \"~/Documents/Codex/xdv-test-ds/dv/run/out/sanity/test/bsg_cache_nb_smoke_tc_1/waves....
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_retry_session_list_query_attempt3.xout`
+- native key data: {"_bytes": 11175, "_truncated_json": "{\"sessions\": [{\"created_at\": 1783442525, \"file_dir\": \"~/.xdebug/engine/sessions/smoke2_bbea1df62ed711e2/transport\", \"fsdb\": \"<design-repo>/dv/run/out/sanity/test/bsg_cache_nb_smoke_tc_1/waves....
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_retry_session_list_query_attempt3.xout`
 
 **Retry / Failure Record**：
 - MCP attempt1: xverif_debug_raw_request(request.action=session.list, output_format=xout) -> @xdebug.session.list.v1 summary: session_count: 1 expired_removed_count: 0 sessions: id session_id mode fsdb socket_path
@@ -2603,7 +2603,7 @@
     "verbosity": "compact"
   },
   "target": {
-    "fsdb": "~/xverif/xdebug/testdata/waveform/ai_complex_wave/out/waves.fsdb"
+    "fsdb": "<xverif-repo>/xdebug/testdata/waveform/ai_complex_wave/out/waves.fsdb"
   }
 }
 ```
@@ -2617,8 +2617,8 @@
 - mode: waveform
 - 
 - session:
-- native key data: {"session": {"file_dir": "~/.xdebug/engine/sessions/native_review_20_0aec419b5632383d/transport", "fsdb": "~/xverif/xdebug/testdata/waveform/ai_complex_wave/out/waves.fsdb", "id": "native_review_20260708_3613710_open_action", "mode": "waveform", "server_hos...
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_session_open_target_attempt2.xout`
+- native key data: {"session": {"file_dir": "~/.xdebug/engine/sessions/native_review_20_0aec419b5632383d/transport", "fsdb": "<xverif-repo>/xdebug/testdata/waveform/ai_complex_wave/out/waves.fsdb", "id": "native_review_20260708_3613710_open_action", "mode": "waveform", "server_hos...
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_session_open_target_attempt2.xout`
 
 **Retry / Failure Record**：
 - MCP attempt1: xverif_debug_raw_request(request.action=session.open, output_format=xout) -> @xdebug.session.open.v1 summary: session_id: mcp_raw_session_open_20260708 mode: waveform session: id: mcp_raw_session_open_20260708 session_id: mcp_raw_session_open_20260708 mo...
@@ -2668,7 +2668,7 @@
 - 
 - data:
 - native key data: {"aliases": [], "ambiguous": false, "base_signal": null, "canonical": "uart_16550.tx_fifo_empty", "fsdb_candidates": [], "leaf": null, "port_mappings": [], "query": "uart_16550.tx_fifo_empty", "rtl_path": null, "scope": null, "select": null}
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_signal_canonicalize_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_signal_canonicalize_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -2722,7 +2722,7 @@
 - actual_transition_count: 2
 - truncated: false
 - native key data: {"begin": "0ns", "end": "120ns", "final_value": {"bits": "00100010", "known": true, "value": "8'h22", "width": 8}, "first_change": "0ns", "includes_initial_value": true, "initial_value": {"bits": "00000000", "known": true, "value": "8'h00", "width": 8}, "la...
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_signal_changes_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_signal_changes_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -2770,8 +2770,8 @@
 - ok: true
 - query: uart_16550.RXDin
 - status: ok
-- native key data: {"count": 1, "matches": [{"file": "~/xverif/xdebug/testdata/design/uart/uart_16550.sv", "line": 65, "signal": "uart_16550.tx_fifo_empty", "type": "net"}], "message": "", "ok": true, "query": "uart_16550.tx_fifo_empty", "status": "ok"}
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_signal_resolve_target_attempt1.xout`
+- native key data: {"count": 1, "matches": [{"file": "<xverif-repo>/xdebug/testdata/design/uart/uart_16550.sv", "line": 65, "signal": "uart_16550.tx_fifo_empty", "type": "net"}], "message": "", "ok": true, "query": "uart_16550.tx_fifo_empty", "status": "ok"}
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_signal_resolve_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -2824,7 +2824,7 @@
 - end: 400ns
 - 
 - native key data: {"begin": "0ns", "changes": [{"time": "0ns", "value": {"bits": "1", "known": true, "value": "1'h1", "width": 1}}], "end": "400ns", "final_value": {"bits": "1", "known": true, "value": "1'h1", "width": 1}, "first_change": "0ns", "initial_value": {"bits": "1"...
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_signal_stability_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_signal_stability_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -2879,7 +2879,7 @@
 - edge: negedge
 - sample_time_semantics: time is sample_time
 - native key data: {"activity": {"first_high_time": "130ns", "high_burst_count": 1, "last_fall_time": "200ns", "last_high_time": "190ns", "max_high_cycles": 7}, "begin": "120ns", "end": "210ns", "final": {"known": true, "value": "'b0", "width": 1}, "first": {"known": true, "v...
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_signal_statistics_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_signal_statistics_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -2907,7 +2907,7 @@
   "api_version": "xdebug.v1",
   "args": {
     "context_lines": 3,
-    "file": "~/xverif/xdebug/testdata/design/uart/uart_tx.sv",
+    "file": "<xverif-repo>/xdebug/testdata/design/uart/uart_tx.sv",
     "line": 70
   },
   "output": {
@@ -2922,12 +2922,12 @@
 **Execution Evidence**：
 - @xdebug.source.context.v1
 - summary:
-- file: ~/xverif/xdebug/testdata/design/uart/uart_16550.sv
+- file: <xverif-repo>/xdebug/testdata/design/uart/uart_16550.sv
 - line: 164
 - 
 - data:
 - native key data: {"context_kind": "if", "enclosing": {"begin_line": 70, "end_line": 76, "name": "", "type": "if"}, "symbol": ""}
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_source_context_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_source_context_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -2974,7 +2974,7 @@
 - streams:
 - name sampling_mode clock edge handshake packet field_count channel_id_valid allow_interleaving sample_point
 - native key data: {"streams": [{"allow_interleaving": false, "channel_id_valid": "every_beat", "clock": "stream_v1_top.clk", "edge": "posedge", "field_count": 3, "handshake": "vld/bp", "name": "bp_packet", "packet": "sop/eop", "sample_point": "before", "sampling_mode": "cloc...
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_stream_config_list_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_stream_config_list_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -3001,7 +3001,7 @@
   "action": "stream.config.load",
   "api_version": "xdebug.v1",
   "args": {
-    "config_path": "~/xverif/xdebug/testdata/waveform/stream_v1/config/streams.json",
+    "config_path": "<xverif-repo>/xdebug/testdata/waveform/stream_v1/config/streams.json",
     "mode": "replace"
   },
   "output": {
@@ -3024,7 +3024,7 @@
 - 
 - streams:
 - native key data: {"issues": [{"code": "CLOCK_COMPLEX", "message": "clock expression is not a plain signal; edge detection uses expression dependency changes", "severity": "WARNING", "stream": "valid_only"}], "streams": ["valid_only", "ready_stream", "bp_stream", "ready_pack...
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_stream_config_load_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_stream_config_load_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -3054,7 +3054,7 @@
     "format": "tsv",
     "kind": "transfer",
     "output": {
-      "path": "/tmp/xdebug_action_review_20260708/native_ready_stream.tsv"
+      "path": "<repo>/tmp/xdebug_action_review_20260708/native_ready_stream.tsv"
     },
     "stream": "ready_stream",
     "time_range": {
@@ -3081,8 +3081,8 @@
 - sampling_mode: clock_edge
 - clock: stream_v1_top.clk
 - edge: posedge
-- native key data: {"format": "tsv", "kind": "transfer", "meta_file": "/tmp/xdebug_action_review_20260708/native_ready_stream.tsv.meta.json", "output_file": "/tmp/xdebug_action_review_20260708/native_ready_stream.tsv", "row_count": 15059}
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_retry2_stream_export_target_attempt2.xout`
+- native key data: {"format": "tsv", "kind": "transfer", "meta_file": "<repo>/tmp/xdebug_action_review_20260708/native_ready_stream.tsv.meta.json", "output_file": "<repo>/tmp/xdebug_action_review_20260708/native_ready_stream.tsv", "row_count": 15059}
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_retry2_stream_export_target_attempt2.xout`
 
 **Retry / Failure Record**：
 - MCP attempt1: xverif_debug_session_open -> xverif_debug_query(action=stream.export, default xout) -> xverif_debug_session_close -> kind must be transfer, packet, or packet_beats
@@ -3142,7 +3142,7 @@
 - clock: stream_v1_top.clk
 - edge: posedge
 - native key data: {"_bytes": 4850, "_truncated_json": "{\"hint\": \"use stream.export for large result\", \"query\": \"match_field\", \"rows\": [{\"beat_index\": 0, \"bp\": false, \"channel_id\": {\"bits\": \"10\", \"known\": true, \"value\": \"2'h2\", \"width\": 2}, \"cycle...
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_stream_query_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_stream_query_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -3191,7 +3191,7 @@
 - packet_enabled: false
 - 
 - native key data: {"config": {"allow_interleaving": false, "channel_id": "stream_v1_top.ready_chid", "channel_id_valid": "every_beat", "clock": "stream_v1_top.clk", "data_fields": {"addr": "{stream_v1_top.ready_addr_hi, stream_v1_top.ready_addr_lo}", "data": "stream_v1_top.r...
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_stream_show_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_stream_show_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -3245,7 +3245,7 @@
 - 
 - data:
 - native key data: {"dynamic": {"clock": "stream_v1_top.clk", "clock_edges": 20011, "control_xz_count": 0, "data_xz_count": 0, "edge": "posedge", "first_stall": {"cycles": 1, "end_cycle": 12, "end_time": "125ns", "reason": "rdy_low", "start_cycle": 11, "start_time": "115ns"},...
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_stream_validate_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_stream_validate_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -3294,8 +3294,8 @@
 - requested_time: 50ns
 - active_time: 45ns
 - path_count: 5
-- native key data: {"paths": [{"file": "~/xverif/xdebug/testdata/combined/active_driver/active_driver_tb.sv", "line": 20, "signal_path": ["active_driver_tb.u_dut.data_b", "active_driver_tb.u_dut.q"], "source_context": [{"active": false, "line": 17, "text": " else if (sel)"}, ...
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_trace_active_driver_target_attempt1.xout`
+- native key data: {"paths": [{"file": "<xverif-repo>/xdebug/testdata/combined/active_driver/active_driver_tb.sv", "line": 20, "signal_path": ["active_driver_tb.u_dut.data_b", "active_driver_tb.u_dut.q"], "source_context": [{"active": false, "line": 17, "text": " else if (sel)"}, ...
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_trace_active_driver_target_attempt1.xout`
 
 **Retry / Failure Record**：
 有重试计数但未展开失败明细：MCP=0，native=2。
@@ -3344,8 +3344,8 @@
 - start_time: 50ns
 - hop_count: 3
 - termination: primary_input
-- native key data: {"hops": [{"file": "~/xverif/xdebug/testdata/combined/active_driver/active_driver_tb.sv", "index": 0, "line": 20, "signal_path": ["active_driver_tb.u_dut.data_b", "active_driver_tb.u_dut.q"], "source_context": [{"active": false, "line": 17, "text": " else i...
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_retry2_trace_active_driver_chain_target_attempt2.xout`
+- native key data: {"hops": [{"file": "<xverif-repo>/xdebug/testdata/combined/active_driver/active_driver_tb.sv", "index": 0, "line": 20, "signal_path": ["active_driver_tb.u_dut.data_b", "active_driver_tb.u_dut.q"], "source_context": [{"active": false, "line": 17, "text": " else i...
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_retry2_trace_active_driver_chain_target_attempt2.xout`
 
 **Retry / Failure Record**：
 - MCP attempt1: xverif_debug_session_open -> xverif_debug_query(action=trace.active_driver_chain, default xout) -> xverif_debug_sessi... -> validation failed for additional property 'depth': instance invalid as per false-schema
@@ -3394,8 +3394,8 @@
 - mode: driver
 - path_count: 3
 - truncated: false
-- native key data: {"paths": [{"file": "~/xverif/xdebug/testdata/design/uart/uart_tx.sv", "line": 30, "signal_path": ["uart_16550.tx_channel.tx_fifo_empty", "uart_16550.tx_fifo_empty"], "source_context": [{"active": false, "line": 27, "text": " input tx_fifo_push,"}, {"active...
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_trace_driver_target_attempt1.xout`
+- native key data: {"paths": [{"file": "<xverif-repo>/xdebug/testdata/design/uart/uart_tx.sv", "line": 30, "signal_path": ["uart_16550.tx_channel.tx_fifo_empty", "uart_16550.tx_fifo_empty"], "source_context": [{"active": false, "line": 27, "text": " input tx_fifo_push,"}, {"active...
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_trace_driver_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -3444,8 +3444,8 @@
 - mode: load
 - path_count: 5
 - truncated: false
-- native key data: {"_bytes": 7639, "_truncated_json": "{\"paths\": [{\"file\": \"~/xverif/xdebug/testdata/design/uart/uart_register_file.sv\", \"line\": 323, \"signal_path\": [\"uart_16550.control.LSR\", \"uart_16550.tx_fifo_empty\"], \"source_context\": [{\"active\": false,...
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_trace_load_target_attempt1.xout`
+- native key data: {"_bytes": 7639, "_truncated_json": "{\"paths\": [{\"file\": \"<xverif-repo>/xdebug/testdata/design/uart/uart_register_file.sv\", \"line\": 323, \"signal_path\": [\"uart_16550.control.LSR\", \"uart_16550.tx_fifo_empty\"], \"source_context\": [{\"active\": false,...
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_trace_load_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -3497,7 +3497,7 @@
 - clock: ai_complex_top.clk
 - edge: negedge
 - native key data: {"clock_context": {"bracket_complete": true, "clock": "ai_complex_top.clk", "clock_edge_hit": true, "clock_edge_kind": "posedge", "edge": "negedge", "next_sample_time": "80ns", "previous_sample_time": "70ns", "requested_time": "75ns", "sample_point_applied"...
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_value_at_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_value_at_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -3552,7 +3552,7 @@
 - 
 - values:
 - native key data: {"clock_context": {"bracket_complete": true, "clock": "ai_complex_top.clk", "clock_edge_hit": true, "clock_edge_kind": "posedge", "edge": "negedge", "next_sample_time": "80ns", "previous_sample_time": "70ns", "requested_time": "75ns", "sample_point_applied"...
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_value_batch_at_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_value_batch_at_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -3614,7 +3614,7 @@
 - condition_count: 3
 - all_passed: false
 - native key data: {"checks": [{"expected": "'h22", "known": true, "observed": {"known": true, "value": "'h22"}, "op": "==", "pass": true, "samples": {"after": {"status": "ok", "value": {"known": true, "value": "'h22"}}, "before": {"status": "ok", "value": {"known": true, "va...
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_verify_conditions_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_verify_conditions_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。
@@ -3677,7 +3677,7 @@
 - failed_samples: 0
 - unknown_samples: 0
 - native key data: {"conditions": [{"expr": "valid&&!ready", "failed_samples": 3, "mode": "eventually", "pass_samples": 1, "passed": true, "unknown_samples": 0}]}
-- MCP evidence file: `/tmp/xdebug_action_review_20260708/mcp_window_verify_target_attempt1.xout`
+- MCP evidence file: `<repo>/tmp/xdebug_action_review_20260708/mcp_window_verify_target_attempt1.xout`
 
 **Retry / Failure Record**：
 无失败重试记录；首次或既有矩阵请求成功。

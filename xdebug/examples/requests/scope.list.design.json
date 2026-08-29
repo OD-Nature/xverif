@@ -1,0 +1,18 @@
+{
+  "api_version": "xdebug.v1",
+  "action": "scope.list",
+  "target": {
+    "daidir": "simv.daidir"
+  },
+  "args": {
+    "source": "design",
+    "path": "top",
+    "level": 2,
+    "kind": "all",
+    "include_patterns": [],
+    "exclude_patterns": []
+  },
+  "limits": {
+    "max_rows": 1000
+  }
+}

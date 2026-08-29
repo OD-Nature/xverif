@@ -1,6 +1,7 @@
 #include "service/engine_action_handler.h"
 #include "service/engine_action_registry.h"
 #include "service/engine_globals.h"
+#include "service/config_store_error.h"
 
 #include "waveform/common/xdebug_waveform_paths.h"
 #include "waveform/stream/stream_analyzer.h"
@@ -25,47 +26,28 @@ using xdebug_waveform::StreamAnalyzer;
 using xdebug_waveform::StreamConfig;
 using xdebug_waveform::StreamExporter;
 using xdebug_waveform::StreamManager;
-using xdebug_waveform::StreamMatch;
 using xdebug_waveform::StreamQueryOptions;
 
-Json stream_config_list_example() {
-    return Json{{"api_version", "xdebug.v1"},
-                {"action", "stream.config.list"},
-                {"target", {{"session_id", "case_a"}}},
-                {"args", Json::object()}};
-}
 class StreamConfigListHandler : public EngineActionHandler {
 public:
     const char* action_name() const override { return "stream.config.list"; }
     bool needs_design() const override { return false; }
     bool needs_waveform() const override { return true; }
-    Json run(const Json& request, EngineActionContext& ctx) const override {
-        Json args = request.value("args", Json::object());
-        Json output = args.value("output", Json::object());
+    Json run(
+        ContractBoundRequest& request,
+        EngineActionContext& ctx) const override {
+        auto args = request.args();
+        auto output = args["output"];
         bool verbose = output.value("verbose", false);
-        std::string name = args.value("name", std::string());
         StreamManager manager;
-        if (!name.empty()) {
-            StreamConfig config;
-            if (!manager.get_stream(xdebug_waveform::g_session_id, name, config)) {
-                Json example = stream_config_list_example();
-                example["args"] = {{"name", "req_stream"}};
-                return make_handler_error(
-                    "CONFIG_NOT_FOUND",
-                    "stream config not found: " + name,
-                    {{"invalid_arg", "args.name"},
-                     {"expected", "name of a previously loaded stream config"},
-                     {"missing_name", name},
-                     {"missing_resource", "stream config"},
-                     {"correct_example", example},
-                     {"example_note", "Example only; omit args.name to list all loaded stream configs."},
-                     {"next_actions", Json::array({"Call stream.config.list with args:{} to list loaded stream names.",
-                                                    "Call stream.config.load before showing a named stream config."})}});
-            }
-            return Json{{"summary", {{"name", name}}},
-                        {"stream", xdebug_waveform::stream_config_json(config)}};
+        std::vector<StreamConfig> streams;
+        xdebug_waveform::StoreResult listed =
+            manager.list_streams(
+                xdebug_waveform::g_session_id,
+                streams);
+        if (!listed.ok()) {
+            return make_config_store_error(listed);
         }
-        auto streams = manager.list_streams(xdebug_waveform::g_session_id);
         Json arr = Json::array();
         for (const auto& stream : streams) {
             if (verbose) arr.push_back(xdebug_waveform::stream_config_json(stream));
@@ -76,8 +58,8 @@ public:
                              {"edge", xdebug_waveform::clock_edge_kind_text(stream.clock_sample.edge)},
                              {"handshake", xdebug_waveform::stream_handshake_text(stream)},
                              {"packet", xdebug_waveform::stream_packet_enabled(stream) ? "sop/eop" : "none"},
-                             {"field_count", stream.data_fields.size() + stream.beat_fields.size() +
-                                 stream.stable_fields.size() + (stream.data.empty() ? 0 : 1)},
+                             {"field_count", stream.beat_fields.size() +
+                                 stream.packet_stable_fields.size() + (stream.data.empty() ? 0 : 1)},
                              {"channel_id_valid", stream.channel_id_valid},
                              {"allow_interleaving", stream.allow_interleaving}};
                 if (stream.clock_sample.edge != xdebug_waveform::ClockEdgeKind::Negedge)

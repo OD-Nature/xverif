@@ -31,10 +31,10 @@
         "id": "sample_stream",
         "session_id": "sample_stream",
         "mode": "waveform",
-        "fsdb": "~/xverif/xdebug/testdata/waveform/stream_v1/out/waves.fsdb",
-        "socket_path": "/tmp/xdebug_action_sampling/home/.xdebug/engine/sessions/sample_stream_b3eef096b9b9196a/socket",
+        "fsdb": "<xverif-repo>/xdebug/testdata/waveform/stream_v1/out/waves.fsdb",
+        "socket_path": "<repo>/tmp/xdebug_action_sampling/home/.xdebug/engine/sessions/sample_stream_b3eef096b9b9196a/socket",
         "transport": "uds",
-        "file_dir": "/tmp/xdebug_action_sampling/home/.xdebug/engine/sessions/sample_stream_b3eef096b9b9196a/transport",
+        "file_dir": "<repo>/tmp/xdebug_action_sampling/home/.xdebug/engine/sessions/sample_stream_b3eef096b9b9196a/transport",
         "server_host": "localhost.localdomain"
       },
       "backends": {

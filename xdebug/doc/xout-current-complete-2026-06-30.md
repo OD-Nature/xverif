@@ -1,8 +1,8 @@
 # xdebug 当前 Action XOUT 完整输出 (2026-06-30)
 
-> 参考: `~/xring/dv/doc/feedback/2026-06-27-v29-xdebug-full-xout-complete.md`
-> daidir=`~/xring/dv/run/out/sanity/build/simv.daidir`
-> fsdb=`~/xring/dv/run/out/sanity/test/tc_sanity_10q_100db/waves.fsdb`
+> 参考: `<xring-repo>/dv/doc/feedback/2026-06-27-v29-xdebug-full-xout-complete.md`
+> daidir=`<xring-repo>/dv/run/out/sanity/build/simv.daidir`
+> fsdb=`<xring-repo>/dv/run/out/sanity/test/tc_sanity_10q_100db/waves.fsdb`
 > 已跳过参考文件中的已删除 action；本文件由当前 xdebug 二进制重放生成。
 > regenerated_session=`xout_current_20260630_regen`
 > regenerated_at=`2026-06-30T14:01:45`
@@ -153,8 +153,8 @@ request:
   "api_version": "xdebug.v1",
   "action": "session.open",
   "target": {
-    "daidir": "~/xring/dv/run/out/sanity/build/simv.daidir",
-    "fsdb": "~/xring/dv/run/out/sanity/test/tc_sanity_10q_100db/waves.fsdb"
+    "daidir": "<xring-repo>/dv/run/out/sanity/build/simv.daidir",
+    "fsdb": "<xring-repo>/dv/run/out/sanity/test/tc_sanity_10q_100db/waves.fsdb"
   },
   "args": {
     "name": "xout_current_20260630_regen"
@@ -173,8 +173,8 @@ session:
   id         : xout_current_20260630_regen
   session_id : xout_current_20260630_regen
   mode       : combined
-  daidir     : ~/xring/dv/run/out/sanity/build/simv.daidir
-  fsdb       : ~/xring/dv/run/out/sanity/test/tc_sanity_10q_100db/waves.fsdb
+  daidir     : <xring-repo>/dv/run/out/sanity/build/simv.daidir
+  fsdb       : <xring-repo>/dv/run/out/sanity/test/tc_sanity_10q_100db/waves.fsdb
   socket_path: ~/.xdebug/engine/sessions/xout_current_202_344baca0287e6f7b/socket
   transport  : uds
   file_dir   : ~/.xdebug/engine/sessions/xout_current_202_344baca0287e6f7b/transport
@@ -200,14 +200,14 @@ summary:
 
 sessions:
   id                                session_id                        mode      daidir                                                                          fsdb                                                                           socket_path                                                                  transport  file_dir                                                                        server_host            server_pid  created_at  last_active  dbdir_mtime  dbdir_size  dbdir_dev  dbdir_inode  fsdb_mtime  fsdb_size  fsdb_dev  fsdb_inode
-  xout_current_20260630             xout_current_20260630             combined  ~/xring/dv/run/out/sanity/build/simv.daidir                            ~/xring/dv/run/out/sanity/test/tc_sanity_10q_100db/waves.fsdb         ~/.xdebug/engine/sessions/xout_current_202_f68723fc1c2acbb9/socket  uds        ~/.xdebug/engine/sessions/xout_current_202_f68723fc1c2acbb9/transport  localhost.localdomain  2879498     1782790678  1782796130   1781509284   4096        66307      3553032      1780650771  497468     66307     3558781
-  xout_current_20260630_b           xout_current_20260630_b           combined  ~/xring/dv/run/out/sanity/build/simv.daidir                            ~/xring/dv/run/out/sanity/test/tc_sanity_10q_100db/waves.fsdb         ~/.xdebug/engine/sessions/xout_current_202_09750ab00d736010/socket  uds        ~/.xdebug/engine/sessions/xout_current_202_09750ab00d736010/transport  localhost.localdomain  2881701     1782790854  1782796130   1781509284   4096        66307      3553032      1780650771  497468     66307     3558781
-  xout_current_20260630_c           xout_current_20260630_c           combined  ~/xring/dv/run/out/sanity/build/simv.daidir                            ~/xring/dv/run/out/sanity/test/tc_sanity_10q_100db/waves.fsdb         ~/.xdebug/engine/sessions/xout_current_202_09750bb00d7361c3/socket  uds        ~/.xdebug/engine/sessions/xout_current_202_09750bb00d7361c3/transport  localhost.localdomain  2883339     1782790963  1782796130   1781509284   4096        66307      3553032      1780650771  497468     66307     3558781
-  active_driver_py_2918664          active_driver_py_2918664          combined  ~/xverif/xdebug/testdata/combined/active_driver/out/simv.daidir        ~/xverif/xdebug/testdata/combined/active_driver/out/waves.fsdb        ~/.xdebug/engine/sessions/active_driver_py_02e879d9c249d84d/socket  uds        ~/.xdebug/engine/sessions/active_driver_py_02e879d9c249d84d/transport  localhost.localdomain  2918683     1782796007  1782796130   1782715423   4096        66307      554070230    1782715423  9821       66307     1611510105
-  if_port_root_py_2918664           if_port_root_py_2918664           combined  ~/xverif/xdebug/testdata/combined/interface_port_root/out/simv.daidir  ~/xverif/xdebug/testdata/combined/interface_port_root/out/waves.fsdb  ~/.xdebug/engine/sessions/if_port_root_py__1634e14c3170c8f0/socket  uds        ~/.xdebug/engine/sessions/if_port_root_py__1634e14c3170c8f0/transport  localhost.localdomain  2918741     1782796007  1782796130   1781511675   4096        66307      541233024    1781579586  9741       66307     1087379363
-  xout_current_20260630_envtrace    xout_current_20260630_envtrace    combined  ~/xring/dv/run/out/sanity/build/simv.daidir                            ~/xring/dv/run/out/sanity/test/tc_sanity_10q_100db/waves.fsdb         ~/.xdebug/engine/sessions/xout_current_202_d4611ca55364fffe/socket  uds        ~/.xdebug/engine/sessions/xout_current_202_d4611ca55364fffe/transport  localhost.localdomain  2921617     1782796126  1782799070   1781509284   4096        66307      3553032      1780650771  497468     66307     3558781
-  xout_current_20260630_limitcheck  xout_current_20260630_limitcheck  combined  ~/xring/dv/run/out/sanity/build/simv.daidir                            ~/xring/dv/run/out/sanity/test/tc_sanity_10q_100db/waves.fsdb         ~/.xdebug/engine/sessions/xout_current_202_2d8694d322bf7e53/socket  uds        ~/.xdebug/engine/sessions/xout_current_202_2d8694d322bf7e53/transport  localhost.localdomain  2940979     1782799143  1782799170   1781509284   4096        66307      3553032      1780650771  497468     66307     3558781
-  xout_current_20260630_regen       xout_current_20260630_regen       combined  ~/xring/dv/run/out/sanity/build/simv.daidir                            ~/xring/dv/run/out/sanity/test/tc_sanity_10q_100db/waves.fsdb         ~/.xdebug/engine/sessions/xout_current_202_344baca0287e6f7b/socket  uds        ~/.xdebug/engine/sessions/xout_current_202_344baca0287e6f7b/transport  localhost.localdomain  2941852     1782799307  1782799307   1781509284   4096        66307      3553032      1780650771  497468     66307     3558781
+  xout_current_20260630             xout_current_20260630             combined  <xring-repo>/dv/run/out/sanity/build/simv.daidir                            <xring-repo>/dv/run/out/sanity/test/tc_sanity_10q_100db/waves.fsdb         ~/.xdebug/engine/sessions/xout_current_202_f68723fc1c2acbb9/socket  uds        ~/.xdebug/engine/sessions/xout_current_202_f68723fc1c2acbb9/transport  localhost.localdomain  2879498     1782790678  1782796130   1781509284   4096        66307      3553032      1780650771  497468     66307     3558781
+  xout_current_20260630_b           xout_current_20260630_b           combined  <xring-repo>/dv/run/out/sanity/build/simv.daidir                            <xring-repo>/dv/run/out/sanity/test/tc_sanity_10q_100db/waves.fsdb         ~/.xdebug/engine/sessions/xout_current_202_09750ab00d736010/socket  uds        ~/.xdebug/engine/sessions/xout_current_202_09750ab00d736010/transport  localhost.localdomain  2881701     1782790854  1782796130   1781509284   4096        66307      3553032      1780650771  497468     66307     3558781
+  xout_current_20260630_c           xout_current_20260630_c           combined  <xring-repo>/dv/run/out/sanity/build/simv.daidir                            <xring-repo>/dv/run/out/sanity/test/tc_sanity_10q_100db/waves.fsdb         ~/.xdebug/engine/sessions/xout_current_202_09750bb00d7361c3/socket  uds        ~/.xdebug/engine/sessions/xout_current_202_09750bb00d7361c3/transport  localhost.localdomain  2883339     1782790963  1782796130   1781509284   4096        66307      3553032      1780650771  497468     66307     3558781
+  active_driver_py_2918664          active_driver_py_2918664          combined  <xverif-repo>/xdebug/testdata/combined/active_driver/out/simv.daidir        <xverif-repo>/xdebug/testdata/combined/active_driver/out/waves.fsdb        ~/.xdebug/engine/sessions/active_driver_py_02e879d9c249d84d/socket  uds        ~/.xdebug/engine/sessions/active_driver_py_02e879d9c249d84d/transport  localhost.localdomain  2918683     1782796007  1782796130   1782715423   4096        66307      554070230    1782715423  9821       66307     1611510105
+  if_port_root_py_2918664           if_port_root_py_2918664           combined  <xverif-repo>/xdebug/testdata/combined/interface_port_root/out/simv.daidir  <xverif-repo>/xdebug/testdata/combined/interface_port_root/out/waves.fsdb  ~/.xdebug/engine/sessions/if_port_root_py__1634e14c3170c8f0/socket  uds        ~/.xdebug/engine/sessions/if_port_root_py__1634e14c3170c8f0/transport  localhost.localdomain  2918741     1782796007  1782796130   1781511675   4096        66307      541233024    1781579586  9741       66307     1087379363
+  xout_current_20260630_envtrace    xout_current_20260630_envtrace    combined  <xring-repo>/dv/run/out/sanity/build/simv.daidir                            <xring-repo>/dv/run/out/sanity/test/tc_sanity_10q_100db/waves.fsdb         ~/.xdebug/engine/sessions/xout_current_202_d4611ca55364fffe/socket  uds        ~/.xdebug/engine/sessions/xout_current_202_d4611ca55364fffe/transport  localhost.localdomain  2921617     1782796126  1782799070   1781509284   4096        66307      3553032      1780650771  497468     66307     3558781
+  xout_current_20260630_limitcheck  xout_current_20260630_limitcheck  combined  <xring-repo>/dv/run/out/sanity/build/simv.daidir                            <xring-repo>/dv/run/out/sanity/test/tc_sanity_10q_100db/waves.fsdb         ~/.xdebug/engine/sessions/xout_current_202_2d8694d322bf7e53/socket  uds        ~/.xdebug/engine/sessions/xout_current_202_2d8694d322bf7e53/transport  localhost.localdomain  2940979     1782799143  1782799170   1781509284   4096        66307      3553032      1780650771  497468     66307     3558781
+  xout_current_20260630_regen       xout_current_20260630_regen       combined  <xring-repo>/dv/run/out/sanity/build/simv.daidir                            <xring-repo>/dv/run/out/sanity/test/tc_sanity_10q_100db/waves.fsdb         ~/.xdebug/engine/sessions/xout_current_202_344baca0287e6f7b/socket  uds        ~/.xdebug/engine/sessions/xout_current_202_344baca0287e6f7b/transport  localhost.localdomain  2941852     1782799307  1782799307   1781509284   4096        66307      3553032      1780650771  497468     66307     3558781
 ```
 
 ## session.doctor
@@ -244,11 +244,11 @@ tool:
 session:
   id         : xout_current_20260630_regen
   session_id : xout_current_20260630_regen
-  dbdir      : ~/xring/dv/run/out/sanity/build/simv.daidir
-  dbdir_path : ~/xring/dv/run/out/sanity/build/simv.daidir
-  design_file: ~/xring/dv/run/out/sanity/build/simv.daidir
-  fsdb       : ~/xring/dv/run/out/sanity/test/tc_sanity_10q_100db/waves.fsdb
-  fsdb_file  : ~/xring/dv/run/out/sanity/test/tc_sanity_10q_100db/waves.fsdb
+  dbdir      : <xring-repo>/dv/run/out/sanity/build/simv.daidir
+  dbdir_path : <xring-repo>/dv/run/out/sanity/build/simv.daidir
+  design_file: <xring-repo>/dv/run/out/sanity/build/simv.daidir
+  fsdb       : <xring-repo>/dv/run/out/sanity/test/tc_sanity_10q_100db/waves.fsdb
+  fsdb_file  : <xring-repo>/dv/run/out/sanity/test/tc_sanity_10q_100db/waves.fsdb
   pid        : 2941852
   transport  : uds
   socket_path: ~/.xdebug/engine/sessions/xout_current_202_344baca0287e6f7b/socket
@@ -598,7 +598,7 @@ data:
 
 matches:
   file                              line  signal                     type
-  ~/xring/rtl/xring_top.v  68    xring_tb_top.u_dut.ds_vld  net
+  <xring-repo>/rtl/xring_top.v  68    xring_tb_top.u_dut.ds_vld  net
   ok       : true
   query    : xring_tb_top.u_dut.ds_vld
   status   : ok
@@ -1035,7 +1035,7 @@ summary:
   path_count: 2
   truncated : false
 
-source: ~/xring/dv/tb/xring_tb_top.sv:21-23
+source: <xring-repo>/dv/tb/xring_tb_top.sv:21-23
    18 |     end
    19 | 
    20 |     initial begin
@@ -1084,7 +1084,7 @@ summary:
   truncated : true
   limit_hint: returned first 3 trace entries; increase limits.max_results to return all results
 
-source: ~/xif_agent/src/xif_if.sv:372
+source: third_party/xif_agent/src/xif_if.sv:372
   369 |       dbg_success_streak = 0;
   370 |     end else begin
   371 |       if (mon_cb.vld === 1'b1) begin
@@ -1108,7 +1108,7 @@ request:
   "api_version": "xdebug.v1",
   "action": "source.context",
   "args": {
-    "file": "~/xverif/xdebug/testdata/design/uart/uart_16550.sv",
+    "file": "<xverif-repo>/xdebug/testdata/design/uart/uart_16550.sv",
     "line": 164,
     "context_lines": 3,
     "include_source": true
@@ -1120,7 +1120,7 @@ xout rc=0:
 ```text
 @xdebug.source.context.v1
 summary:
-  file: ~/xverif/xdebug/testdata/design/uart/uart_16550.sv
+  file: <xverif-repo>/xdebug/testdata/design/uart/uart_16550.sv
   line: 164
 
 data:
@@ -1201,7 +1201,7 @@ summary:
   path_count    : 7
   truncated     : false
 
-source: ~/xring/rtl/scheduler.v:61
+source: <xring-repo>/rtl/scheduler.v:61
    58 |     input  wire                         comp_wr_err,
    59 | 
    60 |     // ---- Downstream VLD/BP interface ----
@@ -1214,7 +1214,7 @@ active_signals:
   line  signal_path
   61    xring_tb_top.u_dut.u_scheduler.ds_vld -> xring_tb_top.u_dut.ds_vld
 
-source: ~/xring/rtl/scheduler.v:818-819
+source: <xring-repo>/rtl/scheduler.v:818-819
   815 |                     {{(DATA_W-1){1'b0}}, 1'b1};
   816 | end
   817 | 
@@ -1229,7 +1229,7 @@ active_signals:
   819   xring_tb_top.u_dut.u_scheduler.ob_valid -> xring_tb_top.u_dut.u_scheduler.ob_state -> xring_tb_top.u_dut.u_scheduler.OB_OUTPUT -> xring_tb_top.u_dut.u_scheduler.ds_bp -> xring_tb_top.u_dut.ds_vld
   818   xring_tb_top.u_dut.ds_vld
 
-source: ~/xring/rtl/xring_top.v:68
+source: <xring-repo>/rtl/xring_top.v:68
    65 |     output wire         bready,
    66 | 
    67 |     // ---- Downstream VLD/BP Interface ----
@@ -1242,7 +1242,7 @@ active_signals:
   line  signal_path
   68    xring_tb_top.u_dut.ds_vld -> xring_tb_top.ds_vld
 
-source: ~/xring/rtl/scheduler.v:61
+source: <xring-repo>/rtl/scheduler.v:61
    58 |     input  wire                         comp_wr_err,
    59 | 
    60 |     // ---- Downstream VLD/BP interface ----
@@ -1255,7 +1255,7 @@ active_signals:
   line  signal_path
   61    xring_tb_top.u_dut.u_scheduler.ds_vld -> xring_tb_top.ds_vld
 
-source: ~/xring/rtl/scheduler.v:818-819
+source: <xring-repo>/rtl/scheduler.v:818-819
   815 |                     {{(DATA_W-1){1'b0}}, 1'b1};
   816 | end
   817 | 
@@ -1305,7 +1305,7 @@ summary:
   termination: ambiguous
   truncated  : false
 
-source: ~/xring/rtl/scheduler.v:819
+source: <xring-repo>/rtl/scheduler.v:819
   816 | end
   817 | 
   818 | always @(*) begin
@@ -2314,14 +2314,14 @@ summary:
 
 before:
   id                                session_id                        mode      daidir                                                                          fsdb                                                                           socket_path                                                                  transport  file_dir                                                                        server_host            server_pid  created_at  last_active  dbdir_mtime  dbdir_size  dbdir_dev  dbdir_inode  fsdb_mtime  fsdb_size  fsdb_dev  fsdb_inode
-  xout_current_20260630             xout_current_20260630             combined  ~/xring/dv/run/out/sanity/build/simv.daidir                            ~/xring/dv/run/out/sanity/test/tc_sanity_10q_100db/waves.fsdb         ~/.xdebug/engine/sessions/xout_current_202_f68723fc1c2acbb9/socket  uds        ~/.xdebug/engine/sessions/xout_current_202_f68723fc1c2acbb9/transport  localhost.localdomain  2879498     1782790678  1782796130   1781509284   4096        66307      3553032      1780650771  497468     66307     3558781
-  xout_current_20260630_b           xout_current_20260630_b           combined  ~/xring/dv/run/out/sanity/build/simv.daidir                            ~/xring/dv/run/out/sanity/test/tc_sanity_10q_100db/waves.fsdb         ~/.xdebug/engine/sessions/xout_current_202_09750ab00d736010/socket  uds        ~/.xdebug/engine/sessions/xout_current_202_09750ab00d736010/transport  localhost.localdomain  2881701     1782790854  1782796130   1781509284   4096        66307      3553032      1780650771  497468     66307     3558781
-  xout_current_20260630_c           xout_current_20260630_c           combined  ~/xring/dv/run/out/sanity/build/simv.daidir                            ~/xring/dv/run/out/sanity/test/tc_sanity_10q_100db/waves.fsdb         ~/.xdebug/engine/sessions/xout_current_202_09750bb00d7361c3/socket  uds        ~/.xdebug/engine/sessions/xout_current_202_09750bb00d7361c3/transport  localhost.localdomain  2883339     1782790963  1782796130   1781509284   4096        66307      3553032      1780650771  497468     66307     3558781
-  active_driver_py_2918664          active_driver_py_2918664          combined  ~/xverif/xdebug/testdata/combined/active_driver/out/simv.daidir        ~/xverif/xdebug/testdata/combined/active_driver/out/waves.fsdb        ~/.xdebug/engine/sessions/active_driver_py_02e879d9c249d84d/socket  uds        ~/.xdebug/engine/sessions/active_driver_py_02e879d9c249d84d/transport  localhost.localdomain  2918683     1782796007  1782796130   1782715423   4096        66307      554070230    1782715423  9821       66307     1611510105
-  if_port_root_py_2918664           if_port_root_py_2918664           combined  ~/xverif/xdebug/testdata/combined/interface_port_root/out/simv.daidir  ~/xverif/xdebug/testdata/combined/interface_port_root/out/waves.fsdb  ~/.xdebug/engine/sessions/if_port_root_py__1634e14c3170c8f0/socket  uds        ~/.xdebug/engine/sessions/if_port_root_py__1634e14c3170c8f0/transport  localhost.localdomain  2918741     1782796007  1782796130   1781511675   4096        66307      541233024    1781579586  9741       66307     1087379363
-  xout_current_20260630_envtrace    xout_current_20260630_envtrace    combined  ~/xring/dv/run/out/sanity/build/simv.daidir                            ~/xring/dv/run/out/sanity/test/tc_sanity_10q_100db/waves.fsdb         ~/.xdebug/engine/sessions/xout_current_202_d4611ca55364fffe/socket  uds        ~/.xdebug/engine/sessions/xout_current_202_d4611ca55364fffe/transport  localhost.localdomain  2921617     1782796126  1782799070   1781509284   4096        66307      3553032      1780650771  497468     66307     3558781
-  xout_current_20260630_limitcheck  xout_current_20260630_limitcheck  combined  ~/xring/dv/run/out/sanity/build/simv.daidir                            ~/xring/dv/run/out/sanity/test/tc_sanity_10q_100db/waves.fsdb         ~/.xdebug/engine/sessions/xout_current_202_2d8694d322bf7e53/socket  uds        ~/.xdebug/engine/sessions/xout_current_202_2d8694d322bf7e53/transport  localhost.localdomain  2940979     1782799143  1782799170   1781509284   4096        66307      3553032      1780650771  497468     66307     3558781
-  xout_current_20260630_regen       xout_current_20260630_regen       combined  ~/xring/dv/run/out/sanity/build/simv.daidir                            ~/xring/dv/run/out/sanity/test/tc_sanity_10q_100db/waves.fsdb         ~/.xdebug/engine/sessions/xout_current_202_344baca0287e6f7b/socket  uds        ~/.xdebug/engine/sessions/xout_current_202_344baca0287e6f7b/transport  localhost.localdomain  2941852     1782799307  1782799311   1781509284   4096        66307      3553032      1780650771  497468     66307     3558781
+  xout_current_20260630             xout_current_20260630             combined  <xring-repo>/dv/run/out/sanity/build/simv.daidir                            <xring-repo>/dv/run/out/sanity/test/tc_sanity_10q_100db/waves.fsdb         ~/.xdebug/engine/sessions/xout_current_202_f68723fc1c2acbb9/socket  uds        ~/.xdebug/engine/sessions/xout_current_202_f68723fc1c2acbb9/transport  localhost.localdomain  2879498     1782790678  1782796130   1781509284   4096        66307      3553032      1780650771  497468     66307     3558781
+  xout_current_20260630_b           xout_current_20260630_b           combined  <xring-repo>/dv/run/out/sanity/build/simv.daidir                            <xring-repo>/dv/run/out/sanity/test/tc_sanity_10q_100db/waves.fsdb         ~/.xdebug/engine/sessions/xout_current_202_09750ab00d736010/socket  uds        ~/.xdebug/engine/sessions/xout_current_202_09750ab00d736010/transport  localhost.localdomain  2881701     1782790854  1782796130   1781509284   4096        66307      3553032      1780650771  497468     66307     3558781
+  xout_current_20260630_c           xout_current_20260630_c           combined  <xring-repo>/dv/run/out/sanity/build/simv.daidir                            <xring-repo>/dv/run/out/sanity/test/tc_sanity_10q_100db/waves.fsdb         ~/.xdebug/engine/sessions/xout_current_202_09750bb00d7361c3/socket  uds        ~/.xdebug/engine/sessions/xout_current_202_09750bb00d7361c3/transport  localhost.localdomain  2883339     1782790963  1782796130   1781509284   4096        66307      3553032      1780650771  497468     66307     3558781
+  active_driver_py_2918664          active_driver_py_2918664          combined  <xverif-repo>/xdebug/testdata/combined/active_driver/out/simv.daidir        <xverif-repo>/xdebug/testdata/combined/active_driver/out/waves.fsdb        ~/.xdebug/engine/sessions/active_driver_py_02e879d9c249d84d/socket  uds        ~/.xdebug/engine/sessions/active_driver_py_02e879d9c249d84d/transport  localhost.localdomain  2918683     1782796007  1782796130   1782715423   4096        66307      554070230    1782715423  9821       66307     1611510105
+  if_port_root_py_2918664           if_port_root_py_2918664           combined  <xverif-repo>/xdebug/testdata/combined/interface_port_root/out/simv.daidir  <xverif-repo>/xdebug/testdata/combined/interface_port_root/out/waves.fsdb  ~/.xdebug/engine/sessions/if_port_root_py__1634e14c3170c8f0/socket  uds        ~/.xdebug/engine/sessions/if_port_root_py__1634e14c3170c8f0/transport  localhost.localdomain  2918741     1782796007  1782796130   1781511675   4096        66307      541233024    1781579586  9741       66307     1087379363
+  xout_current_20260630_envtrace    xout_current_20260630_envtrace    combined  <xring-repo>/dv/run/out/sanity/build/simv.daidir                            <xring-repo>/dv/run/out/sanity/test/tc_sanity_10q_100db/waves.fsdb         ~/.xdebug/engine/sessions/xout_current_202_d4611ca55364fffe/socket  uds        ~/.xdebug/engine/sessions/xout_current_202_d4611ca55364fffe/transport  localhost.localdomain  2921617     1782796126  1782799070   1781509284   4096        66307      3553032      1780650771  497468     66307     3558781
+  xout_current_20260630_limitcheck  xout_current_20260630_limitcheck  combined  <xring-repo>/dv/run/out/sanity/build/simv.daidir                            <xring-repo>/dv/run/out/sanity/test/tc_sanity_10q_100db/waves.fsdb         ~/.xdebug/engine/sessions/xout_current_202_2d8694d322bf7e53/socket  uds        ~/.xdebug/engine/sessions/xout_current_202_2d8694d322bf7e53/transport  localhost.localdomain  2940979     1782799143  1782799170   1781509284   4096        66307      3553032      1780650771  497468     66307     3558781
+  xout_current_20260630_regen       xout_current_20260630_regen       combined  <xring-repo>/dv/run/out/sanity/build/simv.daidir                            <xring-repo>/dv/run/out/sanity/test/tc_sanity_10q_100db/waves.fsdb         ~/.xdebug/engine/sessions/xout_current_202_344baca0287e6f7b/socket  uds        ~/.xdebug/engine/sessions/xout_current_202_344baca0287e6f7b/transport  localhost.localdomain  2941852     1782799307  1782799311   1781509284   4096        66307      3553032      1780650771  497468     66307     3558781
 
 kept:
   session_id                        mode

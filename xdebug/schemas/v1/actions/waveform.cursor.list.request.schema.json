@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "xdebug.waveform.cursor.list.request.v1",
+  "title": "waveform.cursor.list request",
+  "type": "object",
+  "required": [
+    "api_version",
+    "action",
+    "target"
+  ],
+  "properties": {
+    "api_version": {
+      "type": "string",
+      "enum": [
+        "xdebug.v1"
+      ]
+    },
+    "request_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "action": {
+      "type": "string",
+      "enum": [
+        "waveform.cursor.list"
+      ]
+    },
+    "target": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fsdb": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "session_id"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "fsdb"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "session_id"
+            ]
+          },
+          "required": [
+            "fsdb"
+          ]
+        }
+      ],
+      "additionalProperties": false
+    },
+    "args": {
+      "type": "object",
+      "required": [],
+      "properties": {
+        "render_time_unit": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "ps",
+            "ns",
+            "us"
+          ],
+          "description": "Controls only canonical response time rendering: auto, ps, ns, or us. It never changes input parsing, sampling, filtering, or ordering."
+        }
+      },
+      "additionalProperties": false
+    },
+    "limits": {
+      "type": "object",
+      "properties": {
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647,
+          "description": "Positive public frontend-to-engine request timeout in milliseconds. Omit limits.timeout_ms to disable the public watchdog."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "description": "List named waveform cursors.",
+  "x-purpose": "列出游标。",
+  "x-how_it_works": "读取当前 session 的 cursor 存储。",
+  "x-when_to_use": "查看可复用的命名时间点。",
+  "x-arg_contract_notes": "none",
+  "x-description-zh": "列出游标。",
+  "x-agent": {
+    "use_when": [
+      "Need to discover available waveform time-bookmark names before reading or activating one."
+    ],
+    "do_not_use_when": [
+      "Do not use it to read one cursor time or enumerate protocol transactions."
+    ],
+    "alternatives": [
+      {
+        "action": "waveform.cursor.get",
+        "when": "Read one saved waveform cursor."
+      },
+      {
+        "action": "apb.query",
+        "when": "Enumerate APB transactions."
+      },
+      {
+        "action": "axi.query",
+        "when": "Enumerate AXI transactions."
+      }
+    ],
+    "constraints": [
+      "none"
+    ]
+  }
+}

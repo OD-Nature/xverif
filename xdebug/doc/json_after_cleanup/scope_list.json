@@ -3,16 +3,15 @@
     "api_version": "xdebug.v1",
     "action": "scope.list",
     "target": {
-      "session_id": "sample_wave"
+      "session_id": "case_a"
     },
     "args": {
-      "path": ""
-    },
-    "limits": {
-      "timeout_ms": 120000
-    },
-    "output": {
-      "verbosity": "compact"
+      "source": "wave",
+      "path": "top",
+      "level": 1,
+      "kind": "all",
+      "include_patterns": [],
+      "exclude_patterns": []
     }
   },
   "response": {
@@ -23,17 +22,106 @@
       "name": "xdebug",
       "version": "0.1.0"
     },
-    "session": null,
+    "session": {
+      "session_id": "case_a",
+      "mode": "waveform",
+      "fsdb": "waves.fsdb",
+      "socket_path": "session-endpoints/case_a.sock",
+      "transport": "uds",
+      "server_host": "localhost"
+    },
     "summary": {
-      "path": "",
-      "recursive": true,
-      "total_signals": 0,
-      "truncated": false,
-      "signal_count": 0
+      "source": "wave",
+      "path": "top",
+      "level": 1,
+      "kind": "all",
+      "include_patterns": [],
+      "exclude_patterns": [],
+      "visited_count": 5,
+      "scanned_row_count": 5,
+      "returned_module_count": 1,
+      "returned_port_count": 2,
+      "returned_signal_count": 2,
+      "total_module_count": 1,
+      "total_port_count": 2,
+      "total_signal_count": 2,
+      "scan_complete": true,
+      "analysis_complete": true,
+      "response_truncated": false,
+      "total_count": 5,
+      "returned_count": 5,
+      "truncation_scopes": []
     },
     "data": {
-      "scopes": [],
-      "signals": []
+      "modules": [
+        {
+          "name": "u0",
+          "path": "top.u0",
+          "kind": "module",
+          "sources": [
+            "wave"
+          ],
+          "queryable": true,
+          "traceable": false,
+          "module_name": "worker"
+        }
+      ],
+      "interfaces": [],
+      "interface_arrays": [],
+      "gen_scopes": [],
+      "internal_scopes": [],
+      "modports": [],
+      "mpports": [],
+      "ports": [
+        {
+          "name": "u0.bus",
+          "path": "top.u0.bus",
+          "kind": "port",
+          "sources": [
+            "wave"
+          ],
+          "queryable": true,
+          "traceable": false,
+          "direction": "interface",
+          "width": null
+        },
+        {
+          "name": "u0.req_i",
+          "path": "top.u0.req_i",
+          "kind": "port",
+          "sources": [
+            "wave"
+          ],
+          "queryable": true,
+          "traceable": false,
+          "direction": "input",
+          "width": 1
+        }
+      ],
+      "signals": [
+        {
+          "name": "clk",
+          "path": "top.clk",
+          "kind": "signal",
+          "sources": [
+            "wave"
+          ],
+          "queryable": true,
+          "traceable": false,
+          "width": 1
+        },
+        {
+          "name": "link",
+          "path": "top.link",
+          "kind": "signal",
+          "sources": [
+            "wave"
+          ],
+          "queryable": true,
+          "traceable": false,
+          "width": null
+        }
+      ]
     },
     "error": null
   },

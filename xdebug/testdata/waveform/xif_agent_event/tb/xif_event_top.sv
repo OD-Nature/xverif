@@ -49,22 +49,6 @@ module xif_event_top;
   end
 
   initial begin
-    string testname;
-    string fsdb_name;
-    string fsdb_dir;
-
-    if (!$value$plusargs("UVM_TESTNAME=%s", testname)) begin
-      testname = "xif_event_multi_if_test";
-    end
-`ifdef XIF_EVENT_FSDB_DIR
-    fsdb_dir = `XIF_EVENT_FSDB_DIR;
-`else
-    fsdb_dir = "out/waves";
-`endif
-    fsdb_name = $sformatf("%s/%s.fsdb", fsdb_dir, testname);
-    $fsdbDumpfile(fsdb_name);
-    $fsdbDumpvars(0, xif_event_top, "+all");
-
     uvm_config_db#(virtual xif_if #(xif_event_pd_t))::set(null, "uvm_test_top", "if_rdy", if_rdy);
     uvm_config_db#(virtual xif_if #(xif_event_pd_t))::set(null, "uvm_test_top", "if_bp", if_bp);
     uvm_config_db#(virtual xif_if #(xif_event_pd_t))::set(null, "uvm_test_top", "if_none", if_none);

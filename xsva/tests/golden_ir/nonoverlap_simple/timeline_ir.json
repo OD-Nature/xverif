@@ -14,12 +14,15 @@
   },
   "obligations": [
     {
-      "id": "ob_0_1",
+      "id": "ob_0_0",
       "kind": "point",
       "expr": "ack",
       "has_window": false,
       "window": null,
       "depends_on_captures": [],
+      "signals_to_query": [
+        "ack"
+      ],
       "requirement": "",
       "failure_condition": "ack is false at cycle +1"
     }
@@ -29,7 +32,7 @@
       "id": "path_0",
       "description": "Path 0: ack must be true at cycle +1",
       "obligations": [
-        "point"
+        "ob_0_0"
       ]
     }
   ],
@@ -42,6 +45,5 @@
       "expr": "##1 ack",
       "text": "ack must be true at cycle +1."
     }
-  ],
-  "diagnostics": []
+  ]
 }

@@ -31,7 +31,36 @@ def test_default_output_is_xout(cli_runner: CliRunner) -> None:
     assert result.returncode == 0
     assert isinstance(result.response, str)
     assert result.response.startswith("@xdebug.actions.v1")
-    assert "action_count:" in result.response
+    summary_block = result.response.split("summary:\n", 1)[1].split("\n\n", 1)[0]
+    summary_lines = [line for line in summary_block.splitlines() if line.startswith("  ")]
+    assert {line.split(":", 1)[0].strip() for line in summary_lines} >= {
+        "action_count", "total_action_count", "verbose", "filtered"
+    }
+    assert len({line.index(":") for line in summary_lines}) == 1
+
+
+@pytest.mark.contract
+def test_action_guide_xout_is_concise_and_standard_framed(
+    cli_runner: CliRunner,
+) -> None:
+    result = cli_runner.run(
+        {
+            "api_version": "xdebug.v1",
+            "action": "actions",
+            "args": {
+                "filter": {"keyword": "schema"},
+                "output": {"view": "guide"},
+            },
+        },
+        output_format="xout",
+    )
+    assert result.returncode == 0
+    assert result.response.startswith("@xdebug.actions.v1")
+    assert "view              : guide" in result.response
+    assert "guide_limit_bytes : 10000" in result.response
+    assert "\nguide:\n" in result.response
+    assert "schema: Return the request or response schema for an action." in result.response
+    assert "[stable]" not in result.response
 
 
 @pytest.mark.contract

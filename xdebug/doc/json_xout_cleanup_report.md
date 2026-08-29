@@ -41,9 +41,9 @@
 
 APB/AXI 补充验证：
 
-- 按 `~/xring/dv/cfg/Makefile` 设置：
-  - `SVT_VIP_INCDIR=~/axi_test/test/include/sverilog`
-  - `SVT_VIP_SRCDIR=~/axi_test/test/src/sverilog/vcs`
+- 按 `<xring-repo>/dv/cfg/Makefile` 设置：
+  - `SVT_VIP_INCDIR=<legacy-axi-vip-root>/include/sverilog`
+  - `SVT_VIP_SRCDIR=<legacy-axi-vip-root>/src/sverilog/vcs`
 - APB nonaxi fixture 通过，覆盖 `apb.config.load/list/query/cursor/transfer_window`。
 - APB VIP real 通过，覆盖真实 VIP 编译、仿真、FSDB 生成和 xdebug 查询。
 - AXI real fixture 通过，覆盖 `axi.config.*`、`axi.query`、`axi.cursor`、`axi.analysis`、`axi.request_response_pair`、`axi.latency_outlier`、`axi.outstanding_timeline`、`axi.channel_stall`、`axi.export`。

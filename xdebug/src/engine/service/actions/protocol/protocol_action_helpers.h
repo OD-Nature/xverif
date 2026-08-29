@@ -1,16 +1,126 @@
 #pragma once
 
+#include "service/config_store_error.h"
 #include "service/engine_action_handler.h"
+#include "service/engine_globals.h"
+#include "waveform/apb/apb_analyzer.h"
 #include "waveform/apb/apb_manager.h"
+#include "waveform/axi/axi_analyzer.h"
 #include "waveform/axi/axi_manager.h"
 
+#include <utility>
+
 namespace xdebug_design {
+
+enum class ProtocolEnsureStatus {
+    Ok,
+    ConfigNotFound,
+    StoreError,
+    AnalysisError
+};
+
+struct ProtocolEnsureResult {
+    ProtocolEnsureStatus status = ProtocolEnsureStatus::Ok;
+    xdebug_waveform::StoreResult store;
+    std::string message;
+
+    ProtocolEnsureResult() = default;
+    ProtocolEnsureResult(
+        ProtocolEnsureStatus result_status,
+        xdebug_waveform::StoreResult store_result,
+        std::string result_message)
+        : status(result_status),
+          store(std::move(store_result)),
+          message(std::move(result_message)) {}
+
+    bool ok() const { return status == ProtocolEnsureStatus::Ok; }
+};
+
+inline bool analyze_apb_config(const std::string& name,
+                               const xdebug_waveform::ApbConfig& config,
+                               std::string& error) {
+    if (xdebug_waveform::g_apb_analyzer.analyze(
+            name, xdebug_waveform::g_fsdb_file, config)) {
+        return true;
+    }
+    const auto& cache_error =
+        xdebug_waveform::g_apb_analyzer.last_cache_error();
+    error = cache_error.message.empty()
+        ? "Failed to analyze APB: " + name : cache_error.message;
+    return false;
+}
+
+inline ProtocolEnsureResult ensure_apb_analyzed(
+    const std::string& name,
+    xdebug_waveform::ApbConfig& config) {
+    xdebug_waveform::ApbManager manager;
+    xdebug_waveform::StoreResult loaded =
+        manager.get_apb(xdebug_waveform::g_session_id, name, config);
+    if (!loaded.ok()) {
+        return {
+            loaded.status == xdebug_waveform::StoreStatus::NotFound
+                ? ProtocolEnsureStatus::ConfigNotFound
+                : ProtocolEnsureStatus::StoreError,
+            loaded,
+            loaded.message
+        };
+    }
+    std::string error;
+    if (!analyze_apb_config(name, config, error)) {
+        return {
+            ProtocolEnsureStatus::AnalysisError,
+            {},
+            error
+        };
+    }
+    return {};
+}
+
+inline bool analyze_axi_config(const std::string& name,
+                               const xdebug_waveform::AxiConfig& config,
+                               std::string& error) {
+    if (xdebug_waveform::g_axi_analyzer.analyze(
+            name, xdebug_waveform::g_fsdb_file, config)) {
+        return true;
+    }
+    const auto& cache_error =
+        xdebug_waveform::g_axi_analyzer.last_cache_error();
+    error = cache_error.message.empty()
+        ? "Failed to analyze AXI: " + name : cache_error.message;
+    return false;
+}
+
+inline ProtocolEnsureResult ensure_axi_analyzed(
+    const std::string& name,
+    xdebug_waveform::AxiConfig& config) {
+    xdebug_waveform::AxiManager manager;
+    xdebug_waveform::StoreResult loaded =
+        manager.get_axi(xdebug_waveform::g_session_id, name, config);
+    if (!loaded.ok()) {
+        return {
+            loaded.status == xdebug_waveform::StoreStatus::NotFound
+                ? ProtocolEnsureStatus::ConfigNotFound
+                : ProtocolEnsureStatus::StoreError,
+            loaded,
+            loaded.message
+        };
+    }
+    std::string error;
+    if (!analyze_axi_config(name, config, error)) {
+        return {
+            ProtocolEnsureStatus::AnalysisError,
+            {},
+            error
+        };
+    }
+    return {};
+}
 
 inline Json apb_config_json(const xdebug_waveform::ApbConfig& cfg) {
     Json out = {{"name", cfg.name}, {"sampling_mode", "clock_edge"},
                 {"clock", cfg.clock_sample.clock},
                 {"edge", xdebug_waveform::clock_edge_kind_text(cfg.clock_sample.edge)},
-                {"rst_n", cfg.rst_n}, {"paddr", cfg.paddr}, {"psel", cfg.psel},
+                {"reset", xdebug_waveform::reset_config_json(cfg.reset)}, {"paddr", cfg.paddr}, {"psel", cfg.psel},
                 {"penable", cfg.penable}, {"pwrite", cfg.pwrite},
                 {"pwdata", cfg.pwdata}, {"prdata", cfg.prdata}};
     if (cfg.clock_sample.edge != xdebug_waveform::ClockEdgeKind::Negedge)
@@ -24,7 +134,7 @@ inline Json axi_config_json(const xdebug_waveform::AxiConfig& cfg) {
     Json out = {{"name", cfg.name}, {"sampling_mode", "clock_edge"},
                 {"clock", cfg.clock_sample.clock},
                 {"edge", xdebug_waveform::clock_edge_kind_text(cfg.clock_sample.edge)},
-                {"rst_n", cfg.rst_n}};
+                {"reset", xdebug_waveform::reset_config_json(cfg.reset)}};
     if (cfg.clock_sample.edge != xdebug_waveform::ClockEdgeKind::Negedge)
         out["sample_point"] = xdebug_waveform::clock_sample_point_text(cfg.clock_sample.sample_point);
     out["channels"] = {
@@ -48,7 +158,7 @@ inline Json protocol_example_args(const std::string& action) {
     if (action == "axi.config.load") {
         return Json{{"name", "axi0"},
                     {"config", {{"clock", "top.u.clk"},
-                                {"rst_n", "top.u.rst_n"},
+                                {"reset", {{"signal", "top.u.rst_n"}, {"polarity", "active_low"}}},
                                 {"awvalid", "top.u.awvalid"},
                                 {"awready", "top.u.awready"},
                                 {"awaddr", "top.u.awaddr"},
@@ -82,27 +192,29 @@ inline Json protocol_example_args(const std::string& action) {
     if (action == "apb.config.load") {
         return Json{{"name", "apb0"},
                     {"config", {{"clock", "top.u.clk"},
-                                {"rst_n", "top.u.rst_n"},
+                                {"reset", {{"signal", "top.u.rst_n"}, {"polarity", "active_low"}}},
                                 {"paddr", "top.u.paddr"},
                                 {"psel", "top.u.psel"},
                                 {"penable", "top.u.penable"},
+                                {"pready", "top.u.pready"},
+                                {"pslverr", "top.u.pslverr"},
                                 {"pwrite", "top.u.pwrite"},
                                 {"pwdata", "top.u.pwdata"},
                                 {"prdata", "top.u.prdata"}}}};
     }
-    if (action == "axi.export") {
-        return Json{{"name", "axi0"},
+    if (action == "axi.export" || action == "apb.export") {
+        return Json{{"name", action == "axi.export" ? "axi0" : "apb0"},
                     {"time_range", {{"begin", "0ns"}, {"end", "1000ns"}}},
-                    {"output", {{"path", "/tmp/xdebug-axi-export"}, {"file_format", "tsv"}}}};
+                    {"output", {{"path", "xdebug-axi-export"}, {"file_format", "tsv"}}}};
     }
-    if (action == "axi.cursor" || action == "apb.cursor") {
+    if (action == "axi.transaction.cursor" || action == "apb.transaction.cursor") {
         return Json{{"name", action.rfind("axi.", 0) == 0 ? "axi0" : "apb0"},
                     {"op", "begin"},
                     {"direction", "all"}};
     }
     if (action == "axi.query" || action == "apb.query") {
         return Json{{"name", action.rfind("axi.", 0) == 0 ? "axi0" : "apb0"},
-                    {"direction", "write"},
+                    {"direction", action.rfind("axi.", 0) == 0 ? "write" : "all"},
                     {"query", {{"line_limit", 8}}}};
     }
     if (action == "axi.analysis") {
@@ -163,15 +275,15 @@ inline Json protocol_invalid_arg_error(const std::string& action,
 inline Json protocol_invalid_enum_error(const std::string& action,
                                         const std::string& invalid_arg,
                                         const std::string& message,
-                                        const Json& allowed_values) {
+                                        const Json& available_values) {
     return make_handler_error(
         "INVALID_ENUM",
         message,
         {{"invalid_arg", invalid_arg},
-         {"expected", "one of allowed_values"},
-         {"allowed_values", allowed_values},
+         {"expected", "one of available_values"},
+         {"available_values", available_values},
          {"correct_example", protocol_action_example(action)},
-         {"example_note", "Example only; choose a value from allowed_values."}});
+         {"example_note", "Example only; choose a value from available_values."}});
 }
 
 inline Json protocol_time_error(const std::string& action,

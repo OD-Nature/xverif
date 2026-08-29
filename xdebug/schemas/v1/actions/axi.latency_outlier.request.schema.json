@@ -6,7 +6,8 @@
   "required": [
     "api_version",
     "action",
-    "args"
+    "args",
+    "target"
   ],
   "properties": {
     "api_version": {
@@ -16,7 +17,8 @@
       ]
     },
     "request_id": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "action": {
       "type": "string",
@@ -25,90 +27,168 @@
       ]
     },
     "target": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fsdb": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "session_id"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "fsdb"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "session_id"
+            ]
+          },
+          "required": [
+            "fsdb"
+          ]
+        }
+      ],
+      "additionalProperties": false
     },
     "args": {
       "type": "object",
+      "required": [
+        "name"
+      ],
       "properties": {
+        "direction": {
+          "type": "string",
+          "enum": [
+            "write",
+            "read",
+            "all"
+          ],
+          "description": "协议 transaction 的方向过滤；read/write/all 的可用性以本 action enum 为准。"
+        },
         "line_limit": {
           "type": "integer",
           "minimum": 1,
-          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
+          "description": "Limits returned evidence rows only, not scanning, aggregation, or the verdict; read completeness fields as well."
+        },
+        "method": {
+          "type": "string",
+          "enum": [
+            "top_n",
+            "threshold"
+          ],
+          "default": "top_n",
+          "description": "离群延迟判定方法；threshold 与其它参数的适用性由选定方法的 schema 分支决定。"
         },
         "name": {
           "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。"
+          "description": "Saved-object name in this action namespace; do not assume names are shared by cursors, lists, and protocol configs."
         },
-        "output": {
-          "type": "object",
-          "properties": {
-            "path": {
-              "type": "string"
-            },
-            "file_format": {
-              "type": "string"
-            },
-            "verbose": {
-              "type": "boolean"
-            }
-          },
-          "additionalProperties": false,
-          "description": "导出配置对象；路径统一使用 output.path。"
-        },
-        "time_range": {
-          "type": "object",
-          "properties": {
-            "begin": {
-              "type": "string"
-            },
-            "end": {
-              "type": "string"
-            }
-          },
-          "additionalProperties": false,
-          "description": "查询或分析的时间窗口。"
-        },
-        "time_unit": {
+        "render_time_unit": {
           "type": "string",
           "enum": [
             "auto",
-            "fs",
             "ps",
             "ns",
-            "us",
-            "ms",
-            "s"
-          ]
+            "us"
+          ],
+          "description": "Controls only canonical response time rendering: auto, ps, ns, or us. It never changes input parsing, sampling, filtering, or ordering."
+        },
+        "threshold": {
+          "type": "string",
+          "description": "离群或规则判定阈值；单位和比较方向由同一 action 的 method/rule 分支定义。"
+        },
+        "time_range": {
+          "type": "object",
+          "minProperties": 1,
+          "properties": {
+            "begin": {
+              "type": "string",
+              "minLength": 1,
+              "description": "闭区间起点；省略时使用可用波形窗口起点。"
+            },
+            "end": {
+              "type": "string",
+              "minLength": 1,
+              "description": "闭区间终点；省略时使用可用波形窗口终点。"
+            }
+          },
+          "additionalProperties": false,
+          "description": "Closed analysis interval. begin and end may be omitted independently to use the available waveform bounds."
+        },
+        "top_n": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 10,
+          "description": "按判定分数排序后最多返回的离群项数量；不改变完整分析集合。"
+        },
+        "value_format": {
+          "type": "string",
+          "enum": [
+            "hex",
+            "bin",
+            "dec"
+          ],
+          "default": "hex",
+          "description": "返回 LogicValue 的显示格式；不改变比较、采样或底层四态值。"
         }
       },
-      "additionalProperties": false,
-      "required": [
-        "name"
-      ]
+      "additionalProperties": false
     },
     "limits": {
-      "type": "object"
-    },
-    "auth_token": {
-      "type": "string"
-    },
-    "id": {
-      "type": "string"
-    },
-    "trace_id": {
-      "type": "string"
-    },
-    "span_id": {
-      "type": "string"
-    },
-    "parent_span_id": {
-      "type": "string"
+      "type": "object",
+      "properties": {
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647,
+          "description": "Positive public frontend-to-engine request timeout in milliseconds. Omit limits.timeout_ms to disable the public watchdog."
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false,
-  "description": "axi.latency_outlier: 实验性 AXI latency 异常。",
+  "description": "Find AXI transactions with abnormal latency.",
   "x-purpose": "实验性 AXI latency 异常。",
   "x-how_it_works": "从配对结果中找超过阈值或分布异常的事务。",
   "x-when_to_use": "定位慢事务。",
-  "x-arg_contract_notes": "required: name"
+  "x-arg_contract_notes": "required: name",
+  "x-description-zh": "实验性 AXI latency 异常。",
+  "x-agent": {
+    "use_when": [
+      "Need to rank or threshold reconstructed AXI transactions by end-to-end latency."
+    ],
+    "do_not_use_when": [
+      "Do not use it for the complete transaction list or outstanding-depth evolution."
+    ],
+    "alternatives": [
+      {
+        "action": "axi.query",
+        "when": "Inspect the complete selected transaction evidence."
+      },
+      {
+        "action": "axi.outstanding_timeline",
+        "when": "Inspect outstanding-depth changes over time."
+      }
+    ],
+    "constraints": [
+      "required: name"
+    ]
+  }
 }

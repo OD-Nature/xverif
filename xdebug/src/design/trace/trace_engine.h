@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "npi_hdl.h"
+#include "trace_completeness.h"
 
 namespace xdebug_design {
 
@@ -22,9 +23,20 @@ struct TraceRecord {
     std::string signal;
     std::string role;
     std::string file;
-    int line;
+    int line = 0;
     std::string source;
     std::string resolution;
+    std::string evidence_kind;
+    bool evidence_complete = true;
+};
+
+struct TraceDiagnostic {
+    std::string code = "TRACE_INTERNAL_JSON_PARSE_FAILED";
+    std::string stage;
+    std::string artifact_kind;
+    size_t first_index = 0;
+    size_t failure_count = 0;
+    std::string message = "internal trace evidence could not be decoded";
 };
 
 struct TraceResult {
@@ -42,6 +54,11 @@ struct TraceResult {
     bool ok = true;
     bool truncated = false;
     bool has_statement_only = false;
+    bool has_unknown_expr = false;
+    bool has_incomplete_evidence = false;
+    bool internal_json_parse_failed = false;
+    std::vector<TraceDiagnostic> diagnostics;
+    bool analysis_complete = true;
 };
 
 class TraceEngine {
@@ -50,7 +67,7 @@ public:
 
     std::string render_text(const TraceResult& result) const;
     std::string render_json(const TraceResult& result) const;
-    std::string render_ai_json(const TraceResult& result) const;
+    std::string render_ai_json(TraceResult& result) const;
 
 private:
     TraceResult trace_driver(const std::string& signal);

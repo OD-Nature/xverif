@@ -2,7 +2,9 @@ import json
 from pathlib import Path
 
 import jsonschema
+import pytest
 
+from testinfra.xverif_test.dependencies import DependencyError
 from testinfra.xverif_test.environment import probe_capabilities, write_snapshot
 
 
@@ -10,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_environment_snapshot_is_schema_valid(tmp_path: Path) -> None:
-    statuses = probe_capabilities(["child_process", "uds", "unknown-test-capability"], ROOT)
+    statuses = probe_capabilities(["child_process", "uds"], ROOT)
     path = tmp_path / "environment.json"
     write_snapshot(path, statuses)
     payload = json.loads(path.read_text(encoding="utf-8"))
@@ -20,7 +22,8 @@ def test_environment_snapshot_is_schema_valid(tmp_path: Path) -> None:
         )
     )
     jsonschema.Draft202012Validator(schema).validate(payload)
-    assert statuses["unknown-test-capability"].available is False
+    with pytest.raises(DependencyError, match="unknown dependencies"):
+        probe_capabilities(["unknown-test-capability"], ROOT)
 
 
 def test_environment_snapshot_uses_only_explicit_contract(monkeypatch, tmp_path: Path) -> None:

@@ -15,7 +15,8 @@
       ]
     },
     "request_id": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "action": {
       "type": "string",
@@ -24,54 +25,140 @@
       ]
     },
     "target": {
-      "type": "object"
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
     },
     "args": {
       "type": "object",
+      "required": [],
       "properties": {
-        "output": {
+        "filter": {
           "type": "object",
           "properties": {
-            "path": {
-              "type": "string"
+            "category": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "enum": [
+                  "builtin",
+                  "design",
+                  "waveform",
+                  "combined",
+                  "session"
+                ],
+                "description": "Action catalog 分类过滤值；用于筛选 action 所属的 builtin、design、waveform、protocol 或 combined 业务域。"
+              },
+              "description": "Action catalog 分类过滤值；用于筛选 action 所属的 builtin、design、waveform、protocol 或 combined 业务域。"
             },
-            "file_format": {
-              "type": "string"
+            "requires": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "design",
+                  "waveform",
+                  "combined",
+                  "any",
+                  "session"
+                ],
+                "description": "Action catalog 资源需求过滤值；用于筛选 none、design、waveform、combined 或 session action。"
+              },
+              "description": "Action catalog 资源需求过滤值；用于筛选 none、design、waveform、combined 或 session action。"
             },
-            "verbose": {
-              "type": "boolean"
+            "purposes": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "enum": [
+                  "discover",
+                  "configure",
+                  "query",
+                  "inspect",
+                  "analyze",
+                  "trace",
+                  "verify",
+                  "export",
+                  "manage",
+                  "transform",
+                  "orchestrate"
+                ],
+                "description": "Action catalog purpose 过滤值；用于筛选 discover、query、validate、trace、export 等使用意图。"
+              },
+              "description": "Action catalog purpose 过滤值；用于筛选 discover、query、validate、trace、export 等使用意图。"
+            },
+            "keyword": {
+              "type": "string",
+              "pattern": ".*\\S.*",
+              "description": "Action catalog 关键词过滤文本；在 action 名称和已发布的语义描述中匹配。"
             }
           },
           "additionalProperties": false,
-          "description": "导出配置对象；路径统一使用 output.path。"
+          "description": "筛选对象；同级字段通常取 AND，数组候选值取 OR，具体组合由 constraints 说明。"
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "view": {
+              "type": "string",
+              "enum": [
+                "guide"
+              ],
+              "description": "Return the concise action-name and purpose guide. Omit this field for the existing compact or verbose views."
+            },
+            "verbose": {
+              "type": "boolean",
+              "default": false,
+              "description": "Return full action descriptors instead of the compact action-name list."
+            }
+          },
+          "not": {
+            "required": [
+              "view",
+              "verbose"
+            ]
+          },
+          "additionalProperties": false,
+          "description": "Export destination and rendering controls. path, file_format, and verbose are supported only where this action declares them."
         }
       },
-      "additionalProperties": false,
-      "required": []
+      "additionalProperties": false
     },
     "limits": {
-      "type": "object"
-    },
-    "auth_token": {
-      "type": "string"
-    },
-    "id": {
-      "type": "string"
-    },
-    "trace_id": {
-      "type": "string"
-    },
-    "span_id": {
-      "type": "string"
-    },
-    "parent_span_id": {
-      "type": "string"
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
     }
   },
   "additionalProperties": false,
-  "description": "actions: 列出当前运行时公开 action catalog。",
+  "description": "List the public xdebug action catalog.",
   "x-purpose": "列出当前运行时公开 action catalog。",
-  "x-how_it_works": "默认返回 compact action names；args.output.verbose=true 时返回 descriptors，并同时返回 removed/modes。",
+  "x-how_it_works": "默认返回 compact action names；args.output.verbose=true 时返回 descriptors，并同时返回按资源类别划分的 modes。",
   "x-when_to_use": "让 agent 在调用前发现真实可用能力。",
-  "x-arg_contract_notes": "no required args"
+  "x-arg_contract_notes": "no required args",
+  "x-description-zh": "列出当前运行时公开 action catalog。",
+  "x-agent": {
+    "use_when": [
+      "需要发现当前 runtime 公开的 action、状态和适用资源。"
+    ],
+    "do_not_use_when": [
+      "已经知道 action 且需要它的字段、枚举或 response 合同。"
+    ],
+    "alternatives": [
+      {
+        "action": "schema",
+        "when": "需要一个已知 action 的完整调用合同。"
+      }
+    ],
+    "constraints": [
+      "no required args"
+    ]
+  }
 }

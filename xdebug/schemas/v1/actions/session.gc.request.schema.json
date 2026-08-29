@@ -15,7 +15,8 @@
       ]
     },
     "request_id": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "action": {
       "type": "string",
@@ -24,37 +25,48 @@
       ]
     },
     "target": {
-      "type": "object"
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
     },
     "args": {
       "type": "object",
+      "required": [],
       "properties": {},
-      "additionalProperties": false,
-      "required": []
+      "additionalProperties": false
     },
     "limits": {
-      "type": "object"
-    },
-    "auth_token": {
-      "type": "string"
-    },
-    "id": {
-      "type": "string"
-    },
-    "trace_id": {
-      "type": "string"
-    },
-    "span_id": {
-      "type": "string"
-    },
-    "parent_span_id": {
-      "type": "string"
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
     }
   },
   "additionalProperties": false,
-  "description": "session.gc: 清理过期 session。",
+  "description": "Garbage-collect expired debug sessions.",
   "x-purpose": "清理过期 session。",
   "x-how_it_works": "扫描 session 管理状态并回收可释放项。",
   "x-when_to_use": "避免长期运行时积累无用资源。",
-  "x-arg_contract_notes": "none"
+  "x-arg_contract_notes": "none",
+  "x-description-zh": "清理过期 session。",
+  "x-agent": {
+    "use_when": [
+      "Need policy-driven cleanup of all expired session records rather than mutation of one named active session."
+    ],
+    "do_not_use_when": [
+      "Do not use it to remove a specific active session or diagnose one session."
+    ],
+    "alternatives": [
+      {
+        "action": "session.close",
+        "when": "Close one explicit session with args.mode=force."
+      },
+      {
+        "action": "session.doctor",
+        "when": "Diagnose one explicit session."
+      }
+    ],
+    "constraints": [
+      "none"
+    ]
+  }
 }

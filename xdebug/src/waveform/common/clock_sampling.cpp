@@ -1,5 +1,7 @@
 #include "clock_sampling.h"
 
+#include "core/session/request_deadline.h"
+
 #include "core/npi/time_contract.h"
 #include "waveform/server/fsdb_scan_utils.h"
 
@@ -139,8 +141,21 @@ bool normalize_clock_sample_spec(npiFsdbFileHandle fsdb,
                                  ClockSampleSpec& spec,
                                  std::string& error) {
     (void)fsdb;
-    if (spec.edge == ClockEdgeKind::Negedge && spec.has_sample_point) {
-        error = "sample_point is only valid with edge:posedge or edge:dual";
+    // Negedge keeps its established current-value semantics.  A supplied
+    // sample_point is accepted for uniform public requests but is not applied.
+    return true;
+}
+
+bool find_first_clock_sample(npiFsdbFileHandle fsdb,
+                             const ClockSampleSpec& spec,
+                             npiFsdbTime begin,
+                             npiFsdbTime end,
+                             ClockSamplePoint& point,
+                             std::string& error) {
+    ClockSampleTimeResolver resolver(fsdb, spec);
+    if (!resolver.find_next_sample(begin, point, error)) return false;
+    if (point.sample_time > end) {
+        error = "no requested clock edge found in FSDB range";
         return false;
     }
     return true;
@@ -254,6 +269,7 @@ bool ClockSampleScanner::scan(const std::vector<ClockSampleSignal>& signals,
                               std::string& error,
                               int& sample_count,
                               bool& truncated) const {
+    xdebug_core::request_deadline_checkpoint();
     sample_count = 0;
     truncated = false;
     ClockSampleSpec spec = spec_;
@@ -322,6 +338,7 @@ bool ClockSampleScanner::scan(const std::vector<ClockSampleSignal>& signals,
     npiFsdbSigHandle changed_sig = nullptr;
     bool keep = true;
     while (keep && iter.iter_next(curr_time, changed_sig) > 0) {
+        xdebug_core::request_deadline_checkpoint();
         if (!have_group) {
             have_group = true;
             group_time = curr_time;
@@ -384,6 +401,7 @@ bool ClockExpressionSampleScanner::scan(
     std::string& error,
     int& sample_count,
     bool& truncated) const {
+    xdebug_core::request_deadline_checkpoint();
     sample_count = 0;
     truncated = false;
     if (edge_ == ClockEdgeKind::Negedge && sample_point_ == ClockSamplePointKind::Before) {
@@ -480,6 +498,7 @@ bool ClockExpressionSampleScanner::scan(
     npiFsdbSigHandle changed_sig = nullptr;
     bool keep = true;
     while (keep && iter.iter_next(curr_time, changed_sig) > 0) {
+        xdebug_core::request_deadline_checkpoint();
         if (!have_group) {
             have_group = true;
             group_time = curr_time;
@@ -553,15 +572,11 @@ bool ClockPointSampler::sample(npiFsdbTime requested_time,
         spec_.edge != ClockEdgeKind::Negedge &&
         spec_.sample_point == ClockSamplePointKind::Before;
 
-    result.context.clock = spec_.clock;
-    result.context.edge = spec_.edge;
     result.context.requested_time = requested_time;
     result.context.clock_edge_hit = clock_edge_hit;
     result.context.clock_edge_kind = actual_edge;
     result.context.has_clock_edge_kind = clock_edge_hit;
     result.context.target_edge_hit = target_edge_hit;
-    result.context.sample_point = spec_.sample_point;
-    result.context.sample_point_applied = target_edge_hit && spec_.edge != ClockEdgeKind::Negedge;
     result.context.previous_sample_time = prev_point.sample_time;
     result.context.has_previous_sample_time = have_prev;
     result.context.next_sample_time = next_point.sample_time;
@@ -686,6 +701,7 @@ bool ClockSampleTimeResolver::next_single_edge_sample(ClockEdgeKind edge,
     std::string current_value;
     if (!cursor.first_at_or_after(start_time, change_time, current_value)) return false;
     while (true) {
+        xdebug_core::request_deadline_checkpoint();
         if (change_time < start_time) {
             previous_value = current_value;
             have_previous = true;
@@ -762,6 +778,7 @@ bool ClockSampleTimeResolver::for_each_sample_time(
     if (!valid(error)) return false;
     npiFsdbTime anchor = begin;
     while (true) {
+        xdebug_core::request_deadline_checkpoint();
         ClockSamplePoint point;
         if (!find_next_sample(anchor, point, error)) return true;
         if (point.sample_time > end) return true;

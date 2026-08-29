@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "xdebug.stream.describe.request.v1",
+  "title": "stream.describe request",
+  "type": "object",
+  "required": [
+    "api_version",
+    "action",
+    "args",
+    "target"
+  ],
+  "properties": {
+    "api_version": {
+      "type": "string",
+      "enum": [
+        "xdebug.v1"
+      ]
+    },
+    "action": {
+      "type": "string",
+      "enum": [
+        "stream.describe"
+      ]
+    },
+    "target": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fsdb": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "session_id"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "fsdb"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "session_id"
+            ]
+          },
+          "required": [
+            "fsdb"
+          ]
+        }
+      ],
+      "additionalProperties": false
+    },
+    "args": {
+      "type": "object",
+      "required": [
+        "stream"
+      ],
+      "properties": {
+        "stream": {
+          "type": "string",
+          "description": "已加载的 stream 配置名称。"
+        }
+      },
+      "additionalProperties": false
+    },
+    "limits": {
+      "type": "object",
+      "properties": {
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647,
+          "description": "Positive public frontend-to-engine request timeout in milliseconds. Omit limits.timeout_ms to disable the public watchdog."
+        }
+      },
+      "additionalProperties": false
+    },
+    "request_id": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "additionalProperties": false,
+  "description": "Show a stream definition and its resolved signal metadata.",
+  "x-purpose": "描述 stream 的解析结果和活动语义。",
+  "x-how_it_works": "按 stream 名解析信号、静态验证、采样与 packet 规则，并返回活动语义。",
+  "x-when_to_use": "查询前确认 stream 的可执行定义。",
+  "x-arg_contract_notes": "required: stream",
+  "x-description-zh": "显示 stream 定义和摘要。",
+  "x-agent": {
+    "use_when": [
+      "Know a saved stream name and need its signals resolved against the active waveform with static and activity metadata."
+    ],
+    "do_not_use_when": [
+      "Do not use it to return the untouched persisted object or analyze dynamic transfers."
+    ],
+    "alternatives": [
+      {
+        "action": "stream.config.get",
+        "when": "Read the raw persisted configuration."
+      },
+      {
+        "action": "stream.query",
+        "when": "Analyze observed transfers, stalls, or packets."
+      }
+    ],
+    "constraints": [
+      "required: stream"
+    ]
+  }
+}

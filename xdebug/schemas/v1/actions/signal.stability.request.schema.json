@@ -6,7 +6,8 @@
   "required": [
     "api_version",
     "action",
-    "args"
+    "args",
+    "target"
   ],
   "properties": {
     "api_version": {
@@ -16,7 +17,8 @@
       ]
     },
     "request_id": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "action": {
       "type": "string",
@@ -25,101 +27,135 @@
       ]
     },
     "target": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fsdb": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "session_id"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "fsdb"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "session_id"
+            ]
+          },
+          "required": [
+            "fsdb"
+          ]
+        }
+      ],
+      "additionalProperties": false
     },
     "args": {
       "type": "object",
+      "required": [
+        "signal"
+      ],
       "properties": {
-        "conditions": {
-          "type": "array",
-          "items": {
-            "type": "object"
-          },
-          "description": "需要验证的条件列表。"
-        },
-        "line_limit": {
-          "type": "integer",
-          "minimum": 1,
-          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
-        },
-        "mode": {
-          "type": "string"
-        },
-        "signal": {
-          "type": "string",
-          "description": "目标信号路径。"
-        },
-        "signals": {
-          "oneOf": [
-            {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              }
-            }
-          ],
-          "description": "信号列表，或 alias 到信号路径的映射。"
-        },
-        "time_range": {
-          "type": "object",
-          "properties": {
-            "begin": {
-              "type": "string"
-            },
-            "end": {
-              "type": "string"
-            }
-          },
-          "additionalProperties": false,
-          "description": "查询或分析的时间窗口。"
-        },
-        "time_unit": {
+        "render_time_unit": {
           "type": "string",
           "enum": [
             "auto",
-            "fs",
             "ps",
             "ns",
-            "us",
-            "ms",
-            "s"
-          ]
+            "us"
+          ],
+          "description": "Controls only canonical response time rendering: auto, ps, ns, or us. It never changes input parsing, sampling, filtering, or ordering."
+        },
+        "signal": {
+          "type": "string",
+          "description": "Final leaf signal path. Aggregate, array, and struct roots are not expanded automatically."
+        },
+        "time_range": {
+          "type": "object",
+          "minProperties": 1,
+          "properties": {
+            "begin": {
+              "type": "string",
+              "minLength": 1,
+              "description": "闭区间起点；省略时使用可用波形窗口起点。"
+            },
+            "end": {
+              "type": "string",
+              "minLength": 1,
+              "description": "闭区间终点；省略时使用可用波形窗口终点。"
+            }
+          },
+          "additionalProperties": false,
+          "description": "Closed analysis interval. begin and end may be omitted independently to use the available waveform bounds."
+        },
+        "value_format": {
+          "type": "string",
+          "enum": [
+            "hex",
+            "bin",
+            "dec"
+          ],
+          "default": "hex",
+          "description": "返回 LogicValue 的显示格式；不改变比较、采样或底层四态值。"
         }
       },
-      "additionalProperties": false,
-      "required": [
-        "signal"
-      ]
+      "additionalProperties": false
     },
     "limits": {
-      "type": "object"
-    },
-    "auth_token": {
-      "type": "string"
-    },
-    "id": {
-      "type": "string"
-    },
-    "trace_id": {
-      "type": "string"
-    },
-    "span_id": {
-      "type": "string"
-    },
-    "parent_span_id": {
-      "type": "string"
+      "type": "object",
+      "properties": {
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647,
+          "description": "Positive public frontend-to-engine request timeout in milliseconds. Omit limits.timeout_ms to disable the public watchdog."
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false,
-  "description": "signal.stability: 检查信号窗口内是否稳定。",
+  "description": "Check whether a signal stays stable in a time range.",
   "x-purpose": "检查信号窗口内是否稳定。",
   "x-how_it_works": "基于 signal.changes 判断是否只有初始值或无变化。",
   "x-when_to_use": "确认控制/状态信号是否保持不变。",
-  "x-arg_contract_notes": "required: signal"
+  "x-arg_contract_notes": "required: signal",
+  "x-description-zh": "检查信号窗口内是否稳定。",
+  "x-agent": {
+    "use_when": [
+      "Need a yes/no stability verdict and violating intervals for one signal over a closed time range."
+    ],
+    "do_not_use_when": [
+      "Do not use it for a complete raw-change timeline or aggregate activity statistics."
+    ],
+    "alternatives": [
+      {
+        "action": "signal.changes",
+        "when": "Return raw value changes."
+      },
+      {
+        "action": "signal.statistics",
+        "when": "Compute sampled activity statistics."
+      }
+    ],
+    "constraints": [
+      "required: signal"
+    ]
+  }
 }

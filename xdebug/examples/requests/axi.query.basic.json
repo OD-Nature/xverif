@@ -7,8 +7,22 @@
   "args": {
     "name": "if0",
     "direction": "write",
+    "address": {
+      "mode": "range",
+      "begin": "32'h00001000",
+      "end": "32'h00001fff"
+    },
+    "id": {
+      "mode": "range",
+      "begin": "4'h1",
+      "end": "4'h7"
+    },
+    "time_range": {
+      "begin": "100ns",
+      "end": "200ns"
+    },
     "query": {
-      "index": 1
+      "line_limit": 1
     }
   }
 }

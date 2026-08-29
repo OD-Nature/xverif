@@ -7,12 +7,13 @@
   "args": {
     "stream": "req_stream",
     "kind": "transfer",
+    "cache_scope": "full",
     "time_range": {
       "begin": "0ns",
       "end": "1us"
     },
     "output": {
-      "path": "/tmp/req_stream.tsv",
+      "path": "artifacts/req_stream.tsv",
       "file_format": "tsv"
     }
   }

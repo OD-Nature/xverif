@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "xverif-dependency-registry.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "dependencies"],
+  "properties": {
+    "version": {"const": "xverif-dependency-registry.v1"},
+    "dependencies": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "kind"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[a-z0-9_.-]+$"},
+          "kind": {"enum": ["python_packages", "python_import", "executable", "uds", "constant", "real_lsf", "npi", "vcs", "vcs_uvm", "svt_vip", "vendored_xif", "fixture_output"]},
+          "packages": {"type": "object", "additionalProperties": {"type": "string"}},
+          "module": {"type": "string"},
+          "distribution": {"type": "string"},
+          "command": {"type": "string"},
+          "available": {"type": "boolean"},
+          "reason": {"type": "string"},
+          "protocol": {"enum": ["apb", "axi"]},
+          "output": {"type": "string"}
+        },
+        "additionalProperties": false
+      }
+    }
+  }
+}

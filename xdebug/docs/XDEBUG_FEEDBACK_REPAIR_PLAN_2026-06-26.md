@@ -2,7 +2,7 @@
 
 ## 范围
 
-本文基于 `~/xring/dv/doc/feedback` 下全部 Markdown 文档，以及对
+本文基于 `<xring-repo>/dv/doc/feedback` 下全部 Markdown 文档，以及对
 `2026-06-16-xdebug-full-xout-complete.md` 中真实 compact xout 输出的补充阅读。
 
 这些反馈说明：xdebug 的核心 RTL 和波形事实总体是正确的。已核对通过的能力包括

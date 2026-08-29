@@ -3,7 +3,13 @@ import argparse
 import os
 import sys
 
-from run_complex_wave import AiRunner, NONAXI_FSDB, REPO_ROOT, require
+from run_complex_wave import (
+    AiRunner,
+    NONAXI_FSDB,
+    REPO_ROOT,
+    require,
+    require_clock_sampling_contract,
+)
 
 
 def run_counter_statistics(xdebug, fsdb):
@@ -17,9 +23,10 @@ def run_counter_statistics(xdebug, fsdb):
             "time_range": {"begin": "55ns", "end": "95ns"},
             "line_limit": 1000,
         })
+        require_clock_sampling_contract(stats, "negedge")
         for key in ("first", "final", "min", "max"):
             value = stats["data"][key]
-            require(isinstance(value, dict) and value["value"].startswith("'b"), "signal.statistics %s is not a bit value object" % key)
+            require(isinstance(value, dict) and value["value"].startswith("8'h"), "signal.statistics %s is not a canonical 8-bit hex value object" % key)
             require(value["known"] is True and value["width"] == 8, "signal.statistics %s width/known mismatch" % key)
 
         direct = r.query("counter.statistics", args={
@@ -29,13 +36,45 @@ def run_counter_statistics(xdebug, fsdb):
             "vld": "ai_complex_top.rst_n",
             "cnt": "ai_complex_top.counter_inc",
         })
+        require_clock_sampling_contract(direct, "posedge")
         require(direct["summary"]["valid_count"] >= 4, "counter.statistics valid_count too small")
-        require("truncated" not in direct.get("meta", {}),
-                "counter.statistics must omit default meta.truncated=false")
-        require(direct["summary"]["min_value"] == "0", "counter.statistics min mismatch")
-        require(direct["summary"]["max_value"] == "4", "counter.statistics max mismatch")
+        require(direct["summary"]["scan_complete"] is True and
+                direct["summary"]["analysis_complete"] is True and
+                direct["summary"]["response_truncated"] is False and
+                direct["summary"]["total_count"] == direct["summary"]["returned_count"] and
+                direct["summary"]["truncation_scopes"] == [],
+                "counter.statistics complete evidence contract is inconsistent")
+        require(direct["summary"]["min_value"]["value"] == "8'h00", "counter.statistics min mismatch")
+        require(direct["summary"]["max_value"]["value"] == "8'h04", "counter.statistics max mismatch")
         require(direct["data"]["min_count"] == 1 and direct["data"]["max_count"] == 1, "counter.statistics min/max count mismatch")
         require("ns" in direct["data"]["min_first_time"], "counter.statistics missing min_first_time")
+
+        limited = r.query("counter.statistics", args={
+            "clock": "ai_complex_top.clk",
+            "edge": "posedge",
+            "time_range": {"begin": "55ns", "end": "95ns"},
+            "vld": "ai_complex_top.rst_n",
+            "cnt": "ai_complex_top.counter_inc",
+            "line_limit": 1,
+        })
+        require(limited["summary"]["valid_count"] == direct["summary"]["valid_count"],
+                "counter.statistics line_limit must not reduce analyzed samples")
+        require(limited["summary"]["analysis_complete"] is True,
+                "counter.statistics line_limit must only truncate response evidence")
+        require(limited["summary"]["returned_count"] == 1 and
+                limited["summary"]["response_truncated"] is True,
+                "counter.statistics limited evidence contract mismatch")
+
+        budgeted = r.query("counter.statistics", args={
+            "clock": "ai_complex_top.clk",
+            "edge": "posedge",
+            "time_range": {"begin": "55ns", "end": "95ns"},
+            "vld": "ai_complex_top.rst_n",
+            "cnt": "ai_complex_top.counter_inc",
+            "max_samples": 2,
+        })
+        require(budgeted["summary"]["analysis_complete"] is False,
+                "counter.statistics max_samples must report incomplete analysis")
 
         expr = r.query("counter.statistics", args={
             "clock": "ai_complex_top.clk",
@@ -59,10 +98,11 @@ def run_counter_statistics(xdebug, fsdb):
             "vld": "ai_complex_top.rst_n",
             "cnt": "{ai_complex_top.sig_a,ai_complex_top.counter_inc}",
         })
-        require(int(concat["summary"]["max_value"]) > 255, "concat counter max did not include high bits")
+        require(int(concat["summary"]["max_value"]["bits"], 2) > 255,
+                "concat counter max did not include high bits")
 
-        r.query("cursor.set", args={"name": "cnt_begin", "time": "55ns"})
-        r.query("cursor.set", args={"name": "cnt_end", "time": "95ns"})
+        r.query("waveform.cursor.set", args={"name": "cnt_begin", "time": "55ns"})
+        r.query("waveform.cursor.set", args={"name": "cnt_end", "time": "95ns"})
         cursor = r.query("counter.statistics", args={
             "clock": "ai_complex_top.clk",
             "edge": "posedge",

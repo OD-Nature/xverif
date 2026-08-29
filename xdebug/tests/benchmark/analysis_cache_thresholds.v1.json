@@ -1,0 +1,94 @@
+{
+  "schema": "xdebug.analysis-cache-thresholds.v1",
+  "measurement_date": "2026-07-16",
+  "sample_count": 3,
+  "rss_measurement_tolerance_bytes": 65536,
+  "phase0_baseline": {
+    "apb": {
+      "cold_ms": [62, 68, 60],
+      "cold_p50_ms": 62,
+      "cold_p95_ms": 68,
+      "hot_ms": [59, 56, 59, 53, 55, 58],
+      "hot_p50_ms": 57,
+      "hot_p95_ms": 59,
+      "max_rss_delta_bytes": 2510848,
+      "max_estimated_bytes": 1772,
+      "scanner_invocations": [1, 1, 1]
+    },
+    "axi": {
+      "cold_ms": [6368, 6688, 6997],
+      "cold_p50_ms": 6688,
+      "cold_p95_ms": 6997,
+      "hot_ms": [312, 306, 333, 349, 359, 347],
+      "hot_p50_ms": 340,
+      "hot_p95_ms": 359,
+      "max_rss_delta_bytes": 725323776,
+      "max_estimated_bytes": 828131739,
+      "scanner_invocations": [1, 1, 1]
+    },
+    "stream": {
+      "cold_ms": [854, 773, 778],
+      "cold_p50_ms": 778,
+      "cold_p95_ms": 854,
+      "hot_ms": [941, 811, 758, 727, 705, 775],
+      "hot_p50_ms": 766,
+      "hot_p95_ms": 941,
+      "max_rss_delta_bytes": 32563200,
+      "max_estimated_bytes": 20166722,
+      "scanner_invocations": [4, 3, 3]
+    }
+  },
+  "phase0_hard_regression_limits": {
+    "apb": {
+      "max_rss_delta_bytes": 4194304,
+      "max_estimated_bytes": 4096,
+      "max_canonical_entries": 1,
+      "max_indexes": 0
+    },
+    "axi": {
+      "max_rss_delta_bytes": 850000000,
+      "max_estimated_bytes": 900000000,
+      "max_canonical_entries": 1,
+      "max_indexes": 0
+    },
+    "stream": {
+      "max_rss_delta_bytes": 40000000,
+      "max_estimated_bytes": 25000000,
+      "max_canonical_entries": 1,
+      "max_indexes": 0
+    }
+  },
+  "phase0_latency_targets": {
+    "apb": {"cold_p95_ms": 500, "hot_p95_ms": 500},
+    "axi": {"cold_p95_ms": 8500, "hot_p95_ms": 500},
+    "stream": {"cold_p95_ms": 1200, "hot_p95_ms": 1200}
+  },
+  "frozen_cache_contract": {
+    "estimator_safety_factor": 2.0,
+    "soft_default_bytes": 1073741824,
+    "hard_default_bytes": 2147483648
+  },
+  "phase_targets": {
+    "axi_repository": {
+      "cold_p95_ms": 8050,
+      "hot_p95_ms": 415,
+      "max_rss_delta_bytes": 834122342,
+      "hot_scanner_invocations": 0
+    },
+    "apb_repository": {
+      "cold_p95_ms": 80,
+      "hot_p95_ms": 80,
+      "max_rss_delta_bytes": 4194304,
+      "hot_scanner_invocations": 0
+    },
+    "stream_columnar": {
+      "cold_p95_ms": 1000,
+      "max_rss_delta_bytes": 24422400,
+      "minimum_rss_reduction_percent": 25
+    },
+    "stream_cached": {
+      "hot_p95_ms": 400,
+      "hot_scanner_invocations": 0
+    }
+  }
+}

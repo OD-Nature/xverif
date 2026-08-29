@@ -7,8 +7,9 @@
 
 from __future__ import annotations
 
+from xsva.ir.common import LoweringStatus
 from xsva.ir.diagnostics import DiagnosticBag
-from xsva.ir.sequence import AssignActionIR, SeqNode, SeqNodeKind, DelayRange
+from xsva.ir.sequence import AssignActionIR, SeqNode, SeqNodeKind
 
 from .scanner import Scanner, TokenKind
 from .expr_parser import ExprParser
@@ -67,8 +68,10 @@ class SequenceParser:
                 right_nodes = self.parse_sequence()
                 if nodes and right_nodes:
                     left = nodes.pop()
-                    left_expr = left.expr or ExprParser(Scanner(left.raw or _node_raw(left))).parse_expr()
-                    right = SeqNode.sequence(right_nodes) if len(right_nodes) > 1 else right_nodes[0]
+                    left_expr = left.expr or ExprParser(
+                        Scanner(left.raw or _node_raw(left)), self._diag,
+                    ).parse_expr()
+                    right = SeqNode.concat(right_nodes) if len(right_nodes) > 1 else right_nodes[0]
                     nodes.append(SeqNode.throughout(left_expr, right))
                 continue
 
@@ -81,10 +84,10 @@ class SequenceParser:
                 # Consume the right-hand sequence as raw
                 right_nodes = self.parse_sequence()
                 if nodes and right_nodes:
-                    left = SeqNode.sequence(nodes) if len(nodes) > 1 else nodes[0]
-                    right = SeqNode.sequence(right_nodes) if len(right_nodes) > 1 else right_nodes[0]
+                    left = SeqNode.concat(nodes) if len(nodes) > 1 else nodes[0]
+                    right = SeqNode.concat(right_nodes) if len(right_nodes) > 1 else right_nodes[0]
                     nodes = [SeqNode.intersect(left, right)]
-                    nodes[-1].lowering_status = "partial"
+                    nodes[-1].lowering_status = LoweringStatus.PARTIAL
                 continue
 
             # seq within seq
@@ -92,10 +95,10 @@ class SequenceParser:
                 self._scanner.advance()
                 right_nodes = self.parse_sequence()
                 if nodes and right_nodes:
-                    left = SeqNode.sequence(nodes) if len(nodes) > 1 else nodes[0]
-                    right = SeqNode.sequence(right_nodes) if len(right_nodes) > 1 else right_nodes[0]
+                    left = SeqNode.concat(nodes) if len(nodes) > 1 else nodes[0]
+                    right = SeqNode.concat(right_nodes) if len(right_nodes) > 1 else right_nodes[0]
                     nodes = [SeqNode.within(left, right)]
-                    nodes[-1].lowering_status = "partial"
+                    nodes[-1].lowering_status = LoweringStatus.PARTIAL
                 continue
 
             if tk.kind in (TokenKind.REPEAT_CONSEC, TokenKind.REPEAT_NONCONSEC, TokenKind.REPEAT_GOTO):
@@ -171,9 +174,13 @@ class SequenceParser:
             return None
 
         guard_raw = self._reconstruct_raw(guard_parts).strip()
-        guard_expr = ExprParser(Scanner(guard_raw, file="<match_guard>")).parse_expr() if guard_raw else None
+        guard_expr = ExprParser(
+            Scanner(guard_raw, file="<match_guard>"), self._diag,
+        ).parse_expr() if guard_raw else None
         if guard_expr is None:
-            guard_expr = ExprParser(Scanner("1", file="<match_guard>")).parse_expr()
+            guard_expr = ExprParser(
+                Scanner("1", file="<match_guard>"), self._diag,
+            ).parse_expr()
 
         return SeqNode.match_item(guard_expr, actions, raw=self._reconstruct_raw(inner_tokens))
 
@@ -208,7 +215,7 @@ class SequenceParser:
         if not inner_nodes:
             self._scanner._pos, self._scanner._line, self._scanner._col = saved
             return None
-        return SeqNode.sequence(inner_nodes, raw=raw)
+        return SeqNode.concat(inner_nodes, raw=raw)
 
     def _tokens_look_like_sequence(self, tokens) -> bool:
         sequence_tokens = {
@@ -321,7 +328,7 @@ class SequenceParser:
         inner_nodes = self.parse_sequence()
         self._scanner.expect(TokenKind.RPAREN)
         if inner_nodes:
-            inner = SeqNode.sequence(inner_nodes) if len(inner_nodes) > 1 else inner_nodes[0]
+            inner = SeqNode.concat(inner_nodes) if len(inner_nodes) > 1 else inner_nodes[0]
             return SeqNode.first_match(inner)
         return None
 
@@ -359,10 +366,13 @@ class SequenceParser:
 
     def _parse_expr_node(self) -> SeqNode | None:
         """解析一个表达式节点。"""
-        expr_parser = ExprParser(self._scanner)
+        expr_parser = ExprParser(self._scanner, self._diag)
         expr = expr_parser.parse_expr()
         if expr.raw.strip():
-            return SeqNode.signal_match(expr)
+            node = SeqNode.expr_node(expr.raw, expr)
+            if not expr.dependency_complete:
+                node.lowering_status = LoweringStatus.PARTIAL
+            return node
 
         # Couldn't parse — advance one token to avoid infinite loop
         tk = self._scanner.peek()

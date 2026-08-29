@@ -6,7 +6,8 @@
   "required": [
     "api_version",
     "action",
-    "args"
+    "args",
+    "target"
   ],
   "properties": {
     "api_version": {
@@ -16,7 +17,8 @@
       ]
     },
     "request_id": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "action": {
       "type": "string",
@@ -25,41 +27,294 @@
       ]
     },
     "target": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fsdb": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "session_id"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "fsdb"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "session_id"
+            ]
+          },
+          "required": [
+            "fsdb"
+          ]
+        }
+      ],
+      "additionalProperties": false
     },
     "args": {
       "type": "object",
+      "required": [
+        "name"
+      ],
       "properties": {
         "config": {
           "type": "object",
-          "description": "内联配置对象。"
+          "description": "内联配置对象。",
+          "properties": {
+            "clock": {
+              "type": "string",
+              "minLength": 1,
+              "description": "采样、统计或协议检查使用的 clock 信号路径。"
+            },
+            "awvalid": {
+              "type": "string",
+              "minLength": 1,
+              "description": "AXI AWVALID 信号路径。"
+            },
+            "awready": {
+              "type": "string",
+              "minLength": 1,
+              "description": "AXI AWREADY 信号路径。"
+            },
+            "awaddr": {
+              "type": "string",
+              "minLength": 1,
+              "description": "AXI AWADDR 信号路径。"
+            },
+            "awid": {
+              "type": "string",
+              "minLength": 1,
+              "description": "AXI AWID 信号路径；当前 AXI config schema 和 manager 要求显式提供。"
+            },
+            "awlen": {
+              "type": "string",
+              "minLength": 1,
+              "description": "AXI AWLEN burst-length 信号路径。"
+            },
+            "awsize": {
+              "type": "string",
+              "minLength": 1,
+              "description": "AXI AWSIZE beat-byte-size 信号路径。"
+            },
+            "awburst": {
+              "type": "string",
+              "minLength": 1,
+              "description": "AXI AWBURST burst-type 信号路径。"
+            },
+            "wvalid": {
+              "type": "string",
+              "minLength": 1,
+              "description": "AXI WVALID 信号路径。"
+            },
+            "wready": {
+              "type": "string",
+              "minLength": 1,
+              "description": "AXI WREADY 信号路径。"
+            },
+            "wdata": {
+              "type": "string",
+              "minLength": 1,
+              "description": "AXI WDATA 写数据总线信号路径。"
+            },
+            "wstrb": {
+              "type": "string",
+              "minLength": 1,
+              "description": "AXI WSTRB 写字节使能信号路径。"
+            },
+            "wlast": {
+              "type": "string",
+              "minLength": 1,
+              "description": "AXI WLAST 最后一拍指示信号路径。"
+            },
+            "bvalid": {
+              "type": "string",
+              "minLength": 1,
+              "description": "AXI BVALID 信号路径。"
+            },
+            "bready": {
+              "type": "string",
+              "minLength": 1,
+              "description": "AXI BREADY 信号路径。"
+            },
+            "bid": {
+              "type": "string",
+              "minLength": 1,
+              "description": "AXI BID 写响应 ID 信号路径。"
+            },
+            "bresp": {
+              "type": "string",
+              "minLength": 1,
+              "description": "AXI BRESP 写响应状态信号路径。"
+            },
+            "arvalid": {
+              "type": "string",
+              "minLength": 1,
+              "description": "AXI ARVALID 信号路径。"
+            },
+            "arready": {
+              "type": "string",
+              "minLength": 1,
+              "description": "AXI ARREADY 信号路径。"
+            },
+            "araddr": {
+              "type": "string",
+              "minLength": 1,
+              "description": "AXI ARADDR 信号路径。"
+            },
+            "arid": {
+              "type": "string",
+              "minLength": 1,
+              "description": "AXI ARID 信号路径；当前 AXI config schema 和 manager 要求显式提供。"
+            },
+            "arlen": {
+              "type": "string",
+              "minLength": 1,
+              "description": "AXI ARLEN burst-length 信号路径。"
+            },
+            "arsize": {
+              "type": "string",
+              "minLength": 1,
+              "description": "AXI ARSIZE beat-byte-size 信号路径。"
+            },
+            "arburst": {
+              "type": "string",
+              "minLength": 1,
+              "description": "AXI ARBURST burst-type 信号路径。"
+            },
+            "rvalid": {
+              "type": "string",
+              "minLength": 1,
+              "description": "AXI RVALID 信号路径。"
+            },
+            "rready": {
+              "type": "string",
+              "minLength": 1,
+              "description": "AXI RREADY 信号路径。"
+            },
+            "rdata": {
+              "type": "string",
+              "minLength": 1,
+              "description": "AXI RDATA 读数据总线信号路径。"
+            },
+            "rid": {
+              "type": "string",
+              "minLength": 1,
+              "description": "AXI RID 读数据 ID 信号路径。"
+            },
+            "rresp": {
+              "type": "string",
+              "minLength": 1,
+              "description": "AXI RRESP 读响应状态信号路径。"
+            },
+            "rlast": {
+              "type": "string",
+              "minLength": 1,
+              "description": "AXI RLAST 最后一拍指示信号路径。"
+            },
+            "edge": {
+              "type": "string",
+              "enum": [
+                "posedge",
+                "negedge",
+                "dual"
+              ],
+              "description": "Clock sampling edge. The schema default is authoritative; negedge often matches monitor semantics."
+            },
+            "sample_point": {
+              "type": "string",
+              "enum": [
+                "before",
+                "after"
+              ],
+              "description": "Before/after observation point for posedge or dual sampling; it does not change the raw waveform range."
+            },
+            "reset": {
+              "type": "object",
+              "required": [
+                "signal",
+                "polarity"
+              ],
+              "properties": {
+                "signal": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "One-bit final waveform signal path used as reset."
+                },
+                "polarity": {
+                  "type": "string",
+                  "enum": [
+                    "active_low",
+                    "active_high"
+                  ],
+                  "description": "Level that asserts reset. X, Z, and unavailable samples are conservatively treated as asserted."
+                }
+              },
+              "additionalProperties": false,
+              "description": "Reset definition. Both signal and polarity are required when reset is supplied."
+            }
+          },
+          "required": [
+            "clock",
+            "awvalid",
+            "awready",
+            "awaddr",
+            "awid",
+            "awlen",
+            "awsize",
+            "awburst",
+            "wvalid",
+            "wready",
+            "wdata",
+            "wstrb",
+            "wlast",
+            "bvalid",
+            "bready",
+            "bid",
+            "bresp",
+            "arvalid",
+            "arready",
+            "araddr",
+            "arid",
+            "arlen",
+            "arsize",
+            "arburst",
+            "rvalid",
+            "rready",
+            "rdata",
+            "rid",
+            "rresp",
+            "rlast",
+            "reset"
+          ],
+          "additionalProperties": false
         },
         "config_path": {
           "type": "string",
+          "minLength": 1,
           "description": "输入配置文件路径。"
         },
         "name": {
           "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。"
-        },
-        "time_unit": {
-          "type": "string",
-          "enum": [
-            "auto",
-            "fs",
-            "ps",
-            "ns",
-            "us",
-            "ms",
-            "s"
-          ]
+          "description": "Saved-object name in this action namespace; do not assume names are shared by cursors, lists, and protocol configs."
         }
       },
       "additionalProperties": false,
-      "required": [
-        "name"
-      ],
-      "anyOf": [
+      "oneOf": [
         {
           "required": [
             "config"
@@ -73,28 +328,44 @@
       ]
     },
     "limits": {
-      "type": "object"
-    },
-    "auth_token": {
-      "type": "string"
-    },
-    "id": {
-      "type": "string"
-    },
-    "trace_id": {
-      "type": "string"
-    },
-    "span_id": {
-      "type": "string"
-    },
-    "parent_span_id": {
-      "type": "string"
+      "type": "object",
+      "properties": {
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647,
+          "description": "Positive public frontend-to-engine request timeout in milliseconds. Omit limits.timeout_ms to disable the public watchdog."
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false,
-  "description": "axi.config.load: 加载 AXI 配置。",
+  "description": "Load and validate an AXI interface configuration.",
   "x-purpose": "加载 AXI 配置。",
   "x-how_it_works": "保存 AXI channel 信号映射。",
   "x-when_to_use": "定义后续 AXI 查询对象。",
-  "x-arg_contract_notes": "required: name; also one of: config / config_path"
+  "x-arg_contract_notes": "required: name; also one of: config / config_path",
+  "x-description-zh": "加载 AXI 配置。",
+  "x-agent": {
+    "use_when": [
+      "Have an inline AXI channel mapping or config file that must be registered and validated before traffic analysis."
+    ],
+    "do_not_use_when": [
+      "Do not use it to enumerate saved names or query decoded AXI activity."
+    ],
+    "alternatives": [
+      {
+        "action": "axi.config.list",
+        "when": "Discover saved AXI configuration names."
+      },
+      {
+        "action": "axi.query",
+        "when": "Inspect traffic from a loaded interface."
+      }
+    ],
+    "constraints": [
+      "required: name; also one of: config / config_path"
+    ]
+  }
 }

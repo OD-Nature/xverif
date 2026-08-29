@@ -1,7 +1,9 @@
 .agents/
 .codex/
-**/.xeda_runner/
 /out/
+**/out/
+/tmp/
+**/tmp/
 
 # Legacy unowned test and regression assets
 test/
@@ -43,10 +45,18 @@ xcov/testdata/basic_coverage/out/
 !xsva/tests/**
 !xverif_mcp/tests/
 !xverif_mcp/tests/**
-!xeda_runner/tests/
-!xeda_runner/tests/**
 !testinfra/tests/
 !testinfra/tests/**
+!third_party/
+!third_party/xif_agent/
+!third_party/xif_agent/**
+third_party/xif_agent/**/out/
+third_party/xif_agent/**/csrc/
+third_party/xif_agent/**/simv
+third_party/xif_agent/**/simv.daidir/
+third_party/xif_agent/**/*.fsdb
+third_party/xif_agent/**/*.log
+third_party/xif_agent/**/ucli.key
 xdebug/testdata/**/out/
 xdebug/testdata/**/csrc/
 xdebug/testdata/**/ucli.key
@@ -74,16 +84,21 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 *.egg-info/
+.conda-xverif/
 .xverif-test-cache/
 .xverif-test-results/
+.xverif/
+/tools/xverif_lsf.env.json
 
 xdebug/build/
+xverif_mcp/build/
 xdebug/xdebug
 xdebug/libexec/
 xdebug/signal.rc
 xcov/native/xcov-npi-worker
 xcov-npi-workerLog/
 *_probeLog/
+probeLog/
 *-engineLog/
 npiLog/
 experiments/

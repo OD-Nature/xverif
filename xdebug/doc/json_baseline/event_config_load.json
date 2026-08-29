@@ -6,7 +6,7 @@
       "session_id": "sample_wave"
     },
     "args": {
-      "config_path": "~/xverif/xdebug/testdata/waveform/ai_complex_wave/config/event0.json",
+      "config_path": "<xverif-repo>/xdebug/testdata/waveform/ai_complex_wave/config/event0.json",
       "mode": "replace",
       "max_examples": 3
     },

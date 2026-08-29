@@ -1,4 +1,5 @@
 #include "api/text_response_builder.h"
+#include "core/value/logic_value.h"
 
 #include <algorithm>
 #include <cctype>
@@ -19,155 +20,80 @@ bool is_empty_json(const Json& value) {
            (value.is_object() && value.empty());
 }
 
-std::string trim_copy(const std::string& input) {
-    size_t begin = 0;
-    while (begin < input.size() &&
-           std::isspace(static_cast<unsigned char>(input[begin]))) {
-        ++begin;
+bool split_logic_literal(const std::string& text, std::string& width,
+                         char& radix, std::string& body) {
+    const size_t tick = text.find('\'');
+    if (tick == std::string::npos || tick + 2 > text.size()) return false;
+    width = text.substr(0, tick);
+    for (char character : width) {
+        if (!std::isdigit(static_cast<unsigned char>(character))) return false;
     }
-    size_t end = input.size();
-    while (end > begin &&
-           std::isspace(static_cast<unsigned char>(input[end - 1]))) {
-        --end;
-    }
-    return input.substr(begin, end - begin);
+    radix = static_cast<char>(std::tolower(
+        static_cast<unsigned char>(text[tick + 1])));
+    if (radix != 'h' && radix != 'b' && radix != 'd') return false;
+    body = text.substr(tick + 2);
+    return !body.empty();
 }
 
-std::string lower_no_underscores(std::string text) {
+bool is_value_object(const Json& value) {
+    if (!value.is_object() || !value.contains("value") ||
+        !value["value"].is_string() ||
+        !(value.contains("known") || value.contains("bits") ||
+          value.contains("width"))) {
+        return false;
+    }
+    std::string width, body;
+    char radix = 0;
+    return split_logic_literal(
+        value["value"].get<std::string>(), width, radix, body);
+}
+
+std::string compact_hex_body(std::string body) {
+    body.erase(std::remove(body.begin(), body.end(), '_'), body.end());
+    if (body.empty()) return "0";
+    const bool all_x = std::all_of(body.begin(), body.end(), [](char value) {
+        return value == 'x' || value == 'X';
+    });
+    if (all_x) return "x";
+    const bool all_z = std::all_of(body.begin(), body.end(), [](char value) {
+        return value == 'z' || value == 'Z';
+    });
+    if (all_z) return "z";
+    const size_t first = body.find_first_not_of('0');
+    return first == std::string::npos ? "0" : body.substr(first);
+}
+
+std::string grouped_bits(std::string bits) {
+    bits.erase(std::remove(bits.begin(), bits.end(), '_'), bits.end());
+    if (bits.size() <= 4) return bits;
     std::string out;
-    out.reserve(text.size());
-    for (char c : text) {
-        if (c == '_' || std::isspace(static_cast<unsigned char>(c))) continue;
-        out.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+    const size_t first = bits.size() % 4 == 0 ? 4 : bits.size() % 4;
+    out.append(bits, 0, first);
+    for (size_t offset = first; offset < bits.size(); offset += 4) {
+        out.push_back('_');
+        out.append(bits, offset, 4);
     }
     return out;
 }
 
-bool contains_xz_text(const std::string& text) {
-    std::string s = trim_copy(text);
-    size_t start = 0;
-    if (s.size() >= 2 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X')) {
-        start = 2;
-    } else if (s.size() >= 2 && s[0] == '\'' &&
-               (s[1] == 'h' || s[1] == 'H' || s[1] == 'b' || s[1] == 'B' ||
-                s[1] == 'd' || s[1] == 'D')) {
-        start = 2;
+std::string logic_value_xout(const Json& value) {
+    std::string width, body;
+    char radix = 0;
+    const std::string literal = value["value"].get<std::string>();
+    split_logic_literal(literal, width, radix, body);
+    std::string out = width + "'" + radix +
+        (radix == 'h' ? compact_hex_body(body) : body);
+    const bool known = value.value("known", true);
+    if (!known && radix == 'h' && value.contains("bits") &&
+        value["bits"].is_string()) {
+        out += " bits=" + grouped_bits(value["bits"].get<std::string>());
     }
-    return s.find_first_of("xXzZ", start) != std::string::npos;
-}
-
-bool is_value_object(const Json& value) {
-    if (!value.is_object() || !value.contains("value")) return false;
-    const Json& raw = value["value"];
-    if (!(raw.is_string() || raw.is_number() || raw.is_boolean() || raw.is_null())) return false;
-    return value.contains("known") || value.contains("bits") || value.contains("width");
-}
-
-std::string strip_value_prefix(const std::string& text, char& base) {
-    std::string s = trim_copy(text);
-    base = 0;
-    size_t tick = s.find('\'');
-    if (tick != std::string::npos && tick + 1 < s.size()) {
-        base = static_cast<char>(std::tolower(static_cast<unsigned char>(s[tick + 1])));
-        return s.substr(tick + 2);
-    }
-    if (s.size() > 2 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X')) {
-        base = 'h';
-        return s.substr(2);
-    }
-    if (s.size() > 2 && s[0] == '0' && (s[1] == 'b' || s[1] == 'B')) {
-        base = 'b';
-        return s.substr(2);
-    }
-    base = 'h';
-    return s;
-}
-
-std::string bits_to_hex(std::string bits) {
-    bits = lower_no_underscores(bits);
-    if (bits.empty()) return "0";
-    size_t pad = (4 - bits.size() % 4) % 4;
-    bits.insert(bits.begin(), pad, '0');
-    static const char* hex = "0123456789abcdef";
-    std::string out;
-    for (size_t i = 0; i < bits.size(); i += 4) {
-        bool has_x = false;
-        bool has_z = false;
-        int v = 0;
-        for (size_t j = 0; j < 4; ++j) {
-            char c = bits[i + j];
-            if (c == 'x') has_x = true;
-            else if (c == 'z') has_z = true;
-            else if (c != '0' && c != '1') has_x = true;
-            v = (v << 1) | (c == '1' ? 1 : 0);
-        }
-        out.push_back(has_x ? 'x' : (has_z ? 'z' : hex[v]));
-    }
-    return out.empty() ? "0" : out;
-}
-
-std::string bin_to_hex(std::string bits) {
-    return bits_to_hex(std::move(bits));
-}
-
-std::string dec_to_hex(const std::string& text) {
-    std::string clean = lower_no_underscores(text);
-    if (clean.empty() || contains_xz_text(clean)) return clean;
-    char* end = nullptr;
-    unsigned long long v = std::strtoull(clean.c_str(), &end, 10);
-    if (!end || *end != '\0') return clean;
-    char buf[32];
-    std::snprintf(buf, sizeof(buf), "%llx", v);
-    return buf;
-}
-
-std::string value_json_text(const Json& value) {
-    if (value.is_null()) return "";
-    if (value.is_string()) return value.get<std::string>();
-    if (value.is_boolean()) return value.get<bool>() ? "1" : "0";
-    if (value.is_number_integer()) return std::to_string(value.get<long long>());
-    if (value.is_number_unsigned()) return std::to_string(value.get<unsigned long long>());
-    if (value.is_number_float()) return value.dump();
-    return value.dump();
-}
-
-std::string compact_value_object(const Json& value) {
-    std::string raw = trim_copy(value_json_text(value.value("value", Json())));
-    std::string bits = value.value("bits", std::string());
-    int width = value.value("width", 0);
-    const bool known = value.value("known", !contains_xz_text(raw) && !contains_xz_text(bits));
-
-    std::string hex_text;
-    int inferred_width = width;
-    if (!bits.empty()) {
-        std::string clean_bits = lower_no_underscores(bits);
-        if (inferred_width <= 0) inferred_width = static_cast<int>(clean_bits.size());
-        hex_text = bits_to_hex(clean_bits);
-    } else {
-        char base = 0;
-        std::string body = strip_value_prefix(raw, base);
-        body = lower_no_underscores(body);
-        if (base == 'b') {
-            if (inferred_width <= 0) inferred_width = static_cast<int>(body.size());
-            hex_text = bin_to_hex(body);
-            bits = body;
-        } else if (base == 'd') {
-            hex_text = dec_to_hex(body);
-        } else {
-            hex_text = body.empty() ? "0" : body;
-        }
-    }
-
-    if (hex_text.empty()) hex_text = "0";
-    std::string out = inferred_width > 0
-        ? std::to_string(inferred_width) + "'h" + hex_text
-        : "'h" + hex_text;
-
-    if (!known || contains_xz_text(raw) || contains_xz_text(bits) || contains_xz_text(hex_text)) {
-        out += " known=false";
-        if (!bits.empty()) out += " bits=" + lower_no_underscores(bits);
-        if (inferred_width > 0) out += " width=" + std::to_string(inferred_width);
-    }
+    if (!known && value.value("requested_value_format", std::string()) == "dec")
+        out += " requested=dec reason=X/Z";
+    const bool sized_literal = !width.empty();
+    const bool reliable_width = value.contains("width") &&
+        value["width"].is_number_integer() && value["width"].get<int>() > 0;
+    if (!sized_literal && !reliable_width) out += " width_unknown";
     return out;
 }
 
@@ -183,7 +109,7 @@ std::string compact_field_map(const Json& value) {
     std::string out;
     if (!value.is_object()) return out;
     for (auto it = value.begin(); it != value.end(); ++it) {
-        std::string cell = sanitize_xout_key(it.key()) + "=" + compact_value_object(it.value());
+        std::string cell = sanitize_xout_key(it.key()) + "=" + logic_value_xout(it.value());
         if (!out.empty()) out.push_back(' ');
         out += cell;
     }
@@ -408,13 +334,18 @@ void TextResponseBuilder::emit_error(const Json& error) {
     if (error.contains("expected")) emit_kv("expected", error["expected"]);
     if (error.contains("received")) emit_kv("received", error["received"]);
     if (error.contains("received_type")) emit_kv("received_type", error["received_type"]);
-    if (error.contains("allowed_values")) emit_kv("allowed_values", error["allowed_values"]);
     if (error.contains("available_values")) emit_kv("available_values", error["available_values"]);
     if (error.contains("missing_name")) emit_kv("missing_name", error["missing_name"]);
     if (error.contains("missing_resource")) emit_kv("missing_resource", error["missing_resource"]);
     if (error.contains("required_any_of")) emit_kv("required_any_of", error["required_any_of"]);
     if (error.contains("did_you_mean")) emit_kv("did_you_mean", error["did_you_mean"]);
     if (error.contains("cause_code")) emit_kv("cause_code", error["cause_code"]);
+    if (error.contains("failure_kind")) emit_kv("failure_kind", error["failure_kind"]);
+    if (error.contains("failure_phase")) emit_kv("failure_phase", error["failure_phase"]);
+    if (error.contains("startup_reason")) emit_kv("startup_reason", error["startup_reason"]);
+    if (error.contains("diagnostic_log")) emit_kv("diagnostic_log", error["diagnostic_log"]);
+    if (error.contains("native_error_summary"))
+        emit_kv("native_error_summary", error["native_error_summary"]);
     if (error.contains("example_note")) emit_kv("example_note", error["example_note"]);
     if (error.contains("correct_example")) {
         emit_section("correct_example");
@@ -423,6 +354,11 @@ void TextResponseBuilder::emit_error(const Json& error) {
     if (error.contains("next_actions") && error["next_actions"].is_array()) {
         emit_section("next_actions");
         for (const auto& action : error["next_actions"]) emit_row({json_to_xout_value(action)});
+    }
+    if (error.contains("advisories") && error["advisories"].is_array()) {
+        emit_section("advisories");
+        for (const auto& advisory : error["advisories"])
+            emit_row({json_to_xout_value(advisory)});
     }
 }
 
@@ -436,8 +372,12 @@ std::string TextResponseBuilder::str() {
 
 void TextResponseBuilder::flush_kv_block() {
     if (pending_kv_.empty()) return;
+    size_t max_key_width = 0;
+    for (const auto& item : pending_kv_)
+        max_key_width = std::max(max_key_width, item.key.size());
     for (const auto& item : pending_kv_) {
-        write_line(item.indent + item.key + ": " + item.value);
+        write_line(item.indent + item.key +
+                   std::string(max_key_width - item.key.size(), ' ') + ": " + item.value);
     }
     pending_kv_.clear();
 }
@@ -496,7 +436,7 @@ std::string sanitize_xout_value(const std::string& value) {
 
 std::string json_to_xout_value(const Json& value) {
     if (value.is_null()) return std::string();
-    if (is_value_object(value)) return sanitize_xout_value(compact_value_object(value));
+    if (is_value_object(value)) return sanitize_xout_value(logic_value_xout(value));
     if (is_field_map(value)) return sanitize_xout_value(compact_field_map(value));
     if (value.is_string()) return sanitize_xout_value(value.get<std::string>());
     if (value.is_boolean()) return value.get<bool>() ? "true" : "false";

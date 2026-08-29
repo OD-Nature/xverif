@@ -1,5 +1,9 @@
 #include "../server_internal.h"
 #include "../../common/expression.h"
+#include "../../common/clock_sampling_response.h"
+#include "core/value/logic_value.h"
+
+#include <algorithm>
 
 namespace xdebug_waveform {
 
@@ -72,9 +76,10 @@ bool read_signal_changes(const std::string& signal,
 }
 
 Json changes_to_json(const fsdbTimeValPairVec_t& changes,
-                            char prefix,
-                            int limit,
-                            bool& truncated) {
+                     char prefix,
+                     const std::string& signal,
+                     int limit,
+                     bool& truncated) {
     Json arr = Json::array();
     truncated = false;
     for (size_t i = 0; i < changes.size(); ++i) {
@@ -84,7 +89,7 @@ Json changes_to_json(const fsdbTimeValPairVec_t& changes,
         }
         Json item;
         item["time"] = format_time(changes[i].first);
-        item["value"] = wave_value_json(changes[i].second, prefix);
+        item["value"] = wave_value_json(changes[i].second, prefix, signal);
         arr.push_back(item);
     }
     return arr;
@@ -99,6 +104,10 @@ bool build_signal_alias_handles(const Json& signals,
         error = "signals must be an object";
         return false;
     }
+    if (signals.empty()) {
+        error = "signals must be a non-empty alias-to-path object";
+        return false;
+    }
     std::map<std::string, std::string> seen;
     for (auto it = signals.begin(); it != signals.end(); ++it) {
         if (!it.value().is_string()) {
@@ -107,6 +116,14 @@ bool build_signal_alias_handles(const Json& signals,
         }
         std::string alias = it.key();
         std::string path = it.value().get<std::string>();
+        if (alias.empty()) {
+            error = "signal alias must not be empty";
+            return false;
+        }
+        if (path.empty()) {
+            error = "signal path must not be empty for alias: " + alias;
+            return false;
+        }
         auto prev = seen.find(alias);
         if (prev != seen.end() && prev->second != path) {
             error = "alias maps to different signals: " + alias;
@@ -142,12 +159,9 @@ std::string bit_string_from_value(const std::string& value) {
     return bits;
 }
 
-Json bit_value_json(const std::string& bits) {
-    Json value;
-    value["value"] = std::string("'b") + bits;
-    value["known"] = !bits.empty() && !xdebug_waveform::expr_value_has_unknown(bits);
-    value["width"] = bits.size();
-    return value;
+Json bit_value_json(const std::string& bits, int width) {
+    return xdebug_core::logic_value_json(
+        xdebug_core::logic_value_from_fsdb_raw(bits, 'b', width));
 }
 
 std::string pad_bits_for_compare(const std::string& bits, size_t width) {
@@ -187,12 +201,6 @@ bool bits_to_u64(const std::string& bits, uint64_t& out, std::string& error) {
     return true;
 }
 
-std::string u64_to_decimal(uint64_t value) {
-    std::ostringstream oss;
-    oss << value;
-    return oss.str();
-}
-
 std::string long_double_to_decimal(long double value) {
     std::ostringstream oss;
     oss.setf(std::ios::fixed);
@@ -208,6 +216,10 @@ bool add_signal_alias(Json& signals,
                       const std::string& alias,
                       const std::string& path,
                       std::string& error) {
+    if (alias.empty()) {
+        error = "INVALID_REQUEST: signal alias must not be empty";
+        return false;
+    }
     if (path.empty()) {
         error = "INVALID_REQUEST: signal path must not be empty";
         return false;
@@ -286,9 +298,41 @@ bool build_counter_inputs(const Json& args,
             error = "INVALID_REQUEST: object args.vld requires expr and signals";
             return false;
         }
+        Expression parsed_valid;
+        std::string parse_error;
+        if (!parsed_valid.parse(valid_expr, parse_error)) {
+            error = parse_error;
+            return false;
+        }
+        const std::set<std::string>& referenced_aliases =
+            parsed_valid.aliases();
+        const std::vector<std::string> path_like_aliases =
+            expression_aliases_that_look_like_paths(referenced_aliases);
+        if (!path_like_aliases.empty()) {
+            error =
+                "expression operands must be aliases, not direct signal paths: " +
+                path_like_aliases.front() +
+                "; put real signal paths in args.vld.signals";
+            return false;
+        }
+        for (const auto& alias : referenced_aliases) {
+            if (!vld["signals"].contains(alias)) {
+                error =
+                    "INVALID_REQUEST: args.vld.expr references undeclared alias: " +
+                    alias;
+                return false;
+            }
+        }
         for (auto it = vld["signals"].begin(); it != vld["signals"].end(); ++it) {
             if (!it.value().is_string()) {
                 error = "INVALID_REQUEST: args.vld.signals values must be string paths";
+                return false;
+            }
+            if (referenced_aliases.find(it.key()) ==
+                referenced_aliases.end()) {
+                error =
+                    "INVALID_REQUEST: args.vld.signals contains alias not used by expr: " +
+                    it.key();
                 return false;
             }
             if (!add_signal_alias(signal_union, it.key(), it.value().get<std::string>(), error)) return false;
@@ -320,7 +364,10 @@ std::string counter_bits_from_values(const CounterInput& counter,
     return bits;
 }
 
-bool validate_expression_alias_contract(const std::string& expr, std::string& error) {
+bool validate_expression_alias_contract(
+    const std::string& expr,
+    std::string& error,
+    std::set<std::string>* referenced_aliases = nullptr) {
     Expression parsed;
     std::string parse_error;
     if (!parsed.parse(expr, parse_error)) {
@@ -334,6 +381,10 @@ bool validate_expression_alias_contract(const std::string& expr, std::string& er
                 bad_aliases.front() +
                 "; put real signal paths in args.signals";
         return false;
+    }
+    if (referenced_aliases) {
+        referenced_aliases->insert(
+            parsed.aliases().begin(), parsed.aliases().end());
     }
     return true;
 }
@@ -349,9 +400,18 @@ Json ai_signal_changes(const Json& args, std::string& error) {
     npiFsdbTime begin = 0, end = 0;
     if (!json_time_range(args, begin, end, error)) return Json();
     int limit = args.value("line_limit", 1000);
-    std::string mode = args.value("mode", std::string("head"));
-    bool aggregate_only = args.value("aggregate_only", false);
-    npiFsdbValType fmt = json_value_format(args);
+    const std::string mode = args.value("mode", std::string("timeline"));
+    if (mode != "timeline" && mode != "summary") {
+        error = "signal.changes args.mode must be timeline or summary";
+        return Json();
+    }
+    if (mode == "summary" && args.contains("line_limit")) {
+        error = "signal.changes args.line_limit is valid only in timeline mode";
+        return Json();
+    }
+    const bool include_timeline = mode == "timeline";
+    npiFsdbValType fmt = npiFsdbHexStrVal;
+    if (!json_value_format(args, fmt, error)) return Json();
     fsdbTimeValPairVec_t changes;
     bool truncated = false;
     if (!read_signal_changes(signal, begin, end, fmt, changes, error, -1, &truncated)) return Json();
@@ -360,36 +420,44 @@ Json ai_signal_changes(const Json& args, std::string& error) {
     const size_t actual_transitions = includes_initial ? total_rows - 1 : 0;
     fsdbTimeValPairVec_t selected = changes;
     bool response_truncated = false;
-    if (!aggregate_only && limit >= 0 && selected.size() > static_cast<size_t>(limit)) {
+    if (include_timeline && limit >= 0 &&
+        selected.size() > static_cast<size_t>(limit)) {
         response_truncated = true;
-        if (mode == "tail") selected.erase(selected.begin(), selected.end() - limit);
-        else selected.erase(selected.begin() + limit, selected.end());
+        selected.erase(selected.begin() + limit, selected.end());
     }
     Json data;
     data["summary"] = {
         {"signal", signal},
-        {"total_change_rows", static_cast<int>(total_rows)},
-        {"returned_change_rows", aggregate_only ? 0 : static_cast<int>(selected.size())},
-        {"actual_transition_count", static_cast<int>(actual_transitions)},
-        {"analysis_complete", !truncated},
-        {"truncated", response_truncated || truncated},
-        {"truncation_scope", truncated ? "analysis_samples" :
-                              response_truncated ? "response_rows" : "none"}
+        {"actual_transition_count", static_cast<int>(actual_transitions)}
     };
+    std::vector<std::string> truncation_scopes;
+    if (truncated) truncation_scopes.push_back("analysis_changes");
+    if (response_truncated) truncation_scopes.push_back("response_changes");
+    xdebug_core::set_completeness(
+        data["summary"],
+        !truncated,
+        !truncated,
+        response_truncated,
+        total_rows,
+        include_timeline ? selected.size() : 0,
+        truncation_scopes);
     data["begin"] = format_time(begin);
     data["end"] = format_time(end);
     data["includes_initial_value"] = includes_initial;
     data["semantic_note"] = "signal.changes returns value-change rows for timeline inspection. Do not use row counts as sampled high cycles; use signal.statistics.high_cycles for clock-sampled activity.";
     if (!changes.empty()) {
-        data["initial_value"] = wave_value_json(changes.front().second, json_value_prefix(fmt));
-        data["final_value"] = wave_value_json(changes.back().second, json_value_prefix(fmt));
+        data["initial_value"] = wave_value_json(
+            changes.front().second, json_value_prefix(fmt), signal);
+        data["final_value"] = wave_value_json(
+            changes.back().second, json_value_prefix(fmt), signal);
         data["first_change"] = format_time(changes.front().first);
         data["last_change"] = format_time(changes.back().first);
     }
-    if (!aggregate_only) {
-        data["mode"] = mode == "tail" ? "tail" : "head";
+    data["mode"] = mode;
+    if (include_timeline) {
         bool rows_truncated = false;
-        data["changes"] = changes_to_json(selected, json_value_prefix(fmt), -1, rows_truncated);
+        data["changes"] = changes_to_json(
+            selected, json_value_prefix(fmt), signal, -1, rows_truncated);
     }
     return data;
 }
@@ -402,7 +470,8 @@ Json ai_signal_stability(const Json& args, std::string& error) {
     }
     npiFsdbTime begin = 0, end = 0;
     if (!json_time_range(args, begin, end, error)) return Json();
-    npiFsdbValType fmt = json_value_format(args);
+    npiFsdbValType fmt = npiFsdbHexStrVal;
+    if (!json_value_format(args, fmt, error)) return Json();
     npiFsdbSigHandle sig = npi_fsdb_sig_by_name(g_fsdb_file, signal.c_str(), NULL);
     if (!sig) {
         error = "Signal not found: " + signal;
@@ -424,7 +493,8 @@ Json ai_signal_stability(const Json& args, std::string& error) {
         std::string text = value_with_prefix(val.value.str, json_value_prefix(fmt));
         Json item;
         item["time"] = format_time(change_time);
-        item["value"] = wave_value_json(val.value.str, json_value_prefix(fmt));
+        item["value"] = wave_value_json(
+            val.value.str, json_value_prefix(fmt), signal);
         arr.push_back(item);
         if (first.empty()) {
             first = text;
@@ -435,35 +505,130 @@ Json ai_signal_stability(const Json& args, std::string& error) {
     }
 
     Json data;
+    data["signal"] = signal;
     data["begin"] = format_time(begin);
     data["end"] = format_time(end);
     data["changes"] = arr;
     const size_t change_row_count = arr.size();
     const size_t actual_transition_count = stable ? 0 : 1;
     Json summary = {
-        {"signal", signal}, {"stable", stable},
+        {"stable", stable},
         {"change_row_count", static_cast<int>(change_row_count)},
         {"actual_transition_count", static_cast<int>(actual_transition_count)},
-        {"analysis_complete", true},
         {"scan_stopped_on_first_transition", !stable}
     };
-    if (stable && !arr.empty()) summary["value"] = arr[0]["value"];
+    std::vector<std::string> truncation_scopes;
+    if (!stable) {
+        truncation_scopes.push_back("scan_after_first_transition");
+    }
+    xdebug_core::set_completeness(
+        summary,
+        stable,
+        true,
+        false,
+        change_row_count,
+        change_row_count,
+        truncation_scopes);
     data["summary"] = summary;
     data["includes_initial_value"] = change_row_count > 0;
-    if (!arr.empty()) {
-        data["initial_value"] = arr[0]["value"];
-        data["final_value"] = arr[arr.size() - 1]["value"];
-        data["first_change"] = arr[0]["time"];
-        data["last_change"] = arr[arr.size() - 1]["time"];
+    return data;
+}
+
+Json ai_signal_xz_verify(const Json& args, std::string& error) {
+    const std::string signal = args.value("signal", std::string());
+    const std::string expected_state = args.value("expected_state", std::string());
+    const std::string match_mode = args.value("match_mode", std::string("exact"));
+    if (signal.empty() || expected_state.empty()) {
+        error = "INVALID_REQUEST: signal.xz_verify requires args.signal and args.expected_state";
+        return Json();
     }
-    if (!stable) {
-        for (const auto& item : arr) {
-            if (item["value"]["value"].get<std::string>() != first) {
-                data["first_change_time"] = item["time"];
-                break;
-            }
+    if (expected_state != "x" && expected_state != "z") {
+        error = "INVALID_REQUEST: args.expected_state must be x or z";
+        return Json();
+    }
+    if (match_mode != "exact" && match_mode != "contains") {
+        error = "INVALID_REQUEST: args.match_mode must be exact or contains";
+        return Json();
+    }
+
+    npiFsdbTime begin = 0, end = 0;
+    if (!json_time_range(args, begin, end, error)) return Json();
+    npiFsdbSigHandle sig = npi_fsdb_sig_by_name(g_fsdb_file, signal.c_str(), nullptr);
+    if (!sig) {
+        error = "Signal not found: " + signal;
+        return Json();
+    }
+
+    const char expected_bit = expected_state[0];
+    bool always_matched = true;
+    bool have_value = false;
+    int checked_value_count = 0;
+    Json initial_value = nullptr;
+    Json first_mismatch = nullptr;
+    TimeBasedVcIterGuard guard;
+    npiFsdbTimeBasedVcIter& iter = guard.iter();
+    iter.add(sig);
+    guard.start(begin, end);
+    npiFsdbTime sample_time = 0;
+    npiFsdbSigHandle changed_sig = nullptr;
+    while (iter.iter_next(sample_time, changed_sig) > 0) {
+        npiFsdbValue raw;
+        raw.format = npiFsdbBinStrVal;
+        if (!iter.get_value(raw) || !raw.value.str) continue;
+        xdebug_core::LogicValue value =
+            logic_value_from_fsdb_signal(sig, raw.value.str, 'b');
+        if (!value.valid || value.bits.empty()) continue;
+        Json value_json = xdebug_core::logic_value_json(value);
+        if (!have_value) {
+            initial_value = value_json;
+            have_value = true;
+        }
+        ++checked_value_count;
+        const bool matched = match_mode == "exact"
+            ? std::all_of(value.bits.begin(), value.bits.end(),
+                          [expected_bit](char bit) { return bit == expected_bit; })
+            : value.bits.find(expected_bit) != std::string::npos;
+        if (!matched) {
+            always_matched = false;
+            first_mismatch = {
+                {"sample_time", format_time(sample_time)},
+                {"value", value_json}
+            };
+            break;
         }
     }
+    if (!have_value) {
+        error = "VALUE_NOT_AVAILABLE: no waveform value is available for signal " +
+                signal + " in the requested window";
+        return Json();
+    }
+
+    Json data;
+    data["summary"] = {
+        {"signal", signal},
+        {"expected_state", expected_state},
+        {"match_mode", match_mode},
+        {"verdict", always_matched ? "pass" : "fail"},
+        {"always_matched", always_matched},
+        {"checked_value_count", checked_value_count},
+        {"stop_reason", always_matched ? "window_end" : "first_mismatch"}
+    };
+    xdebug_core::set_completeness(
+        data["summary"],
+        always_matched,
+        true,
+        false,
+        static_cast<std::size_t>(checked_value_count),
+        static_cast<std::size_t>(checked_value_count),
+        {});
+    data["time_range"] = {
+        {"begin", format_time(begin)},
+        {"end", format_time(end)}
+    };
+    data["initial_value"] = initial_value;
+    data["first_mismatch"] = first_mismatch;
+    data["sample_time_semantics"] =
+        "sample_time is the finalized raw waveform value-change time in the closed interval";
     return data;
 }
 
@@ -509,7 +674,8 @@ Json ai_expr_eval_at(const Json& args, std::string& error) {
             value_map[aliases[i]] = cell->raw_value;
             operands.push_back({{"alias", aliases[i]},
                                 {"signal", paths[i]},
-                                {"value", wave_value_json(cell->raw_value, 'b')}});
+                                {"value", wave_value_json(
+                                    cell->raw_value, 'b', paths[i])}});
         }
         if (!xdebug_waveform::eval_event_expression(expr, value_map, result, error)) return false;
         return true;
@@ -531,29 +697,12 @@ Json ai_expr_eval_at(const Json& args, std::string& error) {
         {"expr", expr},
         {"time", format_time(t)},
         {"status", xdebug_waveform::expr_tri_text(result)},
-        {"known", result != ExprTri::Unknown},
-        {"requested_any_edge_hit", point_result.context.clock_edge_hit},
-        {"requested_target_edge_hit", point_result.context.target_edge_hit},
-        {"bracket_complete", point_result.context.bracket_complete}
+        {"known", result != ExprTri::Unknown}
     };
     data["expr_value"] = result == ExprTri::True ? Json(true) : result == ExprTri::False ? Json(false) : Json(nullptr);
     data["operands"] = operands;
-    data["clock_context"] = {
-        {"clock", clock_sample.clock},
-        {"edge", clock_edge_kind_text(clock_sample.edge)},
-        {"requested_time", format_time(t)},
-        {"requested_any_edge_hit", point_result.context.clock_edge_hit},
-        {"clock_edge_kind", point_result.context.has_clock_edge_kind
-            ? Json(clock_edge_kind_text(point_result.context.clock_edge_kind)) : Json(nullptr)},
-        {"requested_target_edge_hit", point_result.context.target_edge_hit},
-        {"sample_point_applied", point_result.context.target_edge_hit && clock_sample.edge != ClockEdgeKind::Negedge
-            ? Json(clock_sample_point_text(clock_sample.sample_point)) : Json(nullptr)},
-        {"previous_sample_time", point_result.context.has_previous_sample_time
-            ? Json(format_time(point_result.context.previous_sample_time)) : Json(nullptr)},
-        {"next_sample_time", point_result.context.has_next_sample_time
-            ? Json(format_time(point_result.context.next_sample_time)) : Json(nullptr)},
-        {"bracket_complete", point_result.context.bracket_complete}
-    };
+    data["clock_context"] = clock_point_context_json(
+        g_fsdb_file, clock_sample, point_result.context);
     data["expr_samples"] = {
         {"before", have_before_result ? Json(expr_tri_text(before_result)) : Json("missing_edge")},
         {"middle", expr_tri_text(result)},
@@ -566,26 +715,58 @@ Json ai_window_verify(const Json& args, std::string& error) {
     ClockSampleSpec clock_sample;
     if (!clock_sample_from_args(args, clock_sample, error)) return Json();
     std::string clock = clock_sample.clock;
-    if (clock.empty() || !args.contains("conditions") || !args["conditions"].is_array()) {
+    if (clock.empty() || !args.contains("conditions") ||
+        !args["conditions"].is_array() || args["conditions"].empty()) {
         error = "window.verify requires args.clock and args.conditions[]";
         return Json();
     }
     npiFsdbTime begin = 0, end = 0;
     if (!json_time_range(args, begin, end, error)) return Json();
-    int max_samples = args.value("line_limit", 1000000);
+    const int evidence_limit = args.value("line_limit", 100);
+    const int max_samples = args.value("max_samples", -1);
 
     if (!args.contains("signals") || !args["signals"].is_object()) {
         error = "window.verify requires args.signals as alias-to-signal-path object";
         return Json();
     }
     Json signal_union = args["signals"];
+    std::set<std::string> referenced_aliases;
     for (const auto& cond : args["conditions"]) {
         if (!cond.contains("expr") || !cond["expr"].is_string()) {
             error = "each condition requires string expr";
             return Json();
         }
         std::string cond_expr = server_compact_expr_ws(cond.value("expr", std::string()));
-        if (!validate_expression_alias_contract(cond_expr, error)) return Json();
+        if (cond_expr.empty()) {
+            error = "each condition expr must be non-empty";
+            return Json();
+        }
+        if (!validate_expression_alias_contract(
+                cond_expr, error, &referenced_aliases)) {
+            return Json();
+        }
+        std::string mode = cond.value("mode", std::string("always"));
+        if (mode != "always" && mode != "eventually" && mode != "never") {
+            error = "condition mode must be always, eventually, or never";
+            return Json();
+        }
+    }
+    for (const auto& alias : referenced_aliases) {
+        if (!signal_union.contains(alias)) {
+            error =
+                "window.verify condition references undeclared signal alias: " +
+                alias;
+            return Json();
+        }
+    }
+    for (auto it = signal_union.begin(); it != signal_union.end(); ++it) {
+        if (referenced_aliases.find(it.key()) ==
+            referenced_aliases.end()) {
+            error =
+                "window.verify args.signals contains alias unused by every condition: " +
+                it.key();
+            return Json();
+        }
     }
     std::vector<std::string> aliases, paths;
     fsdbSigVec_t handles;
@@ -594,7 +775,18 @@ Json ai_window_verify(const Json& args, std::string& error) {
     for (size_t i = 0; i < aliases.size(); ++i) {
         sample_signals.push_back({aliases[i], paths[i], handles[i]});
     }
-
+    auto rendered_signal_values = [&](const std::map<std::string, std::string>& values) {
+        Json rendered = Json::object();
+        for (size_t index = 0; index < aliases.size(); ++index) {
+            auto value = values.find(aliases[index]);
+            if (value == values.end()) continue;
+            const FsdbSignalWidth width = fsdb_signal_width(handles[index]);
+            rendered[aliases[index]] = xdebug_core::logic_value_json(
+                xdebug_core::logic_value_from_fsdb_raw(
+                    value->second, 'b', width.reliable ? width.width : 0));
+        }
+        return rendered;
+    };
     struct CondState { std::string expr; std::string mode; int pass = 0; int fail = 0; int unknown = 0; };
     std::vector<CondState> states;
     for (const auto& cond : args["conditions"]) {
@@ -607,6 +799,8 @@ Json ai_window_verify(const Json& args, std::string& error) {
     int samples = 0;
     bool truncated = false;
     bool decisive_proof = false;
+    Json findings = Json::array();
+    int finding_count = 0;
     bool have_sample = false;
     npiFsdbTime first_sample_time = 0;
     npiFsdbTime last_sample_time = 0;
@@ -635,6 +829,15 @@ Json ai_window_verify(const Json& args, std::string& error) {
                 if (r == ExprTri::Unknown) st.unknown++;
                 else if (pass) st.pass++;
                 else st.fail++;
+                if (r == ExprTri::Unknown || !pass) {
+                    ++finding_count;
+                    if (evidence_limit < 0 || static_cast<int>(findings.size()) < evidence_limit) {
+                        findings.push_back({{"time", format_time(sample.time)},
+                                            {"expr", st.expr}, {"mode", st.mode},
+                                            {"status", r == ExprTri::Unknown ? "unknown" : "fail"},
+                                            {"signals", rendered_signal_values(values)}});
+                    }
+                }
                 if (st.mode == "eventually") {
                     has_eventually = true;
                     if (st.pass == 0) all_eventually_seen = false;
@@ -664,32 +867,43 @@ Json ai_window_verify(const Json& args, std::string& error) {
         conds.push_back({{"expr", st.expr}, {"mode", st.mode}, {"passed", passed},
                          {"pass_samples", st.pass}, {"failed_samples", st.fail}, {"unknown_samples", st.unknown}});
     }
-    const bool validation_complete = decisive_proof || !truncated;
-    const std::string verdict = !validation_complete ? "inconclusive" :
+    const bool scan_complete = !truncated;
+    const bool analysis_complete = decisive_proof || scan_complete;
+    const bool response_truncated = evidence_limit >= 0 && finding_count > evidence_limit;
+    const std::string verdict = !analysis_complete ? "inconclusive" :
                                 all_passed ? "pass" : "fail";
     Json data;
     data["summary"] = {
         {"execution_ok", true},
         {"verdict", verdict},
-        {"all_passed", validation_complete ? Json(all_passed) : Json(nullptr)},
+        {"all_passed", analysis_complete ? Json(all_passed) : Json(nullptr)},
         {"sample_count", samples},
         {"failed_samples", failed_samples},
         {"unknown_samples", unknown_samples},
-        {"truncated", truncated},
-        {"validation_complete", validation_complete},
         {"proof_begin", format_time(begin)},
         {"proof_end", format_time(end)},
         {"scanned_range", {{"begin", have_sample ? Json(format_time(first_sample_time)) : Json(nullptr)},
                             {"end", have_sample ? Json(format_time(last_sample_time)) : Json(nullptr)}}},
-        {"truncation_scope", truncated ? Json("analysis_samples") : Json(nullptr)},
+        {"stop_reason", decisive_proof ? Json("decisive_result") :
+                         truncated ? Json("max_samples") : Json("window_end")},
         {"sampling_mode", "clock_edge"},
         {"clock", clock_sample.clock},
-        {"edge", clock_edge_kind_text(clock_sample.edge)},
         {"sample_time_semantics", "time is sample_time"}
     };
-    if (clock_sample.edge != ClockEdgeKind::Negedge)
-        data["summary"]["sample_point"] = clock_sample_point_text(clock_sample.sample_point);
+    std::vector<std::string> truncation_scopes;
+    if (truncated) truncation_scopes.push_back("analysis_samples");
+    if (response_truncated) truncation_scopes.push_back("response_findings");
+    xdebug_core::set_completeness(
+        data["summary"],
+        scan_complete,
+        analysis_complete,
+        response_truncated,
+        static_cast<std::size_t>(finding_count),
+        findings.size(),
+        truncation_scopes);
+    data["sampling"] = clock_sampling_contract_json(clock_sample);
     data["conditions"] = conds;
+    data["findings"] = findings;
     return data;
 }
 
@@ -702,22 +916,26 @@ Json ai_signal_statistics(const Json& args, std::string& error) {
         error = "signal.statistics requires args.signal";
         return Json();
     }
+    if (clock.empty() &&
+        (args.contains("edge") || args.contains("sample_point"))) {
+        error =
+            "edge and sample_point require args.clock for signal.statistics";
+        return Json();
+    }
     npiFsdbTime begin = 0, end = 0;
     if (!json_time_range(args, begin, end, error)) return Json();
 
     if (clock.empty()) {
-        npiFsdbValType fmt = json_value_format(args);
+        const int evidence_limit = args.value("line_limit", 100);
+        npiFsdbValType fmt = npiFsdbHexStrVal;
+        if (!json_value_format(args, fmt, error)) return Json();
         fsdbTimeValPairVec_t changes;
         bool truncated = false;
         if (!read_signal_changes(signal, begin, end, fmt, changes, error, -1, &truncated)) return Json();
         Json data;
         data["summary"] = {{"signal", signal}, {"sampling_mode", "raw_value_changes"},
                            {"begin", format_time(begin)}, {"end", format_time(end)},
-                           {"sample_count", changes.size()},
-                           {"actual_transition_count", changes.empty() ? 0 : changes.size() - 1},
-                           {"analysis_complete", !truncated}, {"truncated", truncated},
-                           {"truncation_scope", truncated ? Json("analysis_rows") : Json(nullptr)}};
-        data["returned_change_rows"] = changes.size();
+                           {"actual_transition_count", changes.empty() ? 0 : changes.size() - 1}};
         data["includes_initial_value"] = !changes.empty();
         int high_bursts = 0;
         npiFsdbTime first_high = 0, last_high = 0, last_fall = 0;
@@ -741,11 +959,34 @@ Json ai_signal_statistics(const Json& args, std::string& error) {
             {"max_high_cycles", nullptr}
         };
         if (!changes.empty()) {
-            data["initial_value"] = wave_value_json(changes.front().second, json_value_prefix(fmt));
-            data["final_value"] = wave_value_json(changes.back().second, json_value_prefix(fmt));
+            data["initial_value"] = wave_value_json(
+                changes.front().second, json_value_prefix(fmt), signal);
+            data["final_value"] = wave_value_json(
+                changes.back().second, json_value_prefix(fmt), signal);
             data["first_change_time"] = format_time(changes.front().first);
             data["last_change_time"] = format_time(changes.back().first);
         }
+        Json evidence = Json::array();
+        for (size_t i = 0; i < changes.size() &&
+             (evidence_limit < 0 || static_cast<int>(i) < evidence_limit); ++i) {
+            evidence.push_back({{"time", format_time(changes[i].first)},
+                                {"kind", i == 0 ? "initial" : "value_change"},
+                                {"value", wave_value_json(
+                                    changes[i].second, json_value_prefix(fmt), signal)}});
+        }
+        const bool response_truncated = evidence_limit >= 0 && changes.size() > static_cast<size_t>(evidence_limit);
+        std::vector<std::string> truncation_scopes;
+        if (truncated) truncation_scopes.push_back("analysis_changes");
+        if (response_truncated) truncation_scopes.push_back("response_evidence");
+        xdebug_core::set_completeness(
+            data["summary"],
+            !truncated,
+            !truncated,
+            response_truncated,
+            changes.size(),
+            evidence.size(),
+            truncation_scopes);
+        data["evidence"] = evidence;
         return data;
     }
 
@@ -757,8 +998,10 @@ Json ai_signal_statistics(const Json& args, std::string& error) {
     for (size_t i = 0; i < aliases.size(); ++i) {
         sample_signals.push_back({aliases[i], paths[i], handles[i]});
     }
+    const FsdbSignalWidth signal_width = fsdb_signal_width(handles[0]);
 
-    int max_samples = args.value("line_limit", 1000000);
+    const int evidence_limit = args.value("line_limit", 100);
+    const int max_samples = args.value("max_samples", -1);
     int samples = 0, known = 0, unknown = 0;
     int high_cycles = 0, low_cycles = 0;
     int high_bursts = 0, current_high = 0, max_high_cycles = 0;
@@ -769,6 +1012,14 @@ Json ai_signal_statistics(const Json& args, std::string& error) {
     npiFsdbTime first_change_time = 0, last_change_time = 0;
     npiFsdbTime first_high_time = 0, last_high_time = 0, last_fall_time = 0;
     bool prev_high = false;
+    Json evidence = Json::array();
+    int evidence_count = 0;
+    auto add_evidence = [&](npiFsdbTime time, const std::string& kind, const std::string& value) {
+        ++evidence_count;
+        if (evidence_limit < 0 || static_cast<int>(evidence.size()) < evidence_limit)
+            evidence.push_back({{"time", format_time(time)}, {"kind", kind},
+                                {"value", wave_value_json(value, 'b', signal)}});
+    };
 
     ClockSampleScanner scanner(g_fsdb_file, clock_sample);
     if (!scanner.scan(sample_signals, begin, end, npiFsdbBinStrVal, 'b', max_samples,
@@ -778,6 +1029,7 @@ Json ai_signal_statistics(const Json& args, std::string& error) {
             auto it = values.find("sig");
             if (it == values.end() || contains_xz_value(it->second)) {
                 unknown++;
+                add_evidence(t, "unknown", it == values.end() ? std::string("'bx") : it->second);
                 if (prev_high) {
                     if (current_high > max_high_cycles) max_high_cycles = current_high;
                     current_high = 0;
@@ -816,6 +1068,7 @@ Json ai_signal_statistics(const Json& args, std::string& error) {
             } else {
                 if (compare_bit_strings(bits, prev_bits) != 0) {
                     transitions++;
+                    add_evidence(t, "value_change", it->second);
                     if (first_change_time == 0) first_change_time = t;
                     last_change_time = t;
                 }
@@ -832,25 +1085,35 @@ Json ai_signal_statistics(const Json& args, std::string& error) {
         {"signal", signal},
         {"sampling_mode", "clock_edge"},
         {"clock", clock},
-        {"edge", clock_edge_kind_text(clock_sample.edge)},
         {"sample_time_semantics", "time is sample_time"},
         {"sample_count", samples},
         {"known_count", known},
         {"unknown_count", unknown},
         {"begin", format_time(begin)},
-        {"end", format_time(end)},
-        {"analysis_complete", !truncated},
-        {"truncated", truncated},
-        {"truncation_scope", truncated ? Json("analysis_samples") : Json(nullptr)}
+        {"end", format_time(end)}
     };
-    if (clock_sample.edge != ClockEdgeKind::Negedge)
-        data["summary"]["sample_point"] = clock_sample_point_text(clock_sample.sample_point);
+    const bool response_truncated =
+        evidence_limit >= 0 && evidence_count > evidence_limit;
+    std::vector<std::string> truncation_scopes;
+    if (truncated) truncation_scopes.push_back("analysis_samples");
+    if (response_truncated) truncation_scopes.push_back("response_evidence");
+    xdebug_core::set_completeness(
+        data["summary"],
+        !truncated,
+        !truncated,
+        response_truncated,
+        static_cast<std::size_t>(evidence_count),
+        evidence.size(),
+        truncation_scopes);
+    data["evidence"] = evidence;
+    data["sampling"] = clock_sampling_contract_json(clock_sample);
     data["transition_count"] = transitions;
     if (have_known) {
-        data["first"] = bit_value_json(first_bits);
-        data["final"] = bit_value_json(final_bits);
-        data["min"] = bit_value_json(min_bits);
-        data["max"] = bit_value_json(max_bits);
+        const int width = signal_width.reliable ? signal_width.width : 0;
+        data["first"] = bit_value_json(first_bits, width);
+        data["final"] = bit_value_json(final_bits, width);
+        data["min"] = bit_value_json(min_bits, width);
+        data["max"] = bit_value_json(max_bits, width);
         data["low_cycles"] = low_cycles;
         data["high_cycles"] = high_cycles;
         data["high_ratio"] = known > 0 ? static_cast<double>(high_cycles) / static_cast<double>(known) : 0.0;
@@ -896,16 +1159,48 @@ Json ai_counter_statistics(const Json& args, std::string& error) {
     for (size_t i = 0; i < aliases.size(); ++i) {
         sample_signals.push_back({aliases[i], paths[i], handles[i]});
     }
+    int counter_width = 0;
+    bool counter_width_reliable = true;
+    for (const std::string& counter_alias : counter.aliases) {
+        auto alias = std::find(aliases.begin(), aliases.end(), counter_alias);
+        if (alias == aliases.end()) {
+            counter_width_reliable = false;
+            break;
+        }
+        const size_t index = static_cast<size_t>(alias - aliases.begin());
+        const FsdbSignalWidth width = fsdb_signal_width(handles[index]);
+        if (!width.reliable || width.width <= 0) {
+            counter_width_reliable = false;
+            break;
+        }
+        counter_width += width.width;
+    }
+    auto counter_value_json = [&](const std::string& bits) {
+        return xdebug_core::logic_value_json(
+            xdebug_core::logic_value_from_fsdb_raw(
+                bits, 'b', counter_width_reliable ? counter_width : 0));
+    };
 
-    int max_samples = args.value("line_limit", 1000000);
+    const int evidence_limit = args.value("line_limit", 100);
+    const int max_samples = args.value("max_samples", -1);
     int samples = 0;
     bool truncated = false;
     int valid_count = 0, valid_false_count = 0, unknown_count = 0;
     bool have_value = false;
     uint64_t min_value = 0, max_value = 0;
+    std::string min_bits, max_bits;
     int min_count = 0, max_count = 0;
     npiFsdbTime min_first_time = 0, max_first_time = 0;
     long double sum = 0.0;
+    Json evidence = Json::array();
+    int evidence_count = 0;
+    bool have_previous_value = false;
+    uint64_t previous_value = 0;
+    auto add_evidence = [&](npiFsdbTime time, const std::string& kind, const Json& value) {
+        ++evidence_count;
+        if (evidence_limit < 0 || static_cast<int>(evidence.size()) < evidence_limit)
+            evidence.push_back({{"time", format_time(time)}, {"kind", kind}, {"value", value}});
+    };
 
     ClockSampleScanner scanner(g_fsdb_file, clock_sample);
     if (!scanner.scan(sample_signals, begin, end, npiFsdbBinStrVal, 'b', max_samples,
@@ -924,6 +1219,7 @@ Json ai_counter_statistics(const Json& args, std::string& error) {
             }
             if (valid == ExprTri::Unknown) {
                 unknown_count++;
+                add_evidence(t, "unknown_valid", nullptr);
                 return true;
             }
 
@@ -936,7 +1232,15 @@ Json ai_counter_statistics(const Json& args, std::string& error) {
                     return false;
                 }
                 unknown_count++;
+                add_evidence(t, "unknown_counter", nullptr);
                 return true;
+            }
+
+            if (!have_previous_value || value != previous_value) {
+                add_evidence(t, have_previous_value ? "value_change" : "initial",
+                             counter_value_json(bits));
+                previous_value = value;
+                have_previous_value = true;
             }
 
             valid_count++;
@@ -944,12 +1248,14 @@ Json ai_counter_statistics(const Json& args, std::string& error) {
             if (!have_value) {
                 have_value = true;
                 min_value = max_value = value;
+                min_bits = max_bits = bits;
                 min_count = max_count = 1;
                 min_first_time = max_first_time = t;
                 return true;
             }
             if (value < min_value) {
                 min_value = value;
+                min_bits = bits;
                 min_count = 1;
                 min_first_time = t;
             } else if (value == min_value) {
@@ -957,6 +1263,7 @@ Json ai_counter_statistics(const Json& args, std::string& error) {
             }
             if (value > max_value) {
                 max_value = value;
+                max_bits = bits;
                 max_count = 1;
                 max_first_time = t;
             } else if (value == max_value) {
@@ -968,24 +1275,34 @@ Json ai_counter_statistics(const Json& args, std::string& error) {
     Json data;
     data["summary"] = {
         {"sample_count", samples},
-        {"valid_count", valid_count}
+        {"valid_count", valid_count},
+        {"sampling_mode", "clock_edge"},
+        {"clock", clock},
+        {"sample_time_semantics", "time is sample_time"},
+        {"begin", format_time(begin)},
+        {"end", format_time(end)},
+        {"valid_false_count", valid_false_count},
+        {"unknown_count", unknown_count}
     };
-    data["clock"] = clock;
-    data["edge"] = clock_edge_kind_text(clock_sample.edge);
-    if (clock_sample.edge != ClockEdgeKind::Negedge)
-        data["sample_point"] = clock_sample_point_text(clock_sample.sample_point);
-    data["sample_time_semantics"] = "time is sample_time";
-    data["sampling_mode"] = "clock_edge";
-    data["begin"] = format_time(begin);
-    data["end"] = format_time(end);
-    data["valid_false_count"] = valid_false_count;
-    data["unknown_count"] = unknown_count;
-    data["truncated"] = truncated;
+    const bool response_truncated = evidence_limit >= 0 && evidence_count > evidence_limit;
+    std::vector<std::string> truncation_scopes;
+    if (truncated) truncation_scopes.push_back("analysis_samples");
+    if (response_truncated) truncation_scopes.push_back("response_evidence");
+    xdebug_core::set_completeness(
+        data["summary"],
+        !truncated,
+        !truncated,
+        response_truncated,
+        static_cast<std::size_t>(evidence_count),
+        evidence.size(),
+        truncation_scopes);
+    data["evidence"] = evidence;
+    data["sampling"] = clock_sampling_contract_json(clock_sample);
     data["cnt"] = args["cnt"];
     data["vld"] = args["vld"];
     if (have_value) {
-        data["summary"]["min_value"] = u64_to_decimal(min_value);
-        data["summary"]["max_value"] = u64_to_decimal(max_value);
+        data["summary"]["min_value"] = counter_value_json(min_bits);
+        data["summary"]["max_value"] = counter_value_json(max_bits);
         data["summary"]["average_value"] =
             long_double_to_decimal(sum / static_cast<long double>(valid_count));
         data["min_count"] = min_count;

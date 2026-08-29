@@ -32,19 +32,6 @@ static std::string bits_only(const std::string& value) {
     return out;
 }
 
-static bool is_true_value(const std::string& value) {
-    std::string bits = bits_only(value);
-    if (bits.empty()) {
-        std::string raw = strip_value_prefix(value);
-        return raw == "1";
-    }
-    for (char c : bits) {
-        if (c == 'x' || c == 'z') return false;
-        if (c == '1') return true;
-    }
-    return false;
-}
-
 enum class TriValue {
     False,
     True,
@@ -387,8 +374,8 @@ bool EventAnalyzer::validate_config(npiFsdbFileHandle file,
         error = "Clock signal not found: " + config.clock_sample.clock;
         return false;
     }
-    if (!config.rst_n.empty() && !npi_fsdb_sig_by_name(file, config.rst_n.c_str(), NULL)) {
-        error = "Reset signal not found: " + config.rst_n;
+    if (config.has_reset && !npi_fsdb_sig_by_name(file, config.reset.signal.c_str(), NULL)) {
+        error = "Reset signal not found: " + config.reset.signal;
         return false;
     }
     for (const auto& kv : config.signals) {
@@ -432,10 +419,15 @@ bool EventAnalyzer::analyze(npiFsdbFileHandle file,
     if (!validator.eval(ignored, error)) return false;
 
     npiFsdbSigHandle rst = nullptr;
-    if (!config.rst_n.empty()) {
-        rst = npi_fsdb_sig_by_name(file, config.rst_n.c_str(), NULL);
+    if (config.has_reset) {
+        rst = npi_fsdb_sig_by_name(file, config.reset.signal.c_str(), NULL);
         if (!rst) {
-            error = "Reset signal not found: " + config.rst_n;
+            error = "Reset signal not found: " + config.reset.signal;
+            return false;
+        }
+        NPI_INT32 reset_width = 0;
+        if (!npi_fsdb_sig_property(npiFsdbSigRangeSize, rst, &reset_width) || reset_width != 1) {
+            error = "Reset signal must be one bit: " + config.reset.signal;
             return false;
         }
     }
@@ -450,19 +442,22 @@ bool EventAnalyzer::analyze(npiFsdbFileHandle file,
         signal_handles.push_back(sig);
     }
     std::vector<ClockSampleSignal> sample_signals;
-    if (rst) sample_signals.push_back({"__rst_n", config.rst_n, rst});
+    if (rst) sample_signals.push_back({"__reset", config.reset.signal, rst});
     for (size_t i = 0; i < aliases.size(); ++i) {
         sample_signals.push_back({aliases[i], paths[i], signal_handles[i]});
     }
 
+    int matched_count = 0;
+    npiFsdbTime first_match_time = 0;
+    npiFsdbTime last_match_time = 0;
     auto process_edge = [&](npiFsdbTime t,
                             const std::string& sampled_rst_value,
                             const std::vector<std::string>& sampled_values,
                             std::string& process_error) -> bool {
         if (t < query.begin || t > query.end) return true;
 
-        if (!config.rst_n.empty()) {
-            if (!is_true_value(sampled_rst_value)) return true;
+        if (config.has_reset) {
+            if (reset_is_active(config.reset, sampled_rst_value)) return true;
         }
 
         std::map<std::string, std::string> value_map;
@@ -485,12 +480,25 @@ bool EventAnalyzer::analyze(npiFsdbFileHandle file,
         ExprParser parser(query.expr, value_map);
         if (!parser.eval(matched, process_error)) return false;
         if (matched == TriValue::True) {
+            ++matched_count;
+            if (matched_count == 1) first_match_time = t;
+            last_match_time = t;
             EventRecord rec;
             rec.time = t;
             rec.signals = value_map;
             for (const auto& kv : config.fields) rec.signals.erase(kv.first);
             rec.fields = field_map;
-            records.push_back(rec);
+            for (size_t i = 0; i < aliases.size(); ++i) {
+                FsdbSignalWidth width = fsdb_signal_width(signal_handles[i]);
+                rec.signal_widths[aliases[i]] =
+                    width.reliable ? width.width : 0;
+            }
+            for (const auto& kv : config.fields) {
+                rec.field_widths[kv.first] =
+                    std::abs(kv.second.left - kv.second.right) + 1;
+            }
+            if (query.retain_last_only && !records.empty()) records[0] = rec;
+            else records.push_back(rec);
         }
         return true;
     };
@@ -498,7 +506,7 @@ bool EventAnalyzer::analyze(npiFsdbFileHandle file,
     ClockSampleScanner scanner(file, clock_sample);
     int sample_count = 0;
     bool truncated = false;
-    if (!scanner.scan(sample_signals, query.begin, query.end, npiFsdbBinStrVal, 'b', -1,
+    if (!scanner.scan(sample_signals, query.begin, query.end, npiFsdbBinStrVal, 'b', query.max_samples,
         [&](const ClockSample& sample) -> bool {
             size_t offset = 0;
             std::string sampled_rst_value = "'b1";
@@ -522,6 +530,14 @@ bool EventAnalyzer::analyze(npiFsdbFileHandle file,
 
     if (!error.empty()) {
         return false;
+    }
+
+    if (query.stats) {
+        query.stats->sample_count = sample_count;
+        query.stats->matched_count = matched_count;
+        query.stats->first_match_time = first_match_time;
+        query.stats->last_match_time = last_match_time;
+        query.stats->sample_budget_exhausted = truncated;
     }
 
     return true;

@@ -28,7 +28,6 @@ pytest_roots:
   - xcov/tests
   - xwaveform/tests
   - xsva/tests
-  - xeda_runner/tests
   - xverif_mcp/tests
   - xdebug/tests
 non_pytest_test_sources:

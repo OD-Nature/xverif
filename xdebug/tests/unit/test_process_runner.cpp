@@ -9,7 +9,7 @@ int main() {
 
     {
         xdebug::ProcessRequest request;
-        request.executable = "/bin/sh";
+        request.executable = "sh";
         request.argv = {"-c", "cat; printf 'stderr-ok\\n' >&2"};
         request.stdin_text = "stdin-ok\n";
         request.timeout_ms = 2000;
@@ -22,7 +22,7 @@ int main() {
 
     {
         xdebug::ProcessRequest request;
-        request.executable = "/bin/sh";
+        request.executable = "sh";
         request.argv = {
             "-c",
             "i=0; while [ $i -lt 12000 ]; do printf 'stdout-%05d\\n' $i; "
@@ -37,7 +37,7 @@ int main() {
 
     {
         xdebug::ProcessRequest request;
-        request.executable = "/bin/sh";
+        request.executable = "sh";
         request.argv = {"-c", "sleep 5"};
         request.timeout_ms = 100;
         const auto begin = std::chrono::steady_clock::now();
@@ -51,7 +51,7 @@ int main() {
 
     {
         xdebug::ProcessRequest request;
-        request.executable = "/path/that/does/not/exist";
+        request.executable = "definitely-missing-xdebug-executable";
         request.timeout_ms = 1000;
         xdebug::ProcessResult result = runner.run(request);
         assert(result.exit_code == 127);

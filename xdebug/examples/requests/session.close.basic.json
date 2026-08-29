@@ -5,6 +5,6 @@
     "session_id": "case_a"
   },
   "args": {
-    "session_id": "case_a"
+    "mode": "graceful"
   }
 }

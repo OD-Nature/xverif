@@ -6,12 +6,12 @@
   },
   "args": {
     "mode": "replace",
-    "streams": [
-      {
+    "config": {
+      "streams": [
+        {
         "name": "req_stream",
         "signals": {
           "clk": "top.clk",
-          "rst_n": "top.rst_n",
           "req_vld": "top.req_vld",
           "req_rdy": "top.req_rdy",
           "req_sop": "top.req_sop",
@@ -23,17 +23,18 @@
         },
         "clock": "clk",
         "edge": "posedge",
-        "reset": "!rst_n",
+        "reset": {"signal": "top.rst_n", "polarity": "active_low"},
         "vld": "req_vld",
         "rdy": "req_rdy",
         "sop": "req_sop",
         "eop": "req_eop",
-        "data_fields": {
+        "beat_fields": {
           "opcode": "req_data[7:0]",
           "addr": "{addr_hi, addr_lo}",
           "is_wr": "req_cmd == 2'b01"
         }
-      }
-    ]
+        }
+      ]
+    }
   }
 }

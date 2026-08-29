@@ -182,7 +182,7 @@ chain 的 bug 和 single driver 版本同源，但表现更隐蔽。旧逻辑中
 python -m pytest xdebug/tests/combined/test_active_zero_evidence.py -q
 python -m pytest xdebug/tests/combined/test_active_semantics.py -q
 make -C xdebug combined-test
-make full-test PYTHON=~/miniconda3/bin/python
+make full-test PYTHON=python3
 ```
 
 后续又因为 `xif_agent` 包名从 `xif_types_pkg` 改为 `xif_pkg`，顺手修复了 xif event fixture，并暴露出 engine 侧 `event.config.load` 对旧字段切片写法不兼容的问题。这个不是 active trace 主线 bug，但属于同一次回归清理中发现的真实兼容性问题，也已经修掉。

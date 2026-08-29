@@ -70,6 +70,12 @@ def _load_server(
     monkeypatch.setenv("XVERIF_MCP_BACKEND", backend)
     monkeypatch.setenv("XVERIF_MCP_STARTUP_TIMEOUT_SEC", "30")
     monkeypatch.setenv("XVERIF_MCP_REQUEST_TIMEOUT_SEC", "60")
+    monkeypatch.setenv("XVERIF_MCP_ENABLE_MUTATION", "1")
+    monkeypatch.setenv("XVERIF_MCP_ENABLE_ARTIFACT_WRITE", "1")
+    monkeypatch.setenv(
+        "XVERIF_MCP_ARTIFACT_ROOT",
+        str(isolated_home.parent),
+    )
     pythonpath = str(MCP_SRC)
     if os.environ.get("PYTHONPATH"):
         pythonpath += os.pathsep + os.environ["PYTHONPATH"]
@@ -115,12 +121,14 @@ def _kill_native_sessions(isolated_home: Path) -> None:
         input=json.dumps(
             {
                 "api_version": "xdebug.v1",
-                "action": "session.kill",
+                "action": "session.close",
                 "target": {"session_id": "all"},
+                "args": {"mode": "force"},
             }
         )
         + "\n",
         text=True,
+        encoding="utf-8",
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         timeout=30,
@@ -172,7 +180,9 @@ def test_mcp_direct_tools_discovery_schema_and_one_shot_actions(
         )
         assert schema["ok"] is True
         assert schema["summary"]["action"] == "value.at"
-        assert schema["data"]["schema"]["title"] == "value.at request"
+        assert schema["summary"]["view"] == "mcp"
+        assert schema["data"]["args_schema"]["properties"]["signal"]["type"] == "string"
+        assert schema["data"]["minimal_call"]["action"] == "value.at"
     finally:
         _close_loaded_server()
         _kill_native_sessions(isolated_home)
@@ -206,14 +216,15 @@ def test_mcp_direct_real_waveform_design_and_combined_sessions(
                         "signal": "ai_complex_top.sig_a",
                         "clock": "ai_complex_top.clk",
                         "time": "75ns",
-                        "format": "hex",
+                        "value_format": "hex",
                     },
                     "output_format": "json",
                 },
             )
         )
         assert wave["ok"] is True
-        assert wave["data"]["value"]["known"] is True
+        assert wave["data"]["entries"][0]["key"] == "ai_complex_top.sig_a"
+        assert wave["data"]["samples"][0]["values"][0]["value"]["known"] is True
 
         ordinary_error = _json(
             _call(
@@ -234,7 +245,10 @@ def test_mcp_direct_real_waveform_design_and_combined_sessions(
         assert ordinary_error["ok"] is False
         assert ordinary_error["error"]["code"] == "SIGNAL_NOT_FOUND"
         listed = _json(_call(server, "xverif_debug_session_list"))
-        assert any(row["alias"] == "mcp_wave" for row in listed["sessions"])
+        assert any(
+            row["session_id"] == "mcp_wave"
+            for row in listed["sessions"]
+        )
 
         design_open = _json(
             _call(
@@ -261,7 +275,7 @@ def test_mcp_direct_real_waveform_design_and_combined_sessions(
         )
         assert design["ok"] is True
         assert design["data"]["paths"]
-        assert design["summary"]["path_count"] == len(design["data"]["paths"])
+        assert design["summary"]["returned_count"] == len(design["data"]["paths"])
 
         combined_open = _json(
             _call(
@@ -292,11 +306,15 @@ def test_mcp_direct_real_waveform_design_and_combined_sessions(
         )
         assert combined["ok"] is True
         assert combined["data"]["paths"]
-        assert combined["summary"]["path_count"] == len(combined["data"]["paths"])
+        assert combined["summary"]["returned_count"] == len(combined["data"]["paths"])
 
         for name in ("mcp_combined", "mcp_design", "mcp_wave"):
             closed = _json(
-                _call(server, "xverif_debug_session_close", {"name": name})
+                _call(
+                    server,
+                    "xverif_debug_session_close",
+                    {"session_id": name},
+                )
             )
             assert closed["ok"] is True
     finally:
@@ -334,7 +352,7 @@ def test_mcp_direct_matches_cli_normalized_json_response(
                         "signal": "ai_complex_top.sig_a",
                         "clock": "ai_complex_top.clk",
                         "time": "75ns",
-                        "format": "hex",
+                        "value_format": "hex",
                     },
                     "output_format": "json",
                 },
@@ -351,7 +369,7 @@ def test_mcp_direct_matches_cli_normalized_json_response(
                     "signal": "ai_complex_top.sig_a",
                     "clock": "ai_complex_top.clk",
                     "time": "75ns",
-                    "format": "hex",
+                    "value_format": "hex",
                 },
             },
             output_format="json",
@@ -383,7 +401,11 @@ def test_mcp_direct_matches_cli_normalized_json_response(
         )
 
         closed = _json(
-            _call(server, "xverif_debug_session_close", {"name": "mcp_cli_equiv"})
+            _call(
+                server,
+                "xverif_debug_session_close",
+                {"session_id": "mcp_cli_equiv"},
+            )
         )
         assert closed["ok"] is True
     finally:
@@ -418,7 +440,7 @@ def test_mcp_batch_runs_real_session_workflow(
         },
         {
             "tool": "xverif_debug_session_close",
-            "args": {"name": "batch_wave"},
+            "args": {"session_id": "batch_wave"},
         },
     ]
     batch_file.write_text(
@@ -436,13 +458,18 @@ def test_mcp_batch_runs_real_session_workflow(
                 },
             )
         )
-        assert result == {
+        assert {
+            key: value
+            for key, value in result.items()
+            if key != "output_bytes"
+        } == {
             "ok": True,
             "total": 3,
             "ok_count": 3,
             "failed_count": 0,
             "output_file": str(output_file),
         }
+        assert result["output_bytes"] == output_file.stat().st_size
         output_rows = [
             json.loads(line)
             for line in output_file.read_text(encoding="utf-8").splitlines()
@@ -513,7 +540,7 @@ def test_mcp_fake_lsf_launches_real_xdebug_stdio_loop(
             _call(
                 server,
                 "xverif_debug_session_close",
-                {"name": "fake_lsf_wave"},
+                {"session_id": "fake_lsf_wave"},
             )
         )
         assert closed["ok"] is True
@@ -668,13 +695,14 @@ def test_mcp_real_lsf_optional_waveform_smoke(
             )
         )
         assert queried["ok"] is True
-        assert queried["data"]["value"]["known"] is True
+        assert queried["data"]["entries"][0]["key"] == "ai_complex_top.sig_a"
+        assert queried["data"]["samples"][0]["values"][0]["value"]["known"] is True
 
         closed = _json(
             _call(
                 server,
                 "xverif_debug_session_close",
-                {"name": "real_lsf_wave"},
+                {"session_id": "real_lsf_wave"},
             )
         )
         assert closed["ok"] is True

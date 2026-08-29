@@ -15,7 +15,8 @@
       ]
     },
     "request_id": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "action": {
       "type": "string",
@@ -24,37 +25,61 @@
       ]
     },
     "target": {
-      "type": "object"
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
     },
     "args": {
       "type": "object",
-      "properties": {},
-      "additionalProperties": false,
-      "required": []
+      "required": [],
+      "properties": {
+        "output": {
+          "type": "object",
+          "properties": {
+            "verbose": {
+              "type": "boolean",
+              "default": false,
+              "description": "Return verbose session records instead of the default compact representation."
+            }
+          },
+          "additionalProperties": false,
+          "description": "Export destination and rendering controls. path, file_format, and verbose are supported only where this action declares them."
+        }
+      },
+      "additionalProperties": false
     },
     "limits": {
-      "type": "object"
-    },
-    "auth_token": {
-      "type": "string"
-    },
-    "id": {
-      "type": "string"
-    },
-    "trace_id": {
-      "type": "string"
-    },
-    "span_id": {
-      "type": "string"
-    },
-    "parent_span_id": {
-      "type": "string"
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
     }
   },
   "additionalProperties": false,
-  "description": "session.list: 列出当前 session。",
+  "description": "List active debug sessions.",
   "x-purpose": "列出当前 session。",
   "x-how_it_works": "读取 SessionManager 中的活动 session 元数据。",
   "x-when_to_use": "确认已有 session_id 和资源类型。",
-  "x-arg_contract_notes": "none"
+  "x-arg_contract_notes": "none",
+  "x-description-zh": "列出当前 session。",
+  "x-agent": {
+    "use_when": [
+      "Need to discover session identifiers and lifecycle states without probing resources or mutating them."
+    ],
+    "do_not_use_when": [
+      "Do not use it to diagnose resources or mutate session lifecycle."
+    ],
+    "alternatives": [
+      {
+        "action": "session.doctor",
+        "when": "Inspect one session's health and resources."
+      },
+      {
+        "action": "session.open",
+        "when": "Create a new session."
+      }
+    ],
+    "constraints": [
+      "none"
+    ]
+  }
 }

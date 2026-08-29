@@ -60,6 +60,7 @@
             }
           },
           "tool_env": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}
+          ,"build_capabilities": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}
         }
       }
     }

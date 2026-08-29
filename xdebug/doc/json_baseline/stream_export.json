@@ -11,7 +11,7 @@
       "format": "tsv",
       "start": "0ns",
       "end": "250us",
-      "output_file": "/tmp/xdebug_action_sampling/stream.tsv"
+      "output_file": "<repo>/tmp/xdebug_action_sampling/stream.tsv"
     },
     "limits": {
       "timeout_ms": 120000

@@ -279,5 +279,7 @@ def parse_vars(items: list[str] | None, *, state: str = "2state") -> dict[str, B
         name = name.strip()
         if not name:
             raise ParseError("--var name cannot be empty", var=item)
+        if name in variables:
+            raise ParseError("--var name must be unique", var=name)
         variables[name] = parse_value(value.strip(), state=state)
     return variables

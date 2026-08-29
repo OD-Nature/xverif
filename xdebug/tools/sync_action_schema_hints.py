@@ -11,6 +11,9 @@ import sys
 from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "specs"))
+from action_contracts import guidance_for
+
 
 XDEBUG_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = XDEBUG_ROOT.parent
@@ -28,15 +31,18 @@ PARAM_DESCRIPTIONS = {
     "config_path": "输入配置文件路径。",
     "edge": "clock sampling 使用的边沿：posedge、negedge 或 dual。",
     "expr": "需要求值或匹配的布尔表达式。",
+    "expected_state": "窗口内要求持续满足的四态逻辑值：x 或 z。",
     "file": "源码文件路径。",
     "from_signal": "路径查询的起点信号。",
     "index": "列表中要删除的信号序号。",
     "kind": "导出或查询的结果类型。",
     "line": "源码行号。",
     "line_limit": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。",
+    "match_mode": "X/Z 向量匹配方式：exact 要求每一位均为目标态，contains 要求至少一位为目标态。",
     "name": "已保存配置、游标、列表或接口配置名称。",
     "op": "游标移动或协议浏览操作。",
     "output": "导出配置对象；路径统一使用 output.path。",
+    "ownership_token": "managed wrapper 可选提供并复用的 64 个小写十六进制字符（256 bit）conditional-cleanup token，不是授权；session.open 省略时 frontend 仍会 fail-closed 地生成内部 token 并绑定 digest；仅允许 session.close 的 mode=force 且精确单一 session_id 提供，提供时必须匹配，对 all 拒绝；禁止记录、回显或人工构造。",
     "query": "stream 查询条件。",
     "ready": "valid-ready 握手中的 ready 信号路径。",
     "requests": "batch action 中按顺序执行的 request 列表。",
@@ -47,6 +53,7 @@ PARAM_DESCRIPTIONS = {
     "stream": "已保存 stream 配置名称。",
     "streams": "需要加载的 stream 配置列表。",
     "time": "查询或验证的目标时间点。",
+    "times": "按请求顺序查询的一个或多个目标时间点。",
     "time_range": "查询或分析的时间窗口。",
     "to_signal": "路径查询的终点信号。",
     "valid": "valid-ready 握手或采样检查中的 valid 信号路径。",
@@ -131,7 +138,8 @@ def arg_contract_notes(spec: dict[str, Any]) -> str:
 
 def update_request_schema(schema: dict[str, Any], spec: dict[str, Any], hint: dict[str, str]) -> None:
     name = spec["name"]
-    schema["description"] = f"{name}: {hint['purpose']}"
+    schema["description"] = spec["description_en"]
+    schema["x-description-zh"] = spec["description_zh"]
     schema["x-purpose"] = hint["purpose"]
     schema["x-how_it_works"] = hint["how_it_works"]
     schema["x-when_to_use"] = hint["when_to_use"]
@@ -147,28 +155,34 @@ def update_request_schema(schema: dict[str, Any], spec: dict[str, Any], hint: di
     for key in sorted(required_related_args(spec)):
         if key not in props:
             raise ValueError(f"{name}: request schema missing args.properties.{key}")
-        props[key]["description"] = PARAM_DESCRIPTIONS.get(
+        props[key].setdefault("description", PARAM_DESCRIPTIONS.get(
             key, f"{key} parameter for {name}."
-        )
+        ))
+    guidance = guidance_for(name)
+    schema["x-agent"] = {
+        "use_when": guidance["use_when"],
+        "do_not_use_when": guidance["do_not_use_when"],
+        "alternatives": guidance["alternatives"],
+        "constraints": [hint.get("arg_contract_notes") or arg_contract_notes(spec)],
+    }
 
 
 def update_response_schema(schema: dict[str, Any], spec: dict[str, Any], hint: dict[str, str]) -> None:
-    name = spec["name"]
-    schema["description"] = f"{name} response: {hint['purpose']}"
-    schema["x-output_notes"] = (
-        "返回该 action 的 summary/data/error/meta；具体字段以 response schema 和 response example 为准。"
-    )
+    schema["description"] = spec["description_en"]
+    schema["x-description-zh"] = spec["description_zh"]
+    # x-output_notes is action-shape data owned by sync_response_schemas.py.
+    # This hint synchronizer must not replace it with a generic tautology.
 
 
-def sync(check: bool) -> list[str]:
+def sync(check: bool, selected_actions: set[str] | None = None) -> list[str]:
     specs = load_json(SPEC_PATH)["actions"]
     hints = parse_action_reference(action_reference_path())
     errors: list[str] = []
 
     for spec in specs:
-        if spec["status"] == "removed":
-            continue
         name = spec["name"]
+        if selected_actions and name not in selected_actions:
+            continue
         hint = hints.get(name)
         if hint is None:
             errors.append(f"{name}: missing action reference row")
@@ -198,9 +212,10 @@ def sync(check: bool) -> list[str]:
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--check", action="store_true", help="only check, do not update files")
+    parser.add_argument("--action", action="append", default=[], help="sync only the named action; repeatable")
     args = parser.parse_args(argv)
 
-    errors = sync(check=args.check)
+    errors = sync(check=args.check, selected_actions=set(args.action) or None)
     if errors:
         for error in errors:
             print(f"ERROR: {error}", file=sys.stderr)

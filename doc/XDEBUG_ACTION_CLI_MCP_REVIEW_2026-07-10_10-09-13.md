@@ -8,7 +8,7 @@
 - 核心判断：返回内容对实际 debug 是否有用；同时检查失败信息清晰度、可恢复性和内容冗余
 - 证据原则：以本轮真实请求/响应为准；fixture、执行位置和无法覆盖项逐项披露；不以 basic example 或历史文档替代实测
 - 执行约束：不调用、不导入、不复用仓库的 70-action replay runner、registry 或其输出；所有请求均在本轮按 action 独立构造并直接发送到 CLI/MCP 入口
-- 原始证据：本轮 request/response JSONL 与 raw response 保存在 `/tmp/xverif-action-review-2026-07-10/`；本报告保留可版本化结论，临时原始证据不纳入仓库
+- 原始证据：本轮 request/response JSONL 与 raw response 保存在 `<repo>/tmp/xverif-action-review-2026-07-10/`；本报告保留可版本化结论，临时原始证据不纳入仓库
 
 ## 评审口径
 

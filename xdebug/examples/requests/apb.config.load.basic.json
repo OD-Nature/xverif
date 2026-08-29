@@ -6,6 +6,6 @@
   },
   "args": {
     "name": "if0",
-    "config_path": "xdebug/testdata/waveform/ai_complex_wave/config/apb0.json"
+    "config_path": "xdebug/testdata/waveform/apb_vip_real/config/apb0.json"
   }
 }

@@ -5,7 +5,8 @@
   "type": "object",
   "required": [
     "api_version",
-    "action"
+    "action",
+    "target"
   ],
   "properties": {
     "api_version": {
@@ -21,73 +22,107 @@
       ]
     },
     "target": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fsdb": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "session_id"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "fsdb"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "session_id"
+            ]
+          },
+          "required": [
+            "fsdb"
+          ]
+        }
+      ],
+      "additionalProperties": false
     },
     "args": {
       "type": "object",
+      "required": [],
       "properties": {
-        "name": {
-          "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。"
-        },
         "output": {
           "type": "object",
           "properties": {
-            "path": {
-              "type": "string"
-            },
-            "file_format": {
-              "type": "string"
-            },
             "verbose": {
-              "type": "boolean"
+              "type": "boolean",
+              "default": false,
+              "description": "Include each saved configuration object with the name list."
             }
           },
           "additionalProperties": false,
-          "description": "导出配置对象；路径统一使用 output.path。"
-        },
-        "time_unit": {
-          "type": "string",
-          "enum": [
-            "auto",
-            "fs",
-            "ps",
-            "ns",
-            "us",
-            "ms",
-            "s"
-          ]
+          "description": "Export destination and rendering controls. path, file_format, and verbose are supported only where this action declares them."
         }
       },
-      "additionalProperties": false,
-      "required": []
+      "additionalProperties": false
     },
     "limits": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647,
+          "description": "Positive public frontend-to-engine request timeout in milliseconds. Omit limits.timeout_ms to disable the public watchdog."
+        }
+      },
+      "additionalProperties": false
     },
     "request_id": {
-      "type": "string"
-    },
-    "auth_token": {
-      "type": "string"
-    },
-    "id": {
-      "type": "string"
-    },
-    "trace_id": {
-      "type": "string"
-    },
-    "span_id": {
-      "type": "string"
-    },
-    "parent_span_id": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     }
   },
   "additionalProperties": false,
-  "description": "stream.config.list: 列出 stream 配置。",
+  "description": "List saved stream configurations.",
   "x-purpose": "列出 stream 配置。",
-  "x-how_it_works": "读取已保存 stream 定义；args:{} 列全部，args.name 显示单个配置详情。",
+  "x-how_it_works": "只列出已保存配置的名称和摘要，不接受 name。",
   "x-when_to_use": "查看可查询的 stream。",
-  "x-arg_contract_notes": "args:{} list all; optional name shows one config"
+  "x-arg_contract_notes": "no required args",
+  "x-description-zh": "列出 stream 配置。",
+  "x-agent": {
+    "use_when": [
+      "Need only the names and inventory of saved stream configurations before choosing one."
+    ],
+    "do_not_use_when": [
+      "Do not use it to retrieve one raw definition or resolve signals against a waveform."
+    ],
+    "alternatives": [
+      {
+        "action": "stream.config.get",
+        "when": "Read one exact persisted definition."
+      },
+      {
+        "action": "stream.describe",
+        "when": "Resolve and describe a stream against the active waveform."
+      }
+    ],
+    "constraints": [
+      "no required args"
+    ]
+  }
 }

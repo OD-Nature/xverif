@@ -11,7 +11,7 @@
         "clk": "ai_complex_top.clk",
         "rst": "ai_complex_top.rst_n"
       },
-      "output_file": "/tmp/xdebug_action_sampling/events.tsv",
+      "output_file": "<repo>/tmp/xdebug_action_sampling/events.tsv",
       "max_examples": 3
     },
     "limits": {

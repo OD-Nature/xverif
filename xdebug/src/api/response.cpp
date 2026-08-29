@@ -1,15 +1,28 @@
 #include "api/response.h"
+#include "build_info.h"
 #include "core/diagnostic_error.h"
 
 namespace xdebug {
 
+Json tool_metadata() {
+    return {{"name", "xdebug"}, {"version", kToolVersion},
+            {"build_id", XDEBUG_BUILD_ID},
+            {"git_revision", XDEBUG_GIT_REVISION},
+            {"schema_revision", XDEBUG_SCHEMA_REVISION}};
+}
+
 Json make_response(const Json& request, const std::string& action, bool ok) {
     Json response;
     response["api_version"] = kApiVersion;
-    if (request.contains("request_id")) response["request_id"] = request["request_id"];
+    if (request.is_object() &&
+        request.contains("request_id") &&
+        request["request_id"].is_string() &&
+        !request["request_id"].get<std::string>().empty()) {
+        response["request_id"] = request["request_id"];
+    }
     response["ok"] = ok;
     response["action"] = action;
-    response["tool"] = {{"name", "xdebug"}, {"version", kToolVersion}};
+    response["tool"] = tool_metadata();
     response["session"] = nullptr;
     response["summary"] = Json::object();
     response["data"] = ok ? Json::object() : Json(nullptr);
@@ -22,7 +35,10 @@ Json make_error(const Json& request,
                 const std::string& code,
                 const std::string& message,
                 bool recoverable) {
-    Json response = make_response(request, action, false);
+    Json response = make_response(
+        request,
+        action.empty() ? std::string("error") : action,
+        false);
     response["error"] = {
         {"code", code},
         {"message", message},
@@ -36,7 +52,10 @@ Json make_error(const Json& request,
 Json make_error(const Json& request,
                 const std::string& action,
                 const Json& error) {
-    Json response = make_response(request, action, false);
+    Json response = make_response(
+        request,
+        action.empty() ? std::string("error") : action,
+        false);
     Json normalized = xdebug_core::normalize_diagnostic_error(error, "handler");
     if (!normalized.contains("code")) normalized["code"] = "ACTION_FAILED";
     if (!normalized.contains("message")) normalized["message"] = "action failed";
@@ -52,8 +71,7 @@ Json normalize_engine_response(const Json& engine_response) {
     Json response = engine_response;
     response["api_version"] = kApiVersion;
     if (response.contains("tool") && response["tool"].is_object()) {
-        response["tool"]["name"] = "xdebug";
-        response["tool"]["version"] = kToolVersion;
+        response["tool"] = tool_metadata();
     }
     if (response.contains("suggested_next_actions") &&
         response["suggested_next_actions"].is_array()) {

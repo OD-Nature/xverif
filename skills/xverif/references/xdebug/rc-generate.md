@@ -1,6 +1,6 @@
-# xdebug rc.generate 参考
+# xdebug nwave.rc.generate 参考
 
-`rc.generate` 根据外部 JSON 配置生成 nWave `signal.rc`。xdebug 会使用 `target.fsdb` 或包含 fsdb 的 `session_id` 校验信号是否存在、marker 时间是否合法，然后写出 rc 文件。
+`nwave.rc.generate` 根据外部 JSON 配置生成 nWave `signal.rc`。xdebug 会使用包含 fsdb 的 `session_id` 校验信号是否存在、marker 时间是否合法，然后写出 rc 文件。
 
 第一版约束：
 
@@ -8,6 +8,9 @@
 - 配置里的信号路径使用点分层次，例如 `top.u.sig[3:0]`。
 - 生成 rc 时自动转成 nWave slash 路径，例如 `/top/u/sig[3:0]`。
 - 支持 `addSignal`、`addSignal -w analog`、`addExprSig`、`addGroup/addSubGroup`、`cursor/marker/userMarker/zoom`。
+- group 配置不接受 `expanded`；生成的 `addGroup` / `addSubGroup` 固定不带 `-e`。
+- 第一条非注释 RC 语句固定为 `windowTimeUnit 1ns`；配置中不得出现 `window_time_unit`。
+- `user_markers[].time` 必须是带单位的时间字符串，生成的 `userMarker` 使用无后缀 ns 数值。
 - 不写 `openDirFile` 和 `activeDirFile`。
 - 校验失败默认不写 rc；`allow_invalid:true` 才允许带 warning 生成。
 
@@ -16,9 +19,8 @@
 ```json
 {
   "api_version": "xdebug.v1",
-  "action": "rc.generate",
+  "action": "nwave.rc.generate",
   "target": {
-    "fsdb": "waves.fsdb",
     "session_id": "case_a"
   },
   "args": {
@@ -36,14 +38,12 @@
 | --- | --- |
 | `args.config_path` | 必填；rc 配置 JSON 文件路径 |
 | `args.output.path` | 必填；生成 rc 文件路径 |
-| `args.allow_invalid` | 默认 `false`；校验失败时是否仍生成 rc |
 
 ## 配置示例
 
 ```json
 {
   "file_time_scale": "1ns",
-  "window_time_unit": "1ns",
   "signal_spacing": 5,
   "cursor": "120ns",
   "main_marker": "120ns",
@@ -54,7 +54,6 @@
   "groups": [
     {
       "name": "ClockReset",
-      "expanded": true,
       "signals": [
         "top.clk",
         {
@@ -82,7 +81,6 @@
     },
     {
       "name": "AXI",
-      "expanded": true,
       "subgroups": [
         {
           "name": "AW",
@@ -196,7 +194,12 @@ expression signal 推荐使用 `$alias` 引用 `signals` map：
 
 ```rc
 addExprSig -b 1 -n UUU aw_fire "/top/u_axi/awvalid" & "/top/u_axi/awready"
+
+addGroup "AW"
+addSignal -h 18 /aw_fire
 ```
+
+所有 `addExprSig` 会在第一个 group 前统一创建；expression 对应的 `addSignal -h 18` 则位于所属 group 内。
 
 `raw_expr` 只是逃生口，仅当 `allow_raw_expr:true` 时允许；`raw_expr` 不做信号校验。
 

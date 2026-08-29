@@ -6,7 +6,8 @@
   "required": [
     "api_version",
     "action",
-    "args"
+    "args",
+    "target"
   ],
   "properties": {
     "api_version": {
@@ -16,7 +17,8 @@
       ]
     },
     "request_id": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "action": {
       "type": "string",
@@ -25,61 +27,106 @@
       ]
     },
     "target": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fsdb": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "session_id"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "fsdb"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "session_id"
+            ]
+          },
+          "required": [
+            "fsdb"
+          ]
+        }
+      ],
+      "additionalProperties": false
     },
     "args": {
       "type": "object",
-      "properties": {
-        "name": {
-          "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。"
-        },
-        "signal": {
-          "type": "string",
-          "description": "目标信号路径。"
-        },
-        "time_unit": {
-          "type": "string",
-          "enum": [
-            "auto",
-            "fs",
-            "ps",
-            "ns",
-            "us",
-            "ms",
-            "s"
-          ]
-        }
-      },
-      "additionalProperties": false,
       "required": [
         "name",
         "signal"
-      ]
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Saved-object name in this action namespace; do not assume names are shared by cursors, lists, and protocol configs."
+        },
+        "signal": {
+          "type": "string",
+          "description": "Final leaf signal path. Aggregate, array, and struct roots are not expanded automatically."
+        }
+      },
+      "additionalProperties": false
     },
     "limits": {
-      "type": "object"
-    },
-    "auth_token": {
-      "type": "string"
-    },
-    "id": {
-      "type": "string"
-    },
-    "trace_id": {
-      "type": "string"
-    },
-    "span_id": {
-      "type": "string"
-    },
-    "parent_span_id": {
-      "type": "string"
+      "type": "object",
+      "properties": {
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647,
+          "description": "Positive public frontend-to-engine request timeout in milliseconds. Omit limits.timeout_ms to disable the public watchdog."
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false,
-  "description": "list.add: 向信号列表追加一个信号。",
+  "description": "Add a signal to a named waveform list.",
   "x-purpose": "向信号列表追加一个信号。",
   "x-how_it_works": "检查 signal 在 FSDB 中存在后写入 ListManager。",
   "x-when_to_use": "逐步构建观察列表。",
-  "x-arg_contract_notes": "required: name, signal"
+  "x-arg_contract_notes": "required: name, signal",
+  "x-description-zh": "向信号列表追加一个信号。",
+  "x-agent": {
+    "use_when": [
+      "Have an existing named waveform list and need to append one specific signal path."
+    ],
+    "do_not_use_when": [
+      "Do not use it to create the list, delete entries, or inspect waveform values."
+    ],
+    "alternatives": [
+      {
+        "action": "list.create",
+        "when": "Create the named list first."
+      },
+      {
+        "action": "list.delete",
+        "when": "Remove an entry."
+      },
+      {
+        "action": "value.at",
+        "when": "Sample all list signals at one or more times."
+      }
+    ],
+    "constraints": [
+      "required: name, signal"
+    ]
+  }
 }

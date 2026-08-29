@@ -1,8 +1,0 @@
-{
-    "daidir": "~/xring/dv/run/out/sanity/build/simv.daidir",
-    "fsdb": "~/xring/dv/run/out/sanity/test/tc_sanity_10q_100db/waves.fsdb",
-    "signal": "xring_tb_top.u_dut.arvalid",
-    "clock": "xring_tb_top.u_dut.clk",
-    "reset": "xring_tb_top.u_dut.rst_n",
-    "session_name": "action_test"
-}

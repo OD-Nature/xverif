@@ -1,0 +1,19 @@
+{
+  "api_version": "xdebug.v1",
+  "action": "axi.statistics",
+  "target": {
+    "session_id": "case_a"
+  },
+  "args": {
+    "name": "axi0",
+    "filter": {
+      "direction": "all",
+      "ids": ["1", "3"],
+      "address": {
+        "mode": "range",
+        "begin": "'h1000",
+        "end": "'h1fff"
+      }
+    }
+  }
+}

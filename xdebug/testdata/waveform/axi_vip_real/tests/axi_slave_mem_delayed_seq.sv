@@ -81,6 +81,7 @@ class axi_slave_mem_delayed_seq extends svt_axi_slave_base_sequence;
     int bvalid_delay_val;
     int rvalid_delay_val;
     int ai_complex_delay_mode = 0;
+    int delay_profile;
     svt_axi_slave_transaction req_resp;
     bit is_write;
     bit is_read;
@@ -102,9 +103,18 @@ class axi_slave_mem_delayed_seq extends svt_axi_slave_base_sequence;
       // Get request from sequencer
       p_sequencer.response_request_port.peek(req_resp);
 
-      // Generate random delays
-      bvalid_delay_val = $urandom_range(min_resp_delay, max_resp_delay);
-      rvalid_delay_val = $urandom_range(min_resp_delay, max_resp_delay);
+      // Cycle through three fixed values and one fixed-seed random value.
+      // This gives deterministic corner cases without losing delay diversity.
+      delay_profile = (num_wr_responses + num_rd_responses) % 4;
+      case (delay_profile)
+        0: begin bvalid_delay_val = 0;  rvalid_delay_val = 0;  end
+        1: begin bvalid_delay_val = 4;  rvalid_delay_val = 4;  end
+        2: begin bvalid_delay_val = 17; rvalid_delay_val = 17; end
+        default: begin
+          bvalid_delay_val = $urandom_range(min_resp_delay, max_resp_delay);
+          rvalid_delay_val = $urandom_range(min_resp_delay, max_resp_delay);
+        end
+      endcase
       if (ai_complex_delay_mode) begin
         if ((num_wr_responses % 9) == 0)
           bvalid_delay_val = 750;
@@ -138,18 +148,9 @@ class axi_slave_mem_delayed_seq extends svt_axi_slave_base_sequence;
           rresp[i] == svt_axi_slave_transaction::OKAY;
         }
 
-        // Ready signal delays (small random)
-        if (local::ai_complex_delay_mode) {
-          addr_ready_delay inside {[0:12]};
-        } else {
-          addr_ready_delay inside {[0:5]};
-        }
-        foreach (wready_delay[i])
-          if (local::ai_complex_delay_mode) {
-            wready_delay[i] inside {[0:12]};
-          } else {
-            wready_delay[i] inside {[0:5]};
-          }
+        // Keep READY at zero delay so the write phase-order matrix is exact.
+        addr_ready_delay == 0;
+        foreach (wready_delay[i]) wready_delay[i] == 0;
       };
 
       if (!status)
@@ -169,6 +170,10 @@ class axi_slave_mem_delayed_seq extends svt_axi_slave_base_sequence;
       // Send response to driver
       $cast(req, req_resp);
       `uvm_send(req)
+      $display("AXI_RESPONSE_DELAY_JSON {\"profile\":%0d,\"channel\":\"%s\",\"bvalid_delay\":%0d,\"rvalid_delay\":%0d}",
+               delay_profile, is_write ? "B" : "R",
+               req_resp.bvalid_delay,
+               req_resp.rvalid_delay.size() ? req_resp.rvalid_delay[0] : 0);
 
       if (is_write) begin
         num_wr_responses++;

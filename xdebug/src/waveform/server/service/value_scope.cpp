@@ -1,5 +1,6 @@
 #include "../server_internal.h"
 #include "../../export/waveform_exporter.h"
+#include "../../axi/axi_transaction_json.h"
 
 namespace xdebug_waveform {
 
@@ -17,11 +18,9 @@ void handle_value(int client_fd, const char* signal_path, npiFsdbTime time, char
 
 void handle_list_value(int client_fd, const char* list_name, npiFsdbTime time, char fmt, bool json) {
     SignalList list;
-    if (!read_list_from_storage(g_session_id, list_name, list)) {
-        std::string err = std::string(ERROR_PREFIX) + "List not found: " + list_name + "\n" + END_MARKER;
-        send_all(client_fd, err.c_str(), err.length());
-        return;
-    }
+    StoreResult stored =
+        read_list_from_storage(g_session_id, list_name, list);
+    if (!require_store_result(client_fd, stored)) return;
 
     if (list.signals.empty()) {
         std::string err = std::string(ERROR_PREFIX) + "List is empty: " + list_name + "\n" + END_MARKER;
@@ -74,11 +73,9 @@ void handle_signal_check(int client_fd, const char* signal_path) {
 
 void handle_list_validate(int client_fd, const char* list_name, bool json) {
     SignalList list;
-    if (!read_list_from_storage(g_session_id, list_name, list)) {
-        std::string err = std::string(ERROR_PREFIX) + "List not found: " + list_name + "\n" + END_MARKER;
-        send_all(client_fd, err.c_str(), err.length());
-        return;
-    }
+    StoreResult stored =
+        read_list_from_storage(g_session_id, list_name, list);
+    if (!require_store_result(client_fd, stored)) return;
 
     bool all_found = true;
     std::string text;
@@ -147,23 +144,29 @@ void handle_scope(int client_fd, const char* scope_path, bool recursive, bool js
 }
 
 // Helper: read an APB config from the registry file by session_id and name
-bool read_apb_from_registry(const std::string& session_id, const char* name, xdebug_waveform::ApbConfig& out_config) {
+StoreResult read_apb_from_registry(
+    const std::string& session_id,
+    const char* name,
+    xdebug_waveform::ApbConfig& out_config) {
     xdebug_waveform::ApbManager am;
     return am.get_apb(session_id, name, out_config);
 }
 
-bool read_axi_from_registry(const std::string& session_id, const char* name, xdebug_waveform::AxiConfig& out_config) {
+StoreResult read_axi_from_registry(
+    const std::string& session_id,
+    const char* name,
+    xdebug_waveform::AxiConfig& out_config) {
     xdebug_waveform::AxiManager am;
     return am.get_axi(session_id, name, out_config);
 }
 
-void handle_list_diff(int client_fd, const char* list_name, npiFsdbTime begin_time, npiFsdbTime end_time) {
+void handle_list_first_change(int client_fd, const char* list_name,
+                              npiFsdbTime begin_time,
+                              npiFsdbTime end_time) {
     SignalList list;
-    if (!read_list_from_storage(g_session_id, list_name, list)) {
-        std::string err = std::string(ERROR_PREFIX) + "List not found: " + list_name + "\n" + END_MARKER;
-        send_all(client_fd, err.c_str(), err.length());
-        return;
-    }
+    StoreResult stored =
+        read_list_from_storage(g_session_id, list_name, list);
+    if (!require_store_result(client_fd, stored)) return;
 
     if (list.signals.empty()) {
         std::string err = std::string(ERROR_PREFIX) + "List is empty: " + list_name + "\n" + END_MARKER;
@@ -172,7 +175,8 @@ void handle_list_diff(int client_fd, const char* list_name, npiFsdbTime begin_ti
     }
 
     npiFsdbTime diff_time;
-    if (find_list_diff(g_fsdb_file, list.signals, begin_time, end_time, diff_time)) {
+    if (find_list_first_change(
+            g_fsdb_file, list.signals, begin_time, end_time, diff_time)) {
         std::string response = format_time(diff_time) + "\n" + END_MARKER;
         send_all(client_fd, response.c_str(), response.length());
     } else {
@@ -185,11 +189,9 @@ void handle_list_export(int client_fd, const char* list_name, npiFsdbTime begin_
                         npiFsdbTime end_time, const char* output_dir,
                         const char* format) {
     SignalList list;
-    if (!read_list_from_storage(g_session_id, list_name, list)) {
-        std::string err = std::string(ERROR_PREFIX) + "List not found: " + list_name + "\n" + END_MARKER;
-        send_all(client_fd, err.c_str(), err.length());
-        return;
-    }
+    StoreResult stored =
+        read_list_from_storage(g_session_id, list_name, list);
+    if (!require_store_result(client_fd, stored)) return;
 
     ListExportOptions options;
     options.session_id = g_session_id;
@@ -246,8 +248,10 @@ Json apb_txn_to_json(const xdebug_waveform::ApbTransaction* txn, bool include_ty
     if (!txn) return j;
     j["time"] = format_time(txn->time);
     if (include_type) j["type"] = txn->is_write ? "WR" : "RD";
-    j["addr"] = "'h" + txn->addr;
-    j["data"] = "'h" + txn->data;
+    j["addr"] = xdebug_core::render_logic_value(
+        xdebug_core::logic_value_from_fsdb_raw(txn->addr, 'h', txn->addr_width));
+    j["data"] = xdebug_core::render_logic_value(
+        xdebug_core::logic_value_from_fsdb_raw(txn->data, 'h', txn->data_width));
     j["has_error"] = txn->has_error;
     return j;
 }
@@ -267,11 +271,9 @@ std::string format_apb_txn_json_with_type(const xdebug_waveform::ApbTransaction*
 void handle_apb_wr(int client_fd, const char* name, const char* addr_str,
                           int num, bool last_flag, bool json) {
     xdebug_waveform::ApbConfig config;
-    if (!read_apb_from_registry(g_session_id, name, config)) {
-        std::string err = std::string(ERROR_PREFIX) + "APB config not found: " + name + "\n" + END_MARKER;
-        send_all(client_fd, err.c_str(), err.length());
-        return;
-    }
+    StoreResult stored =
+        read_apb_from_registry(g_session_id, name, config);
+    if (!require_store_result(client_fd, stored)) return;
     if (!g_apb_analyzer.analyze(name, g_fsdb_file, config)) {
         std::string err = std::string(ERROR_PREFIX) + "Failed to analyze APB: " + name + "\n" + END_MARKER;
         send_all(client_fd, err.c_str(), err.length());
@@ -320,11 +322,9 @@ void handle_apb_wr(int client_fd, const char* name, const char* addr_str,
 void handle_apb_rd(int client_fd, const char* name, const char* addr_str,
                           int num, bool last_flag, bool json) {
     xdebug_waveform::ApbConfig config;
-    if (!read_apb_from_registry(g_session_id, name, config)) {
-        std::string err = std::string(ERROR_PREFIX) + "APB config not found: " + name + "\n" + END_MARKER;
-        send_all(client_fd, err.c_str(), err.length());
-        return;
-    }
+    StoreResult stored =
+        read_apb_from_registry(g_session_id, name, config);
+    if (!require_store_result(client_fd, stored)) return;
     if (!g_apb_analyzer.analyze(name, g_fsdb_file, config)) {
         std::string err = std::string(ERROR_PREFIX) + "Failed to analyze APB: " + name + "\n" + END_MARKER;
         send_all(client_fd, err.c_str(), err.length());
@@ -372,11 +372,9 @@ void handle_apb_rd(int client_fd, const char* name, const char* addr_str,
 
 void handle_apb_begin(int client_fd, const char* name, int filter, bool json) {
     xdebug_waveform::ApbConfig config;
-    if (!read_apb_from_registry(g_session_id, name, config)) {
-        std::string err = std::string(ERROR_PREFIX) + "APB config not found: " + name + "\n" + END_MARKER;
-        send_all(client_fd, err.c_str(), err.length());
-        return;
-    }
+    StoreResult stored =
+        read_apb_from_registry(g_session_id, name, config);
+    if (!require_store_result(client_fd, stored)) return;
     if (!g_apb_analyzer.analyze(name, g_fsdb_file, config)) {
         std::string err = std::string(ERROR_PREFIX) + "Failed to analyze APB: " + name + "\n" + END_MARKER;
         send_all(client_fd, err.c_str(), err.length());
@@ -399,11 +397,9 @@ void handle_apb_begin(int client_fd, const char* name, int filter, bool json) {
 
 void handle_apb_next(int client_fd, const char* name, int filter, bool json) {
     xdebug_waveform::ApbConfig config;
-    if (!read_apb_from_registry(g_session_id, name, config)) {
-        std::string err = std::string(ERROR_PREFIX) + "APB config not found: " + name + "\n" + END_MARKER;
-        send_all(client_fd, err.c_str(), err.length());
-        return;
-    }
+    StoreResult stored =
+        read_apb_from_registry(g_session_id, name, config);
+    if (!require_store_result(client_fd, stored)) return;
     if (!g_apb_analyzer.analyze(name, g_fsdb_file, config)) {
         std::string err = std::string(ERROR_PREFIX) + "Failed to analyze APB: " + name + "\n" + END_MARKER;
         send_all(client_fd, err.c_str(), err.length());
@@ -426,11 +422,9 @@ void handle_apb_next(int client_fd, const char* name, int filter, bool json) {
 
 void handle_apb_prev(int client_fd, const char* name, int filter, bool json) {
     xdebug_waveform::ApbConfig config;
-    if (!read_apb_from_registry(g_session_id, name, config)) {
-        std::string err = std::string(ERROR_PREFIX) + "APB config not found: " + name + "\n" + END_MARKER;
-        send_all(client_fd, err.c_str(), err.length());
-        return;
-    }
+    StoreResult stored =
+        read_apb_from_registry(g_session_id, name, config);
+    if (!require_store_result(client_fd, stored)) return;
     if (!g_apb_analyzer.analyze(name, g_fsdb_file, config)) {
         std::string err = std::string(ERROR_PREFIX) + "Failed to analyze APB: " + name + "\n" + END_MARKER;
         send_all(client_fd, err.c_str(), err.length());
@@ -453,11 +447,9 @@ void handle_apb_prev(int client_fd, const char* name, int filter, bool json) {
 
 void handle_apb_last(int client_fd, const char* name, int filter, bool json) {
     xdebug_waveform::ApbConfig config;
-    if (!read_apb_from_registry(g_session_id, name, config)) {
-        std::string err = std::string(ERROR_PREFIX) + "APB config not found: " + name + "\n" + END_MARKER;
-        send_all(client_fd, err.c_str(), err.length());
-        return;
-    }
+    StoreResult stored =
+        read_apb_from_registry(g_session_id, name, config);
+    if (!require_store_result(client_fd, stored)) return;
     if (!g_apb_analyzer.analyze(name, g_fsdb_file, config)) {
         std::string err = std::string(ERROR_PREFIX) + "Failed to analyze APB: " + name + "\n" + END_MARKER;
         send_all(client_fd, err.c_str(), err.length());
@@ -480,11 +472,9 @@ void handle_apb_last(int client_fd, const char* name, int filter, bool json) {
 
 bool ensure_axi_analyzed(int client_fd, const char* name) {
     xdebug_waveform::AxiConfig config;
-    if (!read_axi_from_registry(g_session_id, name, config)) {
-        std::string err = std::string(ERROR_PREFIX) + "AXI config not found: " + name + "\n" + END_MARKER;
-        send_all(client_fd, err.c_str(), err.length());
-        return false;
-    }
+    StoreResult stored =
+        read_axi_from_registry(g_session_id, name, config);
+    if (!require_store_result(client_fd, stored)) return false;
     if (!g_axi_analyzer.analyze(name, g_fsdb_file, config)) {
         std::string err = std::string(ERROR_PREFIX) + "Failed to analyze AXI: " + name + "\n" + END_MARKER;
         send_all(client_fd, err.c_str(), err.length());
@@ -517,26 +507,9 @@ std::string format_axi_txn(const xdebug_waveform::AxiTransaction* txn) {
     return out;
 }
 
-Json axi_txn_to_json(const xdebug_waveform::AxiTransaction* txn, bool verbose) {
-    Json j;
-    if (!txn) return j;
-    j["addr_time"] = format_time(txn->addr_time);
-    j["type"] = txn->is_write ? "WR" : "RD";
-    j["id"] = "'h" + txn->id;
-    j["addr"] = "'h" + txn->addr;
-    j["len"] = "'h" + txn->len;
-    j["size"] = "'h" + txn->size;
-    j["burst"] = "'h" + txn->burst;
-    j["beats"] = txn->data.size();
-    j["first_data_time"] = format_time(txn->first_data_time);
-    j["last_data_time"] = format_time(txn->last_data_time);
-    j["resp_time"] = format_time(txn->resp_time);
-    j["resp"] = "'h" + txn->resp;
-    if (verbose) {
-        j["data"] = json_array_hex(txn->data);
-        j["wstrb"] = json_array_hex(txn->wstrb);
-    }
-    return j;
+Json axi_txn_to_json(const xdebug_waveform::AxiTransaction* txn, bool include_data) {
+    if (!txn) return Json();
+    return axi_transaction_to_json(g_fsdb_file, *txn, include_data);
 }
 
 std::string format_axi_txn_json(const xdebug_waveform::AxiTransaction* txn) {

@@ -48,6 +48,9 @@ frontend 不直接承载 NPI 重逻辑；NPI/FSDB/engine 能力集中在内部 e
 - 不要在 CLI 层手写 action-specific 参数规则；参数合同应来自 schema。
 - 不要让日志污染 JSON stdout。
 - 新增公共输出字段时同时考虑 JSON 和 XOUT。
+- `session.open.target.run_manifest` 是可选的 provenance gate：提供时必须在 engine
+  启动前完成 published state、canonical path、size 和 SHA-256 校验；不得通过自动
+  reopen、固定 sleep 或其他 transport 绕过失败。
 
 ## Schema 与 Validator 层
 
@@ -58,20 +61,30 @@ frontend 不直接承载 NPI 重逻辑；NPI/FSDB/engine 能力集中在内部 e
 - `schemas/v1/actions/*.response.schema.json`
 - `examples/requests/*.json`
 - `examples/responses/*.json`
+- `schemas/v1/internal/engine.request.manifest.json`
+- `schemas/v1/internal/actions/*.request.schema.json`
+- `schemas/v1/internal/helper-actions/*.request.schema.json`
 - `src/core/schema/runtime_schema_validator.*`
 - `src/api/request_validator.*`
 - `tools/validate_schema.py`
 - `tools/validate_examples.py`
 - `tools/sync_runtime_request_schemas.py`
+- `tools/sync_internal_request_schema.py`
 - `tools/sync_action_schema_hints.py`
+- `tools/sync_action_metadata.py`
 - `tools/audit_action_schema_coverage.py`
 - `tools/check_action_contract.py`
 
 职责：
 
-- `actions.yaml` 描述 action inventory、category、requires、handler_kind、schema/example 路径和 required args。
+- `actions.yaml` 描述 action inventory、category、requires、handler_kind、schema/example
+  路径、required args，以及双语描述、purposes、适用/禁用范围和推荐替代；编译期
+  action metadata 由此生成。
 - action-specific schema 是 public request/response contract。
 - runtime validator 在执行前拦截非法 envelope 和非法 action 参数。
+- internal runtime validator 由 generated manifest 选择单 action schema；纯
+  server-forward helper 只校验严格转发 envelope，engine server 仍执行完整 action
+  校验，避免 aggregate union 的重复解析和编译。
 - examples 是可执行合同样例，必须被 schema 校验。
 
 修改要求：
@@ -103,6 +116,11 @@ frontend 不直接承载 NPI 重逻辑；NPI/FSDB/engine 能力集中在内部 e
 - 原生 request 使用 `target.session_id` 选择已打开 session。
 - MCP debug query 使用 `session_id` 参数。
 - session 失效后不能继续复用，需要重新 open。
+- session transport 使用 public `limits.timeout_ms` 作为 socket deadline；发生
+  `EAGAIN/EWOULDBLOCK` 时记录一次 `send_request.exchange_failed` 并返回
+  `ENGINE_TIMEOUT`。frontend 只可给短命 helper 一个固定的诊断序列化收尾窗口，
+  不得在该窗口重试、切换 transport 或扩大传给 session server 的执行预算；公开错误
+  仍报告原始 `timeout_ms`。
 
 ## Backend Engine Adapter 层
 
@@ -142,10 +160,46 @@ frontend 不直接承载 NPI 重逻辑；NPI/FSDB/engine 能力集中在内部 e
 - action handler 读取已校验 args，调用 design/waveform/combined helper。
 - 返回稳定 JSON summary/data/errors。
 
+其中 15 个 waveform 查询/分析 action 通过
+`actions/waveform/typed_waveform_action_adapter.*` 直接绑定
+`waveform/service/typed_query_actions.h` 声明的具体 `ai_*` 函数。adapter 只负责
+tracked `args`/`limits` 合并、结构化 cache error、历史 `end` 归一化和表达式别名
+错误转换；action 选择不得再进入按字符串二次分发的 waveform dispatcher。
+
 修改要求：
+
+### AXI canonical transaction reconstruction
+
+- `src/waveform/axi/axi_transaction_tracker.*` 是 AXI AW/W/B/AR/R 配对的唯一状态机；
+  handler 和 exporter 不得复制配对逻辑。
+- AXI4 W burst 按 AW acceptance order 绑定，允许整个 W burst 在 AW 前完成；BID 绑定
+  同 ID 最老的 data-complete write，RID 绑定同 ID 最老的 AR。
+- `AxiAnalyzer` 每个 session/config 只做一次完整 FSDB clock scan，query、analysis、
+  pair、timeline、outlier、cursor 和 export 复用 `AxiResult`。
+- `AxiResult` 由 engine-owned `AnalysisRepository` 按 FSDB identity 和规范化 AXI
+  语义持有；address、ID 与各 channel handshake index 独立按需构建、记账和淘汰，
+  不改变 tracker 的 canonical transaction 与排序。
+- AXI cursor 只保存 key、generation、direction 和 position，不 pin canonical entry；
+  soft LRU 后同 key 重建时恢复 position，显式 config/session 失效则清除。
+- 新增 AXI action 或输出时必须保留 `full_scan_count=1` 回归，并用独立 pin/VIP oracle
+  验证，不能以另一个 xdebug action 作为期望值。
 
 - 新 action 应进入对应 `actions/<domain>/` 子目录，并在对应 `register_*_handlers.cpp` 注册。
 - handler 不应重新发明 schema 校验；只做业务语义检查。
+- 新增 typed waveform action 时，wrapper 必须把 public action 名直接绑定到唯一
+  `ai_*` 实现，并同步静态映射测试；不得恢复通用 JSON envelope dispatcher。
+
+### APB canonical transaction reconstruction
+
+- `ApbAnalyzer` 按规范化 APB 语义和 FSDB identity 将 completed transfer 发布到
+  engine-owned `AnalysisRepository`；query、statistics、transfer_window 和 cursor
+  复用同一份 canonical result，不重复扫描 FSDB。
+- scan 时一次性冻结既有十六进制地址解析结果，保留原始 `addr` 字符串；按地址查询
+  使用独立 lazy `AddressIndex`，index 只保存 canonical position，不复制 transaction。
+- APB cursor 与 AXI cursor 一样只保存 key、generation、direction 和 position；soft
+  LRU 后同 key 重建时恢复位置，显式 config/session 失效则清除。
+- APB canonical 与 AddressIndex 的 build working set 都受 hard limit 约束；失败返回统一
+  结构化 cache error，不缩小扫描范围、不切换 backend。
 
 ## Design Engine 能力层
 
@@ -195,7 +249,46 @@ frontend 不直接承载 NPI 重逻辑；NPI/FSDB/engine 能力集中在内部 e
 
 - clock/time/sample_point 语义必须集中复用统一 helper。
 - value/logic 四态处理必须复用 `LogicValue` 相关组件。
-- 大 payload 默认 compact；只使用 schema 声明的 `args.output.verbose`、action-specific `line_limit` 或 export action 返回细节。
+- signal value 显示使用 `args.value_format`（`hex`、`bin`、`dec`）；decimal 遇 X/Z
+  必须明确给出 binary effective format，不能丢失逐位信息。
+- raw signal 的实际位宽只从 NPI range size 取得；派生表达式仅在宽度可证明时定宽，
+  不得从 FSDB 值文本长度或前导零推断。所有 value-bearing action 在 summary 发布
+  `value_width_complete` 与 `width_diagnostics`。
+- `edge:"negedge"` 可以携带 `sample_point` 以统一请求形状，但它不改变既有 negedge
+  current-value 采样；响应必须给出 requested/effective sampling。
+- 大 payload 默认 compact；只使用 schema 声明的 action-specific 输出参数、`line_limit` 或 export action 返回细节。AXI transaction 的逐 beat payload 统一由 `args.output.include_data` 控制。
+
+### AnalysisRepository 与测量边界
+
+- `src/waveform/cache/analysis_probe.*` 是 test-only 内部 JSONL probe，仅在 engine
+  启动时显式设置 `XDEBUG_TEST_ANALYSIS_PROBE_PATH` 才启用；不注册 public action，
+  不进入 schema、MCP、JSON response 或 XOUT。
+- `src/waveform/cache/analysis_size_estimator.*` 对当前 APB/AXI canonical result 和
+  stream analysis 的动态容器容量做确定性估算。估算不是 allocator/RSS 的替代；
+  safety factor 与预算默认值以 nightly benchmark 的 RSS 对照冻结。
+- `src/waveform/cache/analysis_repository.*` 由每个 engine 唯一持有，统一管理带
+  FSDB identity、版本化语义 fingerprint 和 scope/range 的 key、typed ensure 入口、
+  canonical/index 独立对象、building/ready、generation cursor 及跨协议确定性 LRU。
+- soft/hard 分别由 `XDEBUG_ANALYSIS_CACHE_MAX_BYTES`（默认 1 GiB，0 关闭主动 soft
+  LRU）和 `XDEBUG_ANALYSIS_CACHE_HARD_MAX_BYTES`（默认 2 GiB，必须大于 0）控制；
+  engine 启动时严格解析一次，非法值直接启动失败，不使用默认值兜底。
+- 预算按 estimator bytes 乘冻结 safety factor 2.0 计费；index 先于 canonical 淘汰，
+  单一 oversize entry 或 owner+index 可越过 soft 但不能越过 hard。失败构建不发布对象。
+- Phase 2 已迁移 AXI canonical、address/ID/handshake lazy index 与 cursor；Phase 3
+  已迁移 APB canonical、AddressIndex 与 cursor。Phase 4A 已把 stream 单次分析拆为
+  `StreamBaseAnalysis` 与请求级 `StreamQueryView`：所有 sample 只保留时间、控制、
+  stall 和 X/Z 统计元数据，完整 field column 只与 transfer ordinal 对齐；packet 只保存
+  transfer 引用、边界、channel 和 stable mismatch。Phase 4B 已把 `stream.query`、
+  `stream.export` 和动态 `stream.validate` 接入 repository：`cache_scope` 默认 `full`，
+  显式 `range` 只构建规范化请求窗口；静态 validate 不创建 base。
+- 同语义 full 已存在时，range 请求直接从 full 构建 QueryView，不新增 range entry；
+  full 构建成功后事务性清除同语义 ranges，构建或 hard-limit 失败则保留旧 ranges。
+  不同 range 不合并、不自动提升为 full，达到 hard limit 时返回结构化错误。
+- `StreamQueryView` 从 base 重建窗口局部 cycle、packet index、stall 边界、partial 标记、
+  filter evidence 与完整 summary；base sample/transfer ID 不进入 public response。
+  query-specific projection 只限制 packet body materialize，不改变完整计数、首末 evidence
+  或 truncation 语义。所有 public APB/AXI/stream response 与排序保持不变，hard limit
+  通过统一 handler error 返回，不切换 scope/backend。
 
 ## Combined Active Trace 层
 
@@ -209,12 +302,29 @@ frontend 不直接承载 NPI 重逻辑；NPI/FSDB/engine 能力集中在内部 e
 职责：
 
 - 同时使用 daidir 和 fsdb，把波形时间点的现象连接到当前生效 RTL driver。
-- 支持 active driver、active driver chain 等 combined action。
+- 支持 active driver、active driver chain 和 `trace.x` 等 combined action。
 
 修改要求：
 
 - combined action 必须保留 design evidence 和 waveform time evidence。
 - 对未解析、control-only、zero evidence 等状态要稳定表达，不要假装 resolved。
+- active driver chain 只在 `npiRhs` 明确给出直接 signal 时继续追踪。多个 active
+  assignments 或多个 RHS sources 必须停止为 ambiguous，并按 statement 返回 RHS
+  在精确 `active_time` 严格之前和该时刻最终值；该证据不得参与根因猜测。
+- active chain 不接受 `clk_period`，也不得重新引入半周期窗口、邻近时钟沿或其它
+  waveform heuristic/fallback。RHS evidence 截断必须通过 `limits.max_trace_signals`
+  的完整性字段显式表达。
+- active chain 因 `max_depth` 停止时必须点读尚未处理的下一信号，并通过
+  `depth_frontiers` 与 `suggested_next_actions` 发布可直接续查的 signal/time/value。
+  `limits.max_depth` 的 runtime 与 schema 默认值都为 8；本 action 只接受
+  `max_depth`、`max_nodes`、`max_trace_signals`，不得公开未消费的
+  `max_alias_candidates`。
+- `trace.x` 必须先确认查询点任一 bit 为 X，再按 DFS 同等处理含 X 的 RHS/control，
+  穿过 port/interface，并为每一跳重新定位连续 X 区间起点；Z 不等同于 X。
+  仅由 port/interface/modport/ref alias 跳转不同造成的路径必须按非 port 语义前缀
+  归并，`data.chains` 只返回最终有效链。`limits.max_chains` 默认 8，并在归并后
+  应用；超额的真实 RHS/control 语义分支保留 pending 现场。控制 X、动态 select 等
+  无法严格证明的原因只能标为 `best_effort`；所有 limit 必须明确保留 chain 当前状态。
 
 ## Runtime/Work Dir 层
 

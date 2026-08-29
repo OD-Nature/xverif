@@ -24,7 +24,7 @@
 
 | 旧测试面 | 新 catalog suite / fixture | 等价性证据 |
 |---|---|---|
-| 各组件 Python unit/CLI | `xbit.unit`、`xentry.unit`、`xloc.unit`、`xcov.unit`、`xwaveform.*`、`xsva.*`、`xeda_runner.unit` | 原测试文件仍是业务断言所有者；catalog 只负责收集和门禁 |
+| 各组件 Python unit/CLI | `xbit.unit`、`xentry.unit`、`xloc.unit`、`xcov.unit`、`xwaveform.*`、`xsva.*` | 原测试文件仍是业务断言所有者；catalog 只负责收集和门禁 |
 | xdebug schema/example/runtime action 合同 | `xdebug.static`、`xdebug.action_runtime_catalog` | 原 schema、example、runtime catalog 检查改为 in-process pytest 或 command item，未减少 action 集合 |
 | xdebug C++ unit | `xdebug.cpp_unit` | 16 个原二进制全部由 leaf runner 构建并执行；工作目录保持原 `xdebug/` 语义 |
 | xdebug contract/session/MCP | `xdebug.contract`、`xdebug.session`、`xdebug.mcp_direct`、`xdebug.mcp_fake_lsf`、`xverif_mcp.process`、`xverif_mcp.action_smoke` | 原 pytest 文件、markers 和 handler/session 断言保留；数据库路径改由 fixture 注入 |

@@ -2,14 +2,25 @@
 #include "../design/common/xdebug_design_paths.h"
 #include "../design/protocol/protocol.h"
 #include "session/session_registry.h"
+#include "session/session_manager.h"
 #include "session/session_transport.h"
 #include "core/common/env_config.h"
 #include "core/diagnostic_error.h"
 #include "core/logging/action_log.h"
 #include "core/npi/time_contract.h"
 #include "core/session/session_timeout.h"
+#include "core/session/request_deadline.h"
+#include "core/session/transport_common.h"
+#include "core/schema/internal_request_contract.h"
 #include "core/schema/runtime_schema_validator.h"
 #include "core/transport/file_exchange.h"
+#include "core/value/logic_value.h"
+#include "waveform/cache/analysis_probe.h"
+#include "waveform/cache/analysis_repository.h"
+#include "waveform/apb/apb_analyzer.h"
+#include "waveform/axi/axi_analyzer.h"
+#include "waveform/common/xdebug_waveform_paths.h"
+#include "waveform/stream/stream_analyzer.h"
 #include "json.hpp"
 
 #include <cstdio>
@@ -34,12 +45,21 @@
 #include <thread>
 #include <ctime>
 #include <exception>
+#include <mutex>
 
 #include "npi.h"
 #include "npi_fsdb.h"
 #include "service/engine_action_registry.h"
 
-namespace xdebug_waveform { extern std::string g_session_id; extern npiFsdbFileHandle g_fsdb_file; extern std::string g_fsdb_file_path; }
+namespace xdebug_waveform {
+extern std::string g_session_id;
+extern npiFsdbFileHandle g_fsdb_file;
+extern std::string g_fsdb_file_path;
+extern ApbAnalyzer g_apb_analyzer;
+extern AxiAnalyzer g_axi_analyzer;
+StreamAnalyzer g_stream_analyzer;
+std::unique_ptr<AnalysisRepository> g_analysis_repository;
+}
 
 namespace xdebug_design {
 
@@ -58,10 +78,39 @@ static int g_port = 0;
 static std::string g_auth_token;
 static int g_idle_timeout_sec = 86400;
 static FILE* g_debug_log = nullptr;
+static std::string g_npi_startup_log_path;
 static int g_crash_fd = -1;
 static char g_crash_prefix[512] = {};
 static char g_current_action[128] = {};
 static char g_current_request_id[128] = {};
+// A session process owns exactly one vendor NPI context.  Keep data actions
+// strictly serialized even if a future transport implementation dispatches
+// accepted clients concurrently.
+static std::mutex g_npi_request_mutex;
+
+static void touch_current_generation(
+    xdebug_engine::SessionRegistry& registry,
+    time_t last_active) {
+    std::string generation;
+    const bool marker_ok =
+        xdebug_design_read_generation_marker(
+            g_session_id, generation);
+    const bool touched =
+        marker_ok &&
+        registry
+            .touch_if_generation(
+                g_session_id,
+                generation,
+                last_active)
+            .ok();
+    if (!touched) {
+        xdebug_core::log_lifecycle_event(
+            "engine",
+            g_session_id,
+            "server.touch_generation_failed",
+            false);
+    }
+}
 
 // Unified-engine resource state.
 bool g_has_design = false;
@@ -70,7 +119,31 @@ npiFsdbFileHandle g_fsdb_file = nullptr;
 std::string g_fsdb_path;
 std::string g_daidir_path;
 
+const char* engine_startup_failure_phase(int exit_code) {
+    switch (static_cast<xdebug_engine::EngineStartupExitCode>(exit_code)) {
+        case xdebug_engine::EngineStartupExitCode::NpiInitFailed:
+            return "npi_init";
+        case xdebug_engine::EngineStartupExitCode::NpiLoadDesignFailed:
+            return "npi_load_design";
+        case xdebug_engine::EngineStartupExitCode::NpiFsdbOpenFailed:
+            return "npi_fsdb_open";
+        case xdebug_engine::EngineStartupExitCode::GenericFailure:
+            break;
+    }
+    return "";
+}
+
 static void close_fsdb_file() {
+    if (xdebug_waveform::g_analysis_repository) {
+        xdebug_waveform::g_apb_analyzer.configure_repository(
+            nullptr, std::string(), xdebug_waveform::FsdbIdentity());
+        xdebug_waveform::g_axi_analyzer.configure_repository(
+            nullptr, std::string(), xdebug_waveform::FsdbIdentity());
+        xdebug_waveform::g_stream_analyzer.configure_repository(
+            nullptr, std::string(), xdebug_waveform::FsdbIdentity());
+        xdebug_waveform::g_analysis_repository->clear("session_exit");
+        xdebug_waveform::g_analysis_repository.reset();
+    }
     if (!g_fsdb_file) return;
     npi_fsdb_close(g_fsdb_file);
     g_fsdb_file = nullptr;
@@ -173,7 +246,15 @@ static void install_crash_signal_handlers() {
 
 static void update_current_request_marker(const Json& request) {
     std::string action = request.value("action", std::string());
-    std::string request_id = request.value("request_id", request.value("id", std::string()));
+    std::string request_id;
+    Json observability =
+        request.value("observability", Json::object());
+    if (observability.is_object() &&
+        observability.contains("request_id") &&
+        observability["request_id"].is_string()) {
+        request_id =
+            observability["request_id"].get<std::string>();
+    }
     snprintf(g_current_action, sizeof(g_current_action), "%s", action.c_str());
     snprintf(g_current_request_id, sizeof(g_current_request_id), "%s", request_id.c_str());
 }
@@ -218,6 +299,10 @@ static void log_environment_snapshot(int argc, char** argv) {
     if (!ld_library_path.empty()) {
         context["paths"] = {{"ld_library_path_hash", hash_string_hex(ld_library_path)}};
     }
+    context["license_env"] = {
+        {"snpslmd_license_file_present", !getenv_string("SNPSLMD_LICENSE_FILE").empty()},
+        {"lm_license_file_present", !getenv_string("LM_LICENSE_FILE").empty()}
+    };
     xdebug_core::log_lifecycle_event("engine", g_session_id, "env.snapshot", true, context);
 }
 
@@ -246,26 +331,68 @@ static void daemonize_io() {
     }
 }
 
-static bool send_all(int fd, const char* buf, size_t len) {
-    size_t sent = 0;
-    while (sent < len) {
-        ssize_t n = write(fd, buf + sent, len - sent);
-        if (n <= 0) return false;
-        sent += n;
+static bool begin_npi_startup_capture() {
+    int devnull = open("/dev/null", O_RDWR);
+    if (devnull >= 0) {
+        dup2(devnull, STDIN_FILENO);
+        close(devnull);
     }
+
+    const std::string lifecycle_log = xdebug_core::component_log_path(
+        "engine", g_session_id, "lifecycle");
+    const size_t slash = lifecycle_log.rfind('/');
+    g_npi_startup_log_path =
+        lifecycle_log.substr(0, slash) + "/npi_startup.log";
+    int fd = open(g_npi_startup_log_path.c_str(),
+                  O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0600);
+    if (fd < 0) {
+        xdebug_core::log_lifecycle_event(
+            "engine", g_session_id, "npi_startup.capture_failed", false,
+            {{"diagnostic_log_path", g_npi_startup_log_path},
+             {"errno", errno}, {"message", strerror(errno)}});
+        daemonize_io();
+        return false;
+    }
+    chmod(g_npi_startup_log_path.c_str(), 0600);
+    dprintf(fd, "=== xdebug NPI startup diagnostics session=%s ===\n", g_session_id.c_str());
+    fflush(stdout);
+    fflush(stderr);
+    dup2(fd, STDOUT_FILENO);
+    dup2(fd, STDERR_FILENO);
+    close(fd);
     return true;
 }
 
-static bool read_command_line(int fd, char* line, size_t line_size) {
-    size_t total = 0;
-    while (total < line_size - 1) {
-        ssize_t n = read(fd, line + total, 1);
-        if (n <= 0) return false;
-        if (line[total] == '\n') break;
-        total++;
-    }
-    line[total] = '\0';
-    return true;
+static long long npi_startup_log_bytes() {
+    struct stat st;
+    if (g_npi_startup_log_path.empty() ||
+        stat(g_npi_startup_log_path.c_str(), &st) != 0) return -1;
+    return static_cast<long long>(st.st_size);
+}
+
+static Json npi_startup_context(const std::string& failure_phase) {
+    Json context = {
+        {"failure_phase", failure_phase},
+        {"diagnostic_log", "engine_npi_startup"},
+        {"diagnostic_log_path", g_npi_startup_log_path},
+        {"diagnostic_log_bytes", npi_startup_log_bytes()}
+    };
+    context["license_env"] = {
+        {"snpslmd_license_file_present", !getenv_string("SNPSLMD_LICENSE_FILE").empty()},
+        {"lm_license_file_present", !getenv_string("LM_LICENSE_FILE").empty()}
+    };
+    return context;
+}
+
+static void end_npi_startup_capture() {
+    fflush(stdout);
+    fflush(stderr);
+    daemonize_io();
+}
+
+static bool send_all(int fd, const char* buf, size_t len) {
+    return xdebug_core::write_all_deadline(fd, buf, len) ==
+           xdebug_core::TransportIoStatus::Ok;
 }
 
 static Json ok_response(const Json& data = Json::object()) {
@@ -281,6 +408,24 @@ static Json error_response(Json error) {
 static Json error_response(const std::string& code, const std::string& message) {
     return error_response(
         xdebug_core::DiagnosticErrorBuilder::handler(code, message).to_json());
+}
+
+static Json request_too_large_response() {
+    const std::string message =
+        "JSON request exceeds the session transport limit";
+    Json error = xdebug_core::DiagnosticErrorBuilder::transport(
+                     "REQUEST_TOO_LARGE", message)
+                     .recoverable(false)
+                     .to_json();
+    error["limit_name"] = "request_bytes";
+    error["received_bytes"] = xdebug_core::kMaxSessionJsonBytes + 1U;
+    error["max_bytes"] = xdebug_core::kMaxSessionJsonBytes;
+    error["transport"] = g_transport;
+    error["phase"] = "transport_request";
+    error["next_actions"] = Json::array({
+        "Split the batch into smaller requests or use a bounded export action."
+    });
+    return error_response(error);
 }
 
 static void patch_example_path(Json& example, const std::string& invalid_arg, const Json& value) {
@@ -301,11 +446,20 @@ static void enrich_runtime_parameter_error(const Json& request, Json& error) {
     if (message.find("TIME_RANGE_INVALID:") == 0) error["code"] = "TIME_RANGE_INVALID";
     if (message.find("TIME_SPEC_INVALID:") == 0) error["code"] = "TIME_SPEC_INVALID";
     Json example = xdebug_core::valid_request_example(action);
+    const auto infer_parameter = [&](const std::string& invalid_arg,
+                                     const std::string& expected) {
+        if (error.contains("invalid_arg")) return;
+        error["invalid_arg"] = invalid_arg;
+        error["expected"] = expected;
+    };
     if (message.find("end time is before begin time") != std::string::npos ||
         message.find("args.time_range.end is before args.time_range.begin") != std::string::npos) {
-        error["invalid_arg"] = "args.time_range.end";
-        error["expected"] = "time_range.end must be greater than or equal to time_range.begin";
-        patch_example_path(example, "args.time_range.end", Json());
+        if (!error.contains("invalid_arg")) {
+            infer_parameter(
+                "args.time_range.end",
+                "time_range.end must be greater than or equal to time_range.begin");
+            patch_example_path(example, "args.time_range.end", Json());
+        }
     } else if (message.find("Invalid time") != std::string::npos ||
                message.find("TIME_SPEC_INVALID") != std::string::npos) {
         std::string invalid = "args.time";
@@ -316,21 +470,23 @@ static void enrich_runtime_parameter_error(const Json& request, Json& error) {
             if (tr.contains("end") && message.find("end") != std::string::npos)
                 invalid = "args.time_range.end";
         }
-        error["invalid_arg"] = invalid;
-        error["expected"] = "time string such as 10ns, 100ps, or max for end";
-        patch_example_path(example, invalid, Json());
+        if (!error.contains("invalid_arg")) {
+            infer_parameter(
+                invalid,
+                "time string such as 10ns, 100ps, or max for end");
+            patch_example_path(example, invalid, Json());
+        }
     } else if (message.find("Clock signal not found") != std::string::npos) {
-        error["invalid_arg"] = "args.clock";
-        error["expected"] = "existing clock signal path";
+        infer_parameter("args.clock", "existing clock signal path");
     } else if (message.find("Signal not found") != std::string::npos ||
                message.find("signal not found") != std::string::npos) {
-        error["invalid_arg"] = "args.signal";
-        error["expected"] = "existing signal path";
+        infer_parameter("args.signal", "existing signal path");
     } else if (message.find("AXI config not found") != std::string::npos ||
                message.find("APB config not found") != std::string::npos ||
                message.find("CONFIG_NOT_FOUND") != std::string::npos) {
-        error["invalid_arg"] = "args.name";
-        error["expected"] = "name of a previously loaded config";
+        infer_parameter(
+            "args.name",
+            "name of a previously loaded config");
     }
     Json args = request.value("args", Json::object());
     if (action == "axi.channel_stall" && args.is_object() && args.contains("channel") &&
@@ -339,7 +495,7 @@ static void enrich_runtime_parameter_error(const Json& request, Json& error) {
         if (c != "aw" && c != "w" && c != "b" && c != "ar" && c != "r") {
             error["invalid_arg"] = "args.channel";
             error["expected"] = "one of aw, w, b, ar, r";
-            error["allowed_values"] = Json::array({"aw", "w", "b", "ar", "r"});
+            error["available_values"] = Json::array({"aw", "w", "b", "ar", "r"});
             patch_example_path(example, "args.channel", "ar");
         }
     }
@@ -446,7 +602,7 @@ static int file_transport_loop(const std::string& file_dir) {
     const std::string agent_id = current_host_name() + "-" + std::to_string(getpid());
     xdebug_engine::SessionRegistry registry;
     time_t last_active = time(nullptr);
-    registry.touch(g_session_id, last_active);
+    touch_current_generation(registry, last_active);
     xdebug_core::log_lifecycle_event("engine", g_session_id, "transport.file_loop_begin", true,
                                      {{"file_dir", file_dir}, {"idle_timeout_sec", g_idle_timeout_sec}});
     while (true) {
@@ -465,7 +621,7 @@ static int file_transport_loop(const std::string& file_dir) {
                                                 {"transport", "file"}, {"worker", worker},
                                                 {"updated_at_us", xdebug_core::file_exchange_now_us()}},
                                                xdebug_core::AtomicWriteMode::Replace,
-                                               file_dir + "/tmp");
+                                               file_dir + "/" + "tmp");
         xdebug_core::file_exchange_scan_stale_claims(
             file_dir, agent_id, xdebug_core::file_exchange_claim_timeout_ms(0));
         xdebug_core::FileClaimResult claim = xdebug_core::file_exchange_claim_one(file_dir, agent_id);
@@ -474,7 +630,7 @@ static int file_transport_loop(const std::string& file_dir) {
             continue;
         }
         last_active = time(nullptr);
-        registry.touch(g_session_id, last_active);
+        touch_current_generation(registry, last_active);
         Json response = error_response("INVALID_REQUEST", "invalid file transport request");
         bool quit = false;
         bool ok = claim.ready &&
@@ -503,20 +659,36 @@ static int file_transport_loop(const std::string& file_dir) {
 
 static bool handle_client(int client_fd, bool& should_quit) {
     should_quit = false;
-    char line[1024 * 1024] = {};
-    if (!read_command_line(client_fd, line, sizeof(line))) return false;
+    std::string line;
+    const xdebug_core::TransportIoStatus read_status =
+        xdebug_core::read_bounded_line_deadline(
+            client_fd, line, xdebug_core::kMaxSessionJsonBytes);
+    if (read_status == xdebug_core::TransportIoStatus::TooLarge) {
+        return send_response(client_fd, request_too_large_response());
+    }
+    if (read_status != xdebug_core::TransportIoStatus::Ok) return false;
     Json request;
     try {
         request = Json::parse(line);
     } catch (...) {
         return send_response(client_fd, error_response("INVALID_JSON", "request must be a JSON object"));
     }
-    std::string api_ver = request.value("api_version", std::string());
-    if (api_ver != INTERNAL_API_VERSION && api_ver != "xdebug.v1") {
-        return send_response(client_fd, error_response("UNSUPPORTED_API_VERSION",
-            "expected xdebug.internal.v1 or xdebug.v1, got " + api_ver));
+    xdebug_core::RuntimeSchemaValidator schema_validator;
+    xdebug_core::RuntimeSchemaValidationResult schema_validation =
+        schema_validator.validate_internal_request(request);
+    if (!schema_validation.ok) {
+        return send_response(
+            client_fd,
+            schema_validation_error_response(
+                request,
+                request.value("action", std::string()),
+                schema_validation));
     }
-    if (g_transport == "tcp" && request.value("auth_token", std::string()) != g_auth_token) {
+    const Json routing =
+        request.value("routing", Json::object());
+    if (g_transport == "tcp" &&
+        routing.value("transport_auth_token", std::string()) !=
+            g_auth_token) {
         return send_response(client_fd, error_response("AUTH_FAILED", "authentication failed"));
     }
     update_current_request_marker(request);
@@ -526,26 +698,6 @@ static bool handle_client(int client_fd, bool& should_quit) {
     if (action == "server.quit")   { send_response(client_fd, ok_response()); should_quit = true; return true; }
     if (action == "server.ping")   return send_response(client_fd, ok_response({{"pong", true}}));
     if (action == "server.version")return send_response(client_fd, ok_response({{"api_version", INTERNAL_API_VERSION}}));
-
-    // ── session introspection ──
-    if (action == "session.list") {
-        Json arr = Json::array();
-        Json s;
-        s["session_id"] = g_session_id;
-        s["has_design"] = g_has_design;
-        s["has_waveform"] = g_has_waveform;
-        if (g_has_waveform) s["fsdb"] = g_fsdb_path;
-        arr.push_back(s);
-        return send_response(client_fd, ok_response({{"sessions", arr}}));
-    }
-    if (action == "session.doctor") {
-        return send_response(client_fd, ok_response({
-            {"session_id", g_session_id},
-            {"has_design", g_has_design},
-            {"has_waveform", g_has_waveform},
-            {"healthy", true}
-        }));
-    }
 
     // ── data actions: registry lookup ──
     const EngineActionHandler* h = engine_action_registry().find(action);
@@ -558,33 +710,60 @@ static bool handle_client(int client_fd, bool& should_quit) {
         return send_response(client_fd, error_response("WAVEFORM_NOT_LOADED",
             "waveform not loaded; open session with -fsdb"));
 
-    xdebug_core::RuntimeSchemaValidator schema_validator;
-    xdebug_core::RuntimeSchemaValidationResult schema_validation =
-        schema_validator.validate_request(action, request);
-    if (!schema_validation.ok) {
-        return send_response(client_fd, schema_validation_error_response(request, action, schema_validation));
+    xdebug_design::ContractBoundRequest bound_request(
+        request, action, true);
+    auto args = bound_request.args();
+    auto limits = bound_request.limits();
+    int request_timeout_ms = 0;
+    if (limits.contains("timeout_ms")) {
+        request_timeout_ms = limits["timeout_ms"].get<int>();
+        limits["timeout_ms"].consume("engine_request_deadline");
     }
 
     xdebug_core::TimeRenderOptions time_render_options;
-    Json args = request.value("args", Json::object());
-    if (args.contains("time_unit")) {
-        if (!args["time_unit"].is_string())
+    if (args.contains("render_time_unit")) {
+        if (!args["render_time_unit"].is_string())
             return send_response(client_fd, error_response("TIME_UNIT_INVALID",
-                "args.time_unit must be ns, ps, us, or auto"));
-        std::string time_unit_error;
-        if (!xdebug_core::parse_time_render_unit(args["time_unit"].get<std::string>(),
+                "args.render_time_unit must be ns, ps, us, or auto"));
+        std::string render_time_unit_error;
+        if (!xdebug_core::parse_time_render_unit(args["render_time_unit"].get<std::string>(),
                                                  time_render_options.unit,
-                                                 time_unit_error)) {
-            return send_response(client_fd, error_response("TIME_UNIT_INVALID", time_unit_error));
+                                                 render_time_unit_error)) {
+            return send_response(client_fd, error_response("TIME_UNIT_INVALID", render_time_unit_error));
         }
     }
     xdebug_core::ScopedTimeRenderOptions time_render_scope(time_render_options);
 
-    ActionResourceScope resources;
-    EngineActionContext ctx(g_session_id, action, resources);
+    std::string value_format = args.value("value_format", std::string("hex"));
+    xdebug_core::ValueRenderFormat render_format =
+        xdebug_core::ValueRenderFormat::Hex;
+    xdebug_core::parse_value_render_format(value_format, render_format);
+    xdebug_core::ScopedValueRenderFormat value_render_scope(render_format);
     Json data;
     try {
-        data = h->run(request, ctx);
+        std::lock_guard<std::mutex> execution_guard(
+            g_npi_request_mutex);
+        // The resource scope lives inside the guarded try block so all owned
+        // vendor handles are released before a cooperative timeout is
+        // reported as confirmed to the caller.
+        ActionResourceScope resources;
+        EngineActionContext ctx(g_session_id, action, resources);
+        xdebug_core::ScopedRequestDeadline deadline(
+            request_timeout_ms);
+        xdebug_core::request_deadline_checkpoint();
+        data = h->run(bound_request, ctx);
+        xdebug_core::request_deadline_checkpoint();
+    } catch (const xdebug_core::RequestDeadlineExceeded& e) {
+        Json timeout_error =
+            xdebug_core::DiagnosticErrorBuilder::handler(
+                "ENGINE_TIMEOUT", e.what())
+                .to_json();
+        timeout_error["cancel_state"] = "confirmed";
+        timeout_error["session_state"] = "active";
+        timeout_error["cleanup_succeeded"] = true;
+        timeout_error["termination_confirmed"] = false;
+        return send_response(
+            client_fd, error_response(timeout_error));
     } catch (const std::exception& e) {
         return send_response(client_fd, error_response(
             "INTERNAL_ENGINE_EXCEPTION",
@@ -596,16 +775,26 @@ static bool handle_client(int client_fd, bool& should_quit) {
     }
     if (data.contains("error"))
         return send_response(client_fd, action_error_response(request, data));
+    const std::vector<std::string> unconsumed_paths =
+        bound_request.unconsumed_paths();
+    if (!unconsumed_paths.empty()) {
+        return send_response(
+            client_fd,
+            error_response(
+                xdebug_core::request_consumption_violation(
+                    unconsumed_paths)));
+    }
+    xdebug_core::apply_value_render_format(data, render_format);
+    xdebug_core::apply_value_width_summary(data);
     Json resp = ok_response(data);
-    // Propagate truncation flag from handler to response envelope.
-    if (data.contains("truncated") && data["truncated"].is_boolean() &&
-        data["truncated"].get<bool>())
-        resp["meta"] = {{"truncated", true}};
-    // Let handler generate XOUT text
-    Json xout_resp;
-    xout_resp["data"] = data;
-    if (data.contains("summary")) xout_resp["summary"] = data["summary"];
-    resp["text"] = h->render_xout(xout_resp);
+    Json xout_response = {
+        {"data", data},
+    };
+    if (data.contains("summary") && data["summary"].is_object())
+        xout_response["summary"] = data["summary"];
+    // Internal-only sidecar.  The public frontend removes this field before
+    // response-schema validation and keeps it only for XOUT presentation.
+    resp["__xout"] = h->render_xout(xout_response);
     return send_response(client_fd, resp);
 }
 
@@ -616,6 +805,11 @@ int server_main(int argc, char** argv) {
         return 1;
     }
 
+    // A client may leave after its public deadline while the server is still
+    // unwinding cooperatively.  Convert the late response into EPIPE rather
+    // than letting SIGPIPE terminate the engine outside lifecycle accounting.
+    signal(SIGPIPE, SIG_IGN);
+
     int arg_idx = 1;
 
     // Parse session ID
@@ -625,6 +819,12 @@ int server_main(int argc, char** argv) {
         return 1;
     }
     arg_idx++;
+    std::string runtime_config_error;
+    if (!xdebug_core::xdebug_file_and_log_env_config_valid(
+            runtime_config_error)) {
+        fprintf(stderr, "%s\n", runtime_config_error.c_str());
+        return 1;
+    }
     server_debug_open_log();
     server_debug_log("server_main: parsed session_id=%s argc=%d", g_session_id.c_str(), argc);
     xdebug_core::log_lifecycle_event("engine", g_session_id, "server.start", true,
@@ -636,6 +836,38 @@ int server_main(int argc, char** argv) {
                                          {{"message", timeout_error}});
         return 1;
     }
+    xdebug_waveform::AnalysisCacheConfig cache_config;
+    std::string cache_config_error;
+    if (!xdebug_waveform::analysis_cache_config_from_environment(
+            cache_config, cache_config_error)) {
+        fprintf(stderr, "%s\n", cache_config_error.c_str());
+        xdebug_core::log_lifecycle_event(
+            "engine", g_session_id, "server.invalid_config", false,
+            {{"message", cache_config_error}, {"component", "analysis_cache"}});
+        return 1;
+    }
+    xdebug_waveform::g_analysis_repository.reset(
+        new xdebug_waveform::AnalysisRepository(
+            cache_config, [](const xdebug_waveform::AnalysisCacheEvent& event) {
+                const bool ok = event.event != "build_failed";
+                xdebug_core::log_lifecycle_event(
+                    "engine", event.session_id, "analysis_cache." + event.event,
+                    ok,
+                    {{"protocol", event.protocol},
+                     {"key_summary", event.key_summary},
+                     {"object_kind", event.object_kind},
+                     {"reason", event.reason},
+                     {"estimated_bytes", event.estimated_bytes},
+                     {"resident_estimated_bytes", event.resident_estimated_bytes},
+                     {"build_estimated_bytes", event.build_estimated_bytes},
+                     {"access_sequence", event.access_sequence},
+                     {"generation", event.generation}});
+            }));
+    xdebug_core::log_lifecycle_event(
+        "engine", g_session_id, "analysis_cache.initialized", true,
+        {{"soft_max_bytes", cache_config.soft_max_bytes},
+         {"hard_max_bytes", cache_config.hard_max_bytes},
+         {"estimator_safety_factor", cache_config.estimator_safety_factor}});
     log_environment_snapshot(argc, argv);
     open_crash_marker();
     maybe_run_crash_marker_test_hook();
@@ -693,17 +925,27 @@ int server_main(int argc, char** argv) {
         npi_argv[npi_idx++] = const_cast<char*>(fsdb_arg.c_str());
     }
 
-    daemonize_io();
+    begin_npi_startup_capture();
 
     // ── npi_init (always; once per session) ──
     server_debug_log("npi_init: begin argc=%d", npi_argc);
     xdebug_core::log_lifecycle_event("engine", g_session_id, "npi_init.begin", true,
                                      {{"argc", npi_argc}});
-    int result = npi_init(npi_argc, npi_argv);
+    int result = 0;
+    if (xdebug_core::xdebug_engine_test_npi_init_fail_enabled()) {
+        fprintf(stderr, "XDEBUG_TEST_NPI_INIT_FAIL: forced npi_init failure\n");
+    } else {
+        result = npi_init(npi_argc, npi_argv);
+    }
     if (result == 0) {
         server_debug_log("npi_init: failed");
-        xdebug_core::log_lifecycle_event("engine", g_session_id, "npi_init.failed", false);
-        delete[] npi_argv; return 1;
+        fflush(stdout);
+        fflush(stderr);
+        xdebug_core::log_lifecycle_event("engine", g_session_id, "npi_init.failed", false,
+                                         npi_startup_context("npi_init"));
+        end_npi_startup_capture();
+        delete[] npi_argv;
+        return static_cast<int>(xdebug_engine::EngineStartupExitCode::NpiInitFailed);
     }
     server_debug_log("npi_init: ok");
     xdebug_core::log_lifecycle_event("engine", g_session_id, "npi_init.ok", true);
@@ -712,11 +954,24 @@ int server_main(int argc, char** argv) {
     if (has_daidir) {
         server_debug_log("npi_load_design: begin");
         xdebug_core::log_lifecycle_event("engine", g_session_id, "npi_load_design.begin", true);
-        if (npi_load_design(npi_argc, npi_argv) == 0) {
+        int load_result = 0;
+        if (xdebug_core::xdebug_engine_test_npi_load_design_fail_enabled()) {
+            fprintf(stderr, "XDEBUG_TEST_NPI_LOAD_DESIGN_FAIL: forced npi_load_design failure\n");
+        } else {
+            load_result = npi_load_design(npi_argc, npi_argv);
+        }
+        if (load_result == 0) {
             server_debug_log("npi_load_design: failed");
-            xdebug_core::log_lifecycle_event("engine", g_session_id, "npi_load_design.failed", false);
+            fflush(stdout);
+            fflush(stderr);
+            xdebug_core::log_lifecycle_event(
+                "engine", g_session_id, "npi_load_design.failed", false,
+                npi_startup_context("npi_load_design"));
             close_fsdb_file();
-            npi_end(); delete[] npi_argv; return 1;
+            npi_end();
+            end_npi_startup_capture();
+            delete[] npi_argv;
+            return static_cast<int>(xdebug_engine::EngineStartupExitCode::NpiLoadDesignFailed);
         }
         g_has_design = true;
         server_debug_log("npi_load_design: ok");
@@ -729,16 +984,76 @@ int server_main(int argc, char** argv) {
         server_debug_log("npi_fsdb_open: begin fsdb=%s", g_fsdb_path.c_str());
         xdebug_core::log_lifecycle_event("engine", g_session_id, "npi_fsdb_open.begin", true,
                                          {{"fsdb", g_fsdb_path}});
-        g_fsdb_file = npi_fsdb_open(g_fsdb_path.c_str());
+        if (xdebug_core::xdebug_engine_test_npi_fsdb_open_fail_enabled()) {
+            fprintf(stderr, "XDEBUG_TEST_NPI_FSDB_OPEN_FAIL: forced npi_fsdb_open failure\n");
+            g_fsdb_file = nullptr;
+        } else {
+            g_fsdb_file = npi_fsdb_open(g_fsdb_path.c_str());
+        }
         if (!g_fsdb_file) {
             server_debug_log("npi_fsdb_open: failed");
-            xdebug_core::log_lifecycle_event("engine", g_session_id, "npi_fsdb_open.failed", false);
+            fflush(stdout);
+            fflush(stderr);
+            xdebug_core::log_lifecycle_event(
+                "engine", g_session_id, "npi_fsdb_open.failed", false,
+                npi_startup_context("npi_fsdb_open"));
             close_fsdb_file();
-            npi_end(); delete[] npi_argv; return 1;
+            npi_end();
+            end_npi_startup_capture();
+            delete[] npi_argv;
+            return static_cast<int>(xdebug_engine::EngineStartupExitCode::NpiFsdbOpenFailed);
         }
         g_has_waveform = true;
         xdebug_waveform::g_fsdb_file = g_fsdb_file;
         xdebug_waveform::g_fsdb_file_path = g_fsdb_path;
+        xdebug_waveform::FsdbIdentity fsdb_identity;
+        std::string identity_error;
+        if (!xdebug_waveform::read_fsdb_identity(
+                g_fsdb_path, fsdb_identity, identity_error)) {
+            server_debug_log("fsdb identity failed: %s", identity_error.c_str());
+            xdebug_core::log_lifecycle_event(
+                "engine", g_session_id, "analysis_cache.fsdb_identity_failed",
+                false, {{"message", identity_error}});
+            close_fsdb_file();
+            npi_end();
+            end_npi_startup_capture();
+            delete[] npi_argv;
+            return static_cast<int>(xdebug_engine::EngineStartupExitCode::GenericFailure);
+        }
+        if (!xdebug_waveform::xdebug_waveform_ensure_session_dir(
+                g_session_id)) {
+            const std::string session_dir =
+                xdebug_waveform::xdebug_waveform_session_dir(
+                    g_session_id);
+            server_debug_log(
+                "waveform state directory provisioning failed: %s",
+                session_dir.c_str());
+            xdebug_core::log_lifecycle_event(
+                "engine", g_session_id,
+                "waveform_state.provision_failed", false,
+                {{"session_dir", session_dir}});
+            close_fsdb_file();
+            npi_end();
+            end_npi_startup_capture();
+            delete[] npi_argv;
+            return static_cast<int>(
+                xdebug_engine::EngineStartupExitCode::GenericFailure);
+        }
+        xdebug_core::log_lifecycle_event(
+            "engine", g_session_id,
+            "waveform_state.provisioned", true,
+            {{"session_dir",
+              xdebug_waveform::xdebug_waveform_session_dir(
+                  g_session_id)}});
+        xdebug_waveform::g_axi_analyzer.configure_repository(
+            xdebug_waveform::g_analysis_repository.get(), g_session_id,
+            fsdb_identity);
+        xdebug_waveform::g_apb_analyzer.configure_repository(
+            xdebug_waveform::g_analysis_repository.get(), g_session_id,
+            fsdb_identity);
+        xdebug_waveform::g_stream_analyzer.configure_repository(
+            xdebug_waveform::g_analysis_repository.get(), g_session_id,
+            fsdb_identity);
         server_debug_log("npi_fsdb_open: ok");
         xdebug_core::log_lifecycle_event("engine", g_session_id, "npi_fsdb_open.ok", true,
                                          {{"fsdb", g_fsdb_path}});
@@ -748,6 +1063,15 @@ int server_main(int argc, char** argv) {
         server_debug_log("fsdb_time: min=%llu max=%llu", tmin, tmax);
     }
 
+    fflush(stdout);
+    fflush(stderr);
+    xdebug_core::log_lifecycle_event(
+        "engine", g_session_id, "npi_startup.capture_complete", true,
+        npi_startup_context("ready"));
+    end_npi_startup_capture();
+
+    xdebug_waveform::analysis_probe().record(
+        "engine_initialized", "engine", g_session_id);
     delete[] npi_argv;
 
     // Set up signal handlers
@@ -877,11 +1201,19 @@ int server_main(int argc, char** argv) {
                                          endpoint_ok,
                                          {{"transport", endpoint.transport}, {"socket_path", endpoint.socket_path},
                                           {"host", endpoint.host}, {"port", endpoint.port}});
+        if (!endpoint_ok) {
+            close(g_srv_fd);
+            g_srv_fd = -1;
+            if (g_transport == "uds") unlink(g_sock_path);
+            close_fsdb_file();
+            npi_end();
+            return 1;
+        }
     }
 
     xdebug_engine::SessionRegistry registry;
     time_t last_active = time(nullptr);
-    registry.touch(g_session_id, last_active);
+    touch_current_generation(registry, last_active);
 
     // Accept loop
     while (true) {
@@ -914,7 +1246,7 @@ int server_main(int argc, char** argv) {
         handle_client(client_fd, quit);
         close(client_fd);
         last_active = time(nullptr);
-        registry.touch(g_session_id, last_active);
+        touch_current_generation(registry, last_active);
 
         if (quit) break;
     }

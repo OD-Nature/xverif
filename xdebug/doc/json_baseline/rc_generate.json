@@ -12,7 +12,7 @@
           "ai_complex_top.rst_n"
         ]
       },
-      "rc_path": "/tmp/xdebug_action_sampling/sample.rc",
+      "rc_path": "<repo>/tmp/xdebug_action_sampling/sample.rc",
       "include_preview": true
     },
     "limits": {

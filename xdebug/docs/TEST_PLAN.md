@@ -192,7 +192,6 @@ public runtime action 以 `xdebug/src/api/action_registry_init.cpp` 为准。
   - `session.ensure`
   - `session.list`
   - `session.doctor`
-  - `session.kill`
   - `session.close`
   - `session.gc`
 - Design：
@@ -1018,7 +1017,7 @@ xring 仍作为 DUT 为 AXI master、VIP slave 响应模式的补充参考：
   response。
 - 需要时通过 `svt_axi_slave_agent.write_byte/read_byte` 预装或检查 memory。
 
-首版 AXI fixture 不直接依赖 `~/axi_test/test/sim_run` 中已经生成的
+首版 AXI fixture 不直接依赖 `<legacy-axi-vip-root>/sim_run` 中已经生成的
 FSDB。应把必要环境代码提取到 xdebug synthetic testdata，重新编译和仿真生成
 可重复的 FSDB/daidir。原工程可以作为对照环境：
 
@@ -1146,7 +1145,9 @@ timeout_sec: 600
 
 signals:
   clock: top.clk
-  reset: top.rst_n
+  reset:
+    signal: top.rst_n
+    polarity: active_low
   probes: []
 
 interfaces:

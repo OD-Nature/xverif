@@ -53,6 +53,20 @@ suites:
     cost: {class: medium, estimate_sec: 5}
     timeouts: {execute_sec: 30, cleanup_sec: 5}
 
+  - id: xloc.nvim
+    owner: xloc
+    level: component
+    intent: [smoke]
+    domains: [source-location, editor]
+    runner:
+      kind: command
+      argv: [python3, testinfra/leaf/run_xloc_nvim.py]
+    capabilities: [child_process, neovim]
+    hermetic: false
+    deterministic: true
+    cost: {class: medium, estimate_sec: 5}
+    timeouts: {execute_sec: 30, cleanup_sec: 5}
+
   - id: xloc.uvm
     owner: xloc
     level: system
@@ -70,11 +84,99 @@ suites:
     level: unit
     intent: [contract]
     domains: [coverage]
-    runner: {kind: pytest, path: xcov/tests}
+    runner:
+      kind: pytest
+      paths:
+        - xcov/tests/test_exclusions.py
+        - xcov/tests/test_native_backend_adapter.py
+        - xcov/tests/test_urg_summary.py
+        - xcov/tests/test_xcov.py
     capabilities: [child_process]
     hermetic: false
     deterministic: true
     cost: {class: fast, estimate_sec: 3}
+
+  - id: xcov.exclusion_npi
+    owner: xcov
+    level: system
+    intent: [contract, semantics, lifecycle]
+    domains: [coverage]
+    runner: {kind: pytest, path: xcov/tests/test_exclusions_real.py}
+    fixtures: [xcov.exclusion]
+    capabilities: [child_process, npi]
+    hermetic: false
+    deterministic: true
+    cost: {class: slow, estimate_sec: 30}
+    timeouts: {execute_sec: 180, cleanup_sec: 20}
+
+  - id: xcov.urg_backend
+    owner: xcov
+    level: system
+    intent: [contract, semantics, lifecycle]
+    domains: [coverage]
+    runner: {kind: pytest, path: xcov/tests/test_urg_backend.py}
+    fixtures: [xcov.comprehensive]
+    capabilities: [child_process, npi]
+    hermetic: false
+    deterministic: true
+    gates: [regression, nightly]
+    cost: {class: slow, estimate_sec: 60}
+    timeouts: {execute_sec: 300, cleanup_sec: 20}
+
+  - id: xcov.modinfo_complex
+    owner: xcov
+    level: system
+    intent: [contract, semantics]
+    domains: [coverage]
+    runner: {kind: pytest, path: xcov/tests/test_modinfo_complex.py}
+    fixtures: [xcov.modinfo_complex]
+    capabilities: [child_process, npi]
+    hermetic: false
+    deterministic: true
+    gates: [regression, nightly]
+    cost: {class: slow, estimate_sec: 45}
+    timeouts: {execute_sec: 300, cleanup_sec: 20}
+
+  - id: xcov.edge_cases
+    owner: xcov
+    level: system
+    intent: [contract, semantics]
+    domains: [coverage]
+    runner: {kind: pytest, path: xcov/tests/test_edge_cases_real.py}
+    fixtures: [xcov.modinfo_edge_layouts, xcov.zero_coverable]
+    capabilities: [child_process, npi]
+    hermetic: false
+    deterministic: true
+    gates: [regression, nightly]
+    cost: {class: slow, estimate_sec: 120}
+    timeouts: {execute_sec: 600, cleanup_sec: 30}
+
+  - id: xcov.large_summary
+    owner: xcov
+    level: system
+    intent: [contract, semantics, performance, lifecycle]
+    domains: [coverage]
+    runner: {kind: pytest, path: xcov/tests/test_large_summary.py}
+    fixtures: [xcov.large_summary]
+    capabilities: [child_process, npi]
+    hermetic: false
+    deterministic: true
+    gates: [regression, nightly]
+    cost: {class: slow, estimate_sec: 300}
+    timeouts: {execute_sec: 1200, cleanup_sec: 30}
+
+  - id: xcov.mcp_integration
+    owner: xcov
+    level: system
+    intent: [contract, lifecycle, integration]
+    domains: [coverage, mcp]
+    runner: {kind: pytest, path: xverif_mcp/tests/test_xcov_mcp_integration.py}
+    fixtures: [xcov.comprehensive]
+    capabilities: [child_process, npi]
+    hermetic: false
+    deterministic: true
+    cost: {class: slow, estimate_sec: 120}
+    timeouts: {execute_sec: 600, cleanup_sec: 30}
 
   - id: xwaveform.unit
     owner: xwaveform
@@ -101,7 +203,16 @@ suites:
     level: static
     intent: [contract]
     domains: [schema, action]
-    runner: {kind: pytest, path: xdebug/tests/static/test_static_contracts.py}
+    runner:
+      kind: pytest
+      paths:
+        - xdebug/tests/static/test_static_contracts.py
+        - xdebug/tests/static/test_session_batch_response_contracts.py
+        - xdebug/tests/static/test_non_sampling_response_contracts.py
+        - xdebug/tests/static/test_composite_parameter_effectiveness.py
+        - xdebug/tests/static/test_publish_run_manifest.py
+        - xdebug/tests/static/test_validation_issue_response_contract.py
+        - xdebug/tests/static/test_available_values_contract.py
     hermetic: true
     deterministic: true
     cost: {class: fast, estimate_sec: 5}
@@ -123,7 +234,7 @@ suites:
     domains: [action, cli]
     runner:
       kind: command
-      argv: [python3, tools/check_action_contract.py, specs/actions, xdebug]
+      argv: [python3, tools/check_action_contract.py, specs/actions, ../tools/xdebug]
       cwd: xdebug
     capabilities: [child_process]
     hermetic: false
@@ -163,16 +274,6 @@ suites:
     deterministic: true
     cost: {class: slow, estimate_sec: 10}
 
-  - id: xeda_runner.unit
-    owner: xeda_runner
-    level: unit
-    intent: [contract]
-    domains: [eda-runner]
-    runner: {kind: pytest, path: xeda_runner/tests}
-    hermetic: true
-    deterministic: true
-    cost: {class: fast, estimate_sec: 3}
-
   - id: skills.xverif
     owner: skills/xverif
     level: static
@@ -193,15 +294,15 @@ suites:
     deterministic: true
     cost: {class: fast, estimate_sec: 5}
 
-  - id: skills.xeda_runner
-    owner: skills/xeda-runner
-    level: static
-    intent: [contract]
-    domains: [skill, eda, execution]
-    runner: {kind: pytest, path: skills/tests/test_xeda_runner_skill.py}
+  - id: skills.xsimdebug
+    owner: skills/xsimdebug
+    level: component
+    intent: [contract, semantics]
+    domains: [skill, vcs, ucli, uvm]
+    runner: {kind: pytest, path: skills/tests/test_xsimdebug_skill.py}
     hermetic: true
     deterministic: true
-    cost: {class: fast, estimate_sec: 2}
+    cost: {class: fast, estimate_sec: 3}
 
   - id: skills.public_docs
     owner: skills
@@ -222,6 +323,34 @@ suites:
     hermetic: true
     deterministic: true
     cost: {class: fast, estimate_sec: 3}
+
+  - id: skills.x_npi_real
+    owner: skills/x-npi
+    level: system
+    intent: [contract, semantics]
+    domains: [skill, npi, fsdb, coverage, protocol]
+    runner: {kind: pytest, path: skills/tests/test_x_npi_real.py}
+    fixtures: [xdebug.axi_vip, xdebug.apb_vip, xdebug.stream_v1, xcov.exclusion, xcov.zero_coverable]
+    capabilities: [child_process, npi, fsdb]
+    hermetic: false
+    deterministic: true
+    cost: {class: medium, estimate_sec: 60}
+    resources: {cpu: 1, memory_mb: 2048, tokens: [verdi_npi]}
+    timeouts: {execute_sec: 240, cleanup_sec: 20}
+
+  - id: skills.x_npi_perf
+    owner: skills/x-npi
+    level: system
+    intent: [performance]
+    domains: [skill, npi, fsdb, protocol]
+    runner: {kind: pytest, path: skills/tests/test_x_npi_performance.py}
+    fixtures: [xdebug.axi_vip, xcov.large_summary]
+    capabilities: [child_process, npi, fsdb]
+    hermetic: false
+    deterministic: true
+    cost: {class: slow, estimate_sec: 180}
+    resources: {cpu: 1, memory_mb: 3072, tokens: [verdi_npi]}
+    timeouts: {execute_sec: 900, cleanup_sec: 30}
 
   - id: skills.xwiki
     owner: skills/xwiki
@@ -245,8 +374,10 @@ suites:
         - xverif_mcp/tests/test_codex_rtl.py
         - xverif_mcp/tests/test_eda_auto.py
         - xverif_mcp/tests/test_import_adapters.py
+        - xverif_mcp/tests/test_lsf_env_config.py
         - xverif_mcp/tests/test_session_capabilities.py
         - xverif_mcp/tests/test_session_errors.py
+        - xverif_mcp/tests/test_schema_projection.py
         - xverif_mcp/tests/test_shared_loop_layer.py
         - xverif_mcp/tests/test_xdebug_session_action_guard.py
     hermetic: true
@@ -261,10 +392,10 @@ suites:
     runner:
       kind: pytest
       paths:
-        - xverif_mcp/tests/test_action_smoke_script.py
         - xverif_mcp/tests/test_direct_output_formats.py
         - xverif_mcp/tests/test_loop_session.py
         - xverif_mcp/tests/test_loop_wrapper_uds.py
+        - xverif_mcp/tests/test_native_lsf_cli.py
         - xverif_mcp/tests/test_mcp_sdk_smoke.py
         - xverif_mcp/tests/test_stdio_loop_session_lifecycle.py
     capabilities: [child_process, mcp_process]
@@ -272,6 +403,31 @@ suites:
     deterministic: true
     cost: {class: medium, estimate_sec: 45}
     timeouts: {execute_sec: 180, cleanup_sec: 20}
+
+  - id: xverif_mcp.runtime_package
+    owner: xverif_mcp
+    level: component
+    intent: [smoke, packaging]
+    domains: [mcp, session, packaging]
+    runner: {kind: pytest, path: xverif_mcp/tests/test_runtime_package_smoke.py}
+    capabilities: [child_process]
+    hermetic: false
+    deterministic: true
+    cost: {class: medium, estimate_sec: 20}
+    timeouts: {execute_sec: 180, cleanup_sec: 20}
+
+  - id: xverif_mcp.sdk_free_lsf_real_data
+    owner: xverif_mcp
+    level: system
+    intent: [contract, lifecycle, integration]
+    domains: [session, fake-lsf, waveform, coverage]
+    runner: {kind: pytest, path: xverif_mcp/tests/test_native_lsf_real_data.py}
+    fixtures: [xdebug.ai_complex_wave, xcov.comprehensive]
+    capabilities: [child_process, npi, fsdb, fake_lsf]
+    hermetic: false
+    deterministic: true
+    cost: {class: medium, estimate_sec: 30}
+    timeouts: {execute_sec: 300, cleanup_sec: 30}
 
   - id: xverif_mcp.action_smoke
     owner: xverif_mcp
@@ -287,6 +443,20 @@ suites:
     hermetic: false
     deterministic: true
     cost: {class: medium, estimate_sec: 180}
+    timeouts: {execute_sec: 600, cleanup_sec: 30}
+
+  - id: xverif_mcp.real_fullchain
+    owner: xverif_mcp
+    level: system
+    intent: [contract, lifecycle, integration]
+    domains: [mcp, debug, coverage]
+    runner: {kind: pytest, path: xverif_mcp/tests/test_real_fullchain.py}
+    fixtures: [xdebug.active_driver, xcov.comprehensive, xcov.exclusion]
+    capabilities: [child_process, mcp_process, npi, fsdb, daidir]
+    hermetic: false
+    deterministic: true
+    cost: {class: slow, estimate_sec: 120}
+    resources: {cpu: 1, memory_mb: 3072, tokens: [verdi_npi]}
     timeouts: {execute_sec: 600, cleanup_sec: 30}
 
   - id: xverif_mcp.real_lsf_jobid
@@ -324,7 +494,7 @@ suites:
     runner:
       kind: command
       argv: [python3, testinfra/leaf/run_xdebug_cpp_units.py]
-    capabilities: [child_process]
+    capabilities: [child_process, make, gxx]
     hermetic: false
     deterministic: true
     cost: {class: medium, estimate_sec: 90}
@@ -431,6 +601,35 @@ suites:
     deterministic: true
     cost: {class: medium, estimate_sec: 20}
 
+  - id: xdebug.stream_differential
+    owner: xdebug
+    level: integration
+    intent: [contract, semantics]
+    domains: [waveform, stream]
+    runner: {kind: pytest, path: xdebug/tests/stream_differential/test_stream_differential.py}
+    fixtures: [xdebug.stream_v1, xdebug.stream_differential_tool]
+    capabilities: [child_process, npi, fsdb]
+    hermetic: false
+    deterministic: true
+    gates: [regression, nightly]
+    cost: {class: medium, estimate_sec: 40}
+    resources: {cpu: 1, memory_mb: 2048, tokens: [verdi_npi]}
+    timeouts: {execute_sec: 240, cleanup_sec: 20}
+
+  - id: xdebug.npi_fsdb_sva
+    owner: xdebug
+    level: integration
+    intent: [contract, semantics]
+    domains: [combined, waveform, sva, npi]
+    runner: {kind: pytest, path: xdebug/tests/synthetic/test_npi_fsdb_sva.py}
+    fixtures: [xdebug.npi_fsdb_sva]
+    capabilities: [npi, fsdb, daidir]
+    hermetic: false
+    deterministic: true
+    cost: {class: medium, estimate_sec: 10}
+    resources: {cpu: 1, memory_mb: 1024, tokens: [verdi_npi]}
+    timeouts: {execute_sec: 60, cleanup_sec: 10}
+
   - id: xdebug.xif_event
     owner: xdebug
     level: system
@@ -456,6 +655,18 @@ suites:
     deterministic: true
     cost: {class: medium, estimate_sec: 20}
 
+  - id: xdebug.trace_x_xprop
+    owner: xdebug
+    level: integration
+    intent: [contract, semantics]
+    domains: [combined, active-trace, waveform]
+    runner: {kind: pytest, path: xdebug/tests/combined/test_trace_x_xprop.py}
+    fixtures: [xdebug.trace_x_xprop]
+    capabilities: [npi, fsdb, daidir]
+    hermetic: false
+    deterministic: true
+    cost: {class: medium, estimate_sec: 30}
+
   - id: xdebug.active_zero_evidence
     owner: xdebug
     level: integration
@@ -473,8 +684,12 @@ suites:
     level: integration
     intent: [contract, semantics]
     domains: [design]
-    runner: {kind: pytest, path: xdebug/tests/design/test_design_semantics.py}
-    fixtures: [xdebug.design_uart, xdebug.design_p3]
+    runner:
+      kind: pytest
+      paths:
+        - xdebug/tests/design/test_design_semantics.py
+        - xdebug/tests/design/test_design_hierarchy_runtime.py
+    fixtures: [xdebug.design_uart, xdebug.design_p3, xdebug.design_hierarchy]
     capabilities: [child_process, npi, daidir]
     hermetic: false
     deterministic: true
@@ -572,14 +787,45 @@ suites:
     cost: {class: slow, estimate_sec: 90}
     timeouts: {execute_sec: 420, cleanup_sec: 30}
 
-  - id: xdebug.realdata
+  - id: xdebug.native_xout_report
+    owner: xdebug
+    level: unit
+    intent: [contract]
+    domains: [xout, report]
+    runner: {kind: pytest, path: xdebug/tests/native_xout/test_report_contract.py}
+    capabilities: []
+    hermetic: true
+    deterministic: true
+    cost: {class: fast, estimate_sec: 5}
+    timeouts: {execute_sec: 60, cleanup_sec: 10}
+
+  - id: xdebug.native_xout_all
     owner: xdebug
     level: system
-    intent: [smoke]
-    domains: [realdata, design, waveform]
-    runner: {kind: pytest, path: xdebug/tests/realdata}
-    capabilities: [npi, external_realdata]
-    availability: optional
+    intent: [contract, semantics]
+    domains: [xout, cli, design, waveform, combined, apb, axi, stream, event]
+    runner:
+      kind: pytest
+      path: xdebug/tests/native_xout
+      env: {XDEBUG_XOUT_PHASE: final}
+    fixtures: [xdebug.ai_complex_wave, xdebug.active_semantics, xdebug.trace_x_xprop, xdebug.apb_vip, xdebug.axi_vip, xdebug.stream_v1, xdebug.xif_event]
+    capabilities: [child_process, npi, fsdb, daidir]
     hermetic: false
-    deterministic: false
-    cost: {class: slow, estimate_sec: 120}
+    deterministic: true
+    cost: {class: slow, estimate_sec: 300}
+    resources: {cpu: 1, memory_mb: 4096, tokens: [verdi_npi]}
+    timeouts: {execute_sec: 1200, cleanup_sec: 60}
+
+  - id: xdebug.analysis_cache_benchmark
+    owner: xdebug
+    level: system
+    intent: [benchmark, contract, semantics]
+    domains: [waveform, apb, axi, stream, cache]
+    runner: {kind: pytest, path: xdebug/tests/benchmark/test_analysis_cache_baseline.py}
+    fixtures: [xdebug.apb_vip, xdebug.axi_vip, xdebug.stream_v1]
+    capabilities: [child_process, npi, fsdb]
+    hermetic: false
+    deterministic: true
+    cost: {class: slow, estimate_sec: 180}
+    resources: {cpu: 1, memory_mb: 4096, tokens: [verdi_npi]}
+    timeouts: {execute_sec: 600, cleanup_sec: 30}

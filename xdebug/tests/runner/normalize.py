@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Mapping, Sequence, Set
@@ -30,7 +31,9 @@ class NormalizeOptions:
     unordered_list_paths: Set[str] = field(default_factory=set)
 
 
-_TMP_PATH = re.compile(r"/tmp/[A-Za-z0-9_.-]+")
+_TMP_PATH = re.compile(
+    re.escape(str(Path(tempfile.gettempdir()))) + r"/[A-Za-z0-9_.-]+"
+)
 
 
 def _normalize_string(value: str, replacements: Mapping[str, str]) -> str:

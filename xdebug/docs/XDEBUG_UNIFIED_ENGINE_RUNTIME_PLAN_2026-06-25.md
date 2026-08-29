@@ -85,8 +85,8 @@ public xdebug CLI / stdio-loop / MCP
 
 - 记录当前工作区状态，保留用户或其他任务已有改动，不回退无关文件。
 - 跑最小基线：
-  - `PYTHON=~/miniconda3/bin/python make -C xdebug clean all`
-  - `PYTHON=~/miniconda3/bin/python make -C xdebug test-fast`
+  - `PYTHON=python3 make -C xdebug clean all`
+  - `PYTHON=python3 make -C xdebug test-fast`
 - 若基线已有失败，先记录失败和归因；如果失败来自沙箱、license、UDS、FSDB、VCS/Verdi 环境，按沙箱内/外 A/B 排查。
 
 ### 阶段 1：建立 engine 自有 query 入口
@@ -211,17 +211,17 @@ public xdebug CLI / stdio-loop / MCP
 ### 分阶段验证
 
 - 入口和构建图阶段：
-  - `PYTHON=~/miniconda3/bin/python make -C xdebug clean all`
-  - `PYTHON=~/miniconda3/bin/python make -C xdebug schema-test`
-  - `PYTHON=~/miniconda3/bin/python make -C xdebug contract-test`
-  - `PYTHON=~/miniconda3/bin/python make -C xdebug unit-test`
+  - `PYTHON=python3 make -C xdebug clean all`
+  - `PYTHON=python3 make -C xdebug schema-test`
+  - `PYTHON=python3 make -C xdebug contract-test`
+  - `PYTHON=python3 make -C xdebug unit-test`
 - session/runtime 阶段：
-  - `PYTHON=~/miniconda3/bin/python make -C xdebug pytest-session`
-  - `PYTHON=~/miniconda3/bin/python make -C xdebug pytest-mcp`
-  - `PYTHON=~/miniconda3/bin/python make -C xdebug combined-test`
+  - `PYTHON=python3 make -C xdebug pytest-session`
+  - `PYTHON=python3 make -C xdebug pytest-mcp`
+  - `PYTHON=python3 make -C xdebug combined-test`
 - waveform/design 行为阶段：
-  - `PYTHON=~/miniconda3/bin/python make -C xdebug test-synthetic`
-  - `PYTHON=~/miniconda3/bin/python make -C xdebug test-realdata-smoke`
+  - `PYTHON=python3 make -C xdebug test-synthetic`
+  - `PYTHON=python3 make -C xdebug test-realdata-smoke`
   - 必要时补跑现有 waveform non-AXI smoke 和 design semantics smoke。
 
 ### 最终全仓库验证
@@ -229,17 +229,17 @@ public xdebug CLI / stdio-loop / MCP
 最终完成后必须执行：
 
 ```bash
-PYTHON=~/miniconda3/bin/python make clean all
-PYTHON=~/miniconda3/bin/python make test
-PYTHON=~/miniconda3/bin/python make full-test
-PYTHON=~/miniconda3/bin/python make -C xdebug test-nightly
-PYTHONPATH=xverif_mcp/src:. ~/miniconda3/bin/python -m pytest xverif_mcp/tests -q
+PYTHON=python3 make clean all
+PYTHON=python3 make test
+PYTHON=python3 make full-test
+PYTHON=python3 make -C xdebug test-nightly
+PYTHONPATH=xverif_mcp/src:. python3 -m pytest xverif_mcp/tests -q
 ```
 
 如需真实 LSF：
 
 ```bash
-PYTHON=~/miniconda3/bin/python XDEBUG_ENABLE_REAL_LSF=1 make -C xdebug test-mcp-real-lsf
+PYTHON=python3 XDEBUG_ENABLE_REAL_LSF=1 make -C xdebug test-mcp-real-lsf
 ```
 
 涉及 NPI、VCS/Verdi、FSDB、UDS、MCP、license、真实 LSF 的测试必须在沙箱外运行；若沙箱内失败，先确认是否为沙箱限制，再判断是否是产品回归。

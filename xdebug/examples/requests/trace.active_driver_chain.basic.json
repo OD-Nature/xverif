@@ -8,6 +8,6 @@
   "args": {
     "signal": "top.data_out",
     "time": "50ns",
-    "clk_period": "10ns"
+    "value_format": "hex"
   }
 }

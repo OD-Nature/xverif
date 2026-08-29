@@ -6,7 +6,8 @@
   "required": [
     "api_version",
     "action",
-    "args"
+    "args",
+    "target"
   ],
   "properties": {
     "api_version": {
@@ -16,7 +17,8 @@
       ]
     },
     "request_id": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "action": {
       "type": "string",
@@ -25,33 +27,78 @@
       ]
     },
     "target": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fsdb": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "session_id"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "fsdb"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "session_id"
+            ]
+          },
+          "required": [
+            "fsdb"
+          ]
+        }
+      ],
+      "additionalProperties": false
     },
     "args": {
       "type": "object",
+      "required": [
+        "signal"
+      ],
       "properties": {
         "clock": {
           "type": "string",
           "description": "采样、统计或协议检查使用的 clock 信号路径。"
         },
-        "conditions": {
-          "type": "array",
-          "items": {
-            "type": "object"
-          },
-          "description": "需要验证的条件列表。"
-        },
         "edge": {
           "type": "string",
-          "description": "clock sampling 使用的边沿：posedge、negedge 或 dual。"
+          "description": "Clock sampling edge. The schema default is authoritative; negedge often matches monitor semantics."
         },
         "line_limit": {
           "type": "integer",
           "minimum": 1,
-          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
+          "description": "Limits returned evidence rows only, not scanning, aggregation, or the verdict; read completeness fields as well."
         },
-        "mode": {
-          "type": "string"
+        "max_samples": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "允许扫描的时钟采样预算；耗尽表示分析不完整而非仅 response 截断。"
+        },
+        "render_time_unit": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "ps",
+            "ns",
+            "us"
+          ],
+          "description": "Controls only canonical response time rendering: auto, ps, ns, or us. It never changes input parsing, sampling, filtering, or ordering."
         },
         "sample_point": {
           "type": "string",
@@ -59,83 +106,82 @@
             "before",
             "after"
           ],
-          "description": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。"
+          "description": "Before/after observation point for posedge or dual sampling; it does not change the raw waveform range."
         },
         "signal": {
           "type": "string",
-          "description": "目标信号路径。"
-        },
-        "signals": {
-          "oneOf": [
-            {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              }
-            }
-          ],
-          "description": "信号列表，或 alias 到信号路径的映射。"
+          "description": "Final leaf signal path. Aggregate, array, and struct roots are not expanded automatically."
         },
         "time_range": {
           "type": "object",
+          "minProperties": 1,
           "properties": {
             "begin": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1,
+              "description": "闭区间起点；省略时使用可用波形窗口起点。"
             },
             "end": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1,
+              "description": "闭区间终点；省略时使用可用波形窗口终点。"
             }
           },
           "additionalProperties": false,
-          "description": "查询或分析的时间窗口。"
+          "description": "Closed analysis interval. begin and end may be omitted independently to use the available waveform bounds."
         },
-        "time_unit": {
+        "value_format": {
           "type": "string",
           "enum": [
-            "auto",
-            "fs",
-            "ps",
-            "ns",
-            "us",
-            "ms",
-            "s"
-          ]
+            "hex",
+            "bin",
+            "dec"
+          ],
+          "default": "hex",
+          "description": "返回 LogicValue 的显示格式；不改变比较、采样或底层四态值。"
         }
       },
-      "additionalProperties": false,
-      "required": [
-        "signal"
-      ]
+      "additionalProperties": false
     },
     "limits": {
-      "type": "object"
-    },
-    "auth_token": {
-      "type": "string"
-    },
-    "id": {
-      "type": "string"
-    },
-    "trace_id": {
-      "type": "string"
-    },
-    "span_id": {
-      "type": "string"
-    },
-    "parent_span_id": {
-      "type": "string"
+      "type": "object",
+      "properties": {
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647,
+          "description": "Positive public frontend-to-engine request timeout in milliseconds. Omit limits.timeout_ms to disable the public watchdog."
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false,
-  "description": "signal.statistics: 统计信号活动。",
+  "description": "Measure waveform signal activity and sampled values.",
   "x-purpose": "统计信号活动。",
   "x-how_it_works": "无 clock 时统计原始变化；有 clock 时按边沿采样，统计 known/high/low/unknown。",
   "x-when_to_use": "量化活跃度、占空和采样质量。",
-  "x-arg_contract_notes": "required: signal"
+  "x-arg_contract_notes": "required: signal",
+  "x-description-zh": "统计信号活动。",
+  "x-agent": {
+    "use_when": [
+      "Need aggregate sampled activity counts or value distributions for one signal under a clock/condition contract."
+    ],
+    "do_not_use_when": [
+      "Do not use it for a raw change-by-change timeline or a yes/no stability verdict."
+    ],
+    "alternatives": [
+      {
+        "action": "signal.changes",
+        "when": "Return every raw change."
+      },
+      {
+        "action": "signal.stability",
+        "when": "Check whether a signal remains stable."
+      }
+    ],
+    "constraints": [
+      "required: signal"
+    ]
+  }
 }

@@ -6,7 +6,8 @@
   "required": [
     "api_version",
     "action",
-    "args"
+    "args",
+    "target"
   ],
   "properties": {
     "api_version": {
@@ -16,7 +17,8 @@
       ]
     },
     "request_id": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "action": {
       "type": "string",
@@ -25,10 +27,52 @@
       ]
     },
     "target": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fsdb": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "session_id"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "fsdb"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "session_id"
+            ]
+          },
+          "required": [
+            "fsdb"
+          ]
+        }
+      ],
+      "additionalProperties": false
     },
     "args": {
       "type": "object",
+      "required": [
+        "clock",
+        "conditions",
+        "signals"
+      ],
       "properties": {
         "clock": {
           "type": "string",
@@ -36,6 +80,7 @@
         },
         "conditions": {
           "type": "array",
+          "minItems": 1,
           "items": {
             "type": "object",
             "required": [
@@ -44,10 +89,8 @@
             "properties": {
               "expr": {
                 "type": "string",
-                "description": "Expression using aliases from args.signals."
-              },
-              "name": {
-                "type": "string"
+                "description": "Expression using aliases from args.signals.",
+                "minLength": 1
               },
               "mode": {
                 "type": "string",
@@ -55,21 +98,38 @@
                   "always",
                   "eventually",
                   "never"
-                ]
+                ],
+                "description": "Action processing or return mode. Its legal values, default, and interactions are action-specific."
               }
             },
-            "additionalProperties": false
+            "additionalProperties": false,
+            "description": "要在同一采样合同下验证的命名条件列表。"
           },
           "description": "需要验证的条件列表。"
         },
         "edge": {
           "type": "string",
-          "description": "clock sampling 使用的边沿：posedge、negedge 或 dual。"
+          "description": "Clock sampling edge. The schema default is authoritative; negedge often matches monitor semantics."
         },
         "line_limit": {
           "type": "integer",
           "minimum": 1,
-          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
+          "description": "Limits returned evidence rows only, not scanning, aggregation, or the verdict; read completeness fields as well."
+        },
+        "max_samples": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "允许扫描的时钟采样预算；耗尽表示分析不完整而非仅 response 截断。"
+        },
+        "render_time_unit": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "ps",
+            "ns",
+            "us"
+          ],
+          "description": "Controls only canonical response time rendering: auto, ps, ns, or us. It never changes input parsing, sampling, filtering, or ordering."
         },
         "sample_point": {
           "type": "string",
@@ -77,81 +137,94 @@
             "before",
             "after"
           ],
-          "description": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。"
+          "description": "Before/after observation point for posedge or dual sampling; it does not change the raw waveform range."
         },
         "signals": {
-          "oneOf": [
-            {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              }
-            }
-          ],
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1
+          },
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Value for a caller-defined signal alias key. Supply the real signal path or the action-supported expression for that alias."
+          },
+          "x-dynamic-map": true,
+          "x-dynamic-contract": "Each property key is an alias referenced by this action; each value resolves that alias to a signal path or supported expression.",
           "description": "信号列表，或 alias 到信号路径的映射。"
         },
         "time_range": {
           "type": "object",
+          "minProperties": 1,
           "properties": {
             "begin": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1,
+              "description": "闭区间起点；省略时使用可用波形窗口起点。"
             },
             "end": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1,
+              "description": "闭区间终点；省略时使用可用波形窗口终点。"
             }
           },
           "additionalProperties": false,
-          "description": "查询或分析的时间窗口。"
+          "description": "Closed analysis interval. begin and end may be omitted independently to use the available waveform bounds."
         },
-        "time_unit": {
+        "value_format": {
           "type": "string",
           "enum": [
-            "auto",
-            "fs",
-            "ps",
-            "ns",
-            "us",
-            "ms",
-            "s"
-          ]
+            "hex",
+            "bin",
+            "dec"
+          ],
+          "default": "hex",
+          "description": "返回 LogicValue 的显示格式；不改变比较、采样或底层四态值。"
         }
       },
-      "additionalProperties": false,
-      "required": [
-        "clock",
-        "conditions",
-        "signals"
-      ]
+      "additionalProperties": false
     },
     "limits": {
-      "type": "object"
-    },
-    "auth_token": {
-      "type": "string"
-    },
-    "id": {
-      "type": "string"
-    },
-    "trace_id": {
-      "type": "string"
-    },
-    "span_id": {
-      "type": "string"
-    },
-    "parent_span_id": {
-      "type": "string"
+      "type": "object",
+      "properties": {
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647,
+          "description": "Positive public frontend-to-engine request timeout in milliseconds. Omit limits.timeout_ms to disable the public watchdog."
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false,
-  "description": "window.verify: 按 clock 在窗口内验证条件。",
+  "description": "Verify conditions across a clock-sampled time window.",
   "x-purpose": "按 clock 在窗口内验证条件。",
   "x-how_it_works": "按 clock edge 采样 args.signals 中的 alias，逐个 conditions[].expr 统计 pass/fail/unknown。",
   "x-when_to_use": "判断协议或断言类条件是否持续满足。",
-  "x-arg_contract_notes": "required: clock, conditions, signals"
+  "x-arg_contract_notes": "required: clock, conditions, signals",
+  "x-description-zh": "按 clock 在窗口内验证条件。",
+  "x-agent": {
+    "use_when": [
+      "需要在时间窗口内按 clock sample 验证多个条件。"
+    ],
+    "do_not_use_when": [
+      "只需要单个采样时刻的条件结果或单个信号稳定性。"
+    ],
+    "alternatives": [
+      {
+        "action": "verify.conditions",
+        "when": "需要单个时刻的条件验证。"
+      },
+      {
+        "action": "signal.stability",
+        "when": "需要单信号稳定性检查。"
+      }
+    ],
+    "constraints": [
+      "required: clock, conditions, signals"
+    ]
+  }
 }

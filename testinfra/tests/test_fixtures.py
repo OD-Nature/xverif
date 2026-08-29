@@ -10,6 +10,9 @@ from testinfra.xverif_test.fixtures import (
 )
 
 
+ROOT = Path(__file__).resolve().parents[2]
+
+
 def make_store(root: Path) -> tuple[FixtureStore, FixtureSpec]:
     source = root / "fixture"
     source.mkdir()
@@ -33,6 +36,7 @@ def make_store(root: Path) -> tuple[FixtureStore, FixtureSpec]:
         },
         outputs=(FixtureOutput("text", "out.txt", "file", 1),),
         tool_env=(),
+        build_capabilities=(),
     )
     return FixtureStore(root, FixtureRegistry("xverif-fixture-registry.v1", (spec,))), spec
 
@@ -58,6 +62,69 @@ def test_prepare_publishes_and_reuses_fixture(tmp_path: Path) -> None:
     assert store.resolve(spec.id) == first
 
 
+def test_concurrent_prepare_uses_one_atomic_claim(tmp_path: Path, monkeypatch) -> None:
+    from concurrent.futures import ThreadPoolExecutor
+    import threading
+
+    store, spec = make_store(tmp_path)
+    original = store._run_builder
+    entered = threading.Event()
+    release = threading.Event()
+    guard = threading.Lock()
+    calls = 0
+
+    def blocking_builder(builder_spec, staging) -> None:
+        nonlocal calls
+        with guard:
+            calls += 1
+        entered.set()
+        assert release.wait(timeout=5)
+        original(builder_spec, staging)
+
+    monkeypatch.setattr(store, "_run_builder", blocking_builder)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(store.prepare, spec.id)
+        assert entered.wait(timeout=5)
+        second = pool.submit(store.prepare, spec.id)
+        release.set()
+        first_path = first.result(timeout=5)
+        second_path = second.result(timeout=5)
+
+    assert calls == 1
+    assert first_path == second_path
+
+
+def test_prepare_reports_cache_and_rebuild_phases(tmp_path: Path) -> None:
+    store, spec = make_store(tmp_path)
+    rebuild_phases: list[str] = []
+    store.prepare(spec.id, progress=rebuild_phases.append)
+    assert rebuild_phases == [
+        "fingerprint", "claim", "builder", "output_validation", "publish"
+    ]
+
+    cache_phases: list[str] = []
+    store.prepare(spec.id, progress=cache_phases.append)
+    assert cache_phases == ["fingerprint", "cache_validation"]
+
+
+def test_prepare_cleans_staging_when_builder_is_interrupted(tmp_path: Path, monkeypatch) -> None:
+    store, spec = make_store(tmp_path)
+
+    def interrupt(_spec, _staging) -> None:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(store, "_run_builder", interrupt)
+    try:
+        store.prepare(spec.id)
+    except KeyboardInterrupt:
+        pass
+    else:
+        raise AssertionError("expected KeyboardInterrupt")
+
+    staging_root = store.root / spec.id / ".staging"
+    assert list(staging_root.iterdir()) == []
+
+
 def test_rebuild_atomically_switches_to_new_immutable_generation(tmp_path: Path) -> None:
     store, spec = make_store(tmp_path)
     first = store.prepare(spec.id)
@@ -68,5 +135,90 @@ def test_rebuild_atomically_switches_to_new_immutable_generation(tmp_path: Path)
 
 
 def test_tool_identity_uses_compatible_major_minor() -> None:
-    assert _compatibility_identity("/tools/verdi/V-2023.12-SP2") == "V-2023.12"
+    assert _compatibility_identity("tools/verdi/V-2023.12-SP2") == "V-2023.12"
     assert _compatibility_identity("") == "unset"
+
+
+def test_fingerprint_uses_effective_default_environment(tmp_path: Path, monkeypatch) -> None:
+    store, spec = make_store(tmp_path)
+    spec = FixtureSpec(**{**spec.__dict__, "builder": {
+        **spec.builder, "default_env": {"VIP_ROOT": "{home}/vip"},
+    }})
+    first, _ = store.fingerprint(spec)
+    monkeypatch.setenv("VIP_ROOT", "other-vip")
+    second, _ = store.fingerprint(spec)
+    assert second != first
+
+
+def test_large_summary_fixture_fingerprints_generator_recipe_probe_and_tools() -> None:
+    registry = FixtureRegistry.load(
+        ROOT / "testinfra/fixtures.v1.yaml",
+        ROOT / "testinfra/schemas/fixtures.v1.schema.json",
+    )
+    spec = registry.by_id("xcov.large_summary")
+    store = FixtureStore(ROOT, registry)
+
+    assert spec.inputs == (
+        "Makefile", "generate_large_fixture.py", "probe_large_fixture.py",
+    )
+    assert spec.tool_env == ("VCS_HOME", "VERDI_HOME")
+    assert spec.builder["argv"] == ["make", "fixture", "RUN_DIR={resources}"]
+    assert spec.builder["timeout_sec"] == 3600
+    assert spec.probes[0]["argv"] == [
+        "python3", "{source}/probe_large_fixture.py",
+        "--resources", "{resources}",
+    ]
+    source_names = {
+        path.name for path in store._source_files(spec)  # private contract audit
+    }
+    assert source_names == {
+        "Makefile", "generate_large_fixture.py", "probe_large_fixture.py",
+    }
+    fingerprint, tool_identity = store.fingerprint(spec)
+    assert len(fingerprint) == 64
+    assert set(tool_identity) == {"VCS_HOME", "VERDI_HOME"}
+
+
+def test_xcov_edge_fixtures_share_rtl_but_publish_independent_vdbs() -> None:
+    registry = FixtureRegistry.load(
+        ROOT / "testinfra/fixtures.v1.yaml",
+        ROOT / "testinfra/schemas/fixtures.v1.schema.json",
+    )
+    edge = registry.by_id("xcov.modinfo_edge_layouts")
+    zero = registry.by_id("xcov.zero_coverable")
+
+    assert edge.source_dir == zero.source_dir == "xcov/fixtures/edge_cases"
+    assert edge.inputs == zero.inputs == ("Makefile", "design.sv")
+    assert edge.builder["argv"][-1] == "VARIANT=edge"
+    assert zero.builder["argv"][-1] == "VARIANT=zero"
+    assert edge.outputs[0].path == "edge_cases.vdb"
+    assert zero.outputs[0].path == "zero_coverable.vdb"
+    assert edge.tool_env == zero.tool_env == ("VCS_HOME", "VERDI_HOME")
+
+
+def test_design_hierarchy_fixture_preserves_validated_npi_experiment_recipe() -> None:
+    registry = FixtureRegistry.load(
+        ROOT / "testinfra/fixtures.v1.yaml",
+        ROOT / "testinfra/schemas/fixtures.v1.schema.json",
+    )
+    spec = registry.by_id("xdebug.design_hierarchy")
+    assert spec.source_dir == "xdebug/testdata/design/hierarchy_types"
+    assert spec.inputs == ("hierarchy_types_fixture.sv",)
+    assert spec.builder["argv"] == [
+        "vcs",
+        "-full64",
+        "-sverilog",
+        "-timescale=1ns/1ps",
+        "-debug_access+all",
+        "-kdb",
+        "-lca",
+        "{source}/hierarchy_types_fixture.sv",
+        "-top",
+        "hierarchy_types_top",
+        "-o",
+        "{resources}/simv",
+    ]
+    assert spec.outputs == (
+        FixtureOutput("daidir", "simv.daidir", "dir", 1),
+    )
+    assert spec.tool_env == ("VERDI_HOME",)

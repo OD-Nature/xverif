@@ -15,7 +15,6 @@
 - `xverif-admin`：MCP、SDK-free、transport、LSF、timeout、session 运维。
 - `x-npi`：批量 FSDB/VDB 扫描和定制分析。
 - `xwiki`：持续知识查询及授权写回。
-- `xeda-runner`：执行 make/VCS/simv/Verdi。
 
 `xverif` 内部划分为 `core/`、`capabilities/`、`workflows/`、`surfaces/`、`generated/` 和 `specs/`。旧 `xverif-cli`、`xverif-mcp` 直接退场，不保留兼容壳。
 
@@ -114,7 +113,7 @@
 
 ## 测试与验收
 
-- 用 `skills.xverif`、`skills.xverif_admin`、`skills.xeda_runner` 替换旧 suites，保留并调整 `skills.x_npi`、`skills.xwiki`。
+- 用 `skills.xverif`、`skills.xverif_admin` 替换旧 suites，保留并调整 `skills.x_npi`、`skills.xwiki`。
 - 验证 xdebug 主文件覆盖 scope、driver、load、active driver、active chain、value/event/verify、诊断闭环、stream 泛用性、多模态观察和 config 保存。
 - 确保全量索引与 runtime registry action 集合完全一致。
 - 运行 focused skill suites、`pytest --xverif-gate fast --xverif-plan` 和 `pytest --xverif-gate fast`。

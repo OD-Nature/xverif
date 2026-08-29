@@ -9,14 +9,36 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .backend import CoverageBackend, METRICS
+from .coverage_contract import ALLOWED_FIELDS
 from .errors import XcovError
 from .query import coverage_pct
 
 Json = Dict[str, Any]
 
+# 2018 worker 在 branch/condition context 上额外输出的表达式/term/AST 扩展字段
+# 不在上游封闭行合同 ALLOWED_FIELDS 内；适配层在返回前剥离，保持行合同可校验。
+# 表达式分析能力的重移植是独立后续工作（worker 二进制仍保留该输出）。
+_NON_CONTRACT_FIELDS_NOTE = (
+    "branch_ast, branch_expression, branch_term_values, condition_ast, "
+    "condition_expression, condition_term_values are dropped by the adapter"
+)
+
+
+def _strip_non_contract_fields(row: Any) -> Json:
+    if not isinstance(row, dict):
+        return row
+    return {key: value for key, value in row.items() if key in ALLOWED_FIELDS}
+
 
 class NativeNpiCoverageBackend(CoverageBackend):
-    """Verdi 2018 coverage backend using a persistent C++ NPI worker."""
+    """Verdi 2018 coverage backend using a persistent C++ NPI worker.
+
+    实现上游 CanonicalCoverageBackend 委托合同中的 worker 可服务子集
+    （close/tests/summary/scopes/items）。exclusion、gap、容器解析等依赖
+    pynpi/URG 的新协议能力以结构化错误显式拒绝，不做静默 fallback。
+    """
+
+    worker_kind = "npi_native_2018"
 
     def __init__(self, vdb: str) -> None:
         self.vdb = vdb
@@ -149,9 +171,11 @@ class NativeNpiCoverageBackend(CoverageBackend):
         return list(self._request("tests") or [])
 
     def summary(self) -> Json:
-        if self._closed:
-            return dict(self._summary_cache)
-        self._summary_cache = dict(self._request("summary") or {})
+        raw = dict(self._request("summary") or {}) if not self._closed else dict(self._summary_cache)
+        self._summary_cache = {
+            "test_count": raw.get("test_count"),
+            "top_scope_count": raw.get("top_scope_count"),
+        }
         return dict(self._summary_cache)
 
     def scopes(self) -> List[Json]:
@@ -175,7 +199,10 @@ class NativeNpiCoverageBackend(CoverageBackend):
             args["scope"] = scope
         key = (tuple(sorted(args["metrics"])), scope or "", test, bool(functional_only))
         if key not in self._items_cache:
-            self._items_cache[key] = list(self._request("items", args) or [])
+            self._items_cache[key] = [
+                _strip_non_contract_fields(row)
+                for row in (self._request("items", args) or [])
+            ]
         return [dict(row) for row in self._items_cache[key]]
 
     def metrics_for_scope(self, scope: Optional[str], test: str) -> List[Json]:
@@ -195,3 +222,59 @@ class NativeNpiCoverageBackend(CoverageBackend):
                 "coverage_pct": coverage_pct(covered, coverable),
             })
         return out
+
+    def scope_metrics(self) -> Dict[str, Json]:
+        self._unsupported("scope_metrics")
+
+    def scope_functional_from_urg(self) -> List[Json]:
+        self._unsupported("scope_functional_from_urg")
+
+    def scope_assert_from_urg(self) -> List[Json]:
+        self._unsupported("scope_assert_from_urg")
+
+    def exact_scope_items(self, metrics: List[str], scope: str, test: str = "merged") -> List[Json]:
+        self._unsupported("exact_scope_items")
+
+    def functional_items_filtered(self, covergroups: set, test: str = "merged") -> List[Json]:
+        self._unsupported("functional_items_filtered")
+
+    def gap_items(self, metric: str, scope: Optional[str] = None,
+                  test: str = "merged") -> List[Json]:
+        self._unsupported("gap_items")
+
+    def load_exclusions(self, paths: List[str], test: str = "merged") -> List[Json]:
+        self._unsupported("load_exclusions")
+
+    def set_exclusion(self, coverage_ref: str, excluded: bool, test: str = "merged") -> Json:
+        self._unsupported("set_exclusion")
+
+    def save_exclusions(self, path: str, test: str = "merged") -> None:
+        self._unsupported("save_exclusions")
+
+    def unload_exclusions(self, test: str = "merged") -> None:
+        self._unsupported("unload_exclusions")
+
+    def attach_gap_locators(self, payload: Json, test: str = "merged") -> Json:
+        self._unsupported("attach_gap_locators")
+
+    def set_exclusion_locator(self, locator: Json, excluded: bool = True,
+                              test: str = "merged") -> Json:
+        self._unsupported("set_exclusion_locator")
+
+    def resolve_gap_payload(self, payload: Json, test: str = "merged") -> Json:
+        self._unsupported("resolve_gap_payload")
+
+    def resolve_container_records(self, records: List[Json], test: str = "merged") -> List[Json]:
+        self._unsupported("resolve_container_records")
+
+    def expand_xml_instances(self, root: str, recursive: bool) -> List[str]:
+        self._unsupported("expand_xml_instances")
+
+    def _unsupported(self, operation: str) -> None:
+        raise XcovError(
+            "NATIVE_BACKEND_UNSUPPORTED",
+            "the Verdi 2018 native NPI worker does not implement this "
+            "operation; it requires the upstream pynpi/URG backend path",
+            operation=operation,
+            worker_kind=self.worker_kind,
+        )

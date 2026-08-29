@@ -8,7 +8,7 @@
     "name": "if0",
     "config": {
       "clock": "axi_vip_fixture_top.clk",
-      "rst_n": "axi_vip_fixture_top.rst_n",
+      "reset": {"signal": "axi_vip_fixture_top.rst_n", "polarity": "active_low"},
       "edge": "posedge",
       "awaddr": "axi_vip_fixture_top.axi_vip_if.master_if[0].awaddr",
       "awid": "axi_vip_fixture_top.axi_vip_if.master_if[0].awid",

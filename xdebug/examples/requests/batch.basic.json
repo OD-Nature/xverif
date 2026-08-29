@@ -5,7 +5,8 @@
     "requests": [
       {
         "api_version": "xdebug.v1",
-        "action": "schema"
+        "action": "session.list",
+        "args": {}
       }
     ]
   }

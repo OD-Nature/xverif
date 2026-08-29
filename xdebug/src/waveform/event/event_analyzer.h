@@ -12,6 +12,16 @@ struct EventRecord {
     npiFsdbTime time = 0;
     std::map<std::string, std::string> signals;
     std::map<std::string, std::string> fields;
+    std::map<std::string, int> signal_widths;
+    std::map<std::string, int> field_widths;
+};
+
+struct EventScanStats {
+    int sample_count = 0;
+    int matched_count = 0;
+    npiFsdbTime first_match_time = 0;
+    npiFsdbTime last_match_time = 0;
+    bool sample_budget_exhausted = false;
 };
 
 struct EventQuery {
@@ -19,7 +29,10 @@ struct EventQuery {
     npiFsdbTime begin = 0;
     npiFsdbTime end = 0xFFFFFFFFFFFFFFFFULL;
     int limit = -1;
+    int max_samples = -1;
     bool fast_find = false;
+    bool retain_last_only = false;
+    EventScanStats* stats = nullptr;
 };
 
 class EventAnalyzer {

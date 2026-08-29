@@ -6,7 +6,8 @@
   "required": [
     "api_version",
     "action",
-    "args"
+    "args",
+    "target"
   ],
   "properties": {
     "api_version": {
@@ -16,7 +17,8 @@
       ]
     },
     "request_id": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "action": {
       "type": "string",
@@ -27,97 +29,155 @@
     "target": {
       "type": "object",
       "properties": {
+        "session_id": {
+          "type": "string",
+          "minLength": 1
+        },
         "daidir": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1
         },
         "fsdb": {
-          "type": "string"
-        },
-        "session_id": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1
         }
-      }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "session_id"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "daidir"
+                ]
+              },
+              {
+                "required": [
+                  "fsdb"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "session_id"
+            ]
+          },
+          "required": [
+            "daidir",
+            "fsdb"
+          ]
+        }
+      ],
+      "additionalProperties": false
     },
     "args": {
       "type": "object",
-      "properties": {
-        "limits": {
-          "type": "object"
-        },
-        "signal": {
-          "type": "string",
-          "description": "目标信号路径。"
-        },
-        "time": {
-          "type": "string",
-          "description": "查询或验证的目标时间点。"
-        },
-        "time_unit": {
-          "type": "string",
-          "enum": [
-            "auto",
-            "fs",
-            "ps",
-            "ns",
-            "us",
-            "ms",
-            "s"
-          ]
-        }
-      },
-      "additionalProperties": false,
       "required": [
         "signal",
         "time"
-      ]
-    },
-    "limits": {
-      "type": "object",
-      "description": "Resource limits for the recursive active trace",
+      ],
       "properties": {
-        "max_depth": {
-          "type": "integer",
-          "minimum": 1,
-          "description": "Maximum recursion depth through pass-through assignments and aliases (default 8)"
+        "render_time_unit": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "ps",
+            "ns",
+            "us"
+          ],
+          "description": "Controls only canonical response time rendering: auto, ps, ns, or us. It never changes input parsing, sampling, filtering, or ordering."
         },
-        "max_nodes": {
-          "type": "integer",
-          "minimum": 1,
-          "description": "Maximum number of trace nodes before truncation (default 50)"
+        "signal": {
+          "type": "string",
+          "description": "Final leaf signal path. Aggregate, array, and struct roots are not expanded automatically."
         },
-        "max_alias_candidates": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Maximum number of alias candidates to explore (default 8)"
-        },
-        "max_trace_signals": {
-          "type": "integer",
-          "minimum": 1,
-          "description": "Maximum signal count for value lookup (default 64)"
+        "time": {
+          "type": "string",
+          "description": "Target sample time. Prefer a canonical string with a unit; a bare number is interpreted as nanoseconds."
         }
       },
       "additionalProperties": false
     },
-    "auth_token": {
-      "type": "string"
-    },
-    "id": {
-      "type": "string"
-    },
-    "trace_id": {
-      "type": "string"
-    },
-    "span_id": {
-      "type": "string"
-    },
-    "parent_span_id": {
-      "type": "string"
+    "limits": {
+      "type": "object",
+      "properties": {
+        "max_depth": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 8,
+          "description": "Maximum active-driver recursion depth."
+        },
+        "max_nodes": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 50,
+          "description": "Maximum active-trace nodes analyzed."
+        },
+        "max_time_steps": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 128,
+          "description": "Maximum distinct waveform times visited by active tracing."
+        },
+        "max_trace_signals": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 64,
+          "description": "Maximum candidate signals sampled for active-driver evidence."
+        },
+        "max_results": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647,
+          "default": 10,
+          "description": "Maximum simplified active-driver paths returned."
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647,
+          "description": "Positive public frontend-to-engine request timeout in milliseconds. Omit limits.timeout_ms to disable the public watchdog."
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false,
-  "description": "trace.active_driver: 在指定时间找 active driver。",
+  "description": "Find active driver evidence at a specific waveform time.",
   "x-purpose": "在指定时间找 active driver。",
   "x-how_it_works": "结合 waveform 当前值和 design 依赖，定位 time 的有效驱动证据。",
   "x-when_to_use": "回答“此刻是谁真正驱动了它”。",
-  "x-arg_contract_notes": "required: signal, time"
+  "x-arg_contract_notes": "required: signal, time",
+  "x-description-zh": "在指定时间找 active driver。",
+  "x-agent": {
+    "use_when": [
+      "Need to identify which static driver is actually controlling a signal at one waveform time, with dynamic evidence."
+    ],
+    "do_not_use_when": [
+      "Do not use it for static driver enumeration or recursive root-cause traversal."
+    ],
+    "alternatives": [
+      {
+        "action": "trace.driver",
+        "when": "Enumerate static design drivers."
+      },
+      {
+        "action": "trace.active_driver_chain",
+        "when": "Recursively follow one active-driver chain."
+      },
+      {
+        "action": "trace.x_origin",
+        "when": "Trace multiple X-producing branches."
+      }
+    ],
+    "constraints": [
+      "required: signal, time"
+    ]
+  }
 }

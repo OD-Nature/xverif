@@ -1,6 +1,0 @@
-#!/usr/bin/env bash
-set -euo pipefail
-
-script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-export XVERIF_HOME="${XVERIF_HOME:-$(cd "$script_dir/.." && pwd)}"
-exec "${PYTHON:-python3}" "$XVERIF_HOME/xeda_runner/xeda_runner.py" "$@"

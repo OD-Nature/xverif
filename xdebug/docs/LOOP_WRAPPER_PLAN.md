@@ -37,7 +37,7 @@ Validation evidence:
 - UDS wrapper tests require running outside the restricted sandbox because the
   sandbox blocks Unix domain socket bind.
 - Targeted wrapper and session tests passed with:
-  `PYTHONPATH=~/xverif/xverif_mcp/src pytest
+  `PYTHONPATH=<xverif-repo>/xverif_mcp/src pytest
   xverif_mcp/tests/test_loop_wrapper_uds.py
   xverif_mcp/tests/test_stdio_loop_session_lifecycle.py`.
 

@@ -16,7 +16,8 @@
       ]
     },
     "request_id": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "action": {
       "type": "string",
@@ -25,50 +26,103 @@
       ]
     },
     "target": {
-      "type": "object"
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
     },
     "args": {
       "type": "object",
+      "required": [
+        "requests"
+      ],
       "properties": {
         "mode": {
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "continue_on_error",
+            "stop_on_error"
+          ],
+          "default": "continue_on_error",
+          "description": "Batch failure policy. continue_on_error executes every child; stop_on_error stops immediately after the first failed child."
         },
         "requests": {
           "type": "array",
           "items": {
-            "type": "object"
+            "type": "object",
+            "properties": {
+              "api_version": {
+                "type": "string",
+                "description": "Child public API version. It is intentionally not defaulted by batch."
+              },
+              "request_id": {
+                "type": "string",
+                "description": "Optional child request correlation id."
+              },
+              "action": {
+                "type": "string",
+                "description": "Child action name selected for action-specific dispatch."
+              },
+              "target": {
+                "type": "object",
+                "x-deferred-action-validation": true,
+                "description": "Child target, validated by the selected action contract."
+              },
+              "args": {
+                "type": "object",
+                "x-deferred-action-validation": true,
+                "description": "Child arguments, validated by the selected action contract."
+              },
+              "limits": {
+                "type": "object",
+                "x-deferred-action-validation": true,
+                "description": "Child limits, validated by the selected action contract."
+              }
+            },
+            "additionalProperties": false,
+            "x-deferred-action-validation": true,
+            "description": "Closed child envelope. Required fields and nested payload are validated by the child's action-specific public contract during child dispatch, so an invalid child is reported in data.results without turning the batch envelope into an outer schema error."
           },
-          "description": "batch action 中按顺序执行的 request 列表。"
+          "description": "Batch 中按顺序执行的完整 xdebug public request 列表；每个子请求仍按自身 action schema 严格校验。",
+          "minItems": 1
         }
       },
-      "additionalProperties": false,
-      "required": [
-        "requests"
-      ]
+      "additionalProperties": false
     },
     "limits": {
-      "type": "object"
-    },
-    "auth_token": {
-      "type": "string"
-    },
-    "id": {
-      "type": "string"
-    },
-    "trace_id": {
-      "type": "string"
-    },
-    "span_id": {
-      "type": "string"
-    },
-    "parent_span_id": {
-      "type": "string"
+      "type": "object",
+      "properties": {
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647,
+          "description": "Total wall-clock budget for the ordered batch. Remaining time is projected into each engine-forward child and no later child starts after the deadline."
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false,
-  "description": "batch: 批量执行多个 xdebug request。",
+  "description": "Execute multiple xdebug requests as one ordered batch.",
   "x-purpose": "批量执行多个 xdebug request。",
   "x-how_it_works": "按 requests 顺序复用同一入口逐条调度，汇总每条响应。",
   "x-when_to_use": "减少多轮 IPC 和保持一组查询的上下文一致。",
-  "x-arg_contract_notes": "required: requests"
+  "x-arg_contract_notes": "required: requests",
+  "x-description-zh": "批量执行多个 xdebug request。",
+  "x-agent": {
+    "use_when": [
+      "需要按顺序执行多个相互独立的 native xdebug request。"
+    ],
+    "do_not_use_when": [
+      "需要一个 MCP session 中的单个 action 查询或跨请求共享结果。"
+    ],
+    "alternatives": [
+      {
+        "action": "schema",
+        "when": "需要先验证单个 request 合同。"
+      }
+    ],
+    "constraints": [
+      "required: requests"
+    ]
+  }
 }

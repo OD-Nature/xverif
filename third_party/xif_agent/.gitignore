@@ -1,0 +1,17 @@
+build/
+csrc/
+logs/
+waves/
+xwaveLog/
+
+simv
+simv.daidir/
+
+novas*
+tr_db.log
+ucli.key
+vc_hdrs.h
+verdi_config_file
+
+*.fsdb
+*.log

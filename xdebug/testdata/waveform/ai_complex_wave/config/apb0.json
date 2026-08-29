@@ -6,6 +6,6 @@
   "penable": "ai_complex_top.penable",
   "psel": "ai_complex_top.psel",
   "clock": "ai_complex_top.clk",
-  "rst_n": "ai_complex_top.rst_n",
+  "reset": {"signal": "ai_complex_top.rst_n", "polarity": "active_low"},
   "edge": "posedge"
 }

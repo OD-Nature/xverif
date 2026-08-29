@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../common/clock_sampling.h"
+#include "../common/reset_config.h"
 
 #include <string>
 
@@ -17,7 +18,7 @@ struct ApbConfig {
     std::string pready;
     std::string pslverr;
     ClockSampleSpec clock_sample;
-    std::string rst_n;
+    ResetConfig reset;
 };
 
 } // namespace xdebug_waveform

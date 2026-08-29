@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "xdebug.waveform.cursor.delete.request.v1",
+  "title": "waveform.cursor.delete request",
+  "type": "object",
+  "required": [
+    "api_version",
+    "action",
+    "args",
+    "target"
+  ],
+  "properties": {
+    "api_version": {
+      "type": "string",
+      "enum": [
+        "xdebug.v1"
+      ]
+    },
+    "request_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "action": {
+      "type": "string",
+      "enum": [
+        "waveform.cursor.delete"
+      ]
+    },
+    "target": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fsdb": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "session_id"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "fsdb"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "session_id"
+            ]
+          },
+          "required": [
+            "fsdb"
+          ]
+        }
+      ],
+      "additionalProperties": false
+    },
+    "args": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Saved-object name in this action namespace; do not assume names are shared by cursors, lists, and protocol configs."
+        }
+      },
+      "additionalProperties": false
+    },
+    "limits": {
+      "type": "object",
+      "properties": {
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647,
+          "description": "Positive public frontend-to-engine request timeout in milliseconds. Omit limits.timeout_ms to disable the public watchdog."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "description": "Delete a named waveform cursor.",
+  "x-purpose": "删除游标。",
+  "x-how_it_works": "按 name 从 CursorManager 删除记录。",
+  "x-when_to_use": "清理不再需要的时间标记。",
+  "x-arg_contract_notes": "required: name",
+  "x-description-zh": "删除游标。",
+  "x-agent": {
+    "use_when": [
+      "Know the waveform cursor name and need to remove that saved time bookmark."
+    ],
+    "do_not_use_when": [
+      "Do not use it to delete protocol transaction state or to move a cursor."
+    ],
+    "alternatives": [
+      {
+        "action": "waveform.cursor.list",
+        "when": "Discover waveform cursor names before deletion."
+      },
+      {
+        "action": "waveform.cursor.set",
+        "when": "Create or replace a waveform cursor."
+      }
+    ],
+    "constraints": [
+      "required: name"
+    ]
+  }
+}

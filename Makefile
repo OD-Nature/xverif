@@ -1,4 +1,4 @@
-.PHONY: all xdebug xbit xentry xloc xcov xwaveform clean install-codex-rtl install-all-skill remove-legacy-xverif-skills install-xverif-skill install-xverif-admin-skill install-xeda-runner-skill install-xwiki-skill install-x-npi-skill _install-agent-skill
+.PHONY: all xdebug xbit xentry xloc xcov xwaveform clean install-codex-rtl install-all-skill remove-legacy-xverif-skills install-xverif-skill install-xverif-admin-skill install-xwiki-skill install-x-npi-skill install-xsimdebug-skill _install-agent-skill
 
 PYTHON ?= python3
 
@@ -31,14 +31,14 @@ install-xverif-skill:
 install-xverif-admin-skill:
 	$(MAKE) _install-agent-skill SKILL_SRC=skills/xverif-admin SKILL_NAME=xverif-admin
 
-install-xeda-runner-skill:
-	$(MAKE) _install-agent-skill SKILL_SRC=skills/xeda-runner SKILL_NAME=xeda-runner
-
 install-xwiki-skill:
 	$(MAKE) _install-agent-skill SKILL_SRC=skills/xwiki SKILL_NAME=xwiki
 
 install-x-npi-skill:
 	$(MAKE) _install-agent-skill SKILL_SRC=skills/x-npi SKILL_NAME=x-npi
+
+install-xsimdebug-skill:
+	$(MAKE) _install-agent-skill SKILL_SRC=skills/xsimdebug SKILL_NAME=xsimdebug
 
 remove-legacy-xverif-skills:
 	@set -eu; \
@@ -91,9 +91,11 @@ _install-agent-skill:
 		else \
 			echo "    no existing $$name skill found in $$skills_dir"; \
 		fi; \
-		echo "    copying $$src -> $$dst"; \
-		cp -R "$$src" "$$dst"; \
-		echo "    installed $$name skill at $$dst"; \
+		echo "    syncing $$src -> $$dst"; \
+		rsync -a --delete --exclude '__pycache__/' --exclude '*.py[cod]' --exclude '.pytest_cache/' "$$src/" "$$dst/"; \
+		printf 'source=%s\ncommit=%s\n' "$$src" "$$(git rev-parse --short HEAD 2>/dev/null || echo unknown)" > "$$dst/.xverif-skill-manifest"; \
+		diff -qr --exclude '__pycache__' --exclude '*.pyc' --exclude '.pytest_cache' --exclude '.xverif-skill-manifest' "$$src" "$$dst"; \
+		echo "    installed and verified $$name skill at $$dst"; \
 	done; \
 	echo "Done. Backups, if any, were moved to ~/.codex/ or ~/.claude/ so agents do not load old and new skills twice."
 

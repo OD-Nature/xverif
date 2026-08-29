@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import fcntl
 import hashlib
 import json
 import os
@@ -8,10 +7,11 @@ import re
 import shutil
 import subprocess
 import tempfile
+import time
 import fnmatch
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
 import jsonschema
 import yaml
@@ -38,6 +38,7 @@ class FixtureSpec:
     builder: dict[str, Any]
     outputs: tuple[FixtureOutput, ...]
     tool_env: tuple[str, ...]
+    build_capabilities: tuple[str, ...]
     probes: tuple[dict[str, Any], ...] = ()
 
     @classmethod
@@ -58,6 +59,7 @@ class FixtureSpec:
                 for item in data["outputs"]
             ),
             tool_env=tuple(data.get("tool_env", [])),
+            build_capabilities=tuple(data.get("build_capabilities", [])),
             probes=tuple(dict(item) for item in data.get("probes", [])),
         )
 
@@ -114,10 +116,30 @@ class FixtureStore:
             name: _compatibility_identity(os.environ.get(name, ""))
             for name in spec.tool_env
         }
+        # Builder defaults are resolved at execution time.  They must therefore
+        # participate in cache identity; otherwise a changed VIP/reference root
+        # can silently reuse resources produced with another environment.
+        values = {"repo": str(self.repo_root), "home": str(Path.home())}
+        effective_env = {
+            key: os.environ.get(key, str(value).format(**values))
+            for key, value in spec.builder.get("default_env", {}).items()
+        }
         digest.update(
             json.dumps(tool_identity, sort_keys=True, separators=(",", ":")).encode("utf-8")
         )
+        digest.update(
+            json.dumps(effective_env, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        )
         return digest.hexdigest(), tool_identity
+
+    def effective_builder_env(self, spec: FixtureSpec) -> dict[str, str]:
+        values = {"repo": str(self.repo_root), "home": str(Path.home())}
+        env = os.environ.copy()
+        for key, value in spec.builder.get("env", {}).items():
+            env[str(key)] = str(value).format(**values)
+        for key, value in spec.builder.get("default_env", {}).items():
+            env.setdefault(str(key), str(value).format(**values))
+        return env
 
     def resolve(self, fixture_id: str) -> Path:
         spec = self.registry.by_id(fixture_id)
@@ -126,20 +148,79 @@ class FixtureStore:
         self._validate_published(spec, target, fingerprint)
         return target / "resources"
 
-    def prepare(self, fixture_id: str, *, rebuild: bool = False) -> Path:
+    def prepare(
+        self,
+        fixture_id: str,
+        *,
+        rebuild: bool = False,
+        progress: Callable[[str], None] | None = None,
+    ) -> Path:
+        notify = progress or (lambda _phase: None)
         spec = self.registry.by_id(fixture_id)
+        notify("fingerprint")
         fingerprint, tool_identity = self.fingerprint(spec)
         fixture_root = self.root / spec.id
         fixture_root.mkdir(parents=True, exist_ok=True)
-        lock_path = fixture_root / ".prepare.lock"
-        with lock_path.open("a+", encoding="utf-8") as lock_stream:
-            fcntl.flock(lock_stream.fileno(), fcntl.LOCK_EX)
+        if not rebuild:
+            try:
+                target = self._published_target(spec, fingerprint)
+            except FixtureError:
+                target = None
+            if target is not None:
+                notify("cache_validation")
+                self._validate_published(spec, target, fingerprint)
+                return target / "resources"
+
+        claim = fixture_root / ".prepare.claim"
+        notify("claim")
+        deadline = time.monotonic() + 3600.0
+        while True:
+            try:
+                claim.mkdir(mode=0o700)
+                break
+            except FileExistsError:
+                if not rebuild:
+                    try:
+                        target = self._published_target(spec, fingerprint)
+                        self._validate_published(spec, target, fingerprint)
+                        notify("cache_validation")
+                        return target / "resources"
+                    except FixtureError:
+                        pass
+                try:
+                    stale = time.time() - claim.stat().st_mtime > 24 * 60 * 60
+                except FileNotFoundError:
+                    continue
+                if stale:
+                    stale_claim = fixture_root / (
+                        f".prepare.claim.stale-{time.time_ns()}-{os.getpid()}"
+                    )
+                    try:
+                        os.replace(claim, stale_claim)
+                    except FileNotFoundError:
+                        pass
+                    continue
+                if time.monotonic() >= deadline:
+                    raise FixtureError(
+                        f"timed out waiting for fixture prepare claim: {spec.id}"
+                    )
+                time.sleep(0.1)
+
+        try:
+            (claim / "owner.json").write_text(
+                json.dumps(
+                    {"pid": os.getpid(), "created_at_unix_ns": time.time_ns()},
+                    sort_keys=True,
+                ) + "\n",
+                encoding="utf-8",
+            )
             if not rebuild:
                 try:
                     target = self._published_target(spec, fingerprint)
                 except FixtureError:
                     target = None
                 if target is not None:
+                    notify("cache_validation")
                     self._validate_published(spec, target, fingerprint)
                     return target / "resources"
             staging_root = fixture_root / ".staging"
@@ -147,9 +228,17 @@ class FixtureStore:
             staging = Path(tempfile.mkdtemp(prefix="prepare-", dir=staging_root))
             (staging / "resources").mkdir(parents=True, exist_ok=True)
             try:
+                notify("builder")
                 self._run_builder(spec, staging)
+                notify("output_validation")
                 self._validate_outputs(spec, staging / "resources")
-                self._run_probes(spec, staging / "resources", staging)
+                self._run_probes(
+                    spec,
+                    staging / "resources",
+                    staging,
+                    progress=notify,
+                )
+                notify("publish")
                 manifest = {
                     "schema_version": "xverif-fixture-manifest.v1",
                     "fixture_id": spec.id,
@@ -171,9 +260,11 @@ class FixtureStore:
                 os.replace(staging, target)
                 self._write_current(fixture_root, fingerprint, version)
                 return target / "resources"
-            except Exception:
+            except BaseException:
                 shutil.rmtree(staging, ignore_errors=True)
                 raise
+        finally:
+            shutil.rmtree(claim, ignore_errors=True)
 
     def clean(self) -> None:
         if self.root.exists():
@@ -227,11 +318,7 @@ class FixtureStore:
         }
         argv = [str(value).format(**values) for value in spec.builder["argv"]]
         cwd = Path(str(spec.builder.get("cwd", "{repo}")).format(**values))
-        env = os.environ.copy()
-        for key, value in spec.builder.get("env", {}).items():
-            env[str(key)] = str(value).format(**values)
-        for key, value in spec.builder.get("default_env", {}).items():
-            env.setdefault(str(key), str(value).format(**values))
+        env = self.effective_builder_env(spec)
         log_path = staging / "builder.log"
         with log_path.open("w", encoding="utf-8") as log:
             result = subprocess.run(
@@ -250,7 +337,15 @@ class FixtureStore:
                 f"fixture builder failed for {spec.id}: rc={result.returncode}\n{tail}"
             )
 
-    def _run_probes(self, spec: FixtureSpec, resources: Path, staging: Path) -> None:
+    def _run_probes(
+        self,
+        spec: FixtureSpec,
+        resources: Path,
+        staging: Path,
+        *,
+        progress: Callable[[str], None] | None = None,
+    ) -> None:
+        notify = progress or (lambda _phase: None)
         values = {
             "repo": str(self.repo_root),
             "source": str((self.repo_root / spec.source_dir).resolve()),
@@ -259,6 +354,7 @@ class FixtureStore:
             "home": str(Path.home()),
         }
         for index, probe in enumerate(spec.probes):
+            notify(f"probe_{index + 1}_of_{len(spec.probes)}")
             argv = [str(value).format(**values) for value in probe["argv"]]
             cwd = Path(str(probe.get("cwd", "{repo}")).format(**values))
             env = os.environ.copy()
@@ -328,15 +424,23 @@ class FixtureStore:
 
     @staticmethod
     def _write_current(fixture_root: Path, fingerprint: str, version: str) -> None:
-        temporary = fixture_root / ".current.tmp"
-        temporary.write_text(
-            json.dumps(
-                {"fingerprint": fingerprint, "version": version}, sort_keys=True
-            )
-            + "\n",
-            encoding="utf-8",
+        descriptor, temporary_text = tempfile.mkstemp(
+            prefix=".current.", suffix=".tmp", dir=fixture_root
         )
-        os.replace(temporary, fixture_root / "current.json")
+        temporary = Path(temporary_text)
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+                stream.write(
+                    json.dumps(
+                        {"fingerprint": fingerprint, "version": version},
+                        sort_keys=True,
+                    ) + "\n"
+                )
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temporary, fixture_root / "current.json")
+        finally:
+            temporary.unlink(missing_ok=True)
 
 
 def _compatibility_identity(value: str) -> str:

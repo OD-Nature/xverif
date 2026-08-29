@@ -1,11 +1,15 @@
 #include "service/engine_action_handler.h"
 #include "service/engine_action_registry.h"
 #include "service/engine_globals.h"
+#include "service/config_store_error.h"
 
 #include "waveform/common/xdebug_waveform_paths.h"
-#include "waveform/stream/stream_analyzer.h"
 #include "waveform/stream/stream_exporter.h"
 #include "waveform/stream/stream_manager.h"
+#ifdef XDEBUG_STREAM_DIFFERENTIAL_TEST_BUILD
+#include "stream_differential/legacy_stream_oracle.h"
+#endif
+#include "core/output/completeness.h"
 #include "core/npi/time_contract.h"
 
 #include "npi_fsdb.h"
@@ -21,11 +25,10 @@ namespace {
 
 using xdebug_waveform::Json;
 using xdebug_waveform::StreamAnalysis;
-using xdebug_waveform::StreamAnalyzer;
+using xdebug_waveform::AnalysisCacheScope;
 using xdebug_waveform::StreamConfig;
 using xdebug_waveform::StreamExporter;
 using xdebug_waveform::StreamManager;
-using xdebug_waveform::StreamMatch;
 using xdebug_waveform::StreamQueryOptions;
 
 Json err(const std::string& code, const std::string& message, const Json& details) {
@@ -38,7 +41,7 @@ Json stream_export_example(const std::string& stream = "req_stream",
                 {"target", {{"session_id", "case_a"}}},
                 {"args", {{"stream", stream},
                           {"kind", kind},
-                          {"output", {{"path", "/tmp/stream.tsv"}, {"file_format", "tsv"}}}}}};
+                          {"output", {{"path", "stream.tsv"}, {"file_format", "tsv"}}}}}};
 }
 Json stream_name_error(const std::string& name) {
     Json details = {{"invalid_arg", "args.stream"},
@@ -72,11 +75,11 @@ Json preview_for_kind(const StreamAnalysis& analysis, const std::string& kind, i
     }
     return rows;
 }
-std::string code_for_stream_error(const std::string& message, const std::string& fallback) {
+std::string code_for_stream_error(const std::string& message, const std::string& default_code) {
     return message.find("0x prefix is not accepted") != std::string::npos ||
            message.find("invalid value literal") != std::string::npos
         ? "VALUE_FORMAT_INVALID"
-        : fallback;
+        : default_code;
 }
 Json stream_time_error(const std::string& message) {
     return err("INVALID_TIME", message,
@@ -92,7 +95,7 @@ Json stream_analyze_error(const std::string& message) {
                {{"cause_code", "STREAM_ANALYZE_FAILED"},
                 {"expected", "loaded stream config whose aliased signal paths exist in the active FSDB"},
                 {"correct_example", stream_export_example()},
-                {"next_actions", Json::array({"Call stream.show to inspect config signal aliases.",
+                {"next_actions", Json::array({"Call stream.describe to inspect config signal aliases.",
                                                "Call stream.validate before exporting large stream results."})}});
 }
 bool parse_time_arg(const std::string& text, bool allow_max, npiFsdbTime& out, std::string& error) {
@@ -106,13 +109,18 @@ bool parse_time_arg(const std::string& text, bool allow_max, npiFsdbTime& out, s
     options.default_unit = "ns";
     return xdebug_core::parse_time(g_fsdb_file, text, options, out, error);
 }
-bool range_from_args(const Json& args, const Json& limits, StreamQueryOptions& options, std::string& error) {
+bool range_from_args(
+    ContractJsonView args,
+    StreamQueryOptions& options,
+    std::string& error) {
     npiFsdbTime min_t = 0, max_t = 0;
     npi_fsdb_min_time(g_fsdb_file, &min_t);
     npi_fsdb_max_time(g_fsdb_file, &max_t);
-    Json tr = args.value("time_range", Json::object());
-    std::string start = tr.value("begin", std::string());
-    std::string end = tr.value("end", std::string("max"));
+    auto time_range = args["time_range"];
+    std::string start =
+        time_range.value("begin", std::string());
+    std::string end =
+        time_range.value("end", std::string("max"));
     if (start.empty()) options.begin = min_t;
     else if (!parse_time_arg(start, false, options.begin, error)) return false;
     if (end.empty() || end == "max") options.end = max_t;
@@ -122,15 +130,26 @@ bool range_from_args(const Json& args, const Json& limits, StreamQueryOptions& o
     options.channel_filter = args.value("channel", std::string());
     return true;
 }
-bool get_config(const Json& args, StreamConfig& config, Json& fail) {
-    std::string name = args.value("stream", args.value("name", std::string()));
+bool get_config(
+    ContractJsonView args,
+    StreamConfig& config,
+    Json& fail) {
+    std::string name = args.value("stream", std::string());
     if (name.empty()) {
         fail = stream_name_error(name);
         return false;
     }
     StreamManager manager;
-    if (!manager.get_stream(xdebug_waveform::g_session_id, name, config)) {
-        fail = stream_name_error(name);
+    xdebug_waveform::StoreResult loaded =
+        manager.get_stream(
+            xdebug_waveform::g_session_id,
+            name,
+            config);
+    if (!loaded.ok()) {
+        fail =
+            loaded.status == xdebug_waveform::StoreStatus::NotFound
+                ? stream_name_error(name)
+                : make_config_store_error(loaded);
         return false;
     }
     return true;
@@ -141,43 +160,109 @@ public:
     const char* action_name() const override { return "stream.export"; }
     bool needs_design() const override { return false; }
     bool needs_waveform() const override { return true; }
-    Json run(const Json& request, EngineActionContext& ctx) const override {
-        Json args = request.value("args", Json::object());
+    Json run(
+        ContractBoundRequest& request,
+        EngineActionContext& ctx) const override {
+        auto args = request.args();
         Json fail;
         StreamConfig config;
         if (!get_config(args, config, fail)) return fail;
         StreamQueryOptions options;
         std::string error;
-        if (!range_from_args(args, request.value("limits", Json::object()), options, error))
+        const std::string cache_scope =
+            args.value("cache_scope", std::string("full"));
+        if (cache_scope != "full" && cache_scope != "range")
+            return err("INVALID_ENUM", "cache_scope must be full or range",
+                       {{"invalid_arg", "args.cache_scope"},
+                        {"expected", "one of full, range"},
+                        {"available_values", Json::array({"full", "range"})},
+                        {"correct_example", stream_export_example(config.name)}});
+        if (cache_scope == "range" &&
+            (!args.contains("time_range") ||
+             !args["time_range"].is_object() ||
+             args["time_range"].empty())) {
+            Json example = stream_export_example(config.name);
+            example["args"]["cache_scope"] = "range";
+            example["args"]["time_range"] = {
+                {"begin", "0ns"}, {"end", "100ns"}};
+            return err(
+                "INVALID_ARGUMENT",
+                "cache_scope=range requires a non-empty time_range",
+                {{"invalid_arg", "args.time_range"},
+                 {"expected", "time_range with begin and/or end"},
+                 {"correct_example", example}});
+        }
+        if (!range_from_args(args, options, error))
             return stream_time_error(error);
         options.limit = 0;
-        StreamAnalyzer analyzer;
         StreamAnalysis analysis;
-        if (!analyzer.analyze(g_fsdb_file, config, options, analysis, error))
+#ifdef XDEBUG_STREAM_DIFFERENTIAL_TEST_BUILD
+        if (!xdebug_stream_differential::
+                analyze_stream_cached_and_compare_legacy(
+                xdebug_waveform::g_stream_analyzer, g_fsdb_file, config,
+                options,
+                cache_scope == "range" ? AnalysisCacheScope::Range
+                                       : AnalysisCacheScope::Full,
+                analysis, error)) {
+#else
+        if (!xdebug_waveform::g_stream_analyzer.analyze_cached(
+                g_fsdb_file, config, options,
+                cache_scope == "range" ? AnalysisCacheScope::Range
+                                       : AnalysisCacheScope::Full,
+                analysis, error)) {
+#endif
+            if (!xdebug_waveform::g_stream_analyzer.last_cache_error().empty())
+                return make_analysis_cache_error(
+                    xdebug_waveform::g_stream_analyzer.last_cache_error());
             return stream_analyze_error(error);
+        }
         std::string kind = args.value("kind", std::string("transfer"));
-        Json output_arg = args.value("output", Json::object());
+        auto output_arg = args["output"];
         std::string format = output_arg.value("file_format", std::string("tsv"));
         if (format != "tsv" && format != "csv" && format != "xout")
             return err("INVALID_ENUM", "output.file_format must be tsv, csv, or xout",
                        {{"invalid_arg", "args.output.file_format"},
                         {"expected", "one of tsv, csv, xout"},
-                        {"allowed_values", Json::array({"tsv", "csv", "xout"})},
+                        {"available_values", Json::array({"tsv", "csv", "xout"})},
                         {"correct_example", stream_export_example(config.name)},
                         {"example_note", "Example only; output.file_format controls exported file content, not MCP output_format."}});
         std::string output = output_arg.value("path", std::string());
+        if (output_arg.contains("file_format") && output.empty())
+            return err(
+                "INVALID_REQUEST",
+                "stream.export output.file_format requires a non-empty output.path",
+                {{"invalid_arg", "args.output.file_format"},
+                 {"expected", "output object with both path and file_format"}});
+        if (!output.empty() && args.contains("line_limit"))
+            return err("INVALID_REQUEST",
+                       "stream.export args.line_limit only controls preview rows and is not valid for file export",
+                       {{"invalid_arg", "args.line_limit"},
+                        {"expected", "omit line_limit when args.output.path is present"}});
         size_t row_count = row_count_for_kind(analysis, kind);
         Json summary = xdebug_waveform::stream_summary_json(config, analysis);
         summary["status"] = output.empty() ? "preview" : "written";
         summary["output_written"] = !output.empty();
         summary["row_count"] = row_count;
         summary["line_limit"] = args.value("line_limit", 16);
-        summary["truncated"] = analysis.truncated ||
-            (output.empty() && static_cast<int>(row_count) > summary["line_limit"].get<int>());
         summary["kind"] = kind;
         if (output.empty()) {
-            return Json{{"summary", summary},
-                        {"preview", preview_for_kind(analysis, kind, summary["line_limit"].get<int>())}};
+            Json preview =
+                preview_for_kind(analysis, kind, summary["line_limit"].get<int>());
+            const bool response_truncated = preview.size() < row_count;
+            std::vector<std::string> truncation_scopes;
+            if (!analysis.analysis_complete)
+                truncation_scopes.push_back("analysis_samples");
+            if (response_truncated)
+                truncation_scopes.push_back("response_preview");
+            xdebug_core::set_completeness(
+                summary,
+                analysis.analysis_complete,
+                analysis.analysis_complete,
+                response_truncated,
+                row_count,
+                preview.size(),
+                truncation_scopes);
+            return Json{{"summary", summary}, {"preview", preview}};
         }
         std::string meta;
         StreamExporter exporter;
@@ -188,9 +273,9 @@ public:
         else return err("INVALID_ENUM", "kind must be transfer, packet, or packet_beats",
                         {{"invalid_arg", "args.kind"},
                          {"expected", "one of transfer, packet, packet_beats"},
-                         {"allowed_values", Json::array({"transfer", "packet", "packet_beats"})},
+                         {"available_values", Json::array({"transfer", "packet", "packet_beats"})},
                          {"correct_example", stream_export_example(config.name, "transfer")},
-                         {"example_note", "Example only; choose kind from allowed_values."}});
+                         {"example_note", "Example only; choose kind from available_values."}});
         if (!ok) return err("ACTION_FAILED", error,
                             {{"cause_code", "EXPORT_FAILED"},
                              {"invalid_arg", "args.output.path"},
@@ -198,6 +283,16 @@ public:
                              {"correct_example", stream_export_example(config.name, kind)}});
         Json output_info = {{"path", output}, {"meta_path", meta}, {"file_format", format}};
         summary["output"] = output_info;
+        xdebug_core::set_completeness(
+            summary,
+            analysis.analysis_complete,
+            analysis.analysis_complete,
+            false,
+            row_count,
+            row_count,
+            analysis.analysis_complete
+                ? std::vector<std::string>{}
+                : std::vector<std::string>{"analysis_samples"});
         return Json{{"summary", summary}};
     }
 };

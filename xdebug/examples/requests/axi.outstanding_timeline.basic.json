@@ -5,6 +5,8 @@
     "session_id": "case_a"
   },
   "args": {
-    "name": "if0"
+    "name": "if0",
+    "direction": "all",
+    "line_limit": 100
   }
 }

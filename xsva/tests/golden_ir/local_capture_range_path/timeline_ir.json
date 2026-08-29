@@ -20,6 +20,9 @@
       "has_window": false,
       "window": null,
       "depends_on_captures": [],
+      "signals_to_query": [
+        "ack"
+      ],
       "requirement": "",
       "failure_condition": "ack is false at cycle +1"
     },
@@ -32,6 +35,10 @@
       "depends_on_captures": [
         "v"
       ],
+      "signals_to_query": [
+        "done_id",
+        "v"
+      ],
       "requirement": "",
       "failure_condition": "done_id == v is false at cycle +2"
     },
@@ -42,6 +49,9 @@
       "has_window": false,
       "window": null,
       "depends_on_captures": [],
+      "signals_to_query": [
+        "ack"
+      ],
       "requirement": "",
       "failure_condition": "ack is false at cycle +2"
     },
@@ -54,6 +64,10 @@
       "depends_on_captures": [
         "v"
       ],
+      "signals_to_query": [
+        "done_id",
+        "v"
+      ],
       "requirement": "",
       "failure_condition": "done_id == v is false at cycle +3"
     },
@@ -64,6 +78,9 @@
       "has_window": false,
       "window": null,
       "depends_on_captures": [],
+      "signals_to_query": [
+        "ack"
+      ],
       "requirement": "",
       "failure_condition": "ack is false at cycle +3"
     },
@@ -76,6 +93,10 @@
       "depends_on_captures": [
         "v"
       ],
+      "signals_to_query": [
+        "done_id",
+        "v"
+      ],
       "requirement": "",
       "failure_condition": "done_id == v is false at cycle +4"
     }
@@ -85,24 +106,24 @@
       "id": "path_0",
       "description": "Path 0: ack must be true at cycle +1 → done_id == v must be true at cycle +2",
       "obligations": [
-        "point",
-        "point"
+        "ob_0_1",
+        "ob_0_3"
       ]
     },
     {
       "id": "path_1",
       "description": "Path 1: ack must be true at cycle +2 → done_id == v must be true at cycle +3",
       "obligations": [
-        "point",
-        "point"
+        "ob_1_1",
+        "ob_1_3"
       ]
     },
     {
       "id": "path_2",
       "description": "Path 2: ack must be true at cycle +3 → done_id == v must be true at cycle +4",
       "obligations": [
-        "point",
-        "point"
+        "ob_2_1",
+        "ob_2_3"
       ]
     }
   ],
@@ -120,6 +141,5 @@
       "expr": "##[1:3] ack , v = id ##1 done_id == v",
       "text": "ack must be true at cycle +1 to +3, capturing v = id at that matching cycle; done_id == v must be true 1 clk after ack."
     }
-  ],
-  "diagnostics": []
+  ]
 }

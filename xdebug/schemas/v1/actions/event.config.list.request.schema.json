@@ -5,7 +5,8 @@
   "type": "object",
   "required": [
     "api_version",
-    "action"
+    "action",
+    "target"
   ],
   "properties": {
     "api_version": {
@@ -15,7 +16,8 @@
       ]
     },
     "request_id": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "action": {
       "type": "string",
@@ -24,59 +26,110 @@
       ]
     },
     "target": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fsdb": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "session_id"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "fsdb"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "session_id"
+            ]
+          },
+          "required": [
+            "fsdb"
+          ]
+        }
+      ],
+      "additionalProperties": false
     },
     "args": {
       "type": "object",
+      "required": [],
       "properties": {
         "line_limit": {
           "type": "integer",
           "minimum": 1,
-          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
+          "description": "Limits returned evidence rows only, not scanning, aggregation, or the verdict; read completeness fields as well."
         },
         "name": {
           "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。"
-        },
-        "time_unit": {
-          "type": "string",
-          "enum": [
-            "auto",
-            "fs",
-            "ps",
-            "ns",
-            "us",
-            "ms",
-            "s"
-          ]
+          "description": "Saved-object name in this action namespace; do not assume names are shared by cursors, lists, and protocol configs."
         }
       },
       "additionalProperties": false,
-      "required": []
+      "allOf": [
+        {
+          "not": {
+            "required": [
+              "name",
+              "line_limit"
+            ]
+          }
+        }
+      ]
     },
     "limits": {
-      "type": "object"
-    },
-    "auth_token": {
-      "type": "string"
-    },
-    "id": {
-      "type": "string"
-    },
-    "trace_id": {
-      "type": "string"
-    },
-    "span_id": {
-      "type": "string"
-    },
-    "parent_span_id": {
-      "type": "string"
+      "type": "object",
+      "properties": {
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647,
+          "description": "Positive public frontend-to-engine request timeout in milliseconds. Omit limits.timeout_ms to disable the public watchdog."
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false,
-  "description": "event.config.list: 列出事件配置。",
+  "description": "List saved event-query configurations.",
   "x-purpose": "列出事件配置。",
   "x-how_it_works": "读取 EventManager 中保存的配置；args:{} 列全部，args.name 显示单个配置详情。",
   "x-when_to_use": "查看可用事件查询模板。",
-  "x-arg_contract_notes": "args:{} list all; optional name shows one config"
+  "x-arg_contract_notes": "args:{} list all; optional name shows one config",
+  "x-description-zh": "列出事件配置。",
+  "x-agent": {
+    "use_when": [
+      "Need to enumerate or inspect saved event-query definitions without executing a waveform search."
+    ],
+    "do_not_use_when": [
+      "Do not use it to load a named event configuration or search waveform events."
+    ],
+    "alternatives": [
+      {
+        "action": "event.config.load",
+        "when": "Load one event-query configuration."
+      },
+      {
+        "action": "event.find",
+        "when": "Search sampled waveform events."
+      }
+    ],
+    "constraints": [
+      "args:{} list all; optional name shows one config"
+    ]
+  }
 }

@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "xdebug.waveform.cursor.get.request.v1",
+  "title": "waveform.cursor.get request",
+  "type": "object",
+  "required": [
+    "api_version",
+    "action",
+    "args",
+    "target"
+  ],
+  "properties": {
+    "api_version": {
+      "type": "string",
+      "enum": [
+        "xdebug.v1"
+      ]
+    },
+    "request_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "action": {
+      "type": "string",
+      "enum": [
+        "waveform.cursor.get"
+      ]
+    },
+    "target": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fsdb": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "session_id"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "fsdb"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "session_id"
+            ]
+          },
+          "required": [
+            "fsdb"
+          ]
+        }
+      ],
+      "additionalProperties": false
+    },
+    "args": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Saved-object name in this action namespace; do not assume names are shared by cursors, lists, and protocol configs."
+        },
+        "render_time_unit": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "ps",
+            "ns",
+            "us"
+          ],
+          "description": "Controls only canonical response time rendering: auto, ps, ns, or us. It never changes input parsing, sampling, filtering, or ordering."
+        }
+      },
+      "additionalProperties": false
+    },
+    "limits": {
+      "type": "object",
+      "properties": {
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647,
+          "description": "Positive public frontend-to-engine request timeout in milliseconds. Omit limits.timeout_ms to disable the public watchdog."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "description": "Read a named waveform cursor.",
+  "x-purpose": "读取命名游标。",
+  "x-how_it_works": "从 CursorManager 按 name 取出保存的时间和元信息。",
+  "x-when_to_use": "把自然语言中的“刚才那个点”变成确定时间。",
+  "x-arg_contract_notes": "required: name",
+  "x-description-zh": "读取命名游标。",
+  "x-agent": {
+    "use_when": [
+      "Know the waveform cursor name and need its stored time without changing the active cursor."
+    ],
+    "do_not_use_when": [
+      "Do not use it to activate a cursor or navigate APB/AXI transactions."
+    ],
+    "alternatives": [
+      {
+        "action": "waveform.cursor.use",
+        "when": "Activate a saved waveform cursor."
+      },
+      {
+        "action": "apb.transaction.cursor",
+        "when": "Navigate APB transactions."
+      },
+      {
+        "action": "axi.transaction.cursor",
+        "when": "Navigate AXI transactions."
+      }
+    ],
+    "constraints": [
+      "required: name"
+    ]
+  }
+}

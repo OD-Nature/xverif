@@ -1,73 +1,64 @@
 # 协议分析模式
 
-协议分析器建议分两阶段实现：
+协议工具分为两层：`iter_edge_samples` 流式读取同一个 clock 的采样行，纯 Python
+状态机逐行完成配对和聚合。这样真实 pynpi 访问集中在一层，协议状态机可以用普通
+Python fixture 做单元测试。默认输出 summary；需要事务、timeline 或 payload 时必须
+选择 `detail=transactions|timeline|full` 并提供输出文件，协议示例不提供 `line_limit`。
 
-1. 在时钟沿采样所有相关信号。
-2. 在采样行上运行纯 Python 状态机。
-
-这样可以让 pynpi 访问逻辑保持简单，也让协议逻辑能够在没有 license 的情况下做单元测试。
-
-所有协议脚本必须基于同一个 clock 的上升沿或下降沿采样行来判断 transfer、stall、latency 和 outstanding；不要直接用任意时间点、信号变化点或不同信号各自的变化时间拼协议事件。默认建议下降沿（`clock_edge: "negedge"` / `posedge: false`），因为它通常比上升沿更能避开 DUT/monitor 同沿更新竞争；只有协议规范或 monitor 采样点明确要求上升沿时才改用 `posedge`。
+时间字段保持 FSDB integer tick；数据库单位由 `meta.scale_unit` 单独说明。握手相关信号
+含 X/Z 时不计 transfer，并通过 `analysis_quality=ambiguous`、unknown count 和首个时间保留证据。
 
 ## APB
 
-必需配置项：
+`PREADY` 和 `PSLVERR` 都是必需配置，不允许省略后假设 zero-wait 或 no-error：
 
 ```json
 {
   "clk": "top.pclk",
   "rst_n": "top.presetn",
+  "edge": "negedge",
   "psel": "top.psel",
   "penable": "top.penable",
+  "pready": "top.pready",
+  "pslverr": "top.pslverr",
   "pwrite": "top.pwrite",
   "paddr": "top.paddr",
   "pwdata": "top.pwdata",
-  "prdata": "top.prdata",
-  "pready": "top.pready",
-  "pslverr": "top.pslverr",
-  "clock_edge": "negedge"
+  "prdata": "top.prdata"
 }
 ```
 
-代码模式：
+状态机记录 setup begin、access begin、completion，以及 wait cycle 和 error response。
+completion 只在 `PSEL && PENABLE && PREADY` 成立时发生。
 
-```python
-def is_posedge(cfg):
-    edge = str(cfg.get("edge", cfg.get("clock_edge", ""))).lower()
-    if edge in {"posedge", "pos", "rising"}:
-        return True
-    if edge in {"negedge", "neg", "falling"}:
-        return False
-    return bool(cfg.get("posedge", False))
+## AXI4 / AXI4-Lite
 
-rows = edge_samples(fp, cfg["clk"], signals, posedge=is_posedge(cfg))
-result = apb_summary(rows, cfg)
-```
+只支持 AXI4/AXI4-Lite 五个独立 channel；配置含 AXI3 `WID` 时明确拒绝：
 
-当配置了 `pready` 时，completion 条件是 `psel && penable && pready`。如果没有配置 `pready`，每个 enabled cycle 都计为一次事务。
+- AW：`AWVALID && AWREADY`
+- W：`WVALID && WREADY`
+- B：`BVALID && BREADY`
+- AR：`ARVALID && ARREADY`
+- R：`RVALID && RREADY`
 
-## AXI
+W channel 可以先于 AW handshake，因此写状态机先缓存 W burst，再和 AW 配对。B response
+允许不同 ID 间重排，同 ID 保持 FIFO；R 必须用 RID 严格匹配 pending AR。orphan、beat
+数量不匹配或 response dependency 违反属于 hard error，不返回部分 summary；扫描窗口结束仍
+pending 是成功结果，并在 final pending/outstanding 与 reset-cleared 字段中区分。
 
-使用独立 channel handshake：
+标准 phase latency 同时统计：AW 到首 W、AW 到末 W、首 W 到末 W、末 W 到 B、AR 到首 R、
+AR 到末 R、首 R 到末 R。`transactions` 不含 payload，只有 `full` 返回 data beats。
 
-- AW: `awvalid && awready`
-- W: `wvalid && wready`
-- B: `bvalid && bready`
-- AR: `arvalid && arready`
-- R: `rvalid && rready`
+## Valid-ready / backpressure stream
 
-helper 会跟踪 pending writes、pending reads、ID、latency 和 outstanding samples。
-
-配置 key 与 channel 信号名保持一致，例如 `awaddr`、`awid`、`awvalid`、`awready`、`wdata`、`wlast`、`bid`、`bresp`、`araddr`、`rid`、`rdata`、`rlast`。
-
-## Stream
-
-必需配置项：
+配置必须恰好包含 `ready` 或 `bp` 之一；若使用 packet boundary，`sop` 和 `eop` 必须同时存在：
 
 ```json
 {
   "clock": "top.clk",
-  "clock_edge": "negedge",
+  "edge": "posedge",
+  "sample_point": "after",
+  "rst_n": "top.rst_n",
   "valid": "top.valid",
   "ready": "top.ready",
   "data": "top.data",
@@ -77,18 +68,18 @@ helper 会跟踪 pending writes、pending reads、ID、latency 和 outstanding s
 }
 ```
 
-transfer 条件是 `valid && ready`。如果没有配置 `ready`，则 valid 单独成立就表示 transfer。
+ready 模式的 transfer 是 `valid && ready`，bp 模式是 `valid && !bp`。packet 状态机严格
+检查 repeated SOP 和 orphan beat，返回 beat、packet、stall window 与 incomplete packet 统计。
 
-使用 stall window 查找 backpressure：
+## AI 自定义处理
 
-```python
-result = stream_summary(rows, cfg)
-```
+这些 helper 是通用 API 和类的示例，不限制 AI 的处理方式。AI 可以在同一 Python 脚本中
+按地址、ID、时间段或字段过滤，构造临时字典/队列/索引，关联其它日志，计算自定义分位数，
+或把一次扫描结果缓存到任务内对象。优先让一次扫描直接生成所需结果；不要默认引入持久化
+缓存数据库或把项目特定过滤器固化进公共 helper。
 
 ## 验证规则
 
-协议示例的定位是脚本模板。对真实项目输出最终数字之前，第一次实现应先和下面任一来源对齐：
-
-- xdebug protocol action 输出；
-- UVM monitor log；
-- 已知 transaction scoreboard。
+第一次用于新项目时，和 xdebug protocol action、UVM monitor log 或已知 scoreboard 中至少
+一个来源对齐。真实 pynpi/FSDB 验证必须在沙箱外执行，并只消费测试 catalog 提供的缓存；
+cache miss 时报告 prepare 命令，不自动仿真或切换数据源。

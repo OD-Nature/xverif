@@ -1,6 +1,93 @@
 version: xverif-fixture-registry.v1
 fixtures:
+  - id: xcov.exclusion
+    build_capabilities: [make, vcs, npi]
+    source_dir: xcov/fixtures/exclusion
+    inputs: [Makefile, "*.sv"]
+    builder:
+      argv: [make, fixture, "RUN_DIR={resources}"]
+      cwd: "{source}"
+      timeout_sec: 1200
+    outputs:
+      - {name: vdb, path: exclusion.vdb, kind: dir}
+    probes:
+      - argv: [python3, "{repo}/testinfra/leaf/probe_fixture.py", --resources, "{resources}", --text-glob, exclusion.vdb/.vdb_version]
+    tool_env: [VERDI_HOME]
+
+  - id: xcov.comprehensive
+    build_capabilities: [make, vcs, npi]
+    source_dir: xcov/fixtures/comprehensive
+    inputs: [Makefile, "*.sv"]
+    builder:
+      argv: [make, fixture, "RUN_DIR={resources}"]
+      cwd: "{source}"
+      timeout_sec: 1200
+    outputs:
+      - {name: vdb, path: comprehensive.vdb, kind: dir}
+    probes:
+      - argv: [python3, "{repo}/testinfra/leaf/probe_fixture.py", --resources, "{resources}", --text-glob, comprehensive.vdb/.vdb_version]
+    tool_env: [VERDI_HOME]
+
+  - id: xcov.modinfo_complex
+    build_capabilities: [make, vcs, npi]
+    source_dir: xcov/fixtures/modinfo_complex
+    inputs: [Makefile, "*.sv"]
+    builder:
+      argv: [make, fixture, "RUN_DIR={resources}"]
+      cwd: "{source}"
+      timeout_sec: 1200
+    outputs:
+      - {name: vdb, path: complex.vdb, kind: dir}
+    probes:
+      - argv: [python3, "{repo}/testinfra/leaf/probe_fixture.py", --resources, "{resources}", --text-glob, complex.vdb/.vdb_version]
+    tool_env: [VERDI_HOME]
+
+  - id: xcov.modinfo_edge_layouts
+    build_capabilities: [make, vcs, npi]
+    source_dir: xcov/fixtures/edge_cases
+    inputs: [Makefile, design.sv]
+    builder:
+      argv: [make, fixture, "RUN_DIR={resources}", VARIANT=edge]
+      cwd: "{source}"
+      timeout_sec: 1200
+    outputs:
+      - {name: vdb, path: edge_cases.vdb, kind: dir}
+    probes:
+      - argv: [python3, "{repo}/testinfra/leaf/probe_fixture.py", --resources, "{resources}", --text-glob, edge_cases.vdb/.vdb_version]
+    tool_env: [VCS_HOME, VERDI_HOME]
+
+  - id: xcov.zero_coverable
+    build_capabilities: [make, vcs, npi]
+    source_dir: xcov/fixtures/edge_cases
+    inputs: [Makefile, design.sv]
+    builder:
+      argv: [make, fixture, "RUN_DIR={resources}", VARIANT=zero]
+      cwd: "{source}"
+      timeout_sec: 1200
+    outputs:
+      - {name: vdb, path: zero_coverable.vdb, kind: dir}
+    probes:
+      - argv: [python3, "{repo}/testinfra/leaf/probe_fixture.py", --resources, "{resources}", --text-glob, zero_coverable.vdb/.vdb_version]
+    tool_env: [VCS_HOME, VERDI_HOME]
+
+  - id: xcov.large_summary
+    build_capabilities: [make, vcs, npi]
+    source_dir: xcov/fixtures/large_summary
+    inputs: [Makefile, generate_large_fixture.py, probe_large_fixture.py]
+    builder:
+      argv: [make, fixture, "RUN_DIR={resources}"]
+      cwd: "{source}"
+      timeout_sec: 3600
+    outputs:
+      - {name: vdb, path: large_summary.vdb, kind: dir}
+      - {name: metadata, path: fixture_metadata.json, kind: file, min_bytes: 128}
+    probes:
+      - argv: [python3, "{source}/probe_large_fixture.py", --resources, "{resources}"]
+        timeout_sec: 1200
+    tool_env: [VCS_HOME, VERDI_HOME]
+
   - id: xdebug.active_driver
+    build_capabilities: [make, vcs, npi]
     source_dir: xdebug/testdata/combined/active_driver
     inputs: [Makefile, "*.sv", "*.tcl"]
     builder:
@@ -15,6 +102,7 @@ fixtures:
     tool_env: [VERDI_HOME]
 
   - id: xdebug.active_semantics
+    build_capabilities: [make, vcs, npi]
     source_dir: xdebug/testdata/combined/active_semantics
     inputs: [Makefile, "*.sv", "*.tcl"]
     builder:
@@ -29,6 +117,7 @@ fixtures:
     tool_env: [VERDI_HOME]
 
   - id: xdebug.active_zero_evidence
+    build_capabilities: [make, vcs, npi]
     source_dir: xdebug/testdata/combined/active_zero_evidence
     inputs: [Makefile, "*.v", "*.sv", "*.tcl"]
     builder:
@@ -43,6 +132,7 @@ fixtures:
     tool_env: [VERDI_HOME]
 
   - id: xdebug.interface_port_root
+    build_capabilities: [make, vcs, npi]
     source_dir: xdebug/testdata/combined/interface_port_root
     inputs: [Makefile, "*.sv", "*.tcl"]
     builder:
@@ -56,7 +146,24 @@ fixtures:
       - argv: [python3, "{repo}/testinfra/leaf/probe_fixture.py", --resources, "{resources}", --xdebug, "{repo}/tools/xdebug", --fsdb-glob, out/waves.fsdb, --daidir-glob, out/simv.daidir]
     tool_env: [VERDI_HOME]
 
+  - id: xdebug.trace_x_xprop
+    build_capabilities: [make, vcs, npi]
+    source_dir: xdebug/testdata/combined/trace_x_xprop
+    inputs: [Makefile, "*.sv", "*.tcl"]
+    builder:
+      argv: [make, fixture, "RUN_DIR={resources}/out"]
+      cwd: "{source}"
+      timeout_sec: 600
+    outputs:
+      - {name: fsdb, path: out/waves.fsdb, kind: file, min_bytes: 1024}
+      - {name: daidir, path: out/simv.daidir, kind: dir}
+      - {name: xprop_log, path: out/xprop.log, kind: file, min_bytes: 1}
+    probes:
+      - argv: [python3, "{repo}/testinfra/leaf/probe_fixture.py", --resources, "{resources}", --xdebug, "{repo}/tools/xdebug", --fsdb-glob, out/waves.fsdb, --daidir-glob, out/simv.daidir, --text-glob, out/xprop.log]
+    tool_env: [VERDI_HOME]
+
   - id: xdebug.ai_complex_wave
+    build_capabilities: [make, vcs, npi]
     source_dir: xdebug/testdata/waveform/ai_complex_wave
     inputs: [Makefile, "tb/**/*.sv", "*.tcl"]
     builder:
@@ -71,6 +178,7 @@ fixtures:
     tool_env: [VERDI_HOME]
 
   - id: xdebug.stream_v1
+    build_capabilities: [make, vcs, npi]
     source_dir: xdebug/testdata/waveform/stream_v1
     inputs: [Makefile, "tb/**/*.sv", "*.tcl"]
     builder:
@@ -85,15 +193,61 @@ fixtures:
       - argv: [python3, "{repo}/testinfra/leaf/probe_fixture.py", --resources, "{resources}", --xdebug, "{repo}/tools/xdebug", --fsdb-glob, out/waves.fsdb, --daidir-glob, out/simv.daidir, --json-glob, out/stream_expected.json]
     tool_env: [VERDI_HOME]
 
+  - id: xdebug.stream_differential_tool
+    build_capabilities: [make, gxx, npi]
+    source_dir: xdebug
+    inputs: [Makefile, help.txt, "specs/actions/actions.yaml", "src/**/*", "tests/stream_differential/**/*.cpp", "tests/stream_differential/**/*.h", "third_party/**/*", "tools/sync_action_metadata.py", "tools/sync_help_text.py"]
+    builder:
+      argv: [make, stream-differential-test-dist, "STREAM_DIFFERENTIAL_DIST={resources}/out"]
+      cwd: "{source}"
+      timeout_sec: 900
+    outputs:
+      - {name: frontend, path: out/xdebug, kind: file, min_bytes: 1024}
+      - {name: engine, path: out/libexec/xdebug-engine, kind: file, min_bytes: 1024}
+    probes:
+      - argv: [python3, "{repo}/testinfra/leaf/probe_fixture.py", --resources, "{resources}", --executable-glob, out/xdebug, --executable-glob, out/libexec/xdebug-engine, --min-count, "1"]
+    tool_env: [VERDI_HOME]
+
+  - id: xdebug.npi_fsdb_sva
+    build_capabilities: [make, gxx, vcs, npi]
+    source_dir: xdebug/testdata/waveform/sva_fsdb_npi
+    inputs: [Makefile, "*.sv", "*.cpp", "*.tcl"]
+    builder:
+      argv: [make, fixture, "RUN_DIR={resources}/out"]
+      cwd: "{source}"
+      timeout_sec: 600
+    outputs:
+      - {name: fsdb, path: out/positive/waves.fsdb, kind: file, min_bytes: 1024}
+      - {name: success_only_fsdb, path: out/success_only/waves.fsdb, kind: file, min_bytes: 1024}
+      - {name: control_fsdb, path: out/control/waves.fsdb, kind: file, min_bytes: 1024}
+      - {name: positive_probe, path: out/positive/probe.json, kind: file, min_bytes: 1}
+      - {name: success_only_probe, path: out/success_only/probe.json, kind: file, min_bytes: 1}
+      - {name: control_probe, path: out/control/probe.json, kind: file, min_bytes: 1}
+      - {name: positive_log, path: out/positive/sim.log, kind: file, min_bytes: 1}
+      - {name: success_only_log, path: out/success_only/sim.log, kind: file, min_bytes: 1}
+      - {name: control_log, path: out/control/sim.log, kind: file, min_bytes: 1}
+      - {name: restrict_log, path: out/restrict/compile.log, kind: file, min_bytes: 1}
+      - {name: probe, path: out/bin/npi_fsdb_sva_probe, kind: file, min_bytes: 1024}
+      - {name: join_fsdb, path: out/join/waves.fsdb, kind: file, min_bytes: 1024}
+      - {name: join_daidir, path: out/join/build/simv.daidir, kind: dir}
+      - {name: join_probe_result, path: out/join/probe.json, kind: file, min_bytes: 1}
+      - {name: join_design_probe_result, path: out/join/design_probe.json, kind: file, min_bytes: 1}
+      - {name: positive_combined_probe_result, path: out/positive/combined_probe.json, kind: file, min_bytes: 1}
+      - {name: join_probe, path: out/bin/npi_daidir_fsdb_sva_probe, kind: file, min_bytes: 1024}
+    probes:
+      - argv: [python3, "{repo}/testinfra/leaf/probe_fixture.py", --resources, "{resources}", --json-glob, "out/*/probe.json", --text-glob, "out/*/sim.log", --min-count, "3"]
+      - argv: [python3, "{repo}/testinfra/leaf/probe_fixture.py", --resources, "{resources}", --executable-glob, "out/bin/npi_fsdb_sva_probe"]
+      - argv: [python3, "{repo}/testinfra/leaf/probe_fixture.py", --resources, "{resources}", --xdebug, "{repo}/tools/xdebug", --fsdb-glob, out/join/waves.fsdb, --daidir-glob, out/join/build/simv.daidir]
+      - argv: [python3, "{repo}/testinfra/leaf/probe_fixture.py", --resources, "{resources}", --executable-glob, "out/bin/npi_daidir_fsdb_sva_probe"]
+    tool_env: [VERDI_HOME]
+
   - id: xdebug.apb_vip
+    build_capabilities: [make, vcs, npi, vip_apb]
     source_dir: xdebug/testdata/waveform/apb_vip_real
     inputs: [Makefile, manifest.json, "**/*.sv", "**/*.svi"]
     builder:
       argv: [make, run, "OUTPUT_ROOT={resources}/out"]
       cwd: "{source}"
-      default_env:
-        SVT_VIP_INCDIR: "{home}/axi_test/test/include/sverilog"
-        SVT_VIP_SRCDIR: "{home}/axi_test/test/src/sverilog/vcs"
       timeout_sec: 1800
     outputs:
       - {name: fsdb, path: out/regression/test/apb_vip_test/waves.fsdb, kind: file, min_bytes: 1024}
@@ -104,25 +258,36 @@ fixtures:
     tool_env: [VERDI_HOME]
 
   - id: xdebug.axi_vip
+    build_capabilities: [make, vcs, npi, vip_axi]
     source_dir: xdebug/testdata/waveform/axi_vip_real
     inputs: [Makefile, manifest.json, "**/*.sv", "**/*.svi"]
     builder:
       argv: [make, run, "OUTPUT_ROOT={resources}/out"]
       cwd: "{source}"
-      default_env:
-        AXI_REFERENCE_ROOT: "{home}/axi_test/test"
-        SVT_VIP_INCDIR: "{home}/axi_test/test/include/sverilog"
-        SVT_VIP_SRCDIR: "{home}/axi_test/test/src/sverilog/vcs"
       timeout_sec: 2400
     outputs:
       - {name: fsdb, path: out/regression/test/axi_multi_id_test/waves.fsdb, kind: file, min_bytes: 1024}
       - {name: daidir, path: out/regression/build/simv.daidir, kind: dir}
       - {name: simulation_log, path: out/regression/test/axi_multi_id_test/sim.log, kind: file, min_bytes: 1}
+      - {name: handshake_oracle, path: out/regression/test/axi_multi_id_test/axi_handshake.jsonl, kind: file, min_bytes: 1}
+      - {name: fixed_fsdb, path: out/regression/test/axi_fixed_delay/waves.fsdb, kind: file, min_bytes: 1024}
+      - {name: fixed_log, path: out/regression/test/axi_fixed_delay/sim.log, kind: file, min_bytes: 1}
+      - {name: fixed_oracle, path: out/regression/test/axi_fixed_delay/axi_handshake.jsonl, kind: file, min_bytes: 1}
+      - {name: seed7_fsdb, path: out/regression/test/axi_random_seed_7/waves.fsdb, kind: file, min_bytes: 1024}
+      - {name: seed7_log, path: out/regression/test/axi_random_seed_7/sim.log, kind: file, min_bytes: 1}
+      - {name: seed7_oracle, path: out/regression/test/axi_random_seed_7/axi_handshake.jsonl, kind: file, min_bytes: 1}
+      - {name: seed19_fsdb, path: out/regression/test/axi_random_seed_19/waves.fsdb, kind: file, min_bytes: 1024}
+      - {name: seed19_log, path: out/regression/test/axi_random_seed_19/sim.log, kind: file, min_bytes: 1}
+      - {name: seed19_oracle, path: out/regression/test/axi_random_seed_19/axi_handshake.jsonl, kind: file, min_bytes: 1}
+      - {name: seed73_fsdb, path: out/regression/test/axi_random_seed_73/waves.fsdb, kind: file, min_bytes: 1024}
+      - {name: seed73_log, path: out/regression/test/axi_random_seed_73/sim.log, kind: file, min_bytes: 1}
+      - {name: seed73_oracle, path: out/regression/test/axi_random_seed_73/axi_handshake.jsonl, kind: file, min_bytes: 1}
     probes:
       - argv: [python3, "{repo}/testinfra/leaf/probe_fixture.py", --resources, "{resources}", --xdebug, "{repo}/tools/xdebug", --fsdb-glob, out/regression/test/axi_multi_id_test/waves.fsdb, --daidir-glob, out/regression/build/simv.daidir, --text-glob, out/regression/test/axi_multi_id_test/sim.log, --uvm-zero]
     tool_env: [VERDI_HOME]
 
   - id: xdebug.design_uart
+    build_capabilities: [vcs, npi]
     source_dir: xdebug/testdata/design/uart
     inputs: [dut.f, "*.sv"]
     builder:
@@ -136,6 +301,7 @@ fixtures:
     tool_env: [VERDI_HOME]
 
   - id: xdebug.design_p3
+    build_capabilities: [vcs, npi]
     source_dir: xdebug/testdata/design/p3_semantics
     inputs: [p3_semantics.sv]
     builder:
@@ -148,7 +314,22 @@ fixtures:
       - argv: [python3, "{repo}/testinfra/leaf/probe_fixture.py", --resources, "{resources}", --xdebug, "{repo}/tools/xdebug", --daidir-glob, simv.daidir]
     tool_env: [VERDI_HOME]
 
+  - id: xdebug.design_hierarchy
+    build_capabilities: [vcs, npi]
+    source_dir: xdebug/testdata/design/hierarchy_types
+    inputs: [hierarchy_types_fixture.sv]
+    builder:
+      argv: [vcs, -full64, -sverilog, "-timescale=1ns/1ps", "-debug_access+all", -kdb, -lca, "{source}/hierarchy_types_fixture.sv", -top, hierarchy_types_top, -o, "{resources}/simv"]
+      cwd: "{source}"
+      timeout_sec: 1200
+    outputs:
+      - {name: daidir, path: simv.daidir, kind: dir}
+    probes:
+      - argv: [python3, "{repo}/testinfra/leaf/probe_fixture.py", --resources, "{resources}", --xdebug, "{repo}/tools/xdebug", --daidir-glob, simv.daidir]
+    tool_env: [VERDI_HOME]
+
   - id: xdebug.active_trace_runner
+    build_capabilities: [make, gxx, npi]
     source_dir: xdebug/tests/active_trace_chain
     inputs: [Makefile, chain_test.cpp, chain_test.h]
     builder:
@@ -162,6 +343,7 @@ fixtures:
     tool_env: [VERDI_HOME]
 
   - id: xdebug.active_trace_p0
+    build_capabilities: [child_process, make, vcs, npi]
     source_dir: xdebug/tests/active_trace_chain/p0_composability
     inputs: ["**/*.sv", "**/*.tcl"]
     extra_inputs: [testinfra/leaf/prepare_active_trace.py]
@@ -176,6 +358,7 @@ fixtures:
     tool_env: [VERDI_HOME]
 
   - id: xdebug.active_trace_composite
+    build_capabilities: [child_process, make, vcs, npi]
     source_dir: xdebug/tests/active_trace_chain/composite
     inputs: ["**/*.sv", "**/*.tcl"]
     extra_inputs: [testinfra/leaf/prepare_active_trace.py]
@@ -190,6 +373,7 @@ fixtures:
     tool_env: [VERDI_HOME]
 
   - id: xdebug.active_trace_timing
+    build_capabilities: [child_process, make, vcs, npi]
     source_dir: xdebug/tests/active_trace_chain/timing
     inputs: ["**/*.sv", "**/*.tcl"]
     extra_inputs: [testinfra/leaf/prepare_active_trace.py]
@@ -204,6 +388,7 @@ fixtures:
     tool_env: [VERDI_HOME]
 
   - id: xdebug.active_trace_phase4
+    build_capabilities: [child_process, make, vcs, npi]
     source_dir: xdebug/tests/active_trace_chain/phase4
     inputs: ["**/*.sv", "**/*.tcl"]
     extra_inputs: [testinfra/leaf/prepare_active_trace.py]
@@ -218,6 +403,7 @@ fixtures:
     tool_env: [VERDI_HOME]
 
   - id: xdebug.active_trace_phase5
+    build_capabilities: [child_process, make, vcs, npi]
     source_dir: xdebug/tests/active_trace_chain/phase5
     inputs: ["*.sv", "*.tcl"]
     extra_inputs: [testinfra/leaf/prepare_active_trace.py]
@@ -232,13 +418,15 @@ fixtures:
     tool_env: [VERDI_HOME]
 
   - id: xdebug.xif_event
+    build_capabilities: [make, vcs, npi, vendored_xif]
     source_dir: xdebug/testdata/waveform/xif_agent_event
     inputs: [Makefile, filelist.f, "tb/**/*.sv", "scripts/*.py", "*.json"]
+    extra_inputs: ["third_party/xif_agent/src/**/*"]
     builder:
       argv: [make, run, "OUT={resources}/out"]
       cwd: "{source}"
       default_env:
-        XIF_AGENT: "{home}/xif_agent"
+        XIF_AGENT: "{repo}/third_party/xif_agent"
       timeout_sec: 1800
     outputs:
       - {name: fsdb, path: out/waves/xif_event_multi_if_test.fsdb, kind: file, min_bytes: 1024}
@@ -249,6 +437,7 @@ fixtures:
     tool_env: [VERDI_HOME]
 
   - id: xsva.vcs
+    build_capabilities: [child_process, make, vcs]
     source_dir: xsva/tests/vcs
     inputs: [Makefile, "cases/**/*.sv", "tb/*.sv", "*.tcl"]
     extra_inputs: [testinfra/leaf/prepare_xsva_vcs.py]
@@ -262,6 +451,7 @@ fixtures:
     tool_env: [VERDI_HOME]
 
   - id: xloc.uvm
+    build_capabilities: [make, vcs_uvm]
     source_dir: xloc
     inputs: [Makefile.fixture, "sv/*.sv", "tb/*.sv"]
     builder:

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "axi_config.h"
+#include "axi_transaction_tracker.h"
 #include "npi_fsdb.h"
 #include "json.hpp"
 
@@ -27,6 +28,8 @@ struct AxiExportTransaction {
     std::string resp;
     size_t beat_count = 0;
     size_t expected_beat_count = 0;
+    std::string phase_order;
+    bool response_dependency_violation = false;
 };
 
 struct AxiExportResult {
@@ -50,16 +53,24 @@ struct AxiExportResult {
     int incomplete_read_count = 0;
     int reset_cleared_write_count = 0;
     int reset_cleared_read_count = 0;
+    int orphan_b_count = 0;
+    int orphan_r_beat_count = 0;
+    int buffered_w_beat_count = 0;
+    int buffered_w_burst_count = 0;
+    int orphan_w_beat_count = 0;
+    int response_dependency_violation_count = 0;
+    size_t sample_count = 0;
+    size_t full_scan_count = 0;
+    bool analysis_complete = true;
 };
 
 class AxiExporter {
 public:
-    bool scan(npiFsdbFileHandle file,
-              const AxiConfig& config,
-              npiFsdbTime begin,
-              npiFsdbTime end,
-              AxiExportResult& result,
-              std::string& error) const;
+    void build(const AxiResult& canonical,
+               const AxiConfig& config,
+               npiFsdbTime begin,
+               npiFsdbTime end,
+               AxiExportResult& result) const;
 
     bool write_files(const std::string& output_prefix,
                      const AxiExportResult& result,

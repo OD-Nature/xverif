@@ -3,14 +3,14 @@
 #include "service/engine_action_handler.h"
 
 #include "core/npi/time_contract.h"
-#include "waveform/value/logic_value.h"
+#include "waveform/server/fsdb_value_reader.h"
+#include "waveform/common/clock_sampling_response.h"
+#include "core/value/logic_value.h"
 
 #include "npi_L1.h"
 
 namespace xdebug_design {
 namespace {
-
-using xdebug_waveform::ClockEdgeKind;
 
 Json invalid_arg(const std::string& arg, const std::string& expected) {
     return make_handler_error(
@@ -27,21 +27,26 @@ Json invalid_arg(const std::string& arg, const std::string& expected) {
          {"example_note", "Example only; use the same clock fields on value/list/verify actions that sample waveform values."}});
 }
 
-Json value_object(const std::string& raw, char fmt) {
-    return xdebug_waveform::logic_value_json(
-        xdebug_waveform::logic_value_from_fsdb_raw(raw, fmt));
+Json value_object(npiFsdbSigHandle signal, const std::string& raw, char fmt) {
+    // The raw FSDB radix only affects parsing.  Display formatting is applied
+    // once at the engine response boundary so all value-bearing fields agree.
+    return xdebug_core::logic_value_json(
+        xdebug_waveform::logic_value_from_fsdb_signal(signal, raw, fmt));
 }
 
 Json missing_edge_cell() {
     return Json{{"status", "missing_edge"}, {"value", nullptr}};
 }
 
-Json cell_json(npiFsdbFileHandle fsdb, const xdebug_waveform::ClockPointCell& cell, char prefix) {
+Json cell_json(npiFsdbFileHandle fsdb,
+               npiFsdbSigHandle signal,
+               const xdebug_waveform::ClockPointCell& cell,
+               char prefix) {
     if (cell.status == "missing_edge") return missing_edge_cell();
     Json out = {{"status", cell.status.empty() ? "missing_value" : cell.status}};
     if (cell.status == "ok") {
         if (cell.has_value_time) out["time"] = xdebug_core::format_time(fsdb, cell.value_time);
-        out["value"] = value_object(cell.raw_value, prefix);
+        out["value"] = value_object(signal, cell.raw_value, prefix);
     } else {
         out["value"] = nullptr;
     }
@@ -50,19 +55,25 @@ Json cell_json(npiFsdbFileHandle fsdb, const xdebug_waveform::ClockPointCell& ce
 
 Json sample_rows_json(npiFsdbFileHandle fsdb,
                       const std::vector<xdebug_waveform::ClockPointRow>& rows,
+                      const std::vector<xdebug_waveform::ClockPointSignal>& signals,
                       const char* key,
                       const Json& time,
                       char prefix) {
     if (time.is_null()) return Json::array();
     Json out = Json::array();
-    for (const auto& row : rows) {
+    for (size_t index = 0; index < rows.size(); ++index) {
+        const auto& row = rows[index];
         const xdebug_waveform::ClockPointCell* cell = &row.middle;
         if (std::string(key) == "before") cell = &row.before;
         else if (std::string(key) == "after") cell = &row.after;
         out.push_back({{"signal", row.label},
                        {"path", row.path},
                        {"time", time},
-                       {"cell", cell_json(fsdb, *cell, prefix)}});
+                       {"cell", cell_json(
+                           fsdb,
+                           index < signals.size() ? signals[index].handle : nullptr,
+                           *cell,
+                           prefix)}});
     }
     return out;
 }
@@ -118,11 +129,7 @@ bool parse_point_clock_args(const Json& args,
             return false;
         }
     }
-    if (!xdebug_waveform::normalize_clock_sample_spec(nullptr, spec, parse_error)) {
-        error = invalid_arg("args.sample_point", "only valid with edge:posedge or edge:dual");
-        error["message"] = parse_error;
-        return false;
-    }
+    if (!xdebug_waveform::normalize_clock_sample_spec(nullptr, spec, parse_error)) return false;
     return true;
 }
 
@@ -153,43 +160,30 @@ bool build_clock_point_query(npiFsdbFileHandle fsdb,
     }
 
     Json rows = Json::array();
-    for (const auto& row_result : point_result.rows) {
+    for (size_t index = 0; index < point_result.rows.size(); ++index) {
+        const auto& row_result = point_result.rows[index];
+        npiFsdbSigHandle signal =
+            index < point_signals.size() ? point_signals[index].handle : nullptr;
         Json row;
         row["signal"] = row_result.label;
         row["path"] = row_result.path;
-        row["before"] = cell_json(fsdb, row_result.before, value_prefix);
-        row["middle"] = cell_json(fsdb, row_result.middle, value_prefix);
-        row["after"] = cell_json(fsdb, row_result.after, value_prefix);
+        row["before"] = cell_json(fsdb, signal, row_result.before, value_prefix);
+        row["middle"] = cell_json(fsdb, signal, row_result.middle, value_prefix);
+        row["after"] = cell_json(fsdb, signal, row_result.after, value_prefix);
         rows.push_back(row);
     }
 
-    Json context;
-    context["clock"] = spec.clock;
-    context["edge"] = xdebug_waveform::clock_edge_kind_text(spec.edge);
-    context["requested_time"] = xdebug_core::format_time(fsdb, point_result.context.requested_time);
-    context["requested_any_edge_hit"] = point_result.context.clock_edge_hit;
-    context["clock_edge_kind"] = point_result.context.has_clock_edge_kind
-        ? Json(xdebug_waveform::clock_edge_kind_text(point_result.context.clock_edge_kind))
-        : Json(nullptr);
-    context["requested_target_edge_hit"] = point_result.context.target_edge_hit;
-    context["sample_point_applied"] =
-        point_result.context.target_edge_hit && spec.edge != ClockEdgeKind::Negedge
-        ? Json(xdebug_waveform::clock_sample_point_text(spec.sample_point))
-        : Json(nullptr);
-    context["previous_sample_time"] = point_result.context.has_previous_sample_time
-        ? Json(xdebug_core::format_time(fsdb, point_result.context.previous_sample_time)) : Json(nullptr);
-    context["next_sample_time"] = point_result.context.has_next_sample_time
-        ? Json(xdebug_core::format_time(fsdb, point_result.context.next_sample_time)) : Json(nullptr);
-    context["bracket_complete"] = point_result.context.bracket_complete;
+    Json context = xdebug_waveform::clock_point_context_json(
+        fsdb, spec, point_result.context);
 
     out.clock_context = context;
     out.rows = rows;
     out.samples = {
-        {"before", sample_rows_json(fsdb, point_result.rows, "before",
+        {"before", sample_rows_json(fsdb, point_result.rows, point_signals, "before",
             context["previous_sample_time"], value_prefix)},
-        {"middle", sample_rows_json(fsdb, point_result.rows, "middle",
+        {"middle", sample_rows_json(fsdb, point_result.rows, point_signals, "middle",
             context["requested_time"], value_prefix)},
-        {"after", sample_rows_json(fsdb, point_result.rows, "after",
+        {"after", sample_rows_json(fsdb, point_result.rows, point_signals, "after",
             context["next_sample_time"], value_prefix)}
     };
     return true;

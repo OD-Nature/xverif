@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 import json
 import os
 import subprocess
@@ -13,8 +14,10 @@ SRC = ROOT / "src"
 sys.path.insert(0, str(SRC))
 
 from xbit.check import run_check
-from xbit.errors import ValueError2State, WidthError
+from xbit.errors import DivisionByZero, ParseError, ValueError2State, WidthError
 from xbit.eval import eval_expr, parse_vars
+from xbit.format import ResponseContractError, failure, success, to_xout, validate_response
+from xbit.agent.stdio import validate_wrapped_response, wrap_response
 from xbit.literal import parse_value
 from xbit import ops
 
@@ -33,6 +36,12 @@ class LiteralTests(unittest.TestCase):
         self.assertEqual(value.width, 32)
         self.assertEqual(value.unsigned, 0xFFFFFFFF)
         self.assertEqual(value.signed_value, -1)
+
+    def test_unsized_decimal_is_signed(self):
+        value = parse_value("42")
+        self.assertEqual(value.width, 32)
+        self.assertTrue(value.signed)
+        self.assertEqual(value.signed_value, 42)
 
     def test_2state_rejects_x(self):
         with self.assertRaises(ValueError2State):
@@ -72,6 +81,54 @@ class OpTests(unittest.TestCase):
         with self.assertRaises(WidthError):
             ops.slice_bits(parse_value("8'hff"), 15, 8)
 
+    def test_mixed_signed_unsigned_is_unsigned(self):
+        signed_ff = parse_value("8'shff")
+        unsigned_one = parse_value("8'h01")
+        self.assertFalse(ops.compare("<", signed_ff, unsigned_one).truthy())
+        result = ops.binary_arithmetic("+", signed_ff, unsigned_one)
+        self.assertFalse(result.signed)
+        self.assertEqual(result.unsigned, 0)
+
+    def test_binary_operands_use_common_width_before_interpretation(self):
+        signed_ff = parse_value("8'shff")
+        signed_one = parse_value("16'sh0001")
+        unsigned_one = parse_value("16'h0001")
+        signed_result = ops.binary_arithmetic("+", signed_ff, signed_one)
+        mixed_result = ops.binary_arithmetic("+", signed_ff, unsigned_one)
+        self.assertTrue(signed_result.signed)
+        self.assertEqual(signed_result.signed_value, 0)
+        self.assertFalse(mixed_result.signed)
+        self.assertEqual(mixed_result.unsigned, 0x0100)
+
+    def test_wide_division_never_uses_float(self):
+        result = ops.binary_arithmetic(
+            "/", parse_value("64'hffffffffffffffff"), parse_value("64'd3")
+        )
+        self.assertEqual(result.unsigned, 0x5555555555555555)
+        result_128 = ops.binary_arithmetic(
+            "/",
+            parse_value("128'hffffffffffffffffffffffffffffffff"),
+            parse_value("128'd3"),
+        )
+        self.assertEqual(
+            result_128.unsigned,
+            0x55555555555555555555555555555555,
+        )
+
+    def test_signed_division_and_remainder_truncate_toward_zero(self):
+        dividend = parse_value("32'sd-5")
+        positive = parse_value("32'sd3")
+        negative = parse_value("32'sd-3")
+        self.assertEqual(ops.binary_arithmetic("/", dividend, positive).signed_value, -1)
+        self.assertEqual(ops.binary_arithmetic("%", dividend, positive).signed_value, -2)
+        self.assertEqual(ops.binary_arithmetic("/", dividend, negative).signed_value, 1)
+        self.assertEqual(ops.binary_arithmetic("%", dividend, negative).signed_value, -2)
+
+    def test_division_by_zero_is_typed_for_divide_and_modulo(self):
+        for op in ("/", "%"):
+            with self.assertRaises(DivisionByZero):
+                ops.binary_arithmetic(op, parse_value("64'd1"), parse_value("64'd0"))
+
 
 class EvalTests(unittest.TestCase):
     def test_arithmetic_shift(self):
@@ -97,6 +154,10 @@ class EvalTests(unittest.TestCase):
         self.assertEqual(eval_expr("ADDR_W + ID_W - 1", variables).unsigned, 35)
         self.assertEqual(eval_expr("sel ? 8'ha5 : 8'h00", variables).unsigned, 0xA5)
 
+    def test_duplicate_variable_assignment_is_rejected(self):
+        with self.assertRaises(ParseError):
+            parse_vars(["data=8'h01", "data=8'h02"])
+
 
 class CheckTests(unittest.TestCase):
     def test_check_vars(self):
@@ -108,7 +169,7 @@ class CheckTests(unittest.TestCase):
         self.assertIn("data", result["evaluated"])
 
     def test_check_values_file(self):
-        payload = {"values": {"valid": "1'b1", "ready": "1'b1", "opcode": "4'ha"}}
+        payload = {"valid": "1'b1", "ready": "1'b1", "opcode": "4'ha"}
         with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as fh:
             json.dump(payload, fh)
             path = fh.name
@@ -117,6 +178,13 @@ class CheckTests(unittest.TestCase):
             self.assertTrue(result["matched"])
         finally:
             os.unlink(path)
+
+    def test_check_rejects_wrapped_values_and_multiple_sources(self):
+        with self.assertRaises(ParseError):
+            run_check("valid", values_payload={"values": {"valid": "1'b1"}})
+        with self.assertRaises(ParseError):
+            run_check("valid", var_items=["valid=1'b1"],
+                      values_payload={"valid": "1'b1"})
 
 
 class CliTests(unittest.TestCase):
@@ -143,6 +211,77 @@ class CliTests(unittest.TestCase):
         payload = self.run_cli("eval", "data[15:8] == 8'hbe", "--var", "data=32'hdead_beef", "--json")
         self.assertTrue(payload["ok"])
         self.assertTrue(payload["result"]["bool"])
+
+    def test_default_xout_is_token_efficient_domain_text(self):
+        payload = success("conv", result=parse_value("8'h5a"))
+        output = to_xout(payload)
+        self.assertIn("  result: 8'h5a", output)
+        self.assertIn("  unsigned: 90", output)
+        self.assertNotIn("pointer\tkind\tvalue", output)
+
+    def test_response_contract_rejects_unknown_or_contradictory_fields(self):
+        payload = success("conv", result=parse_value("8'h5a"))
+        unknown = deepcopy(payload)
+        unknown["input"] = "8'h00"
+        contradictory = deepcopy(payload)
+        contradictory["result"]["hex"] = "0x00"
+        for mutated in (unknown, contradictory):
+            with self.assertRaises(ResponseContractError):
+                validate_response(mutated)
+
+    def test_response_contract_rejects_cross_field_contradictions(self):
+        known = success("conv", result=parse_value("8'h5a"))
+        check = success(
+            "check",
+            result=parse_value("1'b1"),
+            matched=True,
+            evaluated={"ready": "1'b1"},
+        )
+        unknown = success("conv", result=parse_value("4'b10xz", state="4state"))
+        mutations = []
+        bad_signed = deepcopy(known)
+        bad_signed["result"]["signed_value"] = True
+        mutations.append(bad_signed)
+        too_wide = deepcopy(known)
+        too_wide["result"]["unsigned"] = 0x15A
+        mutations.append(too_wide)
+        mismatched = deepcopy(check)
+        mismatched["matched"] = False
+        mutations.append(mismatched)
+        oversized_mask = deepcopy(unknown)
+        oversized_mask["result"]["x_mask"] = "0x12"
+        mutations.append(oversized_mask)
+        for mutated in mutations:
+            with self.subTest(mutated=mutated):
+                with self.assertRaises(ResponseContractError):
+                    validate_response(mutated)
+
+    def test_error_expected_op_and_stdio_correlation_are_strict(self):
+        payload = failure(WidthError("bad width", width=8), op="slice")
+        with self.assertRaises(ResponseContractError):
+            validate_response(payload, expected_op="conv")
+
+        request = {"id": 7, "jsonrpc": "2.0"}
+        response = wrap_response(request, success("conv", result=parse_value("8'h5a")))
+        validate_wrapped_response(request, response)
+        wrong_id = deepcopy(response)
+        wrong_id["id"] = 8
+        with self.assertRaises(Exception):
+            validate_wrapped_response(request, wrong_id)
+        missing_jsonrpc = deepcopy(response)
+        del missing_jsonrpc["jsonrpc"]
+        with self.assertRaises(Exception):
+            validate_wrapped_response(request, missing_jsonrpc)
+
+    def test_error_contract_rejects_unknown_detail_fields(self):
+        payload = failure(
+            WidthError("slice range is invalid for value width",
+                       msb=15, lsb=8, width=8),
+            op="slice",
+        )
+        payload["error"]["details"]["fallback_value"] = 0
+        with self.assertRaises(ResponseContractError):
+            validate_response(payload)
 
     def test_agent_stdio(self):
         env = os.environ.copy()

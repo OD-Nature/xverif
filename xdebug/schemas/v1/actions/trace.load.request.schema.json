@@ -6,7 +6,8 @@
   "required": [
     "api_version",
     "action",
-    "args"
+    "args",
+    "target"
   ],
   "properties": {
     "api_version": {
@@ -16,7 +17,8 @@
       ]
     },
     "request_id": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "action": {
       "type": "string",
@@ -25,67 +27,111 @@
       ]
     },
     "target": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "daidir": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "session_id"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "daidir"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "session_id"
+            ]
+          },
+          "required": [
+            "daidir"
+          ]
+        }
+      ],
+      "additionalProperties": false
     },
     "args": {
       "type": "object",
+      "required": [
+        "signal"
+      ],
       "properties": {
-        "line_limit": {
-          "type": "integer",
-          "minimum": 1,
-          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
-        },
         "no_statement_only": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "为 true 时排除只代表 statement、没有结构化设计对象语义的 trace 结果。"
         },
         "role": {
-          "type": "string"
+          "type": "string",
+          "description": "设计 trace 中节点的语义角色过滤。"
         },
         "signal": {
           "type": "string",
-          "description": "目标信号路径。"
-        },
-        "time_unit": {
-          "type": "string",
-          "enum": [
-            "auto",
-            "fs",
-            "ps",
-            "ns",
-            "us",
-            "ms",
-            "s"
-          ]
+          "description": "Final leaf signal path. Aggregate, array, and struct roots are not expanded automatically."
         }
       },
-      "additionalProperties": false,
-      "required": [
-        "signal"
-      ]
+      "additionalProperties": false
     },
     "limits": {
-      "type": "object"
-    },
-    "auth_token": {
-      "type": "string"
-    },
-    "id": {
-      "type": "string"
-    },
-    "trace_id": {
-      "type": "string"
-    },
-    "span_id": {
-      "type": "string"
-    },
-    "parent_span_id": {
-      "type": "string"
+      "type": "object",
+      "properties": {
+        "max_results": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647,
+          "description": "Maximum static load paths returned."
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647,
+          "description": "Positive public frontend-to-engine request timeout in milliseconds. Omit limits.timeout_ms to disable the public watchdog."
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false,
-  "description": "trace.load: 查找信号 load。",
+  "description": "Find static loads of a design signal.",
   "x-purpose": "查找信号 load。",
   "x-how_it_works": "从设计数据库遍历信号使用点。",
   "x-when_to_use": "回答信号影响到哪里。",
-  "x-arg_contract_notes": "required: signal"
+  "x-arg_contract_notes": "required: signal",
+  "x-description-zh": "查找信号 load。",
+  "x-agent": {
+    "use_when": [
+      "Need all structural consumer pins and fanout endpoints for a design signal without waveform evaluation."
+    ],
+    "do_not_use_when": [
+      "Do not use it to enumerate drivers or decide waveform-time activity."
+    ],
+    "alternatives": [
+      {
+        "action": "trace.driver",
+        "when": "Enumerate static drivers."
+      },
+      {
+        "action": "trace.active_driver",
+        "when": "Find the active driver at one time."
+      }
+    ],
+    "constraints": [
+      "required: signal"
+    ]
+  }
 }

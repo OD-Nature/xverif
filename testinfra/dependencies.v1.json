@@ -1,0 +1,23 @@
+{
+  "version": "xverif-dependency-registry.v1",
+  "dependencies": [
+    {"id": "python_test_runtime", "kind": "python_packages", "packages": {"pytest": "8", "pytest-xdist": "3.6", "PyYAML": "6", "jsonschema": "4"}},
+    {"id": "child_process", "kind": "executable", "command": "python3"},
+    {"id": "make", "kind": "executable", "command": "make"},
+    {"id": "gxx", "kind": "executable", "command": "g++"},
+    {"id": "vim", "kind": "executable", "command": "vim"},
+    {"id": "neovim", "kind": "executable", "command": "nvim"},
+    {"id": "uds", "kind": "uds"},
+    {"id": "mcp_process", "kind": "python_import", "module": "mcp", "distribution": "mcp"},
+    {"id": "fake_lsf", "kind": "constant", "available": true, "reason": "repository fake LSF backend"},
+    {"id": "real_lsf", "kind": "real_lsf"},
+    {"id": "npi", "kind": "npi"},
+    {"id": "vcs", "kind": "vcs"},
+    {"id": "vcs_uvm", "kind": "vcs_uvm"},
+    {"id": "vip_apb", "kind": "svt_vip", "protocol": "apb"},
+    {"id": "vip_axi", "kind": "svt_vip", "protocol": "axi"},
+    {"id": "vendored_xif", "kind": "vendored_xif"},
+    {"id": "fsdb", "kind": "fixture_output", "output": "fsdb"},
+    {"id": "daidir", "kind": "fixture_output", "output": "daidir"}
+  ]
+}

@@ -6,7 +6,7 @@
       "session_id": "sample_stream"
     },
     "args": {
-      "config_path": "~/xverif/xdebug/testdata/waveform/stream_v1/config/streams.json",
+      "config_path": "<xverif-repo>/xdebug/testdata/waveform/stream_v1/config/streams.json",
       "mode": "replace"
     },
     "output": {

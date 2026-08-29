@@ -6,7 +6,8 @@
   "required": [
     "api_version",
     "action",
-    "args"
+    "args",
+    "target"
   ],
   "properties": {
     "api_version": {
@@ -16,7 +17,8 @@
       ]
     },
     "request_id": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "action": {
       "type": "string",
@@ -25,13 +27,72 @@
       ]
     },
     "target": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fsdb": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "session_id"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "fsdb"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "session_id"
+            ]
+          },
+          "required": [
+            "fsdb"
+          ]
+        }
+      ],
+      "additionalProperties": false
     },
     "args": {
       "type": "object",
+      "required": [
+        "expr"
+      ],
       "properties": {
         "aggregate": {
-          "type": "object"
+          "type": "object",
+          "properties": {
+            "events": {
+              "type": "boolean",
+              "default": true,
+              "description": "为 false 时不在 response 中返回逐项 events，只返回 aggregate。"
+            },
+            "group_by": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "description": "要参与聚合分组的 event field 或 signal alias。"
+              },
+              "uniqueItems": true,
+              "description": "聚合分组 key 列表。"
+            }
+          },
+          "additionalProperties": false,
+          "description": "导出聚合控制。events=false 时只返回 aggregate；group_by 按 event fields 或 signal aliases 统计。"
         },
         "clock": {
           "type": "string",
@@ -39,52 +100,107 @@
         },
         "edge": {
           "type": "string",
-          "description": "clock sampling 使用的边沿：posedge、negedge 或 dual。"
-        },
-        "events": {
-          "type": "boolean"
+          "description": "Clock sampling edge. The schema default is authoritative; negedge often matches monitor semantics."
         },
         "expr": {
           "type": "string",
-          "description": "需要求值或匹配的布尔表达式。"
-        },
-        "group_by": {
-          "type": "array"
+          "description": "在指定采样语义下求值或匹配的表达式。"
         },
         "line_limit": {
           "type": "integer",
           "minimum": 1,
-          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
+          "description": "Limits returned evidence rows only, not scanning, aggregation, or the verdict; read completeness fields as well."
+        },
+        "max_events": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "允许处理或写出的事件预算；耗尽会影响 analysis/file completeness。"
+        },
+        "max_samples": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "允许扫描的时钟采样预算；耗尽表示分析不完整而非仅 response 截断。"
         },
         "mode": {
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "export"
+          ],
+          "default": "export",
+          "description": "Action processing or return mode. Its legal values, default, and interactions are action-specific."
         },
         "name": {
           "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。"
+          "description": "Saved-object name in this action namespace; do not assume names are shared by cursors, lists, and protocol configs."
         },
         "output": {
           "type": "object",
           "properties": {
             "path": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1,
+              "description": "Artifact path; omit it to return an in-response preview."
             },
             "file_format": {
               "type": "string",
               "enum": [
                 "json"
               ],
-              "description": "event.export file format."
+              "default": "json",
+              "description": "Event artifact file format."
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "required": [
+                  "file_format"
+                ]
+              },
+              "then": {
+                "required": [
+                  "path"
+                ]
+              },
+              "description": "Export destination and rendering controls. path, file_format, and verbose are supported only where this action declares them."
+            }
+          ],
+          "additionalProperties": false,
+          "description": "Export destination and rendering controls. path, file_format, and verbose are supported only where this action declares them."
+        },
+        "render_time_unit": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "ps",
+            "ns",
+            "us"
+          ],
+          "description": "Controls only canonical response time rendering: auto, ps, ns, or us. It never changes input parsing, sampling, filtering, or ordering."
+        },
+        "reset": {
+          "type": "object",
+          "required": [
+            "signal",
+            "polarity"
+          ],
+          "properties": {
+            "signal": {
+              "type": "string",
+              "minLength": 1,
+              "description": "One-bit final waveform signal path used as reset."
             },
-            "verbose": {
-              "type": "boolean"
+            "polarity": {
+              "type": "string",
+              "enum": [
+                "active_low",
+                "active_high"
+              ],
+              "description": "Level that asserts reset. X, Z, and unavailable samples are conservatively treated as asserted."
             }
           },
           "additionalProperties": false,
-          "description": "导出配置对象；路径统一使用 output.path。"
-        },
-        "rst_n": {
-          "type": "string"
+          "description": "Reset definition. Both signal and polarity are required when reset is supplied."
         },
         "sample_point": {
           "type": "string",
@@ -92,55 +208,54 @@
             "before",
             "after"
           ],
-          "description": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。"
+          "description": "Before/after observation point for posedge or dual sampling; it does not change the raw waveform range."
         },
         "signals": {
-          "oneOf": [
-            {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              }
-            }
-          ],
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1
+          },
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Value for a caller-defined signal alias key. Supply the real signal path or the action-supported expression for that alias."
+          },
+          "x-dynamic-map": true,
+          "x-dynamic-contract": "Each property key is an alias referenced by this action; each value resolves that alias to a signal path or supported expression.",
           "description": "信号列表，或 alias 到信号路径的映射。"
         },
         "time_range": {
           "type": "object",
+          "minProperties": 1,
           "properties": {
             "begin": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1,
+              "description": "闭区间起点；省略时使用可用波形窗口起点。"
             },
             "end": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1,
+              "description": "闭区间终点；省略时使用可用波形窗口终点。"
             }
           },
           "additionalProperties": false,
-          "description": "查询或分析的时间窗口。"
+          "description": "Closed analysis interval. begin and end may be omitted independently to use the available waveform bounds."
         },
-        "time_unit": {
+        "value_format": {
           "type": "string",
           "enum": [
-            "auto",
-            "fs",
-            "ps",
-            "ns",
-            "us",
-            "ms",
-            "s"
-          ]
+            "hex",
+            "bin",
+            "dec"
+          ],
+          "default": "hex",
+          "description": "返回 LogicValue 的显示格式；不改变比较、采样或底层四态值。"
         }
       },
       "additionalProperties": false,
-      "required": [
-        "expr"
-      ],
       "anyOf": [
         {
           "required": [
@@ -153,31 +268,134 @@
             "signals"
           ]
         }
+      ],
+      "allOf": [
+        {
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "name",
+                  "clock"
+                ]
+              },
+              {
+                "required": [
+                  "name",
+                  "signals"
+                ]
+              },
+              {
+                "required": [
+                  "name",
+                  "edge"
+                ]
+              },
+              {
+                "required": [
+                  "name",
+                  "sample_point"
+                ]
+              },
+              {
+                "required": [
+                  "name",
+                  "reset"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "output"
+            ],
+            "properties": {
+              "output": {
+                "required": [
+                  "path"
+                ],
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "line_limit"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "aggregate"
+            ],
+            "properties": {
+              "aggregate": {
+                "required": [
+                  "events"
+                ],
+                "properties": {
+                  "events": {
+                    "const": false
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "line_limit"
+              ]
+            }
+          }
+        }
       ]
     },
     "limits": {
-      "type": "object"
-    },
-    "auth_token": {
-      "type": "string"
-    },
-    "id": {
-      "type": "string"
-    },
-    "trace_id": {
-      "type": "string"
-    },
-    "span_id": {
-      "type": "string"
-    },
-    "parent_span_id": {
-      "type": "string"
+      "type": "object",
+      "properties": {
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647,
+          "description": "Positive public frontend-to-engine request timeout in milliseconds. Omit limits.timeout_ms to disable the public watchdog."
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false,
-  "description": "event.export: 导出满足表达式的事件。",
+  "description": "Export sampled events that match an expression.",
   "x-purpose": "导出满足表达式的事件。",
   "x-how_it_works": "与 event.find 同样分析，但按 export 模式返回/写出更多命中数据；表达式支持布尔组合、相等比较和大小比较。",
   "x-when_to_use": "把事件列表交给后处理或报告。",
-  "x-arg_contract_notes": "required: expr; also one of: name / clock + signals"
+  "x-arg_contract_notes": "required: expr; also one of: name / clock + signals",
+  "x-description-zh": "导出满足表达式的事件。",
+  "x-agent": {
+    "use_when": [
+      "Need all matching sampled-event evidence written to a declared artifact rather than returned only inline."
+    ],
+    "do_not_use_when": [
+      "Do not use it when no artifact is required or when only the first/last matching sample is needed."
+    ],
+    "alternatives": [
+      {
+        "action": "event.find",
+        "when": "Return matching sampled events in the response."
+      }
+    ],
+    "constraints": [
+      "required: expr; also one of: name / clock + signals"
+    ]
+  }
 }

@@ -19,7 +19,7 @@ from xsva.cli import _serialize_timeline_ir, _serialize_sequence_ir, _serialize_
 
 
 def _load_json(path: Path) -> dict:
-    return json.loads(path.read_text())
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def test_golden_surface_ir(run_golden_case):
@@ -27,7 +27,7 @@ def test_golden_surface_ir(run_golden_case):
     surface, seq_ir, timeline, diag, case_dir = run_golden_case
     golden = _load_json(case_dir / "surface_ir.json")
 
-    actual = json.loads(json.dumps(_serialize_surface_ir(surface), ensure_ascii=False, default=str))
+    actual = _serialize_surface_ir(surface)
     assert actual == golden
 
 

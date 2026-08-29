@@ -11,11 +11,22 @@ from pathlib import Path
 
 import pytest
 
-from xverif_mcp.config import default_xdebug_bin
-from xverif_mcp.sessions.launchers import DirectLauncher, LaunchConfig
-from xverif_mcp.sessions.loop_session import XdebugLoopSession, _safe_name
-from xverif_mcp.sessions.session_manager import McpSessionManager
-from xverif_mcp.lsf.protocol import JsonlProcess
+from xverif_loop.config import (
+    default_xdebug_bin,
+    resolve_mcp_runtime_config,
+)
+from xverif_loop.lsf.protocol import JsonlProcess
+from xverif_loop.logging import resolve_logger
+from xverif_loop.sessions.launchers import DirectLauncher, LaunchConfig
+from xverif_loop.sessions.loop_session import XdebugLoopSession, _safe_name
+from xverif_loop.sessions.session_manager import McpSessionManager
+
+TEST_RUNTIME = resolve_mcp_runtime_config().with_overrides(
+    backend="direct",
+    startup_timeout_sec=5.0,
+    request_timeout_sec=5.0,
+)
+TEST_LOGGER = resolve_logger(TEST_RUNTIME)
 
 
 # ---------------------------------------------------------------------------
@@ -28,6 +39,17 @@ def _fake_xdebug_script(tmpdir: Path) -> str:
     script = tmpdir / "fake_xdebug"
     script.write_text(r"""#!/usr/bin/env python3
 import json, sys, os, time
+
+if "--stdio-loop" not in sys.argv:
+    request = json.loads(sys.stdin.readline())
+    print(json.dumps({
+        "api_version": "xdebug.v1",
+        "action": request.get("action"),
+        "ok": True,
+        "summary": {"removed": True},
+        "data": {},
+    }))
+    sys.exit(0)
 
 # ready
 print(json.dumps({"type":"ready","protocol":"xdebug-stdio-loop","version":1,"pid":os.getpid()}))
@@ -50,7 +72,7 @@ for line in sys.stdin:
     output = req.get("output", {})
     wants_json = (output.get("format") == "json" or
                   output.get("response_format") == "json" or
-                  req.get("__xverif_loop_payload_format") == "json")
+                  req.get("payload_format") == "json")
 
     if action == "stdio.quit":
         rsp = {"id": rid, "ok": True, "payload_format": "json", "json": {"ok": True, "action": "stdio.quit"}}
@@ -60,10 +82,15 @@ for line in sys.stdin:
 
     if action == "session.open":
         name = args.get("name", "unknown")
+        returned_name = "unexpected_backend_id" if name == "mismatch_test" else name
         result = {
             "ok": True, "action": "session.open",
-            "summary": {"session_id": name, "mode": "combined",
-                        "open_args": args},
+            "session": {"session_id": returned_name, "mode": "combined"},
+            "summary": {
+                "status": "opened",
+                "open_args": args,
+                "open_target": target,
+            },
         }
     elif action == "value.at":
         delay = float(args.get("sleep", 0))
@@ -129,9 +156,9 @@ def session(fake_xdebug_bin):
         fsdb="test.fsdb",
         daidir=None,
         launcher=DirectLauncher(),
+        runtime=TEST_RUNTIME,
+        logger=TEST_LOGGER,
         xdebug_bin=fake_xdebug_bin,
-        startup_timeout_sec=5.0,
-        request_timeout_sec=5.0,
     )
     yield s
     try:
@@ -167,20 +194,210 @@ class TestLoopSessionOpen:
         assert session.state == "alive"
         assert session.session_id == "test"
 
-    def test_open_does_not_send_reuse_or_reopen(self, fake_xdebug_bin):
-        s = XdebugLoopSession(
-            alias="test2", fsdb="t.fsdb", daidir=None,
-            launcher=DirectLauncher(), xdebug_bin=fake_xdebug_bin,
-            startup_timeout_sec=5.0, request_timeout_sec=5.0,
+    def test_open_rejects_backend_session_id_mismatch_and_cleans_up(
+        self,
+        fake_xdebug_bin,
+        tmp_path,
+    ):
+        runtime = resolve_mcp_runtime_config(
+            environ={
+                "HOME": str(tmp_path / "home"),
+                "XVERIF_MCP_LOG_DIR": str(tmp_path / "logs"),
+            },
+        ).with_overrides(
+            backend="direct",
+            startup_timeout_sec=5.0,
+            request_timeout_sec=5.0,
         )
-        try:
-            r = s.open()
-            assert r.get("ok")
-            assert s.state == "alive"
-            rsp = s.query("fake", {}, output_format="json")
-            assert rsp["summary"]["echo_target"]["session_id"] == "test2"
-        finally:
-            s.close(force=True)
+        logger = resolve_logger(runtime)
+        s = XdebugLoopSession(
+            alias="mismatch_test",
+            fsdb="t.fsdb",
+            daidir=None,
+            launcher=DirectLauncher(),
+            runtime=runtime,
+            logger=logger,
+            xdebug_bin=fake_xdebug_bin,
+        )
+        requests = []
+        admin_calls = []
+        call_raw = s._call_raw
+
+        def capture(request, timeout=None):
+            requests.append(request)
+            result = call_raw(request, timeout)
+            if request["action"] == "session.open":
+                result["json"]["summary"]["opaque_echo"] = (
+                    "backend echoed "
+                    + request["args"]["ownership_token"]
+                )
+            return result
+
+        def conditional_cleanup(action, **kwargs):
+            admin_calls.append((action, kwargs))
+            return {"ok": True, "action": action}
+
+        s._call_raw = capture
+        s._call_native_admin = conditional_cleanup
+
+        response = s.open()
+
+        opened = next(
+            request
+            for request in requests
+            if request["action"] == "session.open"
+        )
+        token = opened["args"]["ownership_token"]
+        assert len(token) == 64
+        assert all(c in "0123456789abcdef" for c in token)
+        assert admin_calls == [
+            (
+                "session.close",
+                {
+                    "session_id": "mismatch_test",
+                    "ownership_token": token,
+                },
+            )
+        ]
+        assert response["ok"] is False
+        assert response["error"]["code"] == "BACKEND_SESSION_ID_MISMATCH"
+        assert response["error"]["requested_session_id"] == "mismatch_test"
+        assert response["error"]["backend_session_id"] == "unexpected_backend_id"
+        assert response["error"]["cleanup_complete"] is True
+        assert response["error"]["cleanup_outcome"] == "cleaned"
+        assert response["error"]["cleanup"]["subprocess"] == "terminated"
+        assert (
+            response["error"]["cleanup"]["conditional_cleanup"]["outcome"]
+            == "cleaned"
+        )
+        backend_summary = response["error"]["backend_response"]["summary"]
+        assert backend_summary["open_args"]["ownership_token"] == {
+            "redacted": True,
+        }
+        assert backend_summary["opaque_echo"] == (
+            "backend echoed <redacted>"
+        )
+        assert token not in json.dumps(response, sort_keys=True)
+        assert token not in json.dumps(s.public_json(), sort_keys=True)
+        log_text = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in runtime.log_root.rglob("*.ndjson")
+        )
+        assert token not in log_text
+        assert s.state == "closed"
+        assert not s.process_alive()
+
+    @pytest.mark.parametrize(
+        (
+            "admin_response",
+            "cleanup_outcome",
+            "cleanup_complete",
+            "state",
+        ),
+        [
+            (
+                {"ok": True, "action": "session.close"},
+                "cleaned",
+                True,
+                "closed",
+            ),
+            (
+                {
+                    "ok": False,
+                    "error": {
+                        "code": "SESSION_NOT_FOUND",
+                        "message": "not created",
+                    },
+                },
+                "not_created",
+                True,
+                "closed",
+            ),
+            (
+                {
+                    "ok": False,
+                    "error": {
+                        "code": "SESSION_OWNERSHIP_TOKEN_MISMATCH",
+                        "message": "different open record",
+                    },
+                },
+                "token_mismatch",
+                True,
+                "closed",
+            ),
+            (
+                {
+                    "ok": False,
+                    "error": {
+                        "code": "SESSION_CLEANUP_FAILED",
+                        "message": "cleanup failed",
+                    },
+                },
+                "cleanup_failed",
+                False,
+                "orphan_suspected",
+            ),
+        ],
+    )
+    def test_rejected_open_has_exact_conditional_cleanup_outcome(
+        self,
+        fake_xdebug_bin,
+        admin_response,
+        cleanup_outcome,
+        cleanup_complete,
+        state,
+    ):
+        s = XdebugLoopSession(
+            alias="rejected_open",
+            fsdb="t.fsdb",
+            daidir=None,
+            launcher=DirectLauncher(),
+            runtime=TEST_RUNTIME,
+            logger=TEST_LOGGER,
+            xdebug_bin=fake_xdebug_bin,
+        )
+        requests = []
+        admin_calls = []
+
+        def reject_open(request, timeout=None):
+            requests.append(request)
+            return {
+                "ok": False,
+                "json": {
+                    "ok": False,
+                    "action": "session.open",
+                    "error": {
+                        "code": "OPEN_REJECTED",
+                        "message": "open rejected after dispatch",
+                    },
+                },
+            }
+
+        def conditional_cleanup(action, **kwargs):
+            admin_calls.append((action, kwargs))
+            return admin_response
+
+        s._call_raw = reject_open
+        s._call_native_admin = conditional_cleanup
+
+        response = s.open()
+
+        token = requests[0]["args"]["ownership_token"]
+        assert admin_calls == [
+            (
+                "session.close",
+                {
+                    "session_id": "rejected_open",
+                    "ownership_token": token,
+                },
+            )
+        ]
+        assert response["ok"] is False
+        assert response["error"]["code"] == "SESSION_OPEN_REJECTED"
+        assert response["error"]["cleanup_outcome"] == cleanup_outcome
+        assert response["error"]["cleanup_complete"] is cleanup_complete
+        assert s.state == state
+        assert token not in json.dumps(response, sort_keys=True)
 
     def test_launcher_start_failure_returns_structured_open_error(self):
         class MissingLauncher(DirectLauncher):
@@ -192,6 +409,8 @@ class TestLoopSessionOpen:
             fsdb="test.fsdb",
             daidir=None,
             launcher=MissingLauncher(),
+            runtime=TEST_RUNTIME,
+            logger=TEST_LOGGER,
             xdebug_bin="/missing/xdebug",
         )
 
@@ -199,12 +418,38 @@ class TestLoopSessionOpen:
 
         assert result["ok"] is False
         assert result["error"]["code"] == "SESSION_OPEN_FAILED"
-        assert "launcher executable" in result["error"]["message"]
+        assert result["error"]["message"] == (
+            "session.open failed before native dispatch"
+        )
+        assert result["error"]["error_type"] == "FileNotFoundError"
+        assert "launcher executable" not in json.dumps(
+            result,
+            sort_keys=True,
+        )
         assert result["error"]["cleanup"]["subprocess"] == "not_started"
         assert session.state == "dead"
 
 
 class TestLoopSessionQuery:
+    def test_empty_args_object_is_preserved(self, session):
+        assert session.open()["ok"] is True
+        requests = []
+        call_raw = session._call_raw
+
+        def capture(request, timeout=None):
+            requests.append(request)
+            return call_raw(request, timeout)
+
+        session._call_raw = capture
+        response = session.query(
+            "waveform.cursor.list",
+            {},
+            output_format="json",
+        )
+
+        assert response["ok"] is True
+        assert requests[-1]["args"] == {}
+
     def test_xout_format(self, session):
         session.open()
         r = session.query("value.at", {"signal": "clk"}, output_format="xout")
@@ -217,14 +462,16 @@ class TestLoopSessionQuery:
         assert isinstance(r, dict)
         assert r.get("ok")
 
-    def test_xout_error_uses_mcp_correct_example(self, session):
+    def test_wrapper_error_stays_structured_instead_of_inventing_xout(self, session):
         session.open()
         r = session.query("bad.args", {"bad": True}, output_format="xout")
-        assert isinstance(r, str)
-        assert r.startswith("@xdebug.error.v1")
-        assert "error_layer: schema" in r
-        assert "xverif_debug_query" in r
-        assert '"api_version"' not in r
+        assert isinstance(r, dict)
+        assert r["ok"] is False
+        assert r["error"]["error_layer"] == "schema"
+        example = r["error"]["correct_example"]
+        assert example["tool"] == "xverif_debug_query"
+        assert example["args"]["session_id"] == "test"
+        assert "api_version" not in example["args"]
 
     def test_json_error_uses_mcp_correct_example(self, session):
         session.open()
@@ -283,8 +530,168 @@ class TestLoopSessionQuery:
         assert len(results) == 2, f"expected 2 results, got {len(results)}; errors={errors}"
         assert all(r.get("ok") for r in results)
 
+    def test_kill_preempts_blocked_query_without_state_resurrection(
+        self,
+        session,
+        monkeypatch,
+    ):
+        """kill 不应排在阻塞 query 后面，旧 query 也不能复活状态。"""
+        assert session.open()["ok"] is True
+        request_started = threading.Event()
+        original_request = session.handle.request
+
+        def observed_request(request, timeout_sec):
+            if request.get("action") == "value.at":
+                request_started.set()
+            return original_request(request, timeout_sec)
+
+        monkeypatch.setattr(session.handle, "request", observed_request)
+        query_results = []
+        query_thread = threading.Thread(
+            target=lambda: query_results.append(
+                session.query(
+                    "value.at",
+                    {"signal": "clk", "sleep": 30},
+                    output_format="json",
+                )
+            )
+        )
+        query_thread.start()
+        assert request_started.wait(timeout=2)
+
+        started = time.monotonic()
+        killed = session.kill()
+        elapsed = time.monotonic() - started
+        query_thread.join(timeout=2)
+
+        assert elapsed < 2
+        assert killed["ok"] is True
+        assert session.handle is None
+        assert session.state == "closed"
+        assert not query_thread.is_alive()
+        assert query_results[0]["error"]["code"] == "SESSION_LOST"
+        assert (
+            query_results[0]["error"]["cleanup"]["subprocess"]
+            == "already_detached"
+        )
+
+    def test_doctor_does_not_wait_for_blocked_request_lane(
+        self,
+        session,
+        monkeypatch,
+    ):
+        assert session.open()["ok"] is True
+        request_started = threading.Event()
+        original_request = session.handle.request
+
+        def observed_request(request, timeout_sec):
+            if request.get("action") == "value.at":
+                request_started.set()
+            return original_request(request, timeout_sec)
+
+        monkeypatch.setattr(session.handle, "request", observed_request)
+        query_thread = threading.Thread(
+            target=lambda: session.query(
+                "value.at",
+                {"signal": "clk", "sleep": 0.5},
+                output_format="json",
+            )
+        )
+        query_thread.start()
+        assert request_started.wait(timeout=2)
+
+        started = time.monotonic()
+        result = session.doctor(verbose=True)
+        elapsed = time.monotonic() - started
+        query_thread.join(timeout=2)
+
+        assert elapsed < 0.5
+        assert result["summary"]["source"] == "fixed_native_admin"
+        assert result["summary"]["backend_healthy"] is True
+        assert not query_thread.is_alive()
+
 
 class TestLoopSessionClose:
+    def test_close_returns_busy_without_waiting_for_blocked_query(
+        self,
+        session,
+        monkeypatch,
+    ):
+        assert session.open()["ok"] is True
+        request_started = threading.Event()
+        original_request = session.handle.request
+
+        def observed_request(request, timeout_sec):
+            if request.get("action") == "value.at":
+                request_started.set()
+            return original_request(request, timeout_sec)
+
+        monkeypatch.setattr(session.handle, "request", observed_request)
+        query_thread = threading.Thread(
+            target=lambda: session.query(
+                "value.at",
+                {"signal": "clk", "sleep": 0.5},
+                output_format="json",
+            )
+        )
+        query_thread.start()
+        assert request_started.wait(timeout=2)
+
+        started = time.monotonic()
+        result = session.close()
+        elapsed = time.monotonic() - started
+        query_thread.join(timeout=2)
+
+        assert elapsed < 0.5
+        assert result["ok"] is False
+        assert result["error"]["code"] == "SESSION_BUSY"
+        assert result["session_preserved"] is True
+        assert session.state == "alive"
+        assert not query_thread.is_alive()
+
+    def test_manager_preserves_busy_session(
+        self,
+        session,
+        monkeypatch,
+    ):
+        manager = McpSessionManager(
+            runtime=TEST_RUNTIME,
+            xdebug_bin=session.xdebug_bin,
+            logger=TEST_LOGGER,
+        )
+        assert manager.open_session("busy", fsdb="test.fsdb")["ok"] is True
+        managed = manager.sessions["busy"]
+        request_started = threading.Event()
+        original_request = managed.handle.request
+
+        def observed_request(request, timeout_sec):
+            if request.get("action") == "value.at":
+                request_started.set()
+            return original_request(request, timeout_sec)
+
+        monkeypatch.setattr(managed.handle, "request", observed_request)
+        query_thread = threading.Thread(
+            target=lambda: manager.query(
+                "busy",
+                "value.at",
+                {"signal": "clk", "sleep": 0.5},
+                output_format="json",
+            )
+        )
+        query_thread.start()
+        assert request_started.wait(timeout=2)
+
+        result = manager.close_session("busy")
+        query_thread.join(timeout=2)
+
+        assert result["error"]["code"] == "SESSION_BUSY"
+        assert result["session_preserved"] is True
+        assert manager.sessions["busy"] is managed
+        assert "busy" not in manager.tombstones
+        assert managed.state == "alive"
+        assert not query_thread.is_alive()
+        manager.kill_session("busy")
+
     def test_close_changes_state(self, session):
         session.open()
         r = session.close()
@@ -331,9 +738,9 @@ class TestLoopSessionClose:
             fsdb="test.fsdb",
             daidir=None,
             launcher=FailingTerminateLauncher(),
+            runtime=TEST_RUNTIME,
+            logger=TEST_LOGGER,
             xdebug_bin=fake_xdebug_bin,
-            startup_timeout_sec=5.0,
-            request_timeout_sec=5.0,
         )
         try:
             assert s.open()["ok"] is True
@@ -351,12 +758,12 @@ class TestLoopSessionClose:
 
     def test_manager_tombstones_session_after_close_partial_failure(self, fake_xdebug_bin, monkeypatch):
         manager = McpSessionManager(
-            mode="direct",
+            runtime=TEST_RUNTIME,
             xdebug_bin=fake_xdebug_bin,
-            startup_timeout_sec=5.0,
-            request_timeout_sec=5.0,
+            logger=TEST_LOGGER,
         )
         assert manager.open_session("keep", fsdb="test.fsdb")["ok"] is True
+        assert list(manager.sessions) == ["keep"]
         s = manager.sessions["keep"]
         original_call_raw = s._call_raw
 

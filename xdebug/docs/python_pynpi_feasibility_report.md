@@ -26,7 +26,7 @@
 
 - xdebug public action 清单：`xdebug/docs/action-inventory.md`。
 - xdebug C++ 实现：`xdebug/src/combined/`、`xdebug/src/engine/`、`xdebug/src/waveform/`。
-- Verdi Python NPI：`$VERDI_HOME/share/NPI/python/pynpi`，本机路径为 `~/Synopsys/verdi/V-2023.12-SP2/share/NPI/python/pynpi`。
+- Verdi Python NPI：`$VERDI_HOME/share/NPI/python/pynpi`，本机路径为 `<verdi-install>/share/NPI/python/pynpi`。
 - Verdi C/C++ NPI headers：`$VERDI_HOME/share/NPI/inc` 和 `$VERDI_HOME/share/NPI/L1/C/inc`。
 - x-npi skill 实施期间补跑的真实 FSDB/daidir 示例验证。
 

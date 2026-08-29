@@ -104,7 +104,7 @@ The runtime validator must prevent malformed AI/tool inputs from reaching action
   - `make -C xdebug unit-test`;
   - `make -C xdebug all`;
   - `make -C xdebug contract-test`;
-  - `~/miniconda3/bin/python xdebug/tests/waveform/run_complex_wave.py --xdebug xdebug/xdebug --mode nonaxi --skip-build`.
+  - `python3 xdebug/tests/waveform/run_complex_wave.py --xdebug xdebug/xdebug --mode nonaxi --skip-build`.
 
 ## Constraints
 

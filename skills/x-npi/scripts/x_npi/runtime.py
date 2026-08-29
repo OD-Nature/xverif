@@ -6,22 +6,47 @@ import contextlib
 import os
 import sys
 from pathlib import Path
-from typing import Iterator, Sequence
+from typing import IO, Iterator, Sequence
 
 
 def verdi_home(explicit: str | None = None) -> str:
-    home = explicit or os.environ.get("VERDI_HOME") or os.environ.get("XVERIF_XCOV_VERDI_HOME")
+    home = explicit or os.environ.get("VERDI_HOME")
     if not home:
         raise RuntimeError("VERDI_HOME is required for pynpi")
-    return home
+    path = Path(home).expanduser().resolve()
+    py_dir = path / "share" / "NPI" / "python"
+    if not path.is_dir():
+        raise RuntimeError(f"VERDI_HOME does not exist or is not a directory: {path}")
+    if not py_dir.is_dir():
+        raise RuntimeError(f"pynpi Python directory does not exist: {py_dir}")
+    return str(path)
 
 
 def configure_pynpi(explicit_verdi_home: str | None = None) -> str:
     home = verdi_home(explicit_verdi_home)
-    py_dir = str(Path(home) / "share" / "NPI" / "python")
+    py_dir = str((Path(home) / "share" / "NPI" / "python").resolve())
     if py_dir not in sys.path:
         sys.path.insert(0, py_dir)
     return home
+
+
+@contextlib.contextmanager
+def json_stdout_quarantine() -> Iterator[IO[str]]:
+    """Keep native FD1 output away from a single machine-readable JSON stream.
+
+    FD1 deliberately remains redirected to stderr after this context exits.  JSON
+    is written through a duplicate of the original FD1, so delayed native-library
+    flushes cannot append text to the JSON document.
+    """
+
+    saved_fd = os.dup(1)
+    os.dup2(2, 1)
+    stream = os.fdopen(saved_fd, "w", encoding="utf-8", closefd=True)
+    try:
+        yield stream
+        stream.flush()
+    finally:
+        stream.close()
 
 
 @contextlib.contextmanager

@@ -1,0 +1,13 @@
+simv
+simv.daidir/
+csrc/
+ucli.key
+novas*
+verdiLog
+.vcs_lib_lock
+tr_db.log
+vc_hdrs.h
+verdi_config_file
+logs/
+waves/
+*.fsdb

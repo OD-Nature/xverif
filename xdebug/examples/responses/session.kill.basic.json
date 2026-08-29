@@ -1,7 +1,0 @@
-{
-  "api_version": "xdebug.v1",
-  "ok": true,
-  "action": "session.kill",
-  "summary": {"session_id": "case_a", "mode": "combined", "removed": true},
-  "data": {"session": {"id": "case_a", "mode": "combined", "transport": "uds"}, "backends": {"ok": true, "action": "session.kill"}}
-}

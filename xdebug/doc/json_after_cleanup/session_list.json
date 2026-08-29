@@ -2,9 +2,7 @@
   "request": {
     "api_version": "xdebug.v1",
     "action": "session.list",
-    "output": {
-      "verbosity": "compact"
-    }
+    "args": {}
   },
   "response": {
     "api_version": "xdebug.v1",
@@ -16,10 +14,22 @@
     },
     "session": null,
     "summary": {
-      "session_count": 0
+      "session_count": 1,
+      "expired_count": 0,
+      "verbose": false
     },
     "data": {
-      "sessions": []
+      "sessions": [
+        {
+          "session_id": "case_a",
+          "mode": "combined",
+          "transport": "uds",
+          "lifecycle_state": "active",
+          "expired": false,
+          "recommended_action": "session.doctor",
+          "last_active": 1700000000
+        }
+      ]
     },
     "error": null
   },

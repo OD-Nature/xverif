@@ -6,6 +6,7 @@
 
 namespace xdebug_core {
 
+std::string temporary_dir();
 std::string home_dir();
 std::string tool_home_dir(const ToolConfig& config);
 std::string tool_sessions_dir(const ToolConfig& config);

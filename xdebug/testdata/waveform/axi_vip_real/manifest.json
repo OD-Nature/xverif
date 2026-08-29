@@ -1,16 +1,74 @@
 {
   "name": "axi_vip_real",
   "kind": "synthetic-vip",
-  "reference_environment": "<axi-test-root>/test",
-  "compile_reference": "<xring-root>/dv/cfg/Makefile",
+  "reference_environment": "repository-local SVT master/slave bridge",
+  "compile_reference": "<xuvm-gen-root>/output_multi/cfg/Makefile",
   "top": "axi_vip_fixture_top",
   "interface": "axi_vip_fixture_top.axi_vip_if.master_if[0]",
   "testcase": "axi_multi_id_test",
   "seed": 7,
+  "runs": [
+    {
+      "name": "stress",
+      "seed": 7,
+      "num_ids": 16,
+      "transactions_per_id": 200,
+      "min_random_delay": 50,
+      "max_random_delay": 100,
+      "fsdb": "out/regression/test/axi_multi_id_test/waves.fsdb",
+      "simulation_log": "out/regression/test/axi_multi_id_test/sim.log",
+      "handshake_oracle": "out/regression/test/axi_multi_id_test/axi_handshake.jsonl"
+    },
+    {
+      "name": "fixed_delay",
+      "seed": 7,
+      "num_ids": 4,
+      "transactions_per_id": 8,
+      "min_random_delay": 0,
+      "max_random_delay": 32,
+      "fsdb": "out/regression/test/axi_fixed_delay/waves.fsdb",
+      "simulation_log": "out/regression/test/axi_fixed_delay/sim.log",
+      "handshake_oracle": "out/regression/test/axi_fixed_delay/axi_handshake.jsonl"
+    },
+    {
+      "name": "random_seed_7",
+      "seed": 7,
+      "num_ids": 8,
+      "transactions_per_id": 32,
+      "min_random_delay": 0,
+      "max_random_delay": 32,
+      "fsdb": "out/regression/test/axi_random_seed_7/waves.fsdb",
+      "simulation_log": "out/regression/test/axi_random_seed_7/sim.log",
+      "handshake_oracle": "out/regression/test/axi_random_seed_7/axi_handshake.jsonl"
+    },
+    {
+      "name": "random_seed_19",
+      "seed": 19,
+      "num_ids": 8,
+      "transactions_per_id": 32,
+      "min_random_delay": 0,
+      "max_random_delay": 32,
+      "fsdb": "out/regression/test/axi_random_seed_19/waves.fsdb",
+      "simulation_log": "out/regression/test/axi_random_seed_19/sim.log",
+      "handshake_oracle": "out/regression/test/axi_random_seed_19/axi_handshake.jsonl"
+    },
+    {
+      "name": "random_seed_73",
+      "seed": 73,
+      "num_ids": 8,
+      "transactions_per_id": 32,
+      "min_random_delay": 0,
+      "max_random_delay": 32,
+      "fsdb": "out/regression/test/axi_random_seed_73/waves.fsdb",
+      "simulation_log": "out/regression/test/axi_random_seed_73/sim.log",
+      "handshake_oracle": "out/regression/test/axi_random_seed_73/axi_handshake.jsonl"
+    }
+  ],
   "resources": {
     "fsdb": "out/regression/test/axi_multi_id_test/waves.fsdb",
     "daidir": "out/regression/build/simv.daidir",
-    "simulation_log": "out/regression/test/axi_multi_id_test/sim.log"
+    "simulation_log": "out/regression/test/axi_multi_id_test/sim.log",
+    "handshake_oracle": "out/regression/test/axi_multi_id_test/axi_handshake.jsonl"
   },
   "parameters": {
     "num_ids": 16,
@@ -20,8 +78,8 @@
     "max_delay_cycles": 100
   },
   "required_env": [
-    "AXI_REFERENCE_ROOT",
-    "SVT_VIP_INCDIR",
-    "SVT_VIP_SRCDIR"
+    "DESIGNWARE_HOME",
+    "SVT_AMBA_VIP_HOME",
+    "SVT_COMMON_HOME"
   ]
 }

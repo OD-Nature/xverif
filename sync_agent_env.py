@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Sync current environment variables into agent project settings."""
 
-from __future__ import annotations
-
 import argparse
 import json
 import os

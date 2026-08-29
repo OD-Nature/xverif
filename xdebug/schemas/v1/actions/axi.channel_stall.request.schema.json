@@ -6,7 +6,8 @@
   "required": [
     "api_version",
     "action",
-    "args"
+    "args",
+    "target"
   ],
   "properties": {
     "api_version": {
@@ -16,7 +17,8 @@
       ]
     },
     "request_id": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "action": {
       "type": "string",
@@ -25,10 +27,50 @@
       ]
     },
     "target": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fsdb": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "session_id"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "fsdb"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "session_id"
+            ]
+          },
+          "required": [
+            "fsdb"
+          ]
+        }
+      ],
+      "additionalProperties": false
     },
     "args": {
       "type": "object",
+      "required": [
+        "name"
+      ],
       "properties": {
         "channel": {
           "type": "string",
@@ -44,76 +86,95 @@
         "line_limit": {
           "type": "integer",
           "minimum": 1,
-          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
+          "description": "Limits returned evidence rows only, not scanning, aggregation, or the verdict; read completeness fields as well."
         },
         "name": {
           "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。"
+          "description": "Saved-object name in this action namespace; do not assume names are shared by cursors, lists, and protocol configs."
         },
-        "rules": {
-          "oneOf": [
-            {
-              "type": "array"
-            },
-            {
-              "type": "object"
-            }
-          ]
-        },
-        "time_range": {
-          "type": "object",
-          "properties": {
-            "begin": {
-              "type": "string"
-            },
-            "end": {
-              "type": "string"
-            }
-          },
-          "additionalProperties": false,
-          "description": "查询或分析的时间窗口。"
-        },
-        "time_unit": {
+        "render_time_unit": {
           "type": "string",
           "enum": [
             "auto",
-            "fs",
             "ps",
             "ns",
-            "us",
-            "ms",
-            "s"
-          ]
+            "us"
+          ],
+          "description": "Controls only canonical response time rendering: auto, ps, ns, or us. It never changes input parsing, sampling, filtering, or ordering."
+        },
+        "rules": {
+          "description": "AXI channel stall 阈值规则。",
+          "type": "object",
+          "properties": {
+            "max_wait_cycles": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 100,
+              "description": "超过该连续 valid&&!ready sample 数才返回 long_stall finding。"
+            }
+          },
+          "additionalProperties": false
+        },
+        "time_range": {
+          "type": "object",
+          "minProperties": 1,
+          "properties": {
+            "begin": {
+              "type": "string",
+              "minLength": 1,
+              "description": "闭区间起点；省略时使用可用波形窗口起点。"
+            },
+            "end": {
+              "type": "string",
+              "minLength": 1,
+              "description": "闭区间终点；省略时使用可用波形窗口终点。"
+            }
+          },
+          "additionalProperties": false,
+          "description": "Closed analysis interval. begin and end may be omitted independently to use the available waveform bounds."
         }
       },
-      "additionalProperties": false,
-      "required": [
-        "name"
-      ]
+      "additionalProperties": false
     },
     "limits": {
-      "type": "object"
-    },
-    "auth_token": {
-      "type": "string"
-    },
-    "id": {
-      "type": "string"
-    },
-    "trace_id": {
-      "type": "string"
-    },
-    "span_id": {
-      "type": "string"
-    },
-    "parent_span_id": {
-      "type": "string"
+      "type": "object",
+      "properties": {
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647,
+          "description": "Positive public frontend-to-engine request timeout in milliseconds. Omit limits.timeout_ms to disable the public watchdog."
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false,
-  "description": "axi.channel_stall: 实验性 AXI stall 分析。",
+  "description": "Inspect AXI channel stall windows.",
   "x-purpose": "实验性 AXI stall 分析。",
   "x-how_it_works": "按 channel 检查 valid 高 ready 低的持续窗口。",
   "x-when_to_use": "定位背压和阻塞。",
-  "x-arg_contract_notes": "required: name"
+  "x-arg_contract_notes": "required: name",
+  "x-description-zh": "实验性 AXI stall 分析。",
+  "x-agent": {
+    "use_when": [
+      "Need intervals and counts where one AXI channel keeps VALID asserted while READY is deasserted."
+    ],
+    "do_not_use_when": [
+      "Do not use it for generic non-AXI valid-ready interfaces or whole-transaction latency analysis."
+    ],
+    "alternatives": [
+      {
+        "action": "protocol.handshake.inspect",
+        "when": "Inspect a generic valid-ready handshake."
+      },
+      {
+        "action": "axi.latency_outlier",
+        "when": "Find end-to-end AXI transaction latency outliers."
+      }
+    ],
+    "constraints": [
+      "required: name"
+    ]
+  }
 }

@@ -1,0 +1,13 @@
+{
+  "clock": "apb_vip_fixture_top.clk",
+  "reset": {"signal": "apb_vip_fixture_top.rst_n", "polarity": "active_low"},
+  "edge": "posedge",
+  "paddr": "apb_vip_fixture_top.apb_if.paddr",
+  "psel": "apb_vip_fixture_top.apb_if.psel[0]",
+  "penable": "apb_vip_fixture_top.apb_if.penable",
+  "pready": "apb_vip_fixture_top.apb_if.pready[0]",
+  "pslverr": "apb_vip_fixture_top.apb_if.pslverr[0]",
+  "pwrite": "apb_vip_fixture_top.apb_if.pwrite",
+  "pwdata": "apb_vip_fixture_top.apb_if.pwdata",
+  "prdata": "apb_vip_fixture_top.apb_if.prdata[0]"
+}

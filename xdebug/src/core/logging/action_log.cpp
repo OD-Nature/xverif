@@ -2,8 +2,12 @@
 
 #include "common/env_config.h"
 #include "common/path_utils.h"
+#include "common/sha256.h"
+#include "core/diagnostic_error.h"
 
 #include <chrono>
+#include <atomic>
+#include <algorithm>
 #include <cstdlib>
 #include <cerrno>
 #include <cstdio>
@@ -12,8 +16,9 @@
 #include <fstream>
 #include <iomanip>
 #include <sstream>
-#include <sys/file.h>
+#include <stdexcept>
 #include <sys/stat.h>
+#include <mutex>
 #include <unistd.h>
 
 namespace xdebug_core {
@@ -25,6 +30,87 @@ const size_t kMaxArray = 64;
 const size_t kMaxObject = 128;
 const int kMaxDepth = 8;
 const size_t kMaxLine = 256 * 1024;
+
+enum class LogDegradedCode {
+    None = 0,
+    DirectoryCreateFailed,
+    SidecarWriteFailed,
+    EventWriteFailed,
+    HealthWriteFailed,
+    LogException,
+    RotationFailed,
+    ManifestParseFailed,
+    ManifestWriteFailed,
+};
+
+enum class LogDegradedOperation {
+    None = 0,
+    AppendEvent,
+    AppendHealthEvent,
+    WriteSidecar,
+    UpdateManifest,
+};
+
+std::atomic<unsigned long long> g_log_failure_count(0);
+std::atomic<bool> g_log_first_claimed(false);
+std::atomic<bool> g_log_degraded(false);
+std::atomic<int> g_log_first_code(static_cast<int>(LogDegradedCode::None));
+std::atomic<int> g_log_first_operation(
+    static_cast<int>(LogDegradedOperation::None));
+std::mutex g_log_append_mutex;
+std::atomic<unsigned long> g_event_counter(0);
+
+const char* log_degraded_code_name(LogDegradedCode code) {
+    switch (code) {
+    case LogDegradedCode::DirectoryCreateFailed: return "LOG_DIRECTORY_CREATE_FAILED";
+    case LogDegradedCode::SidecarWriteFailed: return "LOG_SIDECAR_WRITE_FAILED";
+    case LogDegradedCode::EventWriteFailed: return "LOG_EVENT_WRITE_FAILED";
+    case LogDegradedCode::HealthWriteFailed: return "LOG_HEALTH_WRITE_FAILED";
+    case LogDegradedCode::LogException: return "LOG_EXCEPTION";
+    case LogDegradedCode::RotationFailed: return "LOG_ROTATION_FAILED";
+    case LogDegradedCode::ManifestParseFailed: return "LOG_MANIFEST_PARSE_FAILED";
+    case LogDegradedCode::ManifestWriteFailed: return "LOG_MANIFEST_WRITE_FAILED";
+    case LogDegradedCode::None: return "NONE";
+    }
+    return "UNKNOWN";
+}
+
+const char* log_degraded_operation_name(LogDegradedOperation operation) {
+    switch (operation) {
+    case LogDegradedOperation::AppendEvent: return "append_event";
+    case LogDegradedOperation::AppendHealthEvent: return "append_health_event";
+    case LogDegradedOperation::WriteSidecar: return "write_sidecar";
+    case LogDegradedOperation::UpdateManifest: return "update_manifest";
+    case LogDegradedOperation::None: return "none";
+    }
+    return "unknown";
+}
+
+void mark_logging_degraded(LogDegradedCode code,
+                           LogDegradedOperation operation) noexcept {
+    g_log_failure_count.fetch_add(1, std::memory_order_relaxed);
+    bool expected = false;
+    if (!g_log_first_claimed.compare_exchange_strong(
+            expected, true, std::memory_order_acq_rel)) {
+        return;
+    }
+    g_log_first_code.store(static_cast<int>(code), std::memory_order_relaxed);
+    g_log_first_operation.store(
+        static_cast<int>(operation), std::memory_order_relaxed);
+    g_log_degraded.store(true, std::memory_order_release);
+    char line[384];
+    const int length = snprintf(
+        line, sizeof(line),
+        "xdebug: structured logging degraded code=%s operation=%s; "
+        "later log events may be incomplete\n",
+        log_degraded_code_name(code),
+        log_degraded_operation_name(operation));
+    if (length > 0) {
+        const size_t bytes = std::min(
+            static_cast<size_t>(length), sizeof(line) - 1);
+        (void)write(STDERR_FILENO, line, bytes);
+    }
+}
 
 bool ensure_dir(const std::string& path) {
     if (path.empty()) return false;
@@ -74,15 +160,15 @@ std::string now_iso8601() {
 std::string event_id() {
     using namespace std::chrono;
     long long us = duration_cast<microseconds>(system_clock::now().time_since_epoch()).count();
-    static unsigned long counter = 0;
     std::ostringstream oss;
-    oss << std::hex << us << "-" << getpid() << "-" << counter++;
+    oss << std::hex << us << "-" << getpid() << "-"
+        << g_event_counter.fetch_add(1, std::memory_order_relaxed);
     return oss.str();
 }
 
 std::string xdebug_home() {
     std::string home = env_raw_string("HOME");
-    return (home.empty() ? std::string("/tmp") : home) + "/.xdebug";
+    return (home.empty() ? temporary_dir() : home) + "/.xdebug";
 }
 
 std::string dirname_of(const std::string& path) {
@@ -106,21 +192,10 @@ std::string strip_ndjson_suffix(const std::string& name) {
     return name;
 }
 
-std::string fnv1a_hex(const std::string& s) {
-    unsigned long long hash = 1469598103934665603ULL;
-    for (unsigned char c : s) {
-        hash ^= c;
-        hash *= 1099511628211ULL;
-    }
-    std::ostringstream oss;
-    oss << std::hex << hash;
-    return oss.str();
-}
-
 bool write_file_atomic_append(const std::string& path, const std::string& payload, int mode = 0600) {
+    std::lock_guard<std::mutex> guard(g_log_append_mutex);
     int fd = open(path.c_str(), O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, mode);
     if (fd < 0) return false;
-    flock(fd, LOCK_EX);
     const char* data = payload.data();
     size_t left = payload.size();
     bool ok = true;
@@ -133,9 +208,24 @@ bool write_file_atomic_append(const std::string& path, const std::string& payloa
         data += n;
         left -= static_cast<size_t>(n);
     }
-    flock(fd, LOCK_UN);
-    close(fd);
+    if (close(fd) != 0) ok = false;
     return ok;
+}
+
+std::string owner_instance_id() {
+    static std::mutex mutex;
+    static pid_t owner_pid = -1;
+    static std::string owner;
+    std::lock_guard<std::mutex> guard(mutex);
+    const pid_t current = getpid();
+    if (owner_pid != current) {
+        owner_pid = current;
+        using namespace std::chrono;
+        const long long nonce = duration_cast<nanoseconds>(
+            steady_clock::now().time_since_epoch()).count();
+        owner = std::to_string(current) + "-" + std::to_string(nonce);
+    }
+    return owner;
 }
 
 void append_health_event(const std::string& log_path,
@@ -145,7 +235,11 @@ void append_health_event(const std::string& log_path,
     try {
         std::string dir = dirname_of(log_path);
         if (!ensure_dir_recursive(dir)) dir = xdebug_home() + "/logs";
-        if (!ensure_dir_recursive(dir)) return;
+        if (!ensure_dir_recursive(dir)) {
+            mark_logging_degraded(LogDegradedCode::DirectoryCreateFailed,
+                                  LogDegradedOperation::AppendHealthEvent);
+            return;
+        }
         Json event;
         event["ts"] = now_iso8601();
         event["event_id"] = event_id();
@@ -158,24 +252,57 @@ void append_health_event(const std::string& log_path,
         event["message"] = message;
         event["log_path"] = log_path;
         if (!detail.is_null() && !(detail.is_object() && detail.empty())) event["detail"] = detail;
+        event = sanitize_for_log(event);
         std::string line = event.dump();
         line.push_back('\n');
-        write_file_atomic_append(dir + "/log_health.ndjson", line);
+        if (!write_file_atomic_append(dir + "/log_health.ndjson", line)) {
+            mark_logging_degraded(LogDegradedCode::HealthWriteFailed,
+                                  LogDegradedOperation::AppendHealthEvent);
+        }
     } catch (...) {
+        mark_logging_degraded(LogDegradedCode::LogException,
+                              LogDegradedOperation::AppendHealthEvent);
     }
 }
 
 bool write_sidecar(const std::string& path, const Json& payload, Json& sidecars, const std::string& key) {
     try {
         std::string dir = dirname_of(path);
-        if (!ensure_dir_recursive(dir)) return false;
-        std::string text = payload.dump(2);
+        if (!ensure_dir_recursive(dir)) {
+            mark_logging_degraded(LogDegradedCode::DirectoryCreateFailed,
+                                  LogDegradedOperation::WriteSidecar);
+            return false;
+        }
+        const Json sanitized_payload = sanitize_for_log(payload);
+        std::string text = sanitized_payload.dump(2);
         std::ofstream out(path.c_str(), std::ios::trunc);
-        if (!out) return false;
+        if (!out) {
+            mark_logging_degraded(LogDegradedCode::SidecarWriteFailed,
+                                  LogDegradedOperation::WriteSidecar);
+            return false;
+        }
         out << text << "\n";
-        sidecars[key] = {{"path", path}, {"bytes", text.size()}, {"hash", fnv1a_hex(text)}};
+        out.flush();
+        if (!out.good()) {
+            mark_logging_degraded(LogDegradedCode::SidecarWriteFailed,
+                                  LogDegradedOperation::WriteSidecar);
+            return false;
+        }
+        out.close();
+        if (!out.good()) {
+            mark_logging_degraded(LogDegradedCode::SidecarWriteFailed,
+                                  LogDegradedOperation::WriteSidecar);
+            return false;
+        }
+        sidecars[key] = {
+            {"path", path},
+            {"bytes", text.size()},
+            {"sha256", sha256_text(text)}
+        };
         return true;
     } catch (...) {
+        mark_logging_degraded(LogDegradedCode::LogException,
+                              LogDegradedOperation::WriteSidecar);
         return false;
     }
 }
@@ -212,21 +339,38 @@ void spill_large_context_to_sidecars(const std::string& path, Json& event) {
 }
 
 void rotate_if_needed(const std::string& path, size_t incoming_bytes) {
-    long long max_bytes = xdebug_log_max_bytes();
+    LogEnvConfig config;
+    std::string config_error;
+    if (!xdebug_log_env_config(config, config_error))
+        throw std::invalid_argument(config_error);
+    const long long max_bytes = config.max_bytes;
     if (max_bytes <= 0) return;
-    long long max_files = xdebug_log_max_files();
-    if (max_files <= 0) max_files = 1;
+    const long long max_files = config.max_files;
     struct stat st;
     if (stat(path.c_str(), &st) != 0) return;
     if (st.st_size + static_cast<long long>(incoming_bytes) <= max_bytes) return;
     for (long long i = max_files - 1; i >= 1; --i) {
         std::string from = path + "." + std::to_string(i);
         std::string to = path + "." + std::to_string(i + 1);
-        rename(from.c_str(), to.c_str());
+        struct stat rotated;
+        if (stat(from.c_str(), &rotated) == 0 &&
+            rename(from.c_str(), to.c_str()) != 0) {
+            const int rotation_errno = errno;
+            mark_logging_degraded(LogDegradedCode::RotationFailed,
+                                  LogDegradedOperation::AppendEvent);
+            append_health_event(
+                path, "ROTATION_FAILED", "failed to rotate log file",
+                {{"errno", rotation_errno},
+                 {"message", strerror(rotation_errno)}});
+        }
     }
     if (rename(path.c_str(), (path + ".1").c_str()) != 0) {
+        const int rotation_errno = errno;
+        mark_logging_degraded(LogDegradedCode::RotationFailed,
+                              LogDegradedOperation::AppendEvent);
         append_health_event(path, "ROTATION_FAILED", "failed to rotate log file",
-                            {{"errno", errno}, {"message", strerror(errno)}});
+                            {{"errno", rotation_errno},
+                             {"message", strerror(rotation_errno)}});
     }
 }
 
@@ -238,6 +382,27 @@ bool heavy_key(const std::string& key) {
            key == "all_changes" || key == "all_events";
 }
 
+bool sensitive_lifecycle_key(const std::string& key) {
+    return key == "ownership_token" ||
+           key == "ownership_token_hash";
+}
+
+bool opaque_raw_text_key(const std::string& key) {
+    return key == "stderr" || key == "stderr_text" ||
+           key == "stdout" || key == "stdout_text" ||
+           key == "output" || key == "exception" ||
+           key == "raw_response" || key == "raw_stderr" ||
+           key == "raw_stdout";
+}
+
+Json opaque_raw_text_evidence(const std::string& value) {
+    return {
+        {"present", !value.empty()},
+        {"bytes", value.size()},
+        {"sha256", sha256_text(value)}
+    };
+}
+
 bool path_key(const std::string& key) {
     return key == "fsdb" || key == "daidir" || key == "dbdir" ||
            key == "file_dir" || key == "socket_path" ||
@@ -247,16 +412,27 @@ bool path_key(const std::string& key) {
 }
 
 std::string path_log_mode() {
-    std::string mode = xdebug_log_path_mode();
-    if (!mode.empty()) return mode;
-    if (xdebug_log_redact_enabled()) return "hash";
-    return "full";
+    LogEnvConfig config;
+    std::string config_error;
+    if (!xdebug_log_env_config(config, config_error))
+        throw std::invalid_argument(config_error);
+    const std::string& mode = config.path_mode;
+    if (config.redact) return "hash";
+    if (mode.empty()) return "hash";
+    if (mode == "full" || mode == "basename" || mode == "hash")
+        return mode;
+    throw std::invalid_argument(
+        "XDEBUG_LOG_PATH_MODE must be full, basename, or hash");
 }
 
 std::string redact_path_for_log(const std::string& value) {
     std::string mode = path_log_mode();
     if (mode == "basename") return basename_of(value);
-    if (mode == "hash") return std::string("<path:") + fnv1a_hex(value) + ">";
+    if (mode == "hash") {
+        if (value.compare(0, 13, "<path:sha256:") == 0)
+            return value;
+        return std::string("<path:sha256:") + sha256_text(value) + ">";
+    }
     return value;
 }
 
@@ -290,12 +466,36 @@ Json sanitize_impl(const Json& value, int depth, bool& truncated) {
     if (value.is_object()) {
         Json out = Json::object();
         size_t count = 0;
+        bool sensitive_redacted = false;
+        const bool sensitive_diagnostic =
+            (value.contains("invalid_arg") &&
+             value["invalid_arg"].is_string() &&
+             sensitive_diagnostic_path(
+                 value["invalid_arg"].get<std::string>())) ||
+            (value.contains("path") &&
+             value["path"].is_string() &&
+             sensitive_diagnostic_path(
+                 value["path"].get<std::string>()));
         for (auto it = value.begin(); it != value.end(); ++it) {
             if (count >= kMaxObject) {
                 truncated = true;
                 break;
             }
-            if (heavy_key(it.key())) {
+            if (sensitive_lifecycle_key(it.key())) {
+                sensitive_redacted = true;
+            } else if (sensitive_diagnostic &&
+                       it.key() == "received") {
+                sensitive_redacted = true;
+            } else if (sensitive_diagnostic &&
+                       it.key() == "message") {
+                sensitive_redacted = true;
+                out[it.key()] =
+                    "sensitive request field failed validation";
+            } else if (opaque_raw_text_key(it.key()) &&
+                       it.value().is_string()) {
+                out[it.key()] = opaque_raw_text_evidence(
+                    it.value().get<std::string>());
+            } else if (heavy_key(it.key())) {
                 truncated = true;
                 out[it.key()] = "<omitted:large-field>";
             } else if (path_key(it.key()) && it.value().is_string()) {
@@ -304,6 +504,9 @@ Json sanitize_impl(const Json& value, int depth, bool& truncated) {
                 out[it.key()] = sanitize_impl(it.value(), depth + 1, truncated);
             }
             count++;
+        }
+        if (sensitive_redacted) {
+            out["sensitive_values_redacted"] = true;
         }
         if (value.size() > kMaxObject) out["<truncated>"] = "object";
         return out;
@@ -315,17 +518,22 @@ void append_event(const std::string& path, Json event) {
     try {
         size_t slash = path.rfind('/');
         if (slash != std::string::npos && !ensure_dir_recursive(path.substr(0, slash))) {
+            mark_logging_degraded(LogDegradedCode::DirectoryCreateFailed,
+                                  LogDegradedOperation::AppendEvent);
             append_health_event(path, "DIR_CREATE_FAILED", "failed to create log directory");
             return;
         }
+        event = sanitize_for_log(event);
         std::string line = event.dump();
         if (line.size() > kMaxLine) {
             spill_large_context_to_sidecars(path, event);
+            event = sanitize_for_log(event);
             line = event.dump();
         }
         if (line.size() > kMaxLine) {
             event["log_truncated"] = true;
             event["context"] = {{"message", "log event exceeded max line size and was truncated"}};
+            event = sanitize_for_log(event);
             line = event.dump();
             append_health_event(path, "EVENT_TRUNCATED", "log event exceeded max line size after sidecar spill",
                                 {{"line_bytes", line.size()}});
@@ -333,10 +541,14 @@ void append_event(const std::string& path, Json event) {
         line.push_back('\n');
         rotate_if_needed(path, line.size());
         if (!write_file_atomic_append(path, line)) {
+            mark_logging_degraded(LogDegradedCode::EventWriteFailed,
+                                  LogDegradedOperation::AppendEvent);
             append_health_event(path, "WRITE_FAILED", "failed to append log event",
                                 {{"errno", errno}, {"message", strerror(errno)}});
         }
     } catch (...) {
+        mark_logging_degraded(LogDegradedCode::LogException,
+                              LogDegradedOperation::AppendEvent);
     }
 }
 
@@ -378,9 +590,7 @@ Json base_event(const std::string& layer,
     copy_correlation_field(event, context, "span_id");
     copy_correlation_field(event, context, "parent_span_id");
     copy_correlation_field(event, context, "alias");
-    bool truncated = false;
-    event["context"] = sanitize_impl(context, 0, truncated);
-    if (truncated) event["log_truncated"] = true;
+    event["context"] = context;
     return event;
 }
 
@@ -396,9 +606,13 @@ Json allowlisted_args_for_log(const std::string& action, const Json& args) {
     Json out = Json::object();
     if (!args.is_object()) return out;
     if (action == "value.at") {
-        for (const char* k : {"signal", "time", "radix", "format"}) copy_arg_if_present(out, args, k);
-    } else if (action == "value.batch_at") {
-        for (const char* k : {"signals", "time", "radix", "format", "limit"}) copy_arg_if_present(out, args, k);
+        for (const char* k : {"signal", "list", "apb", "stream", "axi",
+                              "time", "times", "clock", "edge",
+                              "sample_point", "value_format"})
+            copy_arg_if_present(out, args, k);
+    } else if (action == "list.load") {
+        for (const char* k : {"config_path", "mode"})
+            copy_arg_if_present(out, args, k);
     } else if (action == "event.find") {
         for (const char* k : {"signal", "start", "end", "edge", "limit"}) copy_arg_if_present(out, args, k);
     } else if (action == "trace.active_driver") {
@@ -421,11 +635,13 @@ std::string public_session_dir(const std::string& session_id) {
 }
 
 std::string public_action_log_path(const std::string& session_id) {
-    return public_session_dir(session_id) + "/logs/actions.ndjson";
+    return public_session_dir(session_id) + "/owners/" +
+           owner_instance_id() + "/logs/actions.ndjson";
 }
 
 std::string public_stdio_log_path(const std::string& session_id) {
-    return public_session_dir(session_id) + "/logs/stdio.ndjson";
+    return public_session_dir(session_id) + "/owners/" +
+           owner_instance_id() + "/logs/stdio.ndjson";
 }
 
 std::string component_log_path(const std::string& component,
@@ -433,6 +649,7 @@ std::string component_log_path(const std::string& component,
                                const std::string& log_name) {
     return xdebug_home() + "/" + component + "/sessions/" +
            session_dir_name(session_id.empty() ? "adhoc" : session_id) +
+           "/owners/" + owner_instance_id() +
            "/logs/" + log_name + ".ndjson";
 }
 
@@ -443,35 +660,97 @@ Json sanitize_for_log(const Json& value) {
     return out;
 }
 
+LoggingHealthSnapshot logging_health_snapshot() {
+    LoggingHealthSnapshot snapshot;
+    snapshot.degraded = g_log_degraded.load(std::memory_order_acquire);
+    snapshot.failure_count =
+        g_log_failure_count.load(std::memory_order_relaxed);
+    if (snapshot.degraded) {
+        snapshot.first_code = log_degraded_code_name(
+            static_cast<LogDegradedCode>(
+                g_log_first_code.load(std::memory_order_relaxed)));
+        snapshot.first_operation = log_degraded_operation_name(
+            static_cast<LogDegradedOperation>(
+                g_log_first_operation.load(std::memory_order_relaxed)));
+    }
+    return snapshot;
+}
+
 Json request_summary_for_log(const Json& request) {
-    Json target = request.value("target", Json::object());
-    Json args = request.value("args", Json::object());
+    Json target =
+        request.is_object() && request.contains("target") &&
+                request["target"].is_object()
+            ? request["target"]
+            : Json::object();
+    Json args =
+        request.is_object() && request.contains("args") &&
+                request["args"].is_object()
+            ? request["args"]
+            : Json::object();
     Json out;
-    if (request.contains("trace_id")) out["trace_id"] = request["trace_id"];
     if (request.contains("request_id")) out["request_id"] = request["request_id"];
-    else if (request.contains("id") && request["id"].is_string()) out["request_id"] = request["id"];
-    if (request.contains("span_id")) out["span_id"] = request["span_id"];
-    if (request.contains("parent_span_id")) out["parent_span_id"] = request["parent_span_id"];
-    std::string action = request.value("action", std::string());
+    Json observability =
+        request.is_object()
+            ? request.value("observability", Json::object())
+            : Json::object();
+    if (observability.is_object()) {
+        for (const char* field : {
+                 "request_id",
+                 "trace_id",
+                 "span_id",
+                 "parent_span_id"}) {
+            if (observability.contains(field)) {
+                out[field] = observability[field];
+            }
+        }
+    }
+    std::string action =
+        request.contains("action") &&
+                request["action"].is_string()
+            ? request["action"].get<std::string>()
+            : std::string();
     out["action"] = action;
     if (target.is_object()) {
         Json t;
-        for (const char* k : {"session_id", "name", "mode", "daidir", "dbdir", "fsdb", "transport", "host", "bind_host", "port"}) {
+        for (const char* k : {
+                 "session_id",
+                 "daidir",
+                 "fsdb",
+                 "run_manifest"}) {
             if (target.contains(k)) t[k] = target[k];
         }
         out["target"] = sanitize_for_log(t);
     }
+    Json routing =
+        request.is_object()
+            ? request.value("routing", Json::object())
+            : Json::object();
+    if (routing.is_object()) {
+        Json r;
+        for (const char* field : {
+                 "session_id",
+                 "daidir",
+                 "fsdb",
+                 "mode"}) {
+            if (routing.contains(field)) {
+                r[field] = routing[field];
+            }
+        }
+        if (!r.empty()) out["routing"] = sanitize_for_log(r);
+    }
     if (args.is_object()) {
         Json keys = Json::array();
-        for (auto it = args.begin(); it != args.end(); ++it) keys.push_back(it.key());
+        for (auto it = args.begin(); it != args.end(); ++it) {
+            if (!sensitive_lifecycle_key(it.key())) {
+                keys.push_back(it.key());
+            }
+        }
         out["arg_keys"] = keys;
         if (args.contains("name")) out["name"] = args["name"];
-        if (args.contains("session_id")) out["arg_session_id"] = args["session_id"];
         Json allowlisted = allowlisted_args_for_log(action, args);
         if (!allowlisted.empty()) out["args"] = allowlisted;
     }
     if (request.contains("limits")) out["limits"] = sanitize_for_log(request["limits"]);
-    if (request.contains("output")) out["output"] = sanitize_for_log(request["output"]);
     return out;
 }
 
@@ -485,29 +764,44 @@ Json response_summary_for_log(const Json& response) {
     if (response.contains("parent_span_id")) out["parent_span_id"] = response["parent_span_id"];
     if (response.contains("session")) out["session"] = sanitize_for_log(response["session"]);
     if (response.contains("summary")) out["summary"] = sanitize_for_log(response["summary"]);
-    if (response.contains("meta")) out["meta"] = sanitize_for_log(response["meta"]);
     if (response.contains("error") && !response["error"].is_null()) out["error"] = sanitize_for_log(response["error"]);
     return out;
 }
 
-void update_public_session_manifest(const std::string& session_id,
+bool update_public_session_manifest(const std::string& session_id,
                                     const std::string& mode,
                                     const std::string& daidir,
                                     const std::string& fsdb) {
     try {
         std::string dir = public_session_dir(session_id);
-        if (!ensure_dir_recursive(dir)) return;
+        if (!ensure_dir_recursive(dir)) {
+            mark_logging_degraded(LogDegradedCode::DirectoryCreateFailed,
+                                  LogDegradedOperation::UpdateManifest);
+            return false;
+        }
         Json manifest;
         manifest["session_id"] = session_id.empty() ? "adhoc" : session_id;
         if (!mode.empty()) manifest["mode"] = mode;
         if (!daidir.empty()) manifest["daidir"] = daidir;
         if (!fsdb.empty()) manifest["fsdb"] = fsdb;
         manifest["last_log_at"] = now_iso8601();
-        std::string path = dir + "/session.json";
+        std::string owner_dir = dir + "/owners/" + owner_instance_id();
+        if (!ensure_dir_recursive(owner_dir)) return false;
+        std::string path = owner_dir + "/manifest.json";
         Json old;
         std::ifstream in(path.c_str());
         if (in) {
-            try { in >> old; } catch (...) {}
+            try {
+                in >> old;
+            } catch (...) {
+                mark_logging_degraded(LogDegradedCode::ManifestParseFailed,
+                                      LogDegradedOperation::UpdateManifest);
+                append_health_event(
+                    public_action_log_path(session_id),
+                    "MANIFEST_PARSE_FAILED",
+                    "existing public session manifest is not valid JSON");
+                return false;
+            }
         }
         if (old.is_object() && old.contains("created_at")) manifest["created_at"] = old["created_at"];
         else manifest["created_at"] = manifest["last_log_at"];
@@ -518,8 +812,29 @@ void update_public_session_manifest(const std::string& session_id,
         logs["public_stdio"] = public_stdio_log_path(session_id);
         manifest["logs"] = logs;
         std::ofstream out(path.c_str(), std::ios::trunc);
-        if (out) out << manifest.dump(2) << "\n";
+        if (!out) {
+            mark_logging_degraded(LogDegradedCode::ManifestWriteFailed,
+                                  LogDegradedOperation::UpdateManifest);
+            return false;
+        }
+        out << manifest.dump(2) << "\n";
+        out.flush();
+        if (!out.good()) {
+            mark_logging_degraded(LogDegradedCode::ManifestWriteFailed,
+                                  LogDegradedOperation::UpdateManifest);
+            return false;
+        }
+        out.close();
+        if (!out.good()) {
+            mark_logging_degraded(LogDegradedCode::ManifestWriteFailed,
+                                  LogDegradedOperation::UpdateManifest);
+            return false;
+        }
+        return true;
     } catch (...) {
+        mark_logging_degraded(LogDegradedCode::LogException,
+                              LogDegradedOperation::UpdateManifest);
+        return false;
     }
 }
 

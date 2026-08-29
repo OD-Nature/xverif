@@ -9,19 +9,24 @@
 #include "common/path_utils.h"
 #include "core/session/session_timeout.h"
 #include "core/session/session_types.h"
+#include "core/common/sha256.h"
+#include "core/schema/runtime_schema_validator.h"
+#include "engine/service/contract_bound_request.h"
 #include "logging/action_log.h"
 
-#include <cerrno>
+#include <algorithm>
 #include <chrono>
+#include <cerrno>
 #include <ctime>
+#include <fcntl.h>
+#include <initializer_list>
 #include <limits.h>
+#include <set>
+#include <stdexcept>
 #include <string>
-#include <cstring>
+#include <fstream>
 #include <unistd.h>
-#include <sys/socket.h>
 #include <sys/stat.h>
-#include <sys/time.h>
-#include <sys/un.h>
 
 namespace xdebug {
 
@@ -34,43 +39,753 @@ bool has_string(const Json& object, const char* key) {
            !object[key].get<std::string>().empty();
 }
 
-bool fingerprint_recorded(long mtime, long long size,
-                          unsigned long long dev, unsigned long long inode) {
-    return mtime != 0 || size != 0 || dev != 0 || inode != 0;
+void append_recommended_actions(
+    Json& response,
+    const ActionSpec& spec) {
+    if (!response.value("ok", false) ||
+        spec.recommended_actions.empty()) {
+        return;
+    }
+    if (!response.contains("data") ||
+        !response["data"].is_object()) {
+        throw std::runtime_error(
+            "successful load response requires an object data payload");
+    }
+    Json recommendations = Json::array();
+    for (const ActionRecommendation& recommendation :
+         spec.recommended_actions) {
+        recommendations.push_back({
+            {"action", recommendation.action},
+            {"purpose", recommendation.purpose},
+        });
+    }
+    response["data"]["recommended_actions"] =
+        std::move(recommendations);
 }
 
-bool resource_changed(const std::string& path,
-                      long expected_mtime,
-                      long long expected_size,
-                      unsigned long long expected_dev,
-                      unsigned long long expected_inode,
-                      std::string& message) {
-    if (path.empty() ||
-        !fingerprint_recorded(expected_mtime, expected_size, expected_dev, expected_inode)) {
-        return false;
+std::string request_action(const Json& request) {
+    return has_string(request, "action")
+        ? request["action"].get<std::string>()
+        : std::string();
+}
+
+Json session_lifecycle_request(const Json& parent_request,
+                               const std::string& action,
+                               const std::string& session_id) {
+    Json request = {
+        {"api_version", kApiVersion},
+        {"action", action},
+        {"target", {{"session_id", session_id}}},
+        {"args", Json::object()},
+    };
+    if (has_string(parent_request, "request_id")) {
+        request["request_id"] = parent_request["request_id"];
     }
-    struct stat st;
-    if (stat(path.c_str(), &st) != 0) {
-        message = "resource is missing or cannot be stat'ed: " + path;
-        return true;
+    if (action == "session.close" &&
+        parent_request.value("action", std::string()) ==
+            "session.close" &&
+        parent_request.contains("args") &&
+        parent_request["args"].is_object()) {
+        if (has_string(parent_request["args"], "mode")) {
+            request["args"]["mode"] = parent_request["args"]["mode"];
+        }
+        if (has_string(parent_request["args"], "ownership_token")) {
+            request["args"]["ownership_token"] =
+                parent_request["args"]["ownership_token"];
+        }
     }
-    bool content_changed = !xdebug_core::resource_content_matches(
-        expected_mtime, expected_size,
-        static_cast<long>(st.st_mtime), static_cast<long long>(st.st_size));
-    bool identity_changed = xdebug_core::resource_identity_differs(
-        expected_dev, expected_inode,
-        static_cast<unsigned long long>(st.st_dev),
-        static_cast<unsigned long long>(st.st_ino));
-    if (!content_changed && !identity_changed) return false;
-    message = "resource changed since session was opened: " + path;
+    return request;
+}
+
+Json public_envelope_error(const Json& request) {
+    if (!request.is_object()) {
+        return DiagnosticErrorBuilder::schema(
+                   "INVALID_REQUEST",
+                   "public request must be a JSON object")
+            .expected("object")
+            .received_type(request.type_name())
+            .to_json();
+    }
+    static const std::set<std::string> allowed = {
+        "api_version",
+        "request_id",
+        "action",
+        "target",
+        "args",
+        "limits",
+    };
+    for (auto it = request.begin(); it != request.end(); ++it) {
+        if (allowed.count(it.key()) != 0) continue;
+        return DiagnosticErrorBuilder::schema(
+                   "INVALID_REQUEST",
+                   "public request contains unknown field: " + it.key())
+            .invalid_arg(it.key())
+            .expected(
+                "one of api_version, request_id, action, target, args, limits")
+            .received(it.value())
+            .received_type(it.value().type_name())
+            .to_json();
+    }
+    if (!has_string(request, "api_version") ||
+        request["api_version"].get<std::string>() != kApiVersion) {
+        Json error = DiagnosticErrorBuilder::schema(
+                         "UNSUPPORTED_API_VERSION",
+                         "expected xdebug.v1")
+                         .invalid_arg("api_version")
+                         .expected(kApiVersion)
+                         .to_json();
+        if (request.contains("api_version")) {
+            error["received"] = request["api_version"];
+        }
+        return error;
+    }
+    if (!has_string(request, "action")) {
+        Json error = DiagnosticErrorBuilder::schema(
+                         "INVALID_REQUEST",
+                         "action must be a non-empty string")
+                         .invalid_arg("action")
+                         .expected("non-empty action string")
+                         .to_json();
+        if (request.contains("action")) {
+            error["received"] = request["action"];
+            error["received_type"] =
+                request["action"].type_name();
+        }
+        return error;
+    }
+    if (request.contains("request_id") &&
+        (!request["request_id"].is_string() ||
+         request["request_id"].get<std::string>().empty())) {
+        return DiagnosticErrorBuilder::schema(
+                   "INVALID_REQUEST",
+                   "request_id must be a non-empty string")
+            .invalid_arg("request_id")
+            .expected("non-empty string")
+            .received(request["request_id"])
+            .received_type(request["request_id"].type_name())
+            .to_json();
+    }
+    for (const char* field : {"target", "args", "limits"}) {
+        if (!request.contains(field) ||
+            request[field].is_object()) {
+            continue;
+        }
+        return DiagnosticErrorBuilder::schema(
+                   "INVALID_REQUEST",
+                   std::string(field) + " must be an object")
+            .invalid_arg(field)
+            .expected("object")
+            .received(request[field])
+            .received_type(request[field].type_name())
+            .to_json();
+    }
+    return Json();
+}
+
+bool fingerprint_recorded(long long mtime_ns, long long size,
+                          unsigned long long dev, unsigned long long inode) {
+    return mtime_ns != 0 || size != 0 || dev != 0 || inode != 0;
+}
+
+long long stat_mtime_ns(const struct stat& st) {
+    return static_cast<long long>(st.st_mtim.tv_sec) * 1000000000LL +
+           static_cast<long long>(st.st_mtim.tv_nsec);
+}
+
+std::string dirname_of(const std::string& path) {
+    const size_t slash = path.find_last_of('/');
+    return slash == std::string::npos ? "." : (slash == 0 ? "/" : path.substr(0, slash));
+}
+
+bool canonical_path(const std::string& path, std::string& out) {
+    char resolved[PATH_MAX] = {};
+    if (!realpath(path.c_str(), resolved)) return false;
+    out = resolved;
     return true;
 }
 
-bool session_resource_changed(const SessionRecord& record, std::string& message) {
-    return resource_changed(record.daidir, record.dbdir_mtime, record.dbdir_size,
-                            record.dbdir_dev, record.dbdir_inode, message) ||
-           resource_changed(record.fsdb, record.fsdb_mtime, record.fsdb_size,
-                            record.fsdb_dev, record.fsdb_inode, message);
+Json manifest_mismatch(const Json& request,
+                       const std::string& message,
+                       const Json& evidence) {
+    Json error =
+        DiagnosticErrorBuilder::handler(
+            "RESOURCE_PROVENANCE_MISMATCH",
+            message)
+            .to_json();
+    for (const char* field : {
+             "manifest_path",
+             "resource",
+             "expected_path",
+             "actual_path",
+             "expected_size_bytes",
+             "actual_size_bytes",
+             "expected_sha256",
+             "actual_sha256"}) {
+        if (evidence.contains(field)) {
+            error[field] = evidence[field];
+        }
+    }
+    if (evidence.contains("schema_version")) {
+        error["manifest_schema_version"] = evidence["schema_version"];
+    }
+    if (evidence.contains("state")) {
+        error["manifest_state"] = evidence["state"];
+    }
+    return make_error(request, "session.open", error);
+}
+
+Json manifest_evidence(const Json& manifest) {
+    Json evidence = Json::object();
+    for (const char* field :
+         {"manifest_path", "schema_version", "state"}) {
+        if (manifest.contains(field) &&
+            manifest[field].is_string()) {
+            evidence[field] = manifest[field];
+        }
+    }
+    return evidence;
+}
+
+bool manifest_object_has_only(
+    const Json& value,
+    std::initializer_list<const char*> allowed_fields,
+    std::string& unexpected) {
+    if (!value.is_object()) return false;
+    std::set<std::string> allowed;
+    for (const char* field : allowed_fields) allowed.insert(field);
+    for (auto it = value.begin(); it != value.end(); ++it) {
+        if (allowed.find(it.key()) == allowed.end()) {
+            unexpected = it.key();
+            return false;
+        }
+    }
+    return true;
+}
+
+bool valid_manifest_sha256(const std::string& digest) {
+    if (digest.size() != 64) return false;
+    for (char c : digest) {
+        if (!((c >= '0' && c <= '9') ||
+              (c >= 'a' && c <= 'f'))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool valid_conditional_cleanup_token(const std::string& token) {
+    if (token.size() != 64) return false;
+    for (const char c : token) {
+        if (!((c >= '0' && c <= '9') ||
+              (c >= 'a' && c <= 'f'))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool generate_conditional_cleanup_token(std::string& token) {
+    token.clear();
+    unsigned char bytes[32] = {};
+    int flags = O_RDONLY;
+#ifdef O_CLOEXEC
+    flags |= O_CLOEXEC;
+#endif
+    int fd = -1;
+    do {
+        fd = open("/dev/urandom", flags);
+    } while (fd < 0 && errno == EINTR);
+    if (fd < 0) return false;
+
+    size_t offset = 0;
+    while (offset < sizeof(bytes)) {
+        const ssize_t count =
+            read(fd, bytes + offset, sizeof(bytes) - offset);
+        if (count > 0) {
+            offset += static_cast<size_t>(count);
+            continue;
+        }
+        if (count < 0 && errno == EINTR) continue;
+        close(fd);
+        return false;
+    }
+    close(fd);
+
+    static const char hex[] = "0123456789abcdef";
+    token.reserve(sizeof(bytes) * 2);
+    for (const unsigned char byte : bytes) {
+        token.push_back(hex[byte >> 4]);
+        token.push_back(hex[byte & 0x0f]);
+    }
+    return true;
+}
+
+std::string redact_sensitive_text(
+    std::string text,
+    const std::string& sensitive_value) {
+    if (sensitive_value.empty()) return text;
+    size_t offset = 0;
+    while ((offset = text.find(
+                sensitive_value,
+                offset)) != std::string::npos) {
+        static const std::string replacement =
+            "<redacted:sensitive-value>";
+        text.replace(
+            offset,
+            sensitive_value.size(),
+            replacement);
+        offset += replacement.size();
+    }
+    return text;
+}
+
+void redact_sensitive_plaintext(
+    Json& value,
+    const std::string& sensitive_value) {
+    if (sensitive_value.empty()) return;
+    if (value.is_string()) {
+        value = redact_sensitive_text(
+            value.get<std::string>(),
+            sensitive_value);
+        return;
+    }
+    if (value.is_array()) {
+        for (Json& item : value) {
+            redact_sensitive_plaintext(
+                item,
+                sensitive_value);
+        }
+        return;
+    }
+    if (value.is_object()) {
+        Json redacted = Json::object();
+        for (auto it = value.begin();
+             it != value.end();
+             ++it) {
+            Json child = it.value();
+            redact_sensitive_plaintext(
+                child,
+                sensitive_value);
+            redacted[
+                redact_sensitive_text(
+                    it.key(),
+                    sensitive_value)] =
+                child;
+        }
+        value = redacted;
+    }
+}
+
+Json session_conditional_cleanup_error(
+    const Json& request,
+    const std::string& public_action,
+    const SessionRecord& record) {
+    const Json args =
+        request.value("args", Json::object());
+    const std::string ownership_token =
+        has_string(args, "ownership_token")
+            ? args["ownership_token"].get<std::string>()
+            : std::string();
+
+    // This is a conditional cleanup precondition, not a general lifecycle
+    // authorization model.  Existing admin/GC calls that omit the key retain
+    // their established unconditional semantics.  A supplied key, however,
+    // must prove it refers to the record created by the corresponding open.
+    if (ownership_token.empty()) {
+        return Json();
+    }
+    if (record.ownership_token_hash.empty() ||
+        !valid_conditional_cleanup_token(ownership_token) ||
+        xdebug_core::sha256_text(ownership_token) !=
+            record.ownership_token_hash) {
+        return make_error(
+            request,
+            public_action,
+            "SESSION_OWNERSHIP_TOKEN_MISMATCH",
+            "the supplied ownership token does not match this session.open record",
+            false);
+    }
+    return Json();
+}
+
+bool parse_manifest_size_bytes(
+    const Json& value,
+    unsigned long long& size_bytes) {
+    if (value.is_number_unsigned()) {
+        size_bytes = value.get<unsigned long long>();
+        return true;
+    }
+    if (!value.is_number_integer()) return false;
+    const long long signed_size = value.get<long long>();
+    if (signed_size < 0) return false;
+    size_bytes = static_cast<unsigned long long>(signed_size);
+    return true;
+}
+
+bool validate_manifest_resource_shape(
+    const Json& resource,
+    const std::string& key,
+    std::string& message) {
+    std::string unexpected;
+    if (!manifest_object_has_only(
+            resource,
+            {"path", "size_bytes", "sha256"},
+            unexpected)) {
+        message = resource.is_object()
+            ? "run manifest resource " + key +
+                  " contains unknown field: " + unexpected
+            : "run manifest resource " + key +
+                  " must be a JSON object";
+        return false;
+    }
+    unsigned long long size_bytes = 0;
+    if (resource.size() != 3 ||
+        !has_string(resource, "path") ||
+        resource["path"].get<std::string>()[0] == '/' ||
+        !resource.contains("size_bytes") ||
+        !parse_manifest_size_bytes(
+            resource["size_bytes"], size_bytes) ||
+        !has_string(resource, "sha256") ||
+        !valid_manifest_sha256(
+            resource["sha256"].get<std::string>())) {
+        message =
+            "run manifest resource " + key +
+            " must contain exactly relative path, non-negative "
+            "size_bytes, and lowercase 64-hex sha256";
+        return false;
+    }
+    return true;
+}
+
+bool validate_manifest_resource(const Json& request, const std::string& manifest_path,
+                                const std::string& key, const std::string& target_path,
+                                Json& details, Json& error_response) {
+    Json evidence = manifest_evidence(details);
+    evidence["manifest_path"] = manifest_path;
+    evidence["resource"] = key;
+    if (!details.contains("resources") || !details["resources"].is_object() ||
+        !details["resources"].contains(key) || !details["resources"][key].is_object()) {
+        error_response = manifest_mismatch(
+            request,
+            "run manifest does not declare resource: " + key,
+            evidence);
+        return false;
+    }
+    const Json& declared = details["resources"][key];
+    const std::string relative =
+        has_string(declared, "path")
+            ? declared["path"].get<std::string>()
+            : std::string();
+    unsigned long long size = 0;
+    const bool has_size =
+        declared.contains("size_bytes") &&
+        parse_manifest_size_bytes(declared["size_bytes"], size);
+    const std::string expected_sha =
+        has_string(declared, "sha256")
+            ? declared["sha256"].get<std::string>()
+            : std::string();
+    if (!relative.empty()) evidence["expected_path"] = relative;
+    if (has_size) evidence["expected_size_bytes"] = size;
+    if (!expected_sha.empty()) evidence["expected_sha256"] = expected_sha;
+    if (relative.empty() || !has_size || expected_sha.size() != 64) {
+        error_response = manifest_mismatch(
+            request,
+            "run manifest has incomplete resource declaration: " + key,
+            evidence);
+        return false;
+    }
+    std::string expected_path, actual_path;
+    if (!canonical_path(dirname_of(manifest_path) + "/" + relative, expected_path) ||
+        !canonical_path(target_path, actual_path) || expected_path != actual_path) {
+        if (!actual_path.empty()) evidence["actual_path"] = actual_path;
+        error_response = manifest_mismatch(
+            request,
+            "run manifest resource path does not match target: " + key,
+            evidence);
+        return false;
+    }
+    evidence["actual_path"] = actual_path;
+    struct stat st;
+    const int stat_result = stat(actual_path.c_str(), &st);
+    if (stat_result != 0 || st.st_size < 0 ||
+        static_cast<unsigned long long>(st.st_size) != size) {
+        evidence["expected_size_bytes"] = size;
+        evidence["actual_size_bytes"] =
+            stat_result == 0
+                ? Json(static_cast<unsigned long long>(st.st_size))
+                : Json(nullptr);
+        error_response = manifest_mismatch(
+            request,
+            "run manifest resource size does not match target: " + key,
+            evidence);
+        return false;
+    }
+    std::string actual_sha, sha_error;
+    const bool is_directory = S_ISDIR(st.st_mode);
+    const bool digest_ok = is_directory
+        ? xdebug_core::sha256_directory_tree(actual_path, actual_sha, sha_error)
+        : xdebug_core::sha256_file(actual_path, actual_sha, sha_error);
+    if (!digest_ok || actual_sha != expected_sha) {
+        evidence["expected_sha256"] = expected_sha;
+        evidence["actual_sha256"] =
+            actual_sha.empty() ? Json(nullptr) : Json(actual_sha);
+        error_response = manifest_mismatch(
+            request,
+            "run manifest resource SHA-256 does not match target: " + key,
+            evidence);
+        return false;
+    }
+    return true;
+}
+
+bool validate_run_manifest(const Json& request, const Json& target, Json& details, Json& error_response) {
+    if (!has_string(target, "run_manifest")) return true;
+    const std::string requested_manifest =
+        target["run_manifest"].get<std::string>();
+    std::string manifest_path;
+    if (!canonical_path(requested_manifest, manifest_path)) {
+        error_response = manifest_mismatch(
+            request,
+            "run manifest is missing or cannot be resolved",
+            {{"manifest_path", requested_manifest}});
+        return false;
+    }
+    std::ifstream input(manifest_path.c_str());
+    if (!input.good()) {
+        error_response = manifest_mismatch(
+            request,
+            "run manifest cannot be opened",
+            {{"manifest_path", manifest_path}});
+        return false;
+    }
+    Json parsed;
+    try {
+        input >> parsed;
+    } catch (...) {
+        error_response = manifest_mismatch(
+            request,
+            "run manifest is not valid JSON",
+            {{"manifest_path", manifest_path}});
+        return false;
+    }
+    if (!parsed.is_object()) {
+        error_response = manifest_mismatch(
+            request,
+            "run manifest root must be a JSON object",
+            {{"manifest_path", manifest_path}});
+        return false;
+    }
+    std::string unexpected;
+    if (!manifest_object_has_only(
+            parsed,
+            {"schema_version", "state", "resources"},
+            unexpected)) {
+        error_response = manifest_mismatch(
+            request,
+            "run manifest contains unknown root field: " + unexpected,
+            {{"manifest_path", manifest_path}});
+        return false;
+    }
+    const std::string manifest_schema_version =
+        has_string(parsed, "schema_version")
+            ? parsed["schema_version"].get<std::string>()
+            : std::string();
+    const std::string manifest_state =
+        has_string(parsed, "state")
+            ? parsed["state"].get<std::string>()
+            : std::string();
+    if (manifest_schema_version != "xdebug.run-manifest.v1" ||
+        manifest_state != "published") {
+        error_response = manifest_mismatch(
+            request,
+            "run manifest must be xdebug.run-manifest.v1 in published state",
+            {{"manifest_path", manifest_path},
+             {"schema_version", manifest_schema_version},
+             {"state", manifest_state}});
+        return false;
+    }
+    if (!parsed.contains("resources") ||
+        !parsed["resources"].is_object()) {
+        error_response = manifest_mismatch(
+            request,
+            "run manifest resources must be a JSON object",
+            {{"manifest_path", manifest_path},
+             {"schema_version", manifest_schema_version},
+             {"state", manifest_state}});
+        return false;
+    }
+    Json& resources = parsed["resources"];
+    if (!manifest_object_has_only(
+            resources, {"fsdb", "daidir"}, unexpected) ||
+        !resources.contains("fsdb")) {
+        error_response = manifest_mismatch(
+            request,
+            resources.contains("fsdb")
+                ? "run manifest resources contains unknown field: " +
+                      unexpected
+                : "run manifest resources must declare fsdb",
+            {{"manifest_path", manifest_path},
+             {"schema_version", manifest_schema_version},
+             {"state", manifest_state}});
+        return false;
+    }
+    for (const char* key : {"fsdb", "daidir"}) {
+        if (!resources.contains(key)) continue;
+        std::string shape_error;
+        if (!validate_manifest_resource_shape(
+                resources[key], key, shape_error)) {
+            error_response = manifest_mismatch(
+                request,
+                shape_error,
+                {{"manifest_path", manifest_path},
+                 {"schema_version", manifest_schema_version},
+                 {"state", manifest_state},
+                 {"resource", key}});
+            return false;
+        }
+    }
+    const bool target_has_fsdb = has_string(target, "fsdb");
+    const bool target_has_daidir = has_string(target, "daidir");
+    const bool manifest_has_daidir = resources.contains("daidir");
+    if (!target_has_fsdb ||
+        target_has_daidir != manifest_has_daidir) {
+        error_response = manifest_mismatch(
+            request,
+            "run manifest resources must exactly match target.fsdb and "
+            "optional target.daidir",
+            {{"manifest_path", manifest_path},
+             {"schema_version", manifest_schema_version},
+             {"state", manifest_state}});
+        return false;
+    }
+    if (!validate_manifest_resource(
+            request,
+            manifest_path,
+            "fsdb",
+            target["fsdb"].get<std::string>(),
+            parsed,
+            error_response)) {
+        return false;
+    }
+    if (target_has_daidir &&
+        !validate_manifest_resource(
+            request,
+            manifest_path,
+            "daidir",
+            target["daidir"].get<std::string>(),
+            parsed,
+            error_response)) {
+        return false;
+    }
+    details = {
+        {"schema_version", manifest_schema_version},
+        {"state", manifest_state},
+        {"resources", resources},
+        {"manifest_path", manifest_path},
+    };
+    return true;
+}
+
+bool resource_changed(const std::string& path,
+                      const std::string& resource_kind,
+                      long long expected_mtime_ns,
+                      long long expected_size,
+                      unsigned long long expected_dev,
+                      unsigned long long expected_inode,
+                      std::string& message,
+                      Json& evidence) {
+    if (path.empty()) {
+        return false;
+    }
+    struct stat st;
+    evidence = {
+        {"resource", resource_kind},
+        {"resource_path", path},
+        {"expected_resource_identity", {
+            {"canonical_path", path},
+            {"device", expected_dev},
+            {"inode", expected_inode},
+            {"size_bytes", expected_size},
+            {"mtime_ns", expected_mtime_ns},
+        }},
+    };
+    if (!fingerprint_recorded(expected_mtime_ns, expected_size,
+                              expected_dev, expected_inode)) {
+        message = "resource fingerprint must be upgraded before this session can be queried: " + path;
+        evidence["change_kind"] = "fingerprint_upgrade_required";
+        evidence["actual_resource_identity"] = nullptr;
+        return true;
+    }
+    char resolved[PATH_MAX] = {};
+    if (!realpath(path.c_str(), resolved)) {
+        message = "resource is missing or cannot be canonicalized: " + path;
+        evidence["change_kind"] = "missing";
+        evidence["actual_resource_identity"] = nullptr;
+        return true;
+    }
+    const std::string actual_path(resolved);
+    if (stat(actual_path.c_str(), &st) != 0) {
+        message = "resource is missing or cannot be stat'ed: " + path;
+        evidence["change_kind"] = "missing";
+        evidence["actual_resource_identity"] = nullptr;
+        return true;
+    }
+    const bool expected_regular = resource_kind == "fsdb";
+    if ((expected_regular && !S_ISREG(st.st_mode)) ||
+        (!expected_regular && !S_ISDIR(st.st_mode))) {
+        message = "resource type changed since session was opened: " + path;
+        evidence["change_kind"] = "type_changed";
+        evidence["actual_resource_identity"] = nullptr;
+        return true;
+    }
+    const long long actual_mtime_ns = stat_mtime_ns(st);
+    const long long actual_size = static_cast<long long>(st.st_size);
+    const unsigned long long actual_dev =
+        static_cast<unsigned long long>(st.st_dev);
+    const unsigned long long actual_inode =
+        static_cast<unsigned long long>(st.st_ino);
+    const bool path_changed = actual_path != path;
+    bool content_changed = !xdebug_core::resource_content_matches(
+        expected_mtime_ns, expected_size, actual_mtime_ns, actual_size);
+    bool identity_changed = xdebug_core::resource_identity_differs(
+        expected_dev, expected_inode, actual_dev, actual_inode);
+    if (!path_changed && !content_changed && !identity_changed) return false;
+    message = "resource changed since session was opened: " + path;
+    evidence["change_kind"] = path_changed
+        ? "path_changed"
+        : (content_changed && identity_changed
+            ? "identity_and_metadata_changed"
+            : (identity_changed ? "identity_changed" : "metadata_changed"));
+    evidence["actual_resource_identity"] = {
+        {"canonical_path", actual_path},
+        {"device", actual_dev},
+        {"inode", actual_inode},
+        {"size_bytes", actual_size},
+        {"mtime_ns", actual_mtime_ns},
+    };
+    return true;
+}
+
+bool session_fsdb_resource_changed(const SessionRecord& record,
+                                   std::string& message,
+                                   Json& evidence) {
+    return resource_changed(record.fsdb, "fsdb",
+                            record.fsdb_mtime_ns, record.fsdb_size,
+                            record.fsdb_dev, record.fsdb_inode,
+                            message, evidence);
+}
+
+bool session_resource_changed(const SessionRecord& record,
+                              std::string& message,
+                              Json& evidence) {
+    return resource_changed(record.daidir, "daidir",
+                            record.dbdir_mtime_ns, record.dbdir_size,
+                            record.dbdir_dev, record.dbdir_inode,
+                            message, evidence) ||
+           resource_changed(record.fsdb, "fsdb",
+                            record.fsdb_mtime_ns, record.fsdb_size,
+                            record.fsdb_dev, record.fsdb_inode,
+                            message, evidence);
 }
 
 bool session_idle_expired(const SessionRecord& record,
@@ -85,111 +800,9 @@ bool session_idle_expired(const SessionRecord& record,
 
 std::string requested_name(const Json& request) {
     Json args = request.value("args", Json::object());
-    Json target = request.value("target", Json::object());
-    if (has_string(args, "name")) return args["name"].get<std::string>();
-    if (has_string(target, "name")) return target["name"].get<std::string>();
-    return "";
-}
-
-Json engine_error(const Json& request, const std::string& action, const std::string& message) {
-    return make_error(request, action,
-                      DiagnosticErrorBuilder::transport("INTERNAL_ENGINE_FAILED", message).to_json());
-}
-
-int request_timeout_ms(const Json& request) {
-    Json limits = request.value("limits", Json::object());
-    if (!limits.is_object() || !limits.contains("timeout_ms") ||
-        !limits["timeout_ms"].is_number_integer()) {
-        return 30000;
-    }
-    int timeout_ms = limits["timeout_ms"].get<int>();
-    if (timeout_ms < 0) return 0;
-    return timeout_ms;
-}
-
-bool is_socket_timeout_errno(int err) {
-    return err == EAGAIN || err == EWOULDBLOCK || err == EINPROGRESS;
-}
-
-long long elapsed_ms_since(std::chrono::steady_clock::time_point begin) {
-    return std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::steady_clock::now() - begin).count();
-}
-
-Json transport_context(const Json& request,
-                       const std::string& phase,
-                       const std::string& session_id,
-                       const std::string& socket_path,
-                       int timeout_ms) {
-    Json ctx = {
-        {"phase", phase},
-        {"session_id", session_id},
-        {"action", request.value("action", std::string())},
-        {"request", xdebug_core::request_summary_for_log(request)}
-    };
-    if (!socket_path.empty()) ctx["socket_path"] = socket_path;
-    if (timeout_ms >= 0) ctx["timeout_ms"] = timeout_ms;
-    Json summary = xdebug_core::request_summary_for_log(request);
-    if (summary.contains("trace_id")) ctx["trace_id"] = summary["trace_id"];
-    if (summary.contains("request_id")) ctx["request_id"] = summary["request_id"];
-    if (summary.contains("span_id")) ctx["span_id"] = summary["span_id"];
-    if (summary.contains("parent_span_id")) ctx["parent_span_id"] = summary["parent_span_id"];
-    return ctx;
-}
-
-void log_engine_transport(const std::string& session_id,
-                          const std::string& phase,
-                          bool ok,
-                          Json context) {
-    context["transport_phase"] = phase;
-    xdebug_core::log_transport_event("engine", session_id, phase, ok, context);
-}
-
-void set_socket_timeout(int fd, int timeout_ms) {
-    if (timeout_ms <= 0) return;
-    struct timeval tv;
-    tv.tv_sec = timeout_ms / 1000;
-    tv.tv_usec = (timeout_ms % 1000) * 1000;
-    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-    setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
-}
-
-Json direct_socket_timeout_error(const Json& request,
-                                 const std::string& action,
-                                 const std::string& socket_path,
-                                 int timeout_ms) {
-    Json response = make_error(
-        request,
-        action,
-        DiagnosticErrorBuilder::transport("SESSION_TRANSPORT_FAILED",
-                                "direct session socket timed out after " +
-                                    std::to_string(timeout_ms) + "ms: " + socket_path)
-            .to_json());
-    response["summary"] = {
-        {"transport", "uds"},
-        {"socket_path", socket_path},
-        {"timeout_ms", timeout_ms}
-    };
-    return response;
-}
-
-Json direct_socket_failed_error(const Json& request,
-                                const std::string& action,
-                                const SessionRecord& record) {
-    Json response = make_error(
-        request,
-        action,
-        DiagnosticErrorBuilder::transport("SESSION_TRANSPORT_FAILED",
-                                "direct session transport failed for session: " + record.id)
-            .to_json());
-    response["summary"] = {
-        {"session_id", record.id},
-        {"mode", record.mode},
-        {"transport", record.transport.empty() ? "uds" : record.transport}
-    };
-    if (!record.socket_path.empty()) response["summary"]["socket_path"] = record.socket_path;
-    if (!record.file_dir.empty()) response["summary"]["file_dir"] = record.file_dir;
-    return response;
+    return has_string(args, "name")
+        ? args["name"].get<std::string>()
+        : std::string();
 }
 
 bool backend_cleanup_ok(const Json& response) {
@@ -197,6 +810,95 @@ bool backend_cleanup_ok(const Json& response) {
     Json error = response.value("error", Json::object());
     std::string code = error.value("code", std::string());
     return code == "SESSION_NOT_FOUND";
+}
+
+std::string backend_error_code(const Json& response) {
+    if (!response.is_object()) return "";
+    const Json error = response.value("error", Json::object());
+    return error.is_object()
+        ? error.value("code", std::string())
+        : std::string();
+}
+
+bool ambiguous_session_open_result(const Json& response) {
+    if (!response.is_object() ||
+        !response.contains("ok") ||
+        !response["ok"].is_boolean() ||
+        response["ok"].get<bool>()) {
+        return true;
+    }
+    const Json error =
+        response.value("error", Json::object());
+    if (!error.is_object() ||
+        !has_string(error, "code") ||
+        !has_string(error, "message") ||
+        !error.contains("recoverable") ||
+        !error["recoverable"].is_boolean() ||
+        !has_string(error, "error_layer")) {
+        return true;
+    }
+    const std::string code = backend_error_code(response);
+    return code == "ENGINE_TIMEOUT" ||
+           code == "INTERNAL_ENGINE_FAILED" ||
+           code == "INTERNAL_ENGINE_RESPONSE_INVALID";
+}
+
+Json session_error(const Json& request,
+                   const std::string& action,
+                   const std::string& code,
+                   const std::string& message,
+                   const SessionRecord& record) {
+    Json error =
+        DiagnosticErrorBuilder::session_manager(code, message).to_json();
+    error["session_id"] = record.id;
+    error["session_mode"] = record.mode;
+    error["session_transport"] = record.transport;
+    return make_error(request, action, error);
+}
+
+Json resource_changed_error(const Json& request,
+                            const std::string& action,
+                            const SessionRecord& record,
+                            const std::string& message,
+                            const Json& evidence) {
+    Json response = session_error(
+        request, action, "RESOURCE_CHANGED", message, record);
+    response["error"]["recoverable"] = true;
+    response["error"]["health_status"] = "resource_changed";
+    for (auto it = evidence.begin(); it != evidence.end(); ++it) {
+        response["error"][it.key()] = it.value();
+    }
+    response["error"]["next_actions"] = Json::array({
+        "Close this stale session with session.close mode=graceful.",
+        "Open a new session on the current resource before retrying the query."
+    });
+    response["error"]["correct_example"] = {
+        {"api_version", "xdebug.v1"},
+        {"action", "session.close"},
+        {"target", {{"session_id", record.id}}},
+        {"args", {{"mode", "graceful"}}},
+    };
+    return response;
+}
+
+Json catalog_error(const Json& request,
+                   const SessionCatalogResult& result) {
+    const std::string code =
+        result.code.empty()
+            ? (result.status == SessionCatalogStatus::NotFound
+                   ? "SESSION_NOT_FOUND"
+                   : "REGISTRY_INVALID")
+            : result.code;
+    const std::string message =
+        result.message.empty()
+            ? (result.status == SessionCatalogStatus::NotFound
+                   ? "session not found"
+                   : "canonical session registry is invalid")
+            : result.message;
+    return make_error(
+        request,
+        request.value("action", std::string()),
+        DiagnosticErrorBuilder::session_manager(code, message).to_json());
 }
 
 std::string stable_resource_path(const std::string& path) {
@@ -212,29 +914,39 @@ void stabilize_resource_paths(Json& target) {
     if (has_string(target, "fsdb")) {
         target["fsdb"] = stable_resource_path(target["fsdb"].get<std::string>());
     }
+    if (has_string(target, "run_manifest")) {
+        target["run_manifest"] = stable_resource_path(target["run_manifest"].get<std::string>());
+    }
 }
 
 std::string request_log_session_id(const Json& request, const Json& response = Json()) {
-    Json target = request.value("target", Json::object());
-    Json args = request.value("args", Json::object());
+    Json target =
+        request.is_object() && request.contains("target") &&
+                request["target"].is_object()
+            ? request["target"]
+            : Json::object();
+    Json args =
+        request.is_object() && request.contains("args") &&
+                request["args"].is_object()
+            ? request["args"]
+            : Json::object();
     if (has_string(target, "session_id")) return target["session_id"].get<std::string>();
-    if (has_string(args, "session_id")) return args["session_id"].get<std::string>();
-    if (has_string(args, "id") && args["id"].get<std::string>() != "all") return args["id"].get<std::string>();
     if (has_string(args, "name")) return args["name"].get<std::string>();
-    if (has_string(target, "name")) return target["name"].get<std::string>();
     if (response.is_object()) {
         Json session = response.value("session", Json::object());
-        if (has_string(session, "id")) return session["id"].get<std::string>();
         if (has_string(session, "session_id")) return session["session_id"].get<std::string>();
         Json summary = response.value("summary", Json::object());
         if (has_string(summary, "session_id")) return summary["session_id"].get<std::string>();
-        if (has_string(summary, "id")) return summary["id"].get<std::string>();
     }
     return "adhoc";
 }
 
 std::string target_mode_for_log(const Json& request, const Json& response = Json()) {
-    Json target = request.value("target", Json::object());
+    Json target =
+        request.is_object() && request.contains("target") &&
+                request["target"].is_object()
+            ? request["target"]
+            : Json::object();
     if (has_string(target, "mode")) return target["mode"].get<std::string>();
     Json summary = response.value("summary", Json::object());
     if (has_string(summary, "mode")) return summary["mode"].get<std::string>();
@@ -292,34 +1004,98 @@ std::string Dispatcher::mode_for_target(const Json& target) const {
     return "";
 }
 
-Json Dispatcher::resolve_target(const Json& request) const {
-    Json target = request.value("target", Json::object());
-    if (has_string(target, "session_id")) {
+bool Dispatcher::resolve_target(const Json& request,
+                                Json& target,
+                                Json& error_response) const {
+    target = request.value("target", Json::object());
+    if (has_string(target, "session_id") &&
+        target["session_id"].get<std::string>() != "all") {
         SessionRecord record;
-        if (sessions_.get(target["session_id"].get<std::string>(), record)) {
-            if (!record.daidir.empty()) target["daidir"] = record.daidir;
-            if (!record.fsdb.empty()) target["fsdb"] = record.fsdb;
-            target["mode"] = record.mode;
+        const SessionCatalogResult lookup =
+            sessions_.get(target["session_id"].get<std::string>(), record);
+        if (!lookup.ok()) {
+            error_response = catalog_error(request, lookup);
+            return false;
         }
+        if (!record.daidir.empty()) target["daidir"] = record.daidir;
+        if (!record.fsdb.empty()) target["fsdb"] = record.fsdb;
+        target["mode"] = record.mode;
     }
     stabilize_resource_paths(target);
-    return target;
+    return true;
 }
 
-Json Dispatcher::forward_action(const Json& request) {
-    Json forwarded = request;
-    Json target = forwarded.value("target", Json::object());
-    Json args = forwarded.value("args", Json::object());
-    if (!has_string(target, "session_id") && has_string(args, "name") && !has_string(target, "name")) {
-        target["name"] = args["name"];
-    }
-    forwarded["target"] = target;
+Json Dispatcher::invoke_engine(const Json& request,
+                               const Json& resolved_target,
+                               const Json& observability) {
     Json response;
-    std::string error;
-    if (!adapter_.invoke(forwarded, response, error)) {
-        return engine_error(request, request.value("action", std::string()), error);
+    Json error;
+    if (!adapter_.invoke(request, resolved_target, observability,
+                         response, error)) {
+        return make_error(
+            request,
+            request.value("action", std::string()),
+            error);
     }
     return response;
+}
+
+Json Dispatcher::compensate_failed_session_open(
+    const Json& request,
+    const std::string& session_id,
+    const std::string& ownership_token,
+    const Json& observability,
+    const std::string& failure_code,
+    const std::string& failure_message) {
+    Json error =
+        DiagnosticErrorBuilder::internal(
+            failure_code,
+            failure_message)
+            .to_json();
+    error["session_id"] = session_id;
+    error["cleanup_succeeded"] = false;
+    error["compensation_status"] = "cleanup_failed";
+
+    if (!valid_conditional_cleanup_token(ownership_token)) {
+        error["cause_code"] = "INTERNAL_CLEANUP_TOKEN_INVALID";
+        return make_error(
+            request,
+            "session.open",
+            error);
+    }
+
+    Json close_request =
+        session_lifecycle_request(
+            request,
+            "session.close",
+            session_id);
+    close_request["args"]["mode"] = "force";
+    close_request["args"]["ownership_token"] = ownership_token;
+    Json cleanup = invoke_engine(
+        close_request,
+        close_request["target"],
+        observability);
+    const std::string backend_code =
+        backend_error_code(cleanup);
+    if (cleanup.value("ok", false)) {
+        error["cleanup_succeeded"] = true;
+        error["compensation_status"] = "cleaned";
+    } else if (backend_code == "SESSION_NOT_FOUND") {
+        error["cleanup_succeeded"] = true;
+        error["compensation_status"] = "not_created";
+    } else if (
+        backend_code ==
+        "SESSION_OWNERSHIP_TOKEN_MISMATCH") {
+        error["compensation_status"] =
+            "token_mismatch";
+    }
+    if (!backend_code.empty()) {
+        error["backend_error_code"] = backend_code;
+    }
+    return make_error(
+        request,
+        "session.open",
+        error);
 }
 
 Json Dispatcher::resource_error(const Json& request, const ActionSpec& spec, const Json& target) const {
@@ -331,22 +1107,26 @@ Json Dispatcher::resource_error(const Json& request, const ActionSpec& spec, con
     return make_error(request, spec.name, resolution.code, resolution.message);
 }
 
-Json Dispatcher::kill_session_record(const Json& request,
-                                     const SessionRecord& record,
-                                     const std::string& reason) {
-    Json kill_req = request;
-    kill_req["action"] = "session.kill";
-    kill_req["target"] = {{"session_id", record.id}};
-    kill_req["args"] = Json::object();
-    Json kill_result = forward_action(kill_req);
-    return {{"session_id", record.id},
-            {"mode", record.mode},
-            {"reason", reason},
-            {"kill_ok", backend_cleanup_ok(kill_result)},
-            {"result", kill_result}};
+bool Dispatcher::force_close_session_record(
+    const Json& request,
+    const SessionRecord& record,
+    const Json& observability,
+    std::string& backend_code) {
+    Json close_req =
+        session_lifecycle_request(request, "session.close", record.id);
+    close_req["args"]["mode"] = "force";
+    Json close_result = invoke_engine(
+        close_req,
+        close_req["target"],
+        observability);
+    backend_code = backend_error_code(close_result);
+    return backend_cleanup_ok(close_result);
 }
 
-bool Dispatcher::cleanup_expired_sessions(const Json& request, Json& removed, Json& error_response) {
+bool Dispatcher::cleanup_expired_sessions(const Json& request,
+                                          Json& removed,
+                                          Json& error_response,
+                                          const Json& observability) {
     int idle_timeout_sec = 0;
     std::string timeout_error;
     if (!xdebug_core::session_idle_timeout_sec(idle_timeout_sec, timeout_error)) {
@@ -360,10 +1140,42 @@ bool Dispatcher::cleanup_expired_sessions(const Json& request, Json& removed, Js
 
     removed = Json::array();
     const time_t now = time(nullptr);
-    for (const auto& record : sessions_.list()) {
+    std::vector<SessionRecord> records;
+    const SessionCatalogResult listed = sessions_.list(records);
+    if (!listed.ok()) {
+        error_response = catalog_error(request, listed);
+        return false;
+    }
+    for (const auto& record : records) {
         long long idle_sec = 0;
         if (!session_idle_expired(record, idle_timeout_sec, now, idle_sec)) continue;
-        Json removed_item = kill_session_record(request, record, "idle_timeout");
+        std::string cleanup_backend_error;
+        if (!force_close_session_record(
+                request,
+                record,
+                observability,
+                cleanup_backend_error)) {
+            error_response = session_error(
+                request,
+                request.value("action", std::string()),
+                "SESSION_CLEANUP_FAILED",
+                "expired session backend cleanup failed; the session record "
+                "was preserved for retry and diagnosis",
+                record);
+            error_response["error"]["cleanup_succeeded"] = false;
+            error_response["error"]["idle_sec"] = idle_sec;
+            error_response["error"]["idle_timeout_sec"] =
+                idle_timeout_sec;
+            if (!cleanup_backend_error.empty()) {
+                error_response["error"]["backend_error_code"] =
+                    cleanup_backend_error;
+            }
+            return false;
+        }
+        Json removed_item = {
+            {"removed_session", session_record_json(record)},
+            {"reason", "idle_timeout"},
+        };
         removed_item["idle_sec"] = idle_sec;
         removed_item["idle_timeout_sec"] = idle_timeout_sec;
         removed.push_back(removed_item);
@@ -371,20 +1183,23 @@ bool Dispatcher::cleanup_expired_sessions(const Json& request, Json& removed, Js
     return true;
 }
 
-Json Dispatcher::handle_engine_forward(const Json& request, const ActionSpec& spec) {
-    Json target = resolve_target(request);
+Json Dispatcher::handle_engine_forward(const Json& request,
+                                       const ActionSpec& spec,
+                                       const Json& observability) {
+    Json target;
+    Json target_error;
+    if (!resolve_target(request, target, target_error)) {
+        return target_error;
+    }
     Json err_resp = resource_error(request, spec, target);
     if (!err_resp.is_null()) return err_resp;
-    Json routed = request;
-    routed["target"] = target;
 
-    // Direct socket path: if session has a known socket, talk to the
-    // engine server directly instead of spawning a per-request process.
-    std::string sid = target.value("session_id", "");
+    const std::string sid = target.value("session_id", std::string());
     if (!sid.empty()) {
         SessionRecord record;
-        if (!sessions_.get(sid, record)) {
-            return make_error(request, spec.name, "SESSION_NOT_FOUND", "session not found: " + sid);
+        const SessionCatalogResult lookup = sessions_.get(sid, record);
+        if (!lookup.ok()) {
+            return catalog_error(request, lookup);
         }
         int idle_timeout_sec = 0;
         std::string timeout_error;
@@ -393,48 +1208,49 @@ Json Dispatcher::handle_engine_forward(const Json& request, const ActionSpec& sp
         }
         long long idle_sec = 0;
         if (session_idle_expired(record, idle_timeout_sec, time(nullptr), idle_sec)) {
-            Json removed = kill_session_record(request, record, "idle_timeout");
-            Json response = make_error(request, spec.name, "SESSION_EXPIRED",
-                                       "session idle timeout exceeded: " + sid, true);
-            response["summary"] = {{"session_id", sid},
-                                   {"mode", record.mode},
-                                   {"idle_sec", idle_sec},
-                                   {"idle_timeout_sec", idle_timeout_sec},
-                                   {"removed", removed.value("kill_ok", false)}};
-            response["data"] = {{"removed", removed}};
-            return response;
+            std::string cleanup_backend_error;
+            const bool cleanup_succeeded = force_close_session_record(
+                request,
+                record,
+                observability,
+                cleanup_backend_error);
+            Json error =
+                DiagnosticErrorBuilder::session_manager(
+                    "SESSION_EXPIRED",
+                    "session idle timeout exceeded: " + sid)
+                    .to_json();
+            error["session_id"] = sid;
+            error["session_mode"] = record.mode;
+            error["session_transport"] = record.transport;
+            error["idle_sec"] = idle_sec;
+            error["idle_timeout_sec"] = idle_timeout_sec;
+            error["cleanup_succeeded"] =
+                cleanup_succeeded;
+            if (!cleanup_backend_error.empty()) {
+                error["backend_error_code"] =
+                    cleanup_backend_error;
+            }
+            return make_error(request, spec.name, error);
         }
-        if (!record.transport.empty() && record.transport != "uds") {
-            Json ctx = transport_context(routed, "fallback.invoke.begin", sid, "", request_timeout_ms(routed));
-            ctx["transport"] = record.transport;
-            log_engine_transport(sid, "fallback.invoke.begin", true, ctx);
-            auto begin = std::chrono::steady_clock::now();
-            Json response = forward_action(routed);
-            Json end_ctx = transport_context(routed, "fallback.invoke.end", sid, "", request_timeout_ms(routed));
-            end_ctx["transport"] = record.transport;
-            end_ctx["elapsed_ms"] = elapsed_ms_since(begin);
-            end_ctx["response"] = xdebug_core::response_summary_for_log(response);
-            log_engine_transport(sid, "fallback.invoke.end", response.value("ok", false), end_ctx);
-            return response;
+        std::string resource_message;
+        Json resource_evidence;
+        if (session_fsdb_resource_changed(
+                record, resource_message, resource_evidence)) {
+            return resource_changed_error(
+                request, spec.name, record, resource_message,
+                resource_evidence);
         }
-        if (record.socket_path.empty()) return direct_socket_failed_error(request, spec.name, record);
-        Json response;
-        if (send_to_socket(sid, record.socket_path, spec.category, routed, response)) return response;
-        return direct_socket_failed_error(request, spec.name, record);
     }
 
-    Json ctx = transport_context(routed, "fallback.invoke.begin", request_log_session_id(routed), "", request_timeout_ms(routed));
-    log_engine_transport(request_log_session_id(routed), "fallback.invoke.begin", true, ctx);
-    auto begin = std::chrono::steady_clock::now();
-    Json response = forward_action(routed);
-    Json end_ctx = transport_context(routed, "fallback.invoke.end", request_log_session_id(routed, response), "", request_timeout_ms(routed));
-    end_ctx["elapsed_ms"] = elapsed_ms_since(begin);
-    end_ctx["response"] = xdebug_core::response_summary_for_log(response);
-    log_engine_transport(request_log_session_id(routed, response), "fallback.invoke.end", response.value("ok", false), end_ctx);
-    return response;
+    // EngineAdapter is the single public-to-internal invocation boundary.
+    // It projects the strict internal envelope, while the internal engine
+    // owns UDS/TCP/file routing and authentication.
+    return invoke_engine(request, target, observability);
 }
 
-Json Dispatcher::handle_batch(const Json& request) {
+Json Dispatcher::handle_batch(const Json& request,
+                              const Json& observability) {
+    using BatchClock = std::chrono::steady_clock;
     Json args = request.value("args", Json::object());
     Json requests = args.value("requests", Json());
     if (!requests.is_array()) {
@@ -447,9 +1263,72 @@ Json Dispatcher::handle_batch(const Json& request) {
     Json failed_layers = Json::array();
     bool all_ok = true;
     std::string mode = args.value("mode", std::string("continue_on_error"));
+    const Json outer_limits =
+        request.value("limits", Json::object());
+    const int outer_timeout_ms =
+        outer_limits.value("timeout_ms", 0);
+    const BatchClock::time_point batch_deadline =
+        outer_timeout_ms > 0
+            ? BatchClock::now() +
+                  std::chrono::milliseconds(outer_timeout_ms)
+            : BatchClock::time_point::max();
+    if (mode != "continue_on_error" && mode != "stop_on_error") {
+        Json error =
+            DiagnosticErrorBuilder::handler(
+                "INVALID_ARGUMENT",
+                "args.mode must be continue_on_error or stop_on_error")
+                .invalid_arg("args.mode")
+                .expected("continue_on_error or stop_on_error")
+                .received(mode)
+                .available_values(
+                    Json::array({"continue_on_error", "stop_on_error"}))
+                .to_json();
+        return make_error(request, "batch", error);
+    }
     for (auto child : requests) {
-        if (!child.contains("api_version")) child["api_version"] = kApiVersion;
-        Json result = dispatch(child);
+        int remaining_ms = 0;
+        if (outer_timeout_ms > 0) {
+            remaining_ms = static_cast<int>(
+                std::chrono::duration_cast<std::chrono::milliseconds>(
+                    batch_deadline - BatchClock::now()).count());
+            if (remaining_ms <= 0) {
+                Json timeout_error =
+                    DiagnosticErrorBuilder::handler(
+                        "BATCH_TIMEOUT",
+                        "batch deadline expired before the next child request")
+                        .recoverable(true)
+                        .to_json();
+                timeout_error["timeout_ms"] = outer_timeout_ms;
+                Json timeout_result = make_error(
+                    child,
+                    child.value("action", std::string()),
+                    timeout_error);
+                results.push_back(timeout_result);
+                all_ok = false;
+                failed_indexes.push_back(results.size() - 1);
+                failed_codes.push_back("BATCH_TIMEOUT");
+                failed_layers.push_back("handler");
+                break;
+            }
+            const std::string child_action =
+                child.value("action", std::string());
+            const ActionSpec* child_spec =
+                default_action_registry().find_spec(child_action);
+            if (child_spec &&
+                (child_spec->handler_kind == "engine_forward" ||
+                 child_spec->handler_kind == "batch")) {
+                Json child_limits =
+                    child.value("limits", Json::object());
+                const int child_timeout_ms =
+                    child_limits.value("timeout_ms", remaining_ms);
+                child_limits["timeout_ms"] =
+                    std::min(child_timeout_ms, remaining_ms);
+                child["limits"] = child_limits;
+            }
+        }
+        Json child_observability = observability;
+        child_observability.erase("request_id");
+        Json result = dispatch(child, child_observability);
         results.push_back(result);
         if (!result.value("ok", false)) {
             all_ok = false;
@@ -460,63 +1339,157 @@ Json Dispatcher::handle_batch(const Json& request) {
             if (mode == "stop_on_error") break;
         }
     }
-    response["ok"] = all_ok;
     response["summary"] = {{"count", results.size()}, {"all_ok", all_ok},
                            {"failed_count", failed_indexes.size()},
                            {"failed_indexes", failed_indexes},
                            {"failed_codes", failed_codes},
                            {"failed_layers", failed_layers}};
     response["data"] = {{"results", results}};
-    if (!all_ok) response["error"] = {{"code", "BATCH_PARTIAL_FAILURE"},
-                                      {"message", "one or more child requests failed"},
-                                      {"recoverable", true},
-                                      {"error_layer", "handler"}};
     return response;
 }
 
-Json Dispatcher::handle_session(const Json& request, const std::string& action) {
-    Json target = resolve_target(request);
+Json Dispatcher::handle_session(
+    const Json& request,
+    const std::string& action,
+    const Json& observability,
+    std::string& session_open_cleanup_token) {
+    Json target;
+    Json target_error;
+    if (!resolve_target(request, target, target_error)) {
+        return target_error;
+    }
     Json args = request.value("args", Json::object());
     if (action == "session.list") {
-        Json expired_removed;
-        Json cleanup_error;
-        if (!cleanup_expired_sessions(request, expired_removed, cleanup_error)) return cleanup_error;
+        int idle_timeout_sec = 0;
+        std::string timeout_error;
+        if (!xdebug_core::session_idle_timeout_sec(
+                idle_timeout_sec, timeout_error)) {
+            return make_error(
+                request,
+                action,
+                "INVALID_CONFIG",
+                timeout_error,
+                false);
+        }
+        const Json output = args.value("output", Json::object());
+        const bool verbose = output.value("verbose", false);
         Json response = make_response(request, action);
         Json records = Json::array();
-        for (const auto& record : sessions_.list()) records.push_back(session_record_json(record));
-        response["summary"] = {{"session_count", records.size()},
-                               {"expired_removed_count", expired_removed.size()}};
+        std::vector<SessionRecord> listed_records;
+        const SessionCatalogResult listed =
+            sessions_.list(listed_records);
+        if (!listed.ok()) return catalog_error(request, listed);
+        const time_t now = time(nullptr);
+        std::size_t expired_count = 0;
+        for (const auto& record : listed_records) {
+            long long idle_sec = 0;
+            const bool expired = session_idle_expired(
+                record, idle_timeout_sec, now, idle_sec);
+            if (expired) ++expired_count;
+            const std::string recommended_action =
+                expired || record.lifecycle_state == "cleanup_failed" ||
+                        record.lifecycle_state == "terminated_on_timeout"
+                    ? "session.gc"
+                    : "session.doctor";
+            records.push_back(session_list_record_json(
+                record, verbose, expired, recommended_action));
+        }
+        response["summary"] = {
+            {"session_count", records.size()},
+            {"expired_count", expired_count},
+            {"verbose", verbose}
+        };
         response["data"] = {{"sessions", records}};
-        if (!expired_removed.empty()) response["data"]["removed"] = expired_removed;
         return response;
     }
     if (action == "session.gc") {
-        Json before = Json::array();
-        for (const auto& record : sessions_.list()) before.push_back(session_record_json(record));
+        std::vector<SessionRecord> before_records;
+        const SessionCatalogResult before_listed =
+            sessions_.list(before_records);
+        if (!before_listed.ok()) {
+            return catalog_error(request, before_listed);
+        }
         Json removed = Json::array();
         Json cleanup_error;
-        if (!cleanup_expired_sessions(request, removed, cleanup_error)) return cleanup_error;
-        Json kept = Json::array();
-        for (const auto& record : sessions_.list()) {
-            Json doctor_req = request;
-            doctor_req["action"] = "session.doctor";
-            doctor_req["target"] = {{"session_id", record.id}};
-            Json health = forward_action(doctor_req);
+        if (!cleanup_expired_sessions(
+                request, removed, cleanup_error, observability)) {
+            return cleanup_error;
+        }
+        Json kept_sessions = Json::array();
+        std::vector<SessionRecord> after_cleanup;
+        const SessionCatalogResult after_listed =
+            sessions_.list(after_cleanup);
+        if (!after_listed.ok()) {
+            return catalog_error(request, after_listed);
+        }
+        for (const auto& record : after_cleanup) {
+            Json doctor_req =
+                session_lifecycle_request(
+                    request, "session.doctor", record.id);
+            Json health = invoke_engine(
+                doctor_req,
+                doctor_req["target"],
+                observability);
             bool healthy = health.value("ok", false);
             if (healthy) {
-                kept.push_back({{"session_id", record.id}, {"mode", record.mode}});
+                kept_sessions.push_back(session_record_json(record));
             } else {
-                Json removed_item = kill_session_record(request, record, "unhealthy");
-                removed_item["health"] = health;
+                const Json health_error =
+                    health.value("error", Json::object());
+                if (!has_string(health_error, "code") ||
+                    !has_string(health_error, "message")) {
+                    return make_error(
+                        request,
+                        action,
+                        "INTERNAL_ENGINE_RESPONSE_INVALID",
+                        "failed session.doctor backend response is missing "
+                        "error.code or error.message",
+                        false);
+                }
+                std::string cleanup_backend_error;
+                if (!force_close_session_record(
+                        request,
+                        record,
+                        observability,
+                        cleanup_backend_error)) {
+                    Json response = session_error(
+                        request,
+                        action,
+                        "SESSION_CLEANUP_FAILED",
+                        "unhealthy session backend cleanup failed; the "
+                        "session record was preserved for retry and diagnosis",
+                        record);
+                    response["error"]["cleanup_succeeded"] = false;
+                    if (!cleanup_backend_error.empty()) {
+                        response["error"]["backend_error_code"] =
+                            cleanup_backend_error;
+                    }
+                    return response;
+                }
+                Json health_evidence = {
+                    {"code", health_error["code"]},
+                    {"message", health_error["message"]},
+                };
+                if (has_string(health_error, "health_status")) {
+                    health_evidence["health_status"] =
+                        health_error["health_status"];
+                }
+                Json removed_item = {
+                    {"removed_session", session_record_json(record)},
+                    {"reason", "unhealthy"},
+                    {"health_evidence", health_evidence},
+                };
                 removed.push_back(removed_item);
             }
         }
         Json response = make_response(request, action);
-        response["summary"] = {{"status", "completed"},
-                               {"before_count", before.size()},
-                               {"kept_count", kept.size()},
+        response["summary"] = {{"before_count", before_records.size()},
+                               {"kept_count", kept_sessions.size()},
                                {"removed_count", removed.size()}};
-        response["data"] = {{"before", before}, {"kept", kept}, {"removed", removed}};
+        response["data"] = {
+            {"kept_sessions", kept_sessions},
+            {"removed", removed},
+        };
         return response;
     }
     if (action == "session.open") {
@@ -531,36 +1504,101 @@ Json Dispatcher::handle_session(const Json& request, const std::string& action) 
                               "session.open does not accept args.reuse or args.reopen; close or gc existing sessions explicitly");
         }
         if (mode.empty()) return make_error(request, action, "RESOURCE_REQUIRED", "target.daidir or target.fsdb is required");
+        Json manifest_details;
+        Json manifest_error;
+        if (!validate_run_manifest(request, target, manifest_details, manifest_error)) return manifest_error;
         Json expired_removed;
         Json cleanup_error;
-        if (!cleanup_expired_sessions(request, expired_removed, cleanup_error)) return cleanup_error;
-        std::vector<SessionRecord> before_records = sessions_.list();
+        if (!cleanup_expired_sessions(
+                request, expired_removed, cleanup_error, observability)) {
+            return cleanup_error;
+        }
+        std::vector<SessionRecord> before_records;
+        const SessionCatalogResult before_listed =
+            sessions_.list(before_records);
+        if (!before_listed.ok()) {
+            return catalog_error(request, before_listed);
+        }
         SessionRecord existing;
-        if (sessions_.get(name, existing)) {
-            Json doctor_req = request;
-            doctor_req["action"] = "session.doctor";
-            doctor_req["target"] = {{"session_id", name}};
-            Json health = forward_action(doctor_req);
+        const SessionCatalogResult existing_lookup =
+            sessions_.get(name, existing);
+        if (existing_lookup.status == SessionCatalogStatus::Invalid) {
+            return catalog_error(request, existing_lookup);
+        }
+        if (existing_lookup.ok()) {
+            Json doctor_req =
+                session_lifecycle_request(
+                    request, "session.doctor", name);
+            Json health = invoke_engine(
+                doctor_req,
+                doctor_req["target"],
+                observability);
             if (health.value("ok", false)) {
-                Json err = make_error(request, action, "SESSION_ID_EXISTS",
-                                      "session id already exists: " + name);
-                err["summary"] = {{"session_id", name}, {"existing", session_record_json(existing)},
-                                  {"health", health}};
+                Json err = session_error(
+                    request,
+                    action,
+                    "SESSION_ID_EXISTS",
+                    "session id already exists: " + name,
+                    existing);
+                err["error"]["health_status"] = "healthy";
                 return err;
             }
-            Json err = make_error(request, action, "SESSION_STALE",
-                                  "session id exists but is stale: " + name +
-                                      "; close it explicitly or run session.gc before opening again");
-            err["summary"] = {{"session_id", name}, {"existing", session_record_json(existing)},
-                              {"health", health}};
+            Json err = session_error(
+                request,
+                action,
+                "SESSION_STALE",
+                "session id exists but is stale: " + name +
+                    "; close it explicitly or run session.gc before opening again",
+                existing);
+            err["error"]["health_status"] =
+                health.value("error", Json::object())
+                    .value("health_status", std::string("unhealthy"));
+            const std::string health_code = backend_error_code(health);
+            if (!health_code.empty()) {
+                err["error"]["backend_error_code"] = health_code;
+            }
             return err;
         }
         // Spawn ONE unified engine (handles design, waveform, or both).
+        if (has_string(args, "ownership_token")) {
+            session_open_cleanup_token =
+                args["ownership_token"].get<std::string>();
+        } else if (!generate_conditional_cleanup_token(
+                       session_open_cleanup_token)) {
+            return make_error(
+                request,
+                action,
+                DiagnosticErrorBuilder::internal(
+                    "SECURE_RANDOM_UNAVAILABLE",
+                    "failed to generate the internal conditional-cleanup token")
+                    .to_json());
+        }
         Json open_request = request;
         open_request["action"] = "session.open";
         open_request["target"] = target;
-        Json result = forward_action(open_request);
-        if (!result.value("ok", false)) return result;
+        open_request["args"]["ownership_token"] =
+            session_open_cleanup_token;
+        Json result = invoke_engine(
+            open_request,
+            target,
+            observability);
+        if (!result.value("ok", false)) {
+            if (!ambiguous_session_open_result(result)) {
+                return make_error(
+                    request,
+                    action,
+                    result["error"]);
+            }
+            const std::string failure_code =
+                backend_error_code(result);
+            return compensate_failed_session_open(
+                request,
+                name,
+                session_open_cleanup_token,
+                observability,
+                failure_code,
+                "session.open engine invocation did not return a canonical result");
+        }
         SessionRecord record;
         record.id = name;
         record.mode = mode;
@@ -568,104 +1606,285 @@ Json Dispatcher::handle_session(const Json& request, const std::string& action) 
         record.fsdb = target.value("fsdb", std::string());
         // Extract socket_path from engine response for direct socket communication
         Json backend_session = result.value("session", Json::object());
-        record.socket_path = backend_session.value("socket_path", "");
-        record.transport = backend_session.value("transport", std::string("uds"));
-        record.file_dir = backend_session.value("file_dir", std::string());
-        record.host = backend_session.value("host", std::string());
-        record.bind_host = backend_session.value("bind_host", std::string());
-        record.port = backend_session.value("port", 0);
-        record.server_host = backend_session.value("server_host", std::string());
-        xdebug_core::update_public_session_manifest(record.id, record.mode, record.daidir, record.fsdb);
+        if (!has_string(backend_session, "transport")) {
+            return compensate_failed_session_open(
+                request,
+                name,
+                session_open_cleanup_token,
+                observability,
+                "INTERNAL_ENGINE_RESPONSE_INVALID",
+                "successful session.open backend response is missing session.transport");
+        }
+        const std::string backend_transport =
+            backend_session["transport"].get<std::string>();
+        if (backend_transport != "uds" &&
+            backend_transport != "tcp" &&
+            backend_transport != "file") {
+            return compensate_failed_session_open(
+                request,
+                name,
+                session_open_cleanup_token,
+                observability,
+                "INTERNAL_ENGINE_RESPONSE_INVALID",
+                "successful session.open backend response has invalid session.transport");
+        }
+        Json public_record;
+        try {
+            record.lifecycle_state = backend_session.at("lifecycle_state")
+                                         .get<std::string>();
+            record.socket_path = backend_session.value("socket_path", "");
+            record.transport = backend_transport;
+            record.file_dir =
+                backend_session.value("file_dir", std::string());
+            record.host = backend_session.value("host", std::string());
+            record.bind_host =
+                backend_session.value("bind_host", std::string());
+            record.port = backend_session.value("port", 0);
+            record.server_host = backend_session.at("server_host")
+                                     .get<std::string>();
+            record.server_pid = backend_session.at("server_pid").get<int>();
+            record.created_at =
+                backend_session.value("created_at", 0LL);
+            record.last_active =
+                backend_session.value("last_active", 0LL);
+            record.dbdir_mtime_ns =
+                backend_session.value("daidir_mtime_ns", 0LL);
+            record.dbdir_size =
+                backend_session.value("daidir_size", 0LL);
+            record.dbdir_dev =
+                backend_session.value("daidir_dev", 0ULL);
+            record.dbdir_inode =
+                backend_session.value("daidir_inode", 0ULL);
+            record.fsdb_mtime_ns =
+                backend_session.value("fsdb_mtime_ns", 0LL);
+            record.fsdb_size =
+                backend_session.value("fsdb_size", 0LL);
+            record.fsdb_dev =
+                backend_session.value("fsdb_dev", 0ULL);
+            record.fsdb_inode =
+                backend_session.value("fsdb_inode", 0ULL);
+            public_record = session_record_json(record);
+        } catch (...) {
+            return compensate_failed_session_open(
+                request,
+                name,
+                session_open_cleanup_token,
+                observability,
+                "INTERNAL_ENGINE_RESPONSE_INVALID",
+                "successful session.open backend response is not canonical");
+        }
+        if (!xdebug_core::update_public_session_manifest(
+                record.id,
+                record.mode,
+                record.daidir,
+                record.fsdb)) {
+            return compensate_failed_session_open(
+                request,
+                name,
+                session_open_cleanup_token,
+                observability,
+                "SESSION_MANIFEST_WRITE_FAILED",
+                "failed to publish the public session manifest");
+        }
         Json response = make_response(request, action);
-        response["session"] = session_record_json(record);
-        response["summary"] = {{"session_id", name}, {"mode", mode}};
-        response["data"] = {{"session", response["session"]}};
+        response["session"] = public_record;
+        response["summary"] = {{"status", "opened"}};
+        response["data"] = {
+            {"run_manifest",
+             manifest_details.empty() ? Json(nullptr) : manifest_details},
+        };
         Json advisories = duplicate_resource_advisories(before_records, record);
         if (!advisories.empty()) response["advisories"] = advisories;
         return response;
     }
     std::string id = target.value("session_id", std::string());
     if (id == "all") {
-        Json results = Json::array();
+        Json removed_sessions = Json::array();
+        Json failed_session_ids = Json::array();
         int removed_count = 0;
-        for (const auto& record : sessions_.list()) {
-            Json kill_req = request;
-            kill_req["target"] = {{"session_id", record.id}};
-            kill_req["args"] = Json::object();
-            Json result = handle_session(kill_req, "session.kill");
-            if (result.value("ok", false)) removed_count++;
-            results.push_back({{"session_id", record.id}, {"mode", record.mode}, {"result", result}});
+        std::vector<SessionRecord> records;
+        const SessionCatalogResult listed = sessions_.list(records);
+        if (!listed.ok()) return catalog_error(request, listed);
+        if (has_string(args, "ownership_token")) {
+            return make_error(
+                request,
+                action,
+                "SESSION_OWNERSHIP_TOKEN_FORBIDDEN",
+                "args.ownership_token is only valid for one exact session_id",
+                false);
+        }
+        for (const auto& record : records) {
+            std::string cleanup_backend_error;
+            Json close_req = session_lifecycle_request(
+                request, "session.close", record.id);
+            Json close_result = invoke_engine(
+                close_req, close_req["target"], observability);
+            if (backend_cleanup_ok(close_result)) {
+                removed_count++;
+                removed_sessions.push_back(
+                    session_record_json(record));
+            } else {
+                cleanup_backend_error = backend_error_code(close_result);
+                failed_session_ids.push_back(record.id);
+            }
+        }
+        if (removed_count != static_cast<int>(records.size())) {
+            Json error =
+                DiagnosticErrorBuilder::session_manager(
+                    "SESSION_CLEANUP_PARTIAL_FAILURE",
+                    "one or more session engines could not be stopped")
+                    .to_json();
+            error["requested_count"] = records.size();
+            error["removed_count"] = removed_count;
+            error["retained_count"] =
+                records.size() - removed_count;
+            error["failed_session_ids"] = failed_session_ids;
+            return make_error(request, action, error);
         }
         Json response = make_response(request, action);
-        response["ok"] = removed_count == static_cast<int>(results.size());
-        response["summary"] = {{"status", "removed"}, {"target", "all"},
-                               {"requested_count", results.size()}, {"removed_count", removed_count}};
-        response["data"] = {{"results", results}};
-        if (!response["ok"].get<bool>()) {
-            response["error"] = {{"code", "SESSION_CLEANUP_PARTIAL_FAILURE"},
-                                 {"message", "one or more session engines could not be stopped"},
-                                 {"recoverable", true}};
-        }
+        response["summary"] = {
+            {"requested_count", records.size()},
+            {"removed_count", removed_count},
+            {"retained_count", 0},
+        };
+        response["data"] = {
+            {"removed_sessions", removed_sessions},
+        };
         return response;
     }
     if (id.empty()) return make_error(request, action, "MISSING_FIELD", "target.session_id is required");
     SessionRecord record;
-    if (!sessions_.get(id, record)) return make_error(request, action, "SESSION_NOT_FOUND", "session not found: " + id);
-    if (action == "session.kill" || action == "session.close") {
-        Json inner = request;
-        inner["action"] = "session.kill";
-        inner["target"] = {{"session_id", id}};
-        Json r = forward_action(inner);
+    const SessionCatalogResult lookup = sessions_.get(id, record);
+    if (!lookup.ok()) return catalog_error(request, lookup);
+    if (action == "session.close") {
+        Json conditional_cleanup_error =
+            session_conditional_cleanup_error(
+                request,
+                action,
+                record);
+        if (!conditional_cleanup_error.is_null() &&
+            !conditional_cleanup_error.empty()) {
+            return conditional_cleanup_error;
+        }
+        Json inner =
+            session_lifecycle_request(request, "session.close", id);
+        Json r = invoke_engine(
+            inner,
+            inner["target"],
+            observability);
         bool ok = backend_cleanup_ok(r);
+        if (!ok) {
+            Json response = session_error(
+                request,
+                action,
+                "SESSION_CLEANUP_FAILED",
+                "backend cleanup failed; the session record was preserved for retry and diagnosis",
+                record);
+            const std::string code = backend_error_code(r);
+            if (!code.empty()) {
+                response["error"]["backend_error_code"] = code;
+            }
+            return response;
+        }
         Json response = make_response(request, action, ok);
-        response["summary"] = {{"session_id", id}, {"mode", record.mode}, {"removed", ok}};
-        response["data"] = {{"session", session_record_json(record)}, {"backends", r}};
-        if (!ok) response["error"] = {{"code", "SESSION_CLEANUP_FAILED"},
-                                      {"message", "backend cleanup failed; the session record was preserved for retry and diagnosis"},
-                                      {"recoverable", true}};
+        response["summary"] = {{"removed", ok}};
+        response["data"] = {
+            {"removed_session", session_record_json(record)},
+        };
         return response;
     }
     if (action == "session.doctor") {
         std::string resource_message;
-        if (session_resource_changed(record, resource_message)) {
-            Json response = make_response(request, action, false);
-            response["session"] = session_record_json(record);
-            response["summary"] = {{"session_id", id}, {"mode", record.mode},
-                                   {"healthy", false}, {"status", "resource_changed"},
-                                   {"message", resource_message}};
-            response["data"] = {{"health", response["summary"]}};
-            response["error"] = {{"code", "RESOURCE_CHANGED"},
-                                 {"message", resource_message},
-                                 {"recoverable", true}};
+        Json resource_evidence;
+        if (session_resource_changed(
+                record, resource_message, resource_evidence)) {
+            return resource_changed_error(
+                request, action, record, resource_message,
+                resource_evidence);
+        }
+        Json inner =
+            session_lifecycle_request(
+                request, "session.doctor", id);
+        Json health = invoke_engine(
+            inner,
+            inner["target"],
+            observability);
+        if (!health.value("ok", false)) {
+            Json response = session_error(
+                request,
+                action,
+                "SESSION_UNHEALTHY",
+                "session engine is unhealthy",
+                record);
+            response["error"]["health_status"] =
+                health.value("error", Json::object())
+                    .value("health_status", std::string("unhealthy"));
+            const std::string code = backend_error_code(health);
+            if (!code.empty()) {
+                response["error"]["backend_error_code"] = code;
+            }
             return response;
         }
-        Json inner = request;
-        inner["target"] = {{"session_id", id}};
-        Json health = forward_action(inner);
         Json response = make_response(request, action);
-        response["ok"] = health.value("ok", false);
         response["session"] = session_record_json(record);
-        response["summary"] = {{"session_id", id}, {"mode", record.mode}, {"healthy", health.value("ok", false)}};
-        response["data"] = {{"health", health}};
-        if (!response["ok"].get<bool>()) response["error"] = {{"code", "SESSION_UNHEALTHY"}, {"message", "session engine is unhealthy"}, {"recoverable", true}};
+        const Json health_summary =
+            health.value("summary", Json::object());
+        if (!has_string(health_summary, "message")) {
+            return make_error(
+                request,
+                action,
+                "INTERNAL_ENGINE_RESPONSE_INVALID",
+                "successful session.doctor backend response is missing "
+                "summary.message",
+                false);
+        }
+        response["summary"] = {{"healthy", true}};
+        response["data"] = {
+            {"message", health_summary["message"]},
+        };
         return response;
     }
     return make_error(request, action, "UNKNOWN_ACTION", "unknown session action: " + action);
 }
 
-Json Dispatcher::dispatch_impl(const Json& request) {
-    const std::string action = request.value("action", std::string());
+Json Dispatcher::dispatch_impl(
+    const Json& request,
+    const Json& supplied_observability,
+    std::string& session_open_cleanup_token) {
+    const std::string action = request_action(request);
+    const Json envelope_error =
+        public_envelope_error(request);
+    if (!envelope_error.is_null()) {
+        return make_error(request, action, envelope_error);
+    }
     const ActionSpec* spec = default_action_registry().find_spec(action);
-    if (!spec || spec->status == ActionStatus::Removed) {
+    if (!spec) {
+        if (action == "session.kill") {
+            Json error = DiagnosticErrorBuilder::handler(
+                             "UNKNOWN_ACTION",
+                             "session.kill was removed; use explicit "
+                             "session.close force mode")
+                             .invalid_arg("action")
+                             .received(action)
+                             .available_values(
+                                 Json::array({"session.close"}))
+                             .correct_example({
+                                 {"api_version", "xdebug.v1"},
+                                 {"action", "session.close"},
+                                 {"target", {{"session_id", "case_a"}}},
+                                 {"args", {{"mode", "force"}}},
+                             })
+                             .to_json();
+            error["did_you_mean"] = "session.close";
+            return make_error(request, action, error);
+        }
         Json suggestions = suggested_action_names(action);
         Json error = DiagnosticErrorBuilder::handler(
                          "UNKNOWN_ACTION", "unknown action: " + action)
                          .invalid_arg("action")
                          .received(action)
                          .available_values(suggestions)
-                         .did_you_mean(suggestions.empty() ? "" : suggestions[0].get<std::string>())
                          .to_json();
-        error["suggested_actions"] = suggestions;
         return make_error(request, action, error);
     }
 
@@ -683,20 +1902,97 @@ Json Dispatcher::dispatch_impl(const Json& request) {
         return response;
     }
 
-    if (spec->handler_kind == "schema") return catalog_schema_response(request);
-    if (spec->handler_kind == "actions") return catalog_actions_response(request);
-    if (spec->handler_kind == "batch") return handle_batch(request);
-    if (spec->handler_kind == "session") return handle_session(request, action);
+    const bool frontend_owns_args =
+        spec->handler_kind == "schema" ||
+        spec->handler_kind == "actions" ||
+        spec->handler_kind == "batch";
+    xdebug_design::ContractBoundRequest public_boundary(
+        request,
+        action,
+        frontend_owns_args,
+        true,
+        false);
+    auto finalize_public_consumption =
+        [&](Json response) -> Json {
+        if (!response.value("ok", false)) return response;
+        const std::vector<std::string> unconsumed =
+            public_boundary.unconsumed_paths();
+        if (unconsumed.empty()) return response;
+        return make_error(
+            request,
+            action,
+            xdebug_core::request_consumption_violation(unconsumed));
+    };
+
+    Json observability = supplied_observability;
+    if (request.contains("request_id")) {
+        const std::string request_id =
+            request["request_id"].get<std::string>();
+        if (observability.contains("request_id") &&
+            observability["request_id"] != request_id) {
+            return make_error(
+                request,
+                action,
+                DiagnosticErrorBuilder::internal(
+                    "OBSERVABILITY_CONFLICT",
+                    "observability.request_id conflicts with public request_id")
+                    .to_json());
+        }
+        observability["request_id"] = request_id;
+    }
+
+    if (spec->handler_kind == "schema") {
+        if (public_boundary.args().exists()) {
+            public_boundary.args().consume_subtree(
+                "catalog_schema_response");
+        }
+        return finalize_public_consumption(
+            catalog_schema_response(request));
+    }
+    if (spec->handler_kind == "actions") {
+        if (public_boundary.args().exists()) {
+            public_boundary.args().consume_subtree(
+                "catalog_actions_response");
+        }
+        return finalize_public_consumption(
+            catalog_actions_response(request));
+    }
+    if (spec->handler_kind == "batch") {
+        if (public_boundary.args().exists()) {
+            public_boundary.args().consume_subtree(
+                "Dispatcher::handle_batch");
+        }
+        if (public_boundary.limits().exists()) {
+            public_boundary.limits().consume_subtree(
+                "Dispatcher::handle_batch");
+        }
+        return finalize_public_consumption(
+            handle_batch(request, observability));
+    }
+    if (spec->handler_kind == "session") {
+        public_boundary.consume_target(
+            "Dispatcher::handle_session");
+        return finalize_public_consumption(
+            handle_session(
+                request,
+                action,
+                observability,
+                session_open_cleanup_token));
+    }
     if (spec->handler_kind == "engine_forward") {
-        return handle_engine_forward(request, *spec);
+        public_boundary.consume_target(
+            "Dispatcher::resolve_target+ResourceResolver");
+        return finalize_public_consumption(
+            handle_engine_forward(request, *spec, observability));
     }
     return make_error(request, action, "NOT_IMPLEMENTED", "no handler registered for action: " + action);
 }
 
-Json Dispatcher::dispatch(const Json& request) {
+Json Dispatcher::dispatch(const Json& request,
+                          const Json& supplied_observability) {
     using clock = std::chrono::steady_clock;
     const auto begin = clock::now();
-    const std::string action = request.value("action", std::string());
+    const std::string action = request_action(request);
     const std::string begin_session = request_log_session_id(request);
     Json begin_context = {
         {"request", xdebug_core::request_summary_for_log(request)}
@@ -704,12 +2000,152 @@ Json Dispatcher::dispatch(const Json& request) {
     xdebug_core::log_action_event("public", "xdebug", begin_session, action, "begin", true, 0, begin_context);
 
     Json response;
+    last_xout_.clear();
+    std::string session_open_cleanup_token;
+    auto compensate_open_exception =
+        [&](const std::string& failure_code,
+            const std::string& failure_message) -> Json {
+        Json observability =
+            supplied_observability.is_object()
+                ? supplied_observability
+                : Json::object();
+        if (has_string(request, "request_id")) {
+            observability["request_id"] =
+                request["request_id"];
+        }
+        try {
+            return compensate_failed_session_open(
+                request,
+                requested_name(request),
+                session_open_cleanup_token,
+                observability,
+                failure_code,
+                failure_message);
+        } catch (...) {
+            Json error =
+                DiagnosticErrorBuilder::internal(
+                    failure_code,
+                    failure_message)
+                    .to_json();
+            error["session_id"] = requested_name(request);
+            error["cleanup_succeeded"] = false;
+            error["compensation_status"] = "cleanup_failed";
+            return make_error(
+                request,
+                "session.open",
+                error);
+        }
+    };
     try {
-        response = dispatch_impl(request);
+        Json observability = supplied_observability;
+        if (!observability.is_object()) {
+            throw std::invalid_argument(
+                "observability must be an object");
+        }
+        response = dispatch_impl(
+            request,
+            observability,
+            session_open_cleanup_token);
+        if (response.contains("__xout")) {
+            if (response["__xout"].is_string())
+                last_xout_ = response["__xout"].get<std::string>();
+            response.erase("__xout");
+        } else {
+            last_xout_.clear();
+        }
+        if (!action.empty()) {
+            const ActionSpec* completed_spec =
+                default_action_registry().find_spec(action);
+            if (completed_spec) {
+                append_recommended_actions(
+                    response, *completed_spec);
+            }
+        }
     } catch (const std::exception& e) {
-        response = make_error(request, action, "INTERNAL_ERROR", e.what(), false);
+        xdebug_core::log_lifecycle_event(
+            "public",
+            begin_session,
+            "dispatch.exception",
+            false,
+            {{"action", action}, {"exception", e.what()}});
+        response =
+            action == "session.open" &&
+                    valid_conditional_cleanup_token(
+                        session_open_cleanup_token)
+                ? compensate_open_exception(
+                      "INTERNAL_ERROR",
+                      "session.open frontend dispatch failed")
+                : make_error(
+                      request,
+                      action,
+                      "INTERNAL_ERROR",
+                      "request dispatch failed",
+                      false);
     } catch (...) {
-        response = make_error(request, action, "INTERNAL_ERROR", "unhandled exception", false);
+        response =
+            action == "session.open" &&
+                    valid_conditional_cleanup_token(
+                        session_open_cleanup_token)
+                ? compensate_open_exception(
+                      "INTERNAL_ERROR",
+                      "session.open frontend dispatch failed")
+                : make_error(
+                      request,
+                      action,
+                      "INTERNAL_ERROR",
+                      "unhandled exception",
+                      false);
+    }
+
+    if (action == "session.open" &&
+        valid_conditional_cleanup_token(
+            session_open_cleanup_token)) {
+        redact_sensitive_plaintext(
+            response,
+            session_open_cleanup_token);
+    }
+
+    const ActionSpec* response_spec =
+        action.empty()
+            ? nullptr
+            : default_action_registry().find_spec(action);
+    if (response_spec) {
+        xdebug_core::RuntimeSchemaValidator response_validator;
+        const xdebug_core::RuntimeSchemaValidationResult
+            response_validation =
+                action == "batch"
+                    ? response_validator.validate_batch_response(
+                          response,
+                          response_spec->response_schema)
+                    : response_validator.validate_response(
+                          action,
+                          response,
+                          response_spec->response_schema);
+        if (!response_validation.ok) {
+            last_xout_.clear();
+            xdebug_core::log_lifecycle_event(
+                "public",
+                begin_session,
+                "response.schema_validation_failed",
+                false,
+                {{"action", action},
+                 {"response",
+                  xdebug_core::sanitize_for_log(response)},
+                 {"contract_error",
+                  response_validation.error}});
+            if (action == "session.open" &&
+                valid_conditional_cleanup_token(
+                    session_open_cleanup_token)) {
+                response = compensate_open_exception(
+                    "INTERNAL_RESPONSE_SCHEMA_VIOLATION",
+                    "session.open response violated its public response contract");
+            } else {
+                response = make_error(
+                    request,
+                    action,
+                    response_validation.error);
+            }
+        }
     }
 
     const auto end = clock::now();
@@ -727,149 +2163,6 @@ Json Dispatcher::dispatch(const Json& request) {
     }
     xdebug_core::log_action_event("public", "xdebug", session_id, action, "end", ok, elapsed_ms, context);
     return response;
-}
-
-bool Dispatcher::send_to_socket(const std::string& session_id,
-                                const std::string& socket_path,
-                                const std::string& category,
-                                const Json& request,
-                                Json& response) const {
-    const std::string action = request.value("action", std::string());
-    const int timeout_ms = request_timeout_ms(request);
-    auto begin = std::chrono::steady_clock::now();
-    log_engine_transport(session_id, "socket.connect.begin", true,
-                         transport_context(request, "socket.connect.begin", session_id, socket_path, timeout_ms));
-    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (fd < 0) {
-        Json ctx = transport_context(request, "socket.create.failed", session_id, socket_path, timeout_ms);
-        ctx["errno"] = errno;
-        ctx["message"] = strerror(errno);
-        ctx["elapsed_ms"] = elapsed_ms_since(begin);
-        log_engine_transport(session_id, "socket.create.failed", false, ctx);
-        return false;
-    }
-    set_socket_timeout(fd, timeout_ms);
-
-    struct sockaddr_un addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sun_family = AF_UNIX;
-    strncpy(addr.sun_path, socket_path.c_str(), sizeof(addr.sun_path) - 1);
-
-    if (connect(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-        int err = errno;
-        close(fd);
-        Json ctx = transport_context(request, "socket.connect.failed", session_id, socket_path, timeout_ms);
-        ctx["errno"] = err;
-        ctx["message"] = strerror(err);
-        ctx["elapsed_ms"] = elapsed_ms_since(begin);
-        log_engine_transport(session_id, "socket.connect.failed", false, ctx);
-        return false;
-    }
-    Json connect_ctx = transport_context(request, "socket.connect.ok", session_id, socket_path, timeout_ms);
-    connect_ctx["elapsed_ms"] = elapsed_ms_since(begin);
-    log_engine_transport(session_id, "socket.connect.ok", true, connect_ctx);
-
-    // Build internal request for engine server
-    Json rpc = request;
-    rpc["api_version"] = "xdebug.internal.v1";
-    std::string wire = rpc.dump() + "\n";
-    ssize_t written = write(fd, wire.c_str(), wire.size());
-    if (written != static_cast<ssize_t>(wire.size())) {
-        int err = errno;
-        close(fd);
-        Json ctx = transport_context(request, "socket.write.failed", session_id, socket_path, timeout_ms);
-        ctx["errno"] = err;
-        ctx["message"] = strerror(err);
-        ctx["bytes_expected"] = wire.size();
-        ctx["bytes_written"] = written < 0 ? 0 : written;
-        ctx["elapsed_ms"] = elapsed_ms_since(begin);
-        if (is_socket_timeout_errno(err)) {
-            response = direct_socket_timeout_error(request, action, socket_path, timeout_ms);
-            log_engine_transport(session_id, "socket.write.timeout", false, ctx);
-            return true;
-        }
-        log_engine_transport(session_id, "socket.write.failed", false, ctx);
-        return false;
-    }
-
-    // Read response — engine server closes fd after sending.
-    std::string line;
-    char buf[65536];
-    while (true) {
-        ssize_t n = read(fd, buf, sizeof(buf));
-        if (n < 0) {
-            int err = errno;
-            close(fd);
-            Json ctx = transport_context(request, "socket.read.failed", session_id, socket_path, timeout_ms);
-            ctx["errno"] = err;
-            ctx["message"] = strerror(err);
-            ctx["elapsed_ms"] = elapsed_ms_since(begin);
-            if (is_socket_timeout_errno(err)) {
-                response = direct_socket_timeout_error(request, action, socket_path, timeout_ms);
-                log_engine_transport(session_id, "socket.read.timeout", false, ctx);
-                return true;
-            }
-            log_engine_transport(session_id, "socket.read.failed", false, ctx);
-            return false;
-        }
-        if (n <= 0) break;
-        line.append(buf, static_cast<size_t>(n));
-    }
-    close(fd);
-
-    Json engine_resp;
-    try {
-        engine_resp = Json::parse(line);
-    } catch (...) {
-        Json ctx = transport_context(request, "socket.response_parse_failed", session_id, socket_path, timeout_ms);
-        ctx["response_bytes"] = line.size();
-        ctx["elapsed_ms"] = elapsed_ms_since(begin);
-        log_engine_transport(session_id, "socket.response_parse_failed", false, ctx);
-        return false;
-    }
-
-    if (!engine_resp.value("ok", false)) {
-        Json err = engine_resp.value("error", Json::object());
-        response = make_error(request, action, err);
-        Json ctx = transport_context(request, "socket.request.end", session_id, socket_path, timeout_ms);
-        ctx["elapsed_ms"] = elapsed_ms_since(begin);
-        ctx["engine_response"] = xdebug_core::sanitize_for_log(engine_resp);
-        log_engine_transport(session_id, "socket.request.end", false, ctx);
-        return true;
-    }
-
-    // Wrap engine response into xdebug.v1 format.
-    // The engine owns summary construction. Do not infer public summary from
-    // arbitrary data scalars because that creates two public sources for the
-    // same fact.
-    Json data_payload = engine_resp.value("data", Json::object());
-    response = make_response(request, action, true);
-    Json result_summary = data_payload.value("summary", Json::object());
-    if (data_payload.is_object() && data_payload.contains("summary")) {
-        data_payload.erase("summary");
-    }
-    bool truncated = false;
-    if (data_payload.is_object() && data_payload.contains("truncated") &&
-        data_payload["truncated"].is_boolean()) {
-        truncated = data_payload["truncated"].get<bool>();
-        data_payload.erase("truncated");
-    }
-    if (result_summary.is_object() &&
-        result_summary.contains("truncated") && result_summary["truncated"].is_boolean()) {
-        truncated = truncated || result_summary["truncated"].get<bool>();
-        result_summary.erase("truncated");
-    }
-    if (result_summary.is_object() && !result_summary.empty()) response["summary"] = result_summary;
-    if (truncated) response["meta"] = {{"truncated", true}};
-    if (engine_resp.contains("text") && engine_resp["text"].is_string()) {
-        response["text"] = engine_resp["text"];
-    }
-    response["data"] = data_payload;
-    Json ctx = transport_context(request, "socket.request.end", session_id, socket_path, timeout_ms);
-    ctx["elapsed_ms"] = elapsed_ms_since(begin);
-    ctx["response"] = xdebug_core::response_summary_for_log(response);
-    log_engine_transport(session_id, "socket.request.end", true, ctx);
-    return true;
 }
 
 } // namespace xdebug

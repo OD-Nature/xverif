@@ -2,6 +2,28 @@
   "api_version": "xdebug.v1",
   "ok": true,
   "action": "session.list",
-  "summary": {"session_count": 1, "expired_removed_count": 0},
-  "data": {"sessions": [{"id": "case_a", "mode": "combined", "daidir": "simv.daidir", "fsdb": "waves.fsdb", "transport": "uds"}]}
+  "tool": {
+    "name": "xdebug",
+    "version": "0.1.0"
+  },
+  "session": null,
+  "summary": {
+    "session_count": 1,
+    "expired_count": 0,
+    "verbose": false
+  },
+  "data": {
+    "sessions": [
+      {
+        "session_id": "case_a",
+        "mode": "combined",
+        "transport": "uds",
+        "lifecycle_state": "active",
+        "expired": false,
+        "recommended_action": "session.doctor",
+        "last_active": 1700000000
+      }
+    ]
+  },
+  "error": null
 }

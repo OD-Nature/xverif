@@ -11,18 +11,16 @@ import tomllib
 
 
 SUPPORTED_PROFILES = ("verdi-2018", "verdi-2023")
-DEFAULT_SEARCH_ROOTS = (
-    "/eda/synopsys/verdi",
-    "/tools/synopsys/verdi",
-    "/opt/synopsys/verdi",
+# 默认扫描机器级 EDA 安装根下 eda、tools、opt 三个标准根目录中的
+# Synopsys Verdi/VCS 安装；路径运行时按 os.sep 拼接，源码不写死绝对字面量。
+DEFAULT_SEARCH_ROOTS = tuple(
+    os.path.join(os.sep, root, "synopsys", "verdi")
+    for root in ("eda", "tools", "opt")
 )
-DEFAULT_VCS_SEARCH_ROOTS = (
-    "/eda/synopsys/vcs-mx",
-    "/eda/synopsys/vcs",
-    "/tools/synopsys/vcs-mx",
-    "/tools/synopsys/vcs",
-    "/opt/synopsys/vcs-mx",
-    "/opt/synopsys/vcs",
+DEFAULT_VCS_SEARCH_ROOTS = tuple(
+    os.path.join(os.sep, root, "synopsys", leaf)
+    for root in ("eda", "tools", "opt")
+    for leaf in ("vcs-mx", "vcs")
 )
 MACHINE_ENV_KEYS = (
     "SNPSLMD_LICENSE_FILE",

@@ -1,6 +1,7 @@
 #include "engine_action_handler.h"
 
 #include "core/diagnostic_error.h"
+#include "waveform/cache/analysis_repository.h"
 #include "../../api/text_response_builder.h"
 
 #include <algorithm>
@@ -34,8 +35,28 @@ bool contains_text(const std::string& haystack, const char* needle) {
     return haystack.find(needle) != std::string::npos;
 }
 
+std::string canonical_code_prefix(const std::string& message) {
+    const size_t colon = message.find(':');
+    if (colon == std::string::npos || colon == 0) return "";
+    for (size_t index = 0; index < colon; ++index) {
+        const unsigned char character =
+            static_cast<unsigned char>(message[index]);
+        if ((character < 'A' || character > 'Z') &&
+            (character < '0' || character > '9') && character != '_') {
+            return "";
+        }
+    }
+    return message.substr(0, colon);
+}
+
 std::string code_for_handler_message(const std::string& message) {
+    const std::string explicit_code = canonical_code_prefix(message);
+    if (!explicit_code.empty()) return explicit_code;
     std::string lower = lowercase(message);
+    if (contains_text(lower, "value_not_available") ||
+        contains_text(lower, "value not available")) {
+        return "VALUE_NOT_AVAILABLE";
+    }
     if (contains_text(lower, "signal not found") ||
         contains_text(lower, "failed to read value for signal")) {
         return "SIGNAL_NOT_FOUND";
@@ -80,7 +101,35 @@ Json make_handler_error(const std::string& code, const std::string& message,
 }
 
 Json make_handler_error_from_message(const std::string& message) {
-    return make_handler_error(code_for_handler_message(message), message);
+    const std::string explicit_code = canonical_code_prefix(message);
+    std::string clean_message = message;
+    if (!explicit_code.empty()) {
+        size_t begin = explicit_code.size() + 1;
+        while (begin < message.size() &&
+               std::isspace(static_cast<unsigned char>(message[begin]))) {
+            ++begin;
+        }
+        clean_message = message.substr(begin);
+    }
+    return make_handler_error(
+        explicit_code.empty() ? code_for_handler_message(message) : explicit_code,
+        clean_message);
+}
+
+Json make_analysis_cache_error(
+    const xdebug_waveform::AnalysisCacheError& error) {
+    Json next_actions = Json::array();
+    for (const std::string& suggestion : error.suggestions)
+        next_actions.push_back(suggestion);
+    return make_handler_error(
+        error.code.empty() ? "ANALYSIS_BUILD_FAILED" : error.code,
+        error.message.empty() ? "analysis build failed" : error.message,
+        {{"recoverable", error.recoverable},
+         {"current_estimated_bytes", error.current_estimated_bytes},
+         {"hard_max_bytes", error.hard_max_bytes},
+         {"protocol", error.protocol},
+         {"key_summary", error.key_summary},
+         {"next_actions", next_actions}});
 }
 
 std::string append_common_blocks_xout(std::string text, const Json& response) {
@@ -118,22 +167,29 @@ static void render_data_value(xdebug::TextResponseBuilder& out,
     } else if (val.is_array() && val.size() > 0 &&
                xdebug::is_xout_scalar_json(val[0])) {
         out.emit_section(key);
-        int n = std::min(20, (int)val.size());
-        for (int i = 0; i < n; ++i)
-            out.emit_row({xdebug::json_to_xout_value(val[i])});
-        if ((int)val.size() > n)
-            out.emit_kv("(+ " + std::to_string(val.size() - n) + " more)", "");
+        for (const auto& item : val)
+            out.emit_row({xdebug::json_to_xout_value(item)});
     } else if (val.is_array() && val.size() > 0 && val[0].is_object()) {
-        int count = (int)val.size();
         out.emit_section(key);
-        int n = std::min(20, count);
-        out.emit_json_table(val, n);
-        if (count > n)
-            out.emit_kv("(+ " + std::to_string(count - n) + " more)", "");
+        out.emit_json_table(val, static_cast<int>(val.size()));
     } else if (val.is_object()) {
-        out.emit_section(key);
-        for (auto it = val.begin(); it != val.end(); ++it)
-            render_data_value(out, it.key(), it.value());
+        bool has_direct_fields = false;
+        for (auto it = val.begin(); it != val.end(); ++it) {
+            if (should_emit_scalar_key(it.key(), it.value()) ||
+                (it.value().is_array() && it.value().empty())) {
+                if (!has_direct_fields) out.emit_section(key);
+                if (should_emit_scalar_key(it.key(), it.value()))
+                    out.emit_kv(it.key(), it.value());
+                else
+                    out.emit_kv(it.key(), "[empty]");
+                has_direct_fields = true;
+            }
+        }
+        for (auto it = val.begin(); it != val.end(); ++it) {
+            if (should_emit_scalar_key(it.key(), it.value()) ||
+                (it.value().is_array() && it.value().empty())) continue;
+            render_data_value(out, key + "." + it.key(), it.value());
+        }
     }
 }
 
@@ -170,6 +226,43 @@ std::string EngineActionHandler::render_xout(const Json& response) const {
     }
 
     return append_common_blocks_xout(out.str(), response);
+}
+
+std::string render_tabular_xout(const std::string& action,
+                                const Json& response) {
+    xdebug::TextResponseBuilder out("xdebug");
+    out.emit_header(action);
+    const Json data = response.value("data", Json::object());
+    const Json summary = response.contains("summary")
+        ? response["summary"] : data.value("summary", Json::object());
+    if (summary.is_object() && !summary.empty()) {
+        out.emit_section("summary");
+        for (auto it = summary.begin(); it != summary.end(); ++it) {
+            render_data_value(out, it.key(), it.value());
+        }
+    }
+    if (!data.is_object()) return out.str();
+    for (auto it = data.begin(); it != data.end(); ++it) {
+        if (it.key() == "summary") continue;
+        if (it.value().is_array()) {
+            if (it.value().empty()) continue;
+            out.emit_section(it.key());
+            bool all_objects = true;
+            for (const auto& item : it.value()) {
+                all_objects = all_objects && item.is_object();
+            }
+            if (all_objects) {
+                out.emit_json_table(
+                    it.value(), static_cast<int>(it.value().size()));
+            }
+            else for (const auto& item : it.value()) {
+                out.emit_row({xdebug::json_to_xout_value(item)});
+            }
+        } else {
+            render_data_value(out, it.key(), it.value());
+        }
+    }
+    return out.str();
 }
 
 } // namespace xdebug_design

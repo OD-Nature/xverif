@@ -28,6 +28,12 @@ class axi_multi_id_master_seq extends svt_axi_master_base_sequence;
   rand int min_burst_len = 2;
   rand int max_burst_len = 16;
 
+  // Every four writes cover AW-before-W, W-before-AW, same-cycle and
+  // fixed-seed randomized ordering.  The simulator seed makes profile 3
+  // deterministic across fixture rebuilds.
+  int write_order_profile_count[4];
+  string axi_profile = "stress";
+
   // Track statistics
   int total_writes = 0;
   int total_reads = 0;
@@ -65,6 +71,7 @@ class axi_multi_id_master_seq extends svt_axi_master_base_sequence;
     if (cfg == null) begin
       `uvm_fatal("SEQ", "Master sequence did not receive a valid AXI port configuration")
     end
+    void'($value$plusargs("axi_profile=%s", axi_profile));
 
     // Raise objection if starting phase is set
     if (starting_phase != null) begin
@@ -78,6 +85,7 @@ class axi_multi_id_master_seq extends svt_axi_master_base_sequence;
     `uvm_info("SEQ", $sformatf("  Outstanding depth per ID/direction: %0d", outstanding_depth), UVM_LOW)
     `uvm_info("SEQ", $sformatf("  Memory Range: 0x%0h - 0x%0h", mem_start_addr, mem_start_addr + mem_size), UVM_LOW)
     `uvm_info("SEQ", $sformatf("  Single-beat percentage: %0d%%", single_beat_pct), UVM_LOW)
+    `uvm_info("SEQ", $sformatf("  AXI delay profile: %s", axi_profile), UVM_LOW)
   endtask
 
   // Task: Send write transactions for a specific ID
@@ -91,6 +99,7 @@ class axi_multi_id_master_seq extends svt_axi_master_base_sequence;
     int issued = 0;
     int completed = 0;
     int in_flight = 0;
+    int order_profile;
 
     `uvm_info("SEQ", $sformatf("Starting WRITE for ID=%0d (%0d transactions)...", id, trans_per_id), UVM_MEDIUM)
 
@@ -121,6 +130,7 @@ class axi_multi_id_master_seq extends svt_axi_master_base_sequence;
 
       xact = svt_axi_master_transaction::type_id::create($sformatf("write_xact_%0d_%0d", id, issued));
       xact.set_cfg(cfg);
+      order_profile = (issued + id) % 4;
       status = xact.randomize() with {
         xact_type == svt_axi_transaction::WRITE;
         id == local::id;
@@ -133,8 +143,52 @@ class axi_multi_id_master_seq extends svt_axi_master_base_sequence;
         data.size() == local::burst_len;
         wstrb.size() == local::burst_len;
         wvalid_delay.size() == local::burst_len;
-        data_user.size() == local::burst_len;
         foreach (wstrb[j]) { wstrb[j] == 8'hFF; }
+        if (local::order_profile == 0) {
+          // Address handshake, then first write-data handshake four cycles later.
+          data_before_addr == 0;
+          addr_valid_delay == 0;
+          reference_event_for_first_wvalid_delay == svt_axi_transaction::WRITE_ADDR_HANDSHAKE;
+          wvalid_delay[0] == 4;
+          foreach (wvalid_delay[j]) if (j > 0) wvalid_delay[j] == 0;
+        }
+        else if (local::order_profile == 1) {
+          // First write data is accepted four cycles before the address phase.
+          data_before_addr == 1;
+          reference_event_for_first_wvalid_delay == svt_axi_transaction::PREV_WRITE_DATA_HANDSHAKE;
+          wvalid_delay[0] == 0;
+          reference_event_for_addr_valid_delay == svt_axi_transaction::FIRST_WVALID_DATA_BEFORE_ADDR;
+          addr_valid_delay == 4;
+          foreach (wvalid_delay[j]) if (j > 0) wvalid_delay[j] == 0;
+        }
+        else if (local::order_profile == 2) {
+          // AWVALID and WVALID start together; zero-ready delay makes both handshake.
+          data_before_addr == 0;
+          addr_valid_delay == 0;
+          reference_event_for_first_wvalid_delay == svt_axi_transaction::WRITE_ADDR_VALID;
+          wvalid_delay[0] == 0;
+          foreach (wvalid_delay[j]) if (j > 0) wvalid_delay[j] == 0;
+        }
+        else {
+          // Fixed-seed random delay profile. Keep reference events consistent
+          // with the selected direction so the result is legal AXI stimulus.
+          data_before_addr dist {0 := 1, 1 := 1};
+          if (data_before_addr) {
+            reference_event_for_first_wvalid_delay == svt_axi_transaction::PREV_WRITE_DATA_HANDSHAKE;
+            reference_event_for_addr_valid_delay inside {
+              svt_axi_transaction::FIRST_WVALID_DATA_BEFORE_ADDR,
+              svt_axi_transaction::FIRST_DATA_HANDSHAKE_DATA_BEFORE_ADDR
+            };
+          }
+          else {
+            reference_event_for_first_wvalid_delay inside {
+              svt_axi_transaction::WRITE_ADDR_VALID,
+              svt_axi_transaction::WRITE_ADDR_HANDSHAKE
+            };
+          }
+          addr_valid_delay inside {[0:7]};
+          foreach (wvalid_delay[j]) wvalid_delay[j] inside {[0:7]};
+        }
       };
 
       if (!status) begin
@@ -142,6 +196,10 @@ class axi_multi_id_master_seq extends svt_axi_master_base_sequence;
       end
 
       `uvm_send(xact)
+      write_order_profile_count[order_profile]++;
+      $display("AXI_DELAY_PROFILE_JSON {\"id\":%0d,\"issued\":%0d,\"profile\":%0d,\"data_before_addr\":%0d,\"addr_valid_delay\":%0d,\"first_wvalid_delay\":%0d}",
+               id, issued, order_profile, xact.data_before_addr,
+               xact.addr_valid_delay, xact.wvalid_delay[0]);
       issued++;
       in_flight++;
 
@@ -225,7 +283,8 @@ class axi_multi_id_master_seq extends svt_axi_master_base_sequence;
         data.size() == local::burst_len;
         rresp.size() == local::burst_len;
         rready_delay.size() == local::burst_len;
-        data_user.size() == local::burst_len;
+        addr_valid_delay inside {[0:7]};
+        foreach (rready_delay[j]) rready_delay[j] == 0;
       };
 
       if (!status) begin
@@ -297,6 +356,9 @@ class axi_multi_id_master_seq extends svt_axi_master_base_sequence;
     foreach (id_writes[id]) begin
       `uvm_info("SEQ", $sformatf("ID=%0d: Writes=%0d, Reads=%0d", id, id_writes[id], id_reads[id]), UVM_LOW)
     end
+    `uvm_info("SEQ", $sformatf("Write order profiles: AW_FIRST=%0d W_FIRST=%0d SAME_CYCLE=%0d FIXED_SEED_RANDOM=%0d",
+              write_order_profile_count[0], write_order_profile_count[1],
+              write_order_profile_count[2], write_order_profile_count[3]), UVM_LOW)
     `uvm_info("SEQ", "=============================================", UVM_LOW)
 
   endtask

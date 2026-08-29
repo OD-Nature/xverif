@@ -4,6 +4,7 @@
 
 #include <iomanip>
 #include <sstream>
+#include <sys/stat.h>
 #include <unistd.h>
 
 namespace xdebug_core {
@@ -21,7 +22,7 @@ unsigned long long stable_path_hash(const std::string& value) {
 
 std::string short_socket_path(const std::string& nominal_path) {
     std::ostringstream oss;
-    oss << "/tmp/xdebug-" << static_cast<unsigned long long>(getuid())
+    oss << temporary_dir() << "/xdebug-" << static_cast<unsigned long long>(getuid())
         << "-" << std::hex << stable_path_hash(nominal_path) << ".sock";
     return oss.str();
 }
@@ -40,9 +41,23 @@ std::string safe_dir_prefix(const std::string& session_id) {
 
 }  // namespace
 
+std::string temporary_dir() {
+    std::string path = env_raw_string("XVERIF_TEST_TMPDIR");
+    if (!path.empty()) {
+        mkdir(path.c_str(), 0700);
+        return path;
+    }
+    std::string home = env_raw_string("HOME");
+    std::string root = (home.empty() ? std::string(".") : home) + "/.xdebug";
+    mkdir(root.c_str(), 0700);
+    path = root + "/tmp";
+    mkdir(path.c_str(), 0700);
+    return path;
+}
+
 std::string home_dir() {
     std::string home = env_raw_string("HOME");
-    return home.empty() ? std::string("/tmp") : home;
+    return home.empty() ? temporary_dir() : home;
 }
 
 std::string tool_home_dir(const ToolConfig& config) {
@@ -92,7 +107,7 @@ std::string registry_lock_path(const ToolConfig& config) {
 std::string socket_path(const ToolConfig& config, const std::string& session_id) {
     const std::string nominal = tool_session_dir(config, session_id) + "/socket";
     // Linux sockaddr_un::sun_path has 108 bytes including the terminating NUL.
-    // Keep a little margin and use a deterministic /tmp fallback for long HOME
+    // Keep a little margin and use a deterministic repository-local fallback for long HOME
     // paths commonly produced by pytest and CI workspaces.
     return nominal.size() < 104 ? nominal : short_socket_path(nominal);
 }

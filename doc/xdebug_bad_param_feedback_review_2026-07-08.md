@@ -15,13 +15,13 @@
   - cursor/list/event/handshake：子 agent `019f4252-ce4d-7272-a18a-6e3882822805`
   - APB/AXI/stream/combined/rc：子 agent `019f4252-ffb8-7931-afdf-2377d93f7285`
 - 临时 evidence：
-  - `/tmp/xdebug_bad_param_review_design_builtin.md`
-  - `/tmp/xdebug_bad_param_review_waveform_basic.md`
-  - `/tmp/xdebug_bad_param_review_waveform_basic.jsonl`
-  - `/tmp/xdebug_bad_param_review_stateful_event.md`
-  - `/tmp/xdebug_bad_param_review_raw.json`
-  - `/tmp/xdebug_bad_param_review_protocol_stream_combined.md`
-  - `/tmp/xdebug_bad_param_review_protocol_stream_combined.raw.jsonl`
+  - `<repo>/tmp/xdebug_bad_param_review_design_builtin.md`
+  - `<repo>/tmp/xdebug_bad_param_review_waveform_basic.md`
+  - `<repo>/tmp/xdebug_bad_param_review_waveform_basic.jsonl`
+  - `<repo>/tmp/xdebug_bad_param_review_stateful_event.md`
+  - `<repo>/tmp/xdebug_bad_param_review_raw.json`
+  - `<repo>/tmp/xdebug_bad_param_review_protocol_stream_combined.md`
+  - `<repo>/tmp/xdebug_bad_param_review_protocol_stream_combined.raw.jsonl`
 
 ## 总览
 
@@ -204,7 +204,7 @@
 - `make -C xdebug test-regression` 在沙箱外通过。
 - `make -C xdebug contract-test` 通过。
 - `python3 -m pytest xdebug/tests/contract/test_action_contract.py -q` 在沙箱外通过，`19 passed`。
-- `PYTHONPATH=/home/yian/xverif/xverif_mcp/src python3 -m pytest xverif_mcp/tests/test_direct_output_formats.py -q` 通过，`9 passed`。
+- `PYTHONPATH=<repo>/xverif_mcp/src python3 -m pytest xverif_mcp/tests/test_direct_output_formats.py -q` 通过，`9 passed`。
 - `python3 xdebug/tools/sync_runtime_request_schemas.py --check` 通过。
 - `python3 xdebug/tools/sync_action_schema_hints.py --check` 通过。
 

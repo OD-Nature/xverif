@@ -1,7 +1,7 @@
-+incdir+~/xif_agent/src
++incdir+$XIF_AGENT/src
 +incdir+tb
-~/xif_agent/src/xif_pkg.sv
-~/xif_agent/src/xif_if.sv
-~/xif_agent/src/xif_agent_pkg.sv
+$XIF_AGENT/src/xif_pkg.sv
+$XIF_AGENT/src/xif_if.sv
+$XIF_AGENT/src/xif_agent_pkg.sv
 tb/xif_event_pkg.sv
 tb/xif_event_top.sv

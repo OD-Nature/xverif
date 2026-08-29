@@ -31,10 +31,10 @@
         "id": "sample_axi",
         "session_id": "sample_axi",
         "mode": "waveform",
-        "fsdb": "~/xverif/xdebug/testdata/waveform/axi_vip_real/out/regression/test/axi_multi_id_test/waves.fsdb",
-        "socket_path": "/tmp/xdebug_action_sampling/home/.xdebug/engine/sessions/sample_axi_9d07aef7cdfe10de/socket",
+        "fsdb": "<xverif-repo>/xdebug/testdata/waveform/axi_vip_real/out/regression/test/axi_multi_id_test/waves.fsdb",
+        "socket_path": "<repo>/tmp/xdebug_action_sampling/home/.xdebug/engine/sessions/sample_axi_9d07aef7cdfe10de/socket",
         "transport": "uds",
-        "file_dir": "/tmp/xdebug_action_sampling/home/.xdebug/engine/sessions/sample_axi_9d07aef7cdfe10de/transport",
+        "file_dir": "<repo>/tmp/xdebug_action_sampling/home/.xdebug/engine/sessions/sample_axi_9d07aef7cdfe10de/transport",
         "server_host": "localhost.localdomain"
       },
       "backends": {

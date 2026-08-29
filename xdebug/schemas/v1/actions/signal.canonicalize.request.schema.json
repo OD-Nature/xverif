@@ -6,7 +6,8 @@
   "required": [
     "api_version",
     "action",
-    "args"
+    "args",
+    "target"
   ],
   "properties": {
     "api_version": {
@@ -16,7 +17,8 @@
       ]
     },
     "request_id": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "action": {
       "type": "string",
@@ -25,56 +27,97 @@
       ]
     },
     "target": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "daidir": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "session_id"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "daidir"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "session_id"
+            ]
+          },
+          "required": [
+            "daidir"
+          ]
+        }
+      ],
+      "additionalProperties": false
     },
     "args": {
       "type": "object",
+      "required": [
+        "signal"
+      ],
       "properties": {
         "signal": {
           "type": "string",
-          "description": "目标信号路径。"
-        },
-        "time_unit": {
-          "type": "string",
-          "enum": [
-            "auto",
-            "fs",
-            "ps",
-            "ns",
-            "us",
-            "ms",
-            "s"
-          ]
+          "description": "Final leaf signal path. Aggregate, array, and struct roots are not expanded automatically."
         }
       },
-      "additionalProperties": false,
-      "required": [
-        "signal"
-      ]
+      "additionalProperties": false
     },
     "limits": {
-      "type": "object"
-    },
-    "auth_token": {
-      "type": "string"
-    },
-    "id": {
-      "type": "string"
-    },
-    "trace_id": {
-      "type": "string"
-    },
-    "span_id": {
-      "type": "string"
-    },
-    "parent_span_id": {
-      "type": "string"
+      "type": "object",
+      "properties": {
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647,
+          "description": "Positive public frontend-to-engine request timeout in milliseconds. Omit limits.timeout_ms to disable the public watchdog."
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false,
-  "description": "signal.canonicalize: 返回信号 canonical 名称。",
+  "description": "Return the canonical design path for a signal.",
   "x-purpose": "返回信号 canonical 名称。",
   "x-how_it_works": "基于设计解析结果选出规范路径。",
   "x-when_to_use": "让后续 action 使用稳定路径。",
-  "x-arg_contract_notes": "required: signal"
+  "x-arg_contract_notes": "required: signal",
+  "x-description-zh": "返回信号 canonical 名称。",
+  "x-agent": {
+    "use_when": [
+      "Need one unique exact design match followed through static port connectivity to a canonical path."
+    ],
+    "do_not_use_when": [
+      "Do not use it when multiple candidate discovery is desired or when waveform values are required."
+    ],
+    "alternatives": [
+      {
+        "action": "signal.resolve",
+        "when": "Return design candidates without selecting a canonical connectivity path."
+      },
+      {
+        "action": "value.at",
+        "when": "Read the waveform value of a known leaf path."
+      }
+    ],
+    "constraints": [
+      "required: signal"
+    ]
+  }
 }

@@ -6,7 +6,8 @@
   "required": [
     "api_version",
     "action",
-    "args"
+    "args",
+    "target"
   ],
   "properties": {
     "api_version": {
@@ -16,7 +17,8 @@
       ]
     },
     "request_id": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "action": {
       "type": "string",
@@ -25,94 +27,194 @@
       ]
     },
     "target": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fsdb": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "session_id"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "fsdb"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "session_id"
+            ]
+          },
+          "required": [
+            "fsdb"
+          ]
+        }
+      ],
+      "additionalProperties": false
     },
     "args": {
       "type": "object",
+      "required": [
+        "name"
+      ],
       "properties": {
         "line_limit": {
           "type": "integer",
           "minimum": 1,
-          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
+          "description": "Limits returned evidence rows only, not scanning, aggregation, or the verdict; read completeness fields as well."
         },
         "name": {
           "type": "string",
-          "description": "已保存配置、游标、列表或接口配置名称。"
+          "description": "Saved-object name in this action namespace; do not assume names are shared by cursors, lists, and protocol configs."
         },
         "output": {
           "type": "object",
           "properties": {
             "path": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1,
+              "description": "Artifact directory; omit it to return an in-response preview."
             },
             "file_format": {
               "type": "string",
               "enum": [
                 "u64bin"
               ],
-              "description": "list.export file format; response manifest uses versioned format u64bin.v1."
-            },
-            "verbose": {
-              "type": "boolean"
+              "default": "u64bin",
+              "description": "Waveform-list artifact format; the manifest publishes u64bin.v1."
             }
           },
-          "additionalProperties": false,
-          "description": "导出配置对象；路径统一使用 output.path。"
-        },
-        "time_range": {
-          "type": "object",
-          "properties": {
-            "begin": {
-              "type": "string"
-            },
-            "end": {
-              "type": "string"
+          "allOf": [
+            {
+              "if": {
+                "required": [
+                  "file_format"
+                ]
+              },
+              "then": {
+                "required": [
+                  "path"
+                ]
+              },
+              "description": "Export destination and rendering controls. path, file_format, and verbose are supported only where this action declares them."
             }
-          },
+          ],
           "additionalProperties": false,
-          "description": "查询或分析的时间窗口。"
+          "description": "Export destination and rendering controls. path, file_format, and verbose are supported only where this action declares them."
         },
-        "time_unit": {
+        "render_time_unit": {
           "type": "string",
           "enum": [
             "auto",
-            "fs",
             "ps",
             "ns",
-            "us",
-            "ms",
-            "s"
-          ]
+            "us"
+          ],
+          "description": "Controls only canonical response time rendering: auto, ps, ns, or us. It never changes input parsing, sampling, filtering, or ordering."
+        },
+        "time_range": {
+          "type": "object",
+          "minProperties": 1,
+          "properties": {
+            "begin": {
+              "type": "string",
+              "minLength": 1,
+              "description": "闭区间起点；省略时使用可用波形窗口起点。"
+            },
+            "end": {
+              "type": "string",
+              "minLength": 1,
+              "description": "闭区间终点；省略时使用可用波形窗口终点。"
+            }
+          },
+          "additionalProperties": false,
+          "description": "Closed analysis interval. begin and end may be omitted independently to use the available waveform bounds."
         }
       },
       "additionalProperties": false,
-      "required": [
-        "name"
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "output"
+            ],
+            "properties": {
+              "output": {
+                "required": [
+                  "path"
+                ],
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "line_limit"
+              ]
+            }
+          }
+        }
       ]
     },
     "limits": {
-      "type": "object"
-    },
-    "auth_token": {
-      "type": "string"
-    },
-    "id": {
-      "type": "string"
-    },
-    "trace_id": {
-      "type": "string"
-    },
-    "span_id": {
-      "type": "string"
-    },
-    "parent_span_id": {
-      "type": "string"
+      "type": "object",
+      "properties": {
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647,
+          "description": "Positive public frontend-to-engine request timeout in milliseconds. Omit limits.timeout_ms to disable the public watchdog."
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false,
-  "description": "list.export: 导出 list 数据。",
+  "description": "Export waveform-list data.",
   "x-purpose": "导出 list 数据。",
   "x-how_it_works": "读取 list 信号并写出 u64bin 波形表；manifest format 为 u64bin.v1。",
   "x-when_to_use": "把窗口数据交给外部分析。",
-  "x-arg_contract_notes": "required: name; format: u64bin only"
+  "x-arg_contract_notes": "required: name; format: u64bin only",
+  "x-description-zh": "导出 list 数据。",
+  "x-agent": {
+    "use_when": [
+      "Need multi-signal values from a saved list written to a declared artifact or returned as an export preview."
+    ],
+    "do_not_use_when": [
+      "Do not use it when no file or multi-signal preview is needed, or for a single point read."
+    ],
+    "alternatives": [
+      {
+        "action": "value.at",
+        "when": "Read list values at one or more times."
+      },
+      {
+        "action": "list.load",
+        "when": "Load a reusable signal set from JSON configuration before point reads."
+      }
+    ],
+    "constraints": [
+      "required: name; format: u64bin only"
+    ]
+  }
 }

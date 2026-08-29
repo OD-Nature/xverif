@@ -6,7 +6,8 @@
   "required": [
     "api_version",
     "action",
-    "args"
+    "args",
+    "target"
   ],
   "properties": {
     "api_version": {
@@ -22,7 +23,44 @@
       ]
     },
     "target": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fsdb": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "session_id"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "fsdb"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "session_id"
+            ]
+          },
+          "required": [
+            "fsdb"
+          ]
+        }
+      ],
+      "additionalProperties": false
     },
     "args": {
       "type": "object",
@@ -30,75 +68,160 @@
         "stream"
       ],
       "properties": {
+        "cache_scope": {
+          "type": "string",
+          "enum": [
+            "full",
+            "range"
+          ],
+          "default": "full",
+          "description": "Base-analysis cache scope for dynamic=true only. full (default) caches the complete FSDB; range requires a non-empty time_range and caches that normalized interval. Omit this argument when dynamic=false."
+        },
         "channel": {
-          "type": "string"
+          "type": "string",
+          "description": "协议或 stream 的逻辑 channel 选择；可用值由本 action 的 enum 决定。"
         },
         "dynamic": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "为 true 时允许本 action 已声明的运行时动态检查；不开放未声明字段。"
         },
         "line_limit": {
           "type": "integer",
           "minimum": 1,
-          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
+          "description": "Limits returned evidence rows only, not scanning, aggregation, or the verdict; read completeness fields as well."
         },
-        "stream": {
-          "type": "string",
-          "description": "已保存 stream 配置名称。"
-        },
-        "time_range": {
-          "type": "object",
-          "properties": {
-            "begin": {
-              "type": "string"
-            },
-            "end": {
-              "type": "string"
-            }
-          },
-          "additionalProperties": false,
-          "description": "查询或分析的时间窗口。"
-        },
-        "time_unit": {
+        "render_time_unit": {
           "type": "string",
           "enum": [
             "auto",
-            "fs",
             "ps",
             "ns",
-            "us",
-            "ms",
-            "s"
-          ]
+            "us"
+          ],
+          "description": "Controls only canonical response time rendering: auto, ps, ns, or us. It never changes input parsing, sampling, filtering, or ordering."
+        },
+        "stream": {
+          "type": "string",
+          "description": "已加载的 stream 配置名称。"
+        },
+        "time_range": {
+          "type": "object",
+          "minProperties": 1,
+          "properties": {
+            "begin": {
+              "type": "string",
+              "minLength": 1,
+              "description": "闭区间起点；省略时使用可用波形窗口起点。"
+            },
+            "end": {
+              "type": "string",
+              "minLength": 1,
+              "description": "闭区间终点；省略时使用可用波形窗口终点。"
+            }
+          },
+          "additionalProperties": false,
+          "description": "Closed analysis interval. begin and end may be omitted independently to use the available waveform bounds."
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "dynamic"
+            ],
+            "properties": {
+              "dynamic": {
+                "const": false
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "cache_scope"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "cache_scope"
+            ],
+            "properties": {
+              "cache_scope": {
+                "const": "range"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "time_range"
+            ],
+            "properties": {
+              "time_range": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "begin"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "end"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "limits": {
+      "type": "object",
+      "properties": {
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647,
+          "description": "Positive public frontend-to-engine request timeout in milliseconds. Omit limits.timeout_ms to disable the public watchdog."
         }
       },
       "additionalProperties": false
     },
-    "limits": {
-      "type": "object"
-    },
     "request_id": {
-      "type": "string"
-    },
-    "auth_token": {
-      "type": "string"
-    },
-    "id": {
-      "type": "string"
-    },
-    "trace_id": {
-      "type": "string"
-    },
-    "span_id": {
-      "type": "string"
-    },
-    "parent_span_id": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     }
   },
   "additionalProperties": false,
-  "description": "stream.validate: 验证 stream 配置。",
+  "description": "Validate stream configuration and observed behavior; dynamic validation supports explicit full or range base-cache scope.",
   "x-purpose": "验证 stream 配置。",
-  "x-how_it_works": "检查 stream 信号在 FSDB 中是否可解析。",
-  "x-when_to_use": "提前发现错误信号路径。",
-  "x-arg_contract_notes": "required: stream"
+  "x-how_it_works": "static validation 不建 base；dynamic:true 与 query/export 复用 cache_scope 选择的 base。",
+  "x-when_to_use": "提前发现错误信号路径和动态流行为问题。",
+  "x-arg_contract_notes": "required: stream; cache_scope: full(default) / range only when dynamic=true",
+  "x-description-zh": "验证 stream 配置；动态验证可显式选择 full 或 range 基础分析缓存范围。",
+  "x-agent": {
+    "use_when": [
+      "Validate stream configuration statically, or reuse an explicit full/range base analysis for dynamic validation."
+    ],
+    "do_not_use_when": [
+      "Do not use it to return transfer evidence or export artifacts."
+    ],
+    "alternatives": [
+      {
+        "action": "stream.query",
+        "when": "Return observed stream evidence."
+      },
+      {
+        "action": "stream.export",
+        "when": "Write stream artifacts."
+      }
+    ],
+    "constraints": [
+      "required: stream; cache_scope: full(default) / range only when dynamic=true"
+    ]
+  }
 }

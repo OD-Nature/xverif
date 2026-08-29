@@ -9,7 +9,7 @@ xverif 每次测试运行将终端摘要以外的 JUnit、版本化 JSON、suite
 ## Considered Options
 
 - 选择：仓库本地独立 results 根目录。
-- 拒绝：只写 `/tmp`；难以定位、保留和关联提交，清理行为也依赖宿主机。
+- 拒绝：只写 `<repo>/tmp`；难以定位、保留和关联提交，清理行为也依赖宿主机。
 - 拒绝：与 fixture cache 共用根目录；输入资产和运行证据的不可变性、保留与清理策略不同。
 
 ## Consequences

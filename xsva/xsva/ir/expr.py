@@ -83,7 +83,7 @@ class SampleDependencyIR:
 class ExprIR:
     """表达式的轻量语义提取。
 
-    Phase 1 不做完整表达式 AST，只提取：
+    当前表达式 IR 不构造完整 AST，只提取：
     - 信号列表（含层次路径、位选）
     - sampled function 调用
     - local variable 引用
@@ -108,5 +108,6 @@ class ExprIR:
 
     contains_x_sensitive_op: bool = False
     contains_sampled_func: bool = False
+    dependency_complete: bool = True
 
     span: SourceSpan = field(default_factory=SourceSpan)

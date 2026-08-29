@@ -130,7 +130,7 @@ def main():
         xz_events = export("xz", "vld && data != 0")
         require(not xz_events, "X/Z data expression should not become a known match")
 
-        abnormal = query(args.xdebug, home, "detect_abnormal", {
+        abnormal = query(args.xdebug, home, "signal.anomaly.inspect", {
             "signals": [
                 "xif_event_top.if_rdy.pd.opcode",
                 "xif_event_top.if_rdy.pd.data",
@@ -146,9 +146,9 @@ def main():
         }, {"session_id": session})
         findings = abnormal["data"].get("findings", [])
         require(any(f.get("type") == "unknown_xz" and f.get("signal") == "xif_event_top.xz_data"
-                    for f in findings), "detect_abnormal did not find xz_data unknown_xz")
+                    for f in findings), "signal.anomaly.inspect did not find xz_data unknown_xz")
         require(any(f.get("type") == "stuck" and f.get("signal") == "xif_event_top.if_rdy.pd.opcode"
-                    for f in findings), "detect_abnormal did not scan direct struct member path")
+                    for f in findings), "signal.anomaly.inspect did not scan direct struct member path")
 
         query(args.xdebug, home, "event.find",
               {"name": "rdy", "expr": "vld && missing_alias"},
@@ -157,7 +157,7 @@ def main():
             counts, len(findings)))
     finally:
         try:
-            query(args.xdebug, home, "session.kill", target={"session_id": "all"})
+            query(args.xdebug, home, "session.close", args={"mode": "force"}, target={"session_id": "all"})
         except Exception:
             pass
         shutil.rmtree(str(home), ignore_errors=True)

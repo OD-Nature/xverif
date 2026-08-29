@@ -1123,7 +1123,7 @@ message: Unknown alias in expression: bad_alias
 
 证据：
 
-- `source.context` 成功 xout 显示完整 `/home/yian/.../ai_complex_top.sv`。
+- `source.context` 成功 xout 显示完整 `<repo>/.../ai_complex_top.sv`。
 - `source.context(args.context:2)` 被 schema 拒绝，但 action 名称和用户直觉都会诱导传 context 行数。
 
 影响：

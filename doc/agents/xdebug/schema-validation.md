@@ -9,19 +9,43 @@ xdebug public API 以 action-specific schema 为 source of truth。任何文档�
 - `xdebug/specs/actions/actions.yaml`
 - `xdebug/schemas/v1/actions/*.request.schema.json`
 - `xdebug/schemas/v1/actions/*.response.schema.json`
+- `xdebug/schemas/v1/internal/engine.request.schema.json`
+- `xdebug/schemas/v1/internal/engine.request.manifest.json`
+- `xdebug/schemas/v1/internal/actions/*.request.schema.json`
+- `xdebug/schemas/v1/internal/helper-actions/*.request.schema.json`
 - `xdebug/examples/requests/*.json`
 - `xdebug/examples/responses/*.json`
 
 辅助生成/校验：
 
 - `xdebug/tools/sync_runtime_request_schemas.py`
+- `xdebug/tools/sync_internal_request_schema.py`
+- `xdebug/tools/sync_value_response_schemas.py`
+- `xdebug/tools/sync_response_schemas.py`
+- `xdebug/specs/non_sampling_response_contracts.py`（AXI 等非采样 action 的业务对象合同，由统一 response 生成器消费）
+- `xdebug/tools/sync_protocol_statistics_response_schemas.py`
 - `xdebug/tools/sync_action_schema_hints.py`
+- `xdebug/tools/audit_runtime_schema_compatibility.py`
 - `xdebug/tools/validate_schema.py`
 - `xdebug/tools/validate_examples.py`
 - `xdebug/tools/audit_action_schema_coverage.py`
 - `xdebug/tools/check_action_contract.py`
 
 ## Request Schema 要求
+
+虽然 checked-in schema 声明 Draft 2020-12，frontend/engine 的 embedded
+third-party validator 在运行时按 Draft-7 兼容子集编译 request schema。request 不得
+使用 `$dynamicRef`、`unevaluatedProperties`、`prefixItems`、`dependentSchemas` 等未
+确认支持的后期关键字；提交前运行 `audit_runtime_schema_compatibility.py`。response
+schema 不进入 runtime request validator，但仍须经 example/contract 校验。
+
+public request 进入 engine 时使用同源生成的 internal contract。完整 aggregate schema
+保留作全量审计；runtime 根据 generated manifest 选择单 action schema，避免每个短命
+helper 解析和编译整个 action union。仅已有 live session 的纯 `server_forward` 路径可先
+使用严格 helper envelope，再由 server 对 args/target 执行完整 action 校验；session
+不可达或发送前失败时 helper 必须补做完整校验，保持 schema 错误优先级。manifest、
+aggregate、单 action schema 与 helper envelope 必须由
+`sync_internal_request_schema.py` 一次生成并以 `--check` 验收，禁止手改投影产物。
 
 每个 public action 必须有独立 request schema。
 
@@ -41,14 +65,41 @@ xdebug public API 以 action-specific schema 为 source of truth。任何文档�
 - 时间窗口：`args.time_range.begin/end`
 - 数量限制：以 action-specific schema 为准。通用窗口/统计常用 `args.line_limit`；APB/AXI query 使用 `args.query.line_limit` / `args.query.index`；active-driver 链深度使用 top-level `limits.max_depth`。
 - stream 名称：`args.stream`
-- AXI/APB direction：以 action-specific schema 为准；query action 当前只接受 `read/write`，cursor/analysis 等 action 可按各自 schema 接受 `all`。
+- AXI/APB direction：以 action-specific schema 为准；`axi.query` 接受 `read/write`，
+  `apb.query` 接受 `read/write/all` 且默认 `all`，cursor/analysis 等 action 按各自
+  schema 决定是否接受 `all`。
+- APB signal mapping：`apb.config.load.args.config` 必须包含 `PREADY` 和 `PSLVERR`；
+  schema 与 handler 都不得在缺失时假设 zero-wait 或 no-error。协议 config 的严格 shape
+  必须在 `sync_runtime_request_schemas.py` 使用 action-specific template 生成，不能复用
+  第一个同名 `config` 参数的通用 shape。
 - 导出路径：`output.path`
+- `apb.export`：`name`、`time_range.begin`、`time_range.end` 全部必填；`direction` 和
+  exact/range/mask `address` 位于 args 顶层，不接受 query/filter 包装。`output` 可省略以
+  返回最多 8 行 preview；显式 `output.file_format:tsv|csv` 时必须同时提供 path。有 path
+  只返回单 data artifact 与 meta 的路径/字节证据，不混入 preview shape。
 
 特殊收紧合同：
 
+- `line_limit` 只能限制 response/XOUT evidence，不得改变聚合、verdict 或扫描窗口。
+- 需要限制扫描时使用 action-specific `max_samples`；`event.export` 的文件/聚合事件预算使用 `max_events`。预算耗尽必须返回 `analysis_complete:false`、`scan_complete:false` 和明确 `truncation_scopes`。
+- 参数只在部分 mode 生效时，request schema 用条件约束收紧，并在 handler 再做语义校验；禁止接受后静默忽略。例如 `event.find(first/last)` 不接受 `line_limit`，`axi.analysis` 仅 `pending` 接受 `line_limit`。
+- schema 生成器中的 `EXTRA_ARGS_BY_ACTION` 与 action-specific override 是公开参数白名单；修改生成产物时必须同时修改生成器，避免下一次同步回退。
+
 - `list.export` 输入格式只允许 `args.format:"u64bin"`；manifest/response 可使用版本化 `u64bin.v1`。
 - `stream.export.args.kind` 只允许 `transfer`、`packet`、`packet_beats`，不能写 `beats`。
+- Stream 命名逐拍字段只允许 `beat_fields`；`data_fields` 已从 schema 和 runtime 删除，
+  config file 中出现时必须明确报错，禁止自动迁移或静默忽略。
+- `stream.query` 字段过滤只允许 `filter.fields.<name>` 下的 exact 值队列、闭区间
+  range、value/mask 三种互斥模式；旧 `match_field`、`args.match` 和
+  `field_scope` 已删除且不提供兼容。packet stream 必须指定
+  `filter.position=sop|eop`。
 - `apb.query` / `axi.query` 不接受旧 `args.num`、`args.limit` 或猜测的顶层数量字段。
+- `apb.export` 不公开 `line_limit`；preview cap 固定为 8，完整 artifact 的行数不受 preview
+  cap 影响。不得 fallback 到 `apb.query`、`stream.export`、其它数据源或更窄窗口。
+- `apb.statistics` / `axi.statistics` 使用严格 `args.filter`：direction、ID、address 三类
+  条件取 AND；ID 队列内部取 OR；address 的 exact/range/mask 只能选择一种。APB schema
+  不公开 IDs，mask=0、标准化重复值和反向 range 由 handler 返回明确语义错误。三类
+  action 共用通用 value filter helper，禁止复制 literal、range、mask 或 X/Z 比较逻辑。
 
 ## Response Schema 要求
 
@@ -60,6 +111,7 @@ xdebug public API 以 action-specific schema 为 source of truth。任何文档�
 - 错误响应字段稳定。
 - summary/data/findings/evidence 的类型明确。
 - 新增字段后同步 example。
+- 截断必须区分 `scan_complete`、`analysis_complete`、`response_truncated` 和 `render_truncated`；兼容字段 `truncated` 不能替代这些精确字段。
 
 ## 参数错误提示合同
 
@@ -73,7 +125,7 @@ xdebug 参数错误有两层：
 - `invalid_arg`：错误字段路径。
 - `expected`：期望类型、范围或语义。
 - `received_type`：实际 JSON 类型。
-- `allowed_values`：合法 enum。
+- `available_values`：当前错误的合法 enum 或可选对象。错误响应不发布 `allowed_values`；action catalog descriptor 中的 `allowed_values` 仅表示参数到 enum 的元数据映射，两者语义不同。
 - `did_you_mean`：常见错字段的正确字段路径。
 - `required_any_of`：至少提供其中一组参数。
 - `correct_example`：最小正确请求模板。
@@ -82,21 +134,57 @@ xdebug 参数错误有两层：
 
 ## actions.yaml 同步
 
-`actions.yaml` 中的 `required_args`、schema 路径、example 路径、requires、handler_kind 必须和 runtime 一致。
+`actions.yaml` 中的 `required_args`、schema 路径、example 路径、requires、handler_kind
+必须和 runtime 一致。action 的英文/中文描述、purposes、适用范围、禁用范围和推荐替代
+也以该文件为唯一事实源；runtime descriptor 由生成文件承载，不维护平行硬编码。
 
 修改后运行：
 
 ```bash
-~/miniconda3/bin/python xdebug/tools/sync_runtime_request_schemas.py
-~/miniconda3/bin/python xdebug/tools/sync_action_schema_hints.py
+python3 xdebug/tools/sync_runtime_request_schemas.py
+python3 xdebug/tools/sync_internal_request_schema.py
+python3 xdebug/tools/sync_value_response_schemas.py
+python3 xdebug/tools/sync_response_schemas.py
+python3 xdebug/tools/sync_protocol_statistics_response_schemas.py
+python3 xdebug/tools/sync_action_schema_hints.py
+python3 xdebug/tools/sync_action_metadata.py
 ```
 
 检查模式：
 
 ```bash
-~/miniconda3/bin/python xdebug/tools/sync_runtime_request_schemas.py --check
-~/miniconda3/bin/python xdebug/tools/sync_action_schema_hints.py --check
+python3 xdebug/tools/sync_runtime_request_schemas.py --check
+python3 xdebug/tools/sync_internal_request_schema.py --check
+python3 xdebug/tools/sync_value_response_schemas.py --check
+python3 xdebug/tools/sync_response_schemas.py --check
+python3 xdebug/tools/sync_protocol_statistics_response_schemas.py --check
+python3 xdebug/tools/sync_action_schema_hints.py --check
+python3 xdebug/tools/sync_action_metadata.py --check
 ```
+
+## Batch response 组合校验
+
+- batch 的公开 response schema 仍完整枚举所有 action-specific child 合同。运行时
+  采用组合式等价校验：递归 dispatch 在 child 写入 `data.results[]` 前按对应 action
+  response schema 校验；batch 外层使用从同一公开 schema 投影出的严格 envelope
+  校验；未知 action child 单独使用公开 schema 中的
+  `batchChild__unknown_child_error` 定义校验。不得把未知 child 或 envelope 当作已由
+  递归边界覆盖，也不得修改公开 schema 来换取运行时性能。
+- native `schema` action 省略 `response_detail` 时保持 `full` 兼容语义。只有
+  `action=batch, kind=response` 可显式选择 `summary|child|full`：`summary` 是不读取
+  4.8 MiB full artifact 的独立紧凑 outer-envelope/selector 合同，不验证 child payload；
+  `child` 必须同时提供一个非 batch 的 `child_action` 并只读取该 action response schema；
+  `full` 返回 checked-in 完整 recursive union。三者用 `relation.completeness` 明示完整性。
+- MCP 获取 batch response schema 时默认请求 `summary`；普通 action response 默认
+  `full`。调用方需要验证单个 child 时请求 `child`，只有确实需要完整 union 时显式请求
+  `full`，不得把 summary 当成 child 的精确合同。
+- `examples/requests-invalid/manifest.json` 是组合约束反例的 canonical manifest；
+  `validate_examples.py`、C++ runtime validator unit 和 MCP schema projection 共同消费。
+  每个 witness 必须同时被 Draft-7 runtime 子集和 Draft 2020-12 拒绝。
+- README/help 的 canonical 请求片段由 `skills/xverif/specs/examples.yaml` 指向 checked-in
+  request example，再由 `skills/xverif/scripts/generate_references.py` 同步 marker 区域。
+  `skills.public_docs` 会解析所有公开 `json` fence，并对完整 native/MCP call 使用当前
+  action/tool schema 校验；非完整 JSON 片段必须标为 `jsonc` 等其它 fence。
 
 ## 基础校验
 

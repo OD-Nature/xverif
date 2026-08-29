@@ -1,0 +1,709 @@
+"""MCP SDK xcov 全链路集成测试.
+
+通过真实 ``tools/xcov --stdio-loop`` 子进程测试 MCP transport 链路。
+需要 Verdi/VCS 环境和有效的 coverage VDB。
+
+运行方式：
+  XVERIF_TEST_EXECUTION_ENV=host pytest --xverif-gate regression \\
+      --xverif-suite xcov.mcp_integration -v
+"""
+
+from __future__ import annotations
+
+import importlib
+import json
+import os
+import shlex
+import sys
+from pathlib import Path
+from typing import Any
+
+import anyio
+import pytest
+
+XDEBUG_DIR = Path(__file__).resolve().parents[2] / "xdebug"
+sys.path = [
+    path for path in sys.path
+    if Path(path or os.getcwd()).resolve() != XDEBUG_DIR
+]
+
+sys.modules.pop("mcp", None)
+pytest.importorskip("mcp")
+
+POLICY_ENV = [
+    "XVERIF_MCP_ENABLE_COMMON",
+    "XVERIF_MCP_ENABLE_DEBUG",
+    "XVERIF_MCP_ENABLE_COV",
+    "XVERIF_MCP_ENABLE_BIT",
+    "XVERIF_MCP_ENABLE_ENTRY",
+    "XVERIF_MCP_ENABLE_LOC",
+    "XVERIF_MCP_ENABLE_SVA",
+    "XVERIF_MCP_ENABLE_MUTATION",
+    "XVERIF_MCP_ENABLE_ARTIFACT_WRITE",
+    "XVERIF_MCP_ARTIFACT_ROOT",
+]
+
+
+def _server(monkeypatch, overrides=None):
+    for name in POLICY_ENV:
+        monkeypatch.delenv(name, raising=False)
+    resolved_overrides = overrides or {}
+    export_roots = resolved_overrides.get("XVERIF_XCOV_EXPORT_ROOTS")
+    if export_roots:
+        monkeypatch.setenv("XVERIF_MCP_ENABLE_ARTIFACT_WRITE", "1")
+        monkeypatch.setenv("XVERIF_MCP_ARTIFACT_ROOT", export_roots)
+    for name, value in resolved_overrides.items():
+        monkeypatch.setenv(name, value)
+    if "xverif_mcp.server" in sys.modules:
+        return importlib.reload(sys.modules["xverif_mcp.server"])
+    return importlib.import_module("xverif_mcp.server")
+
+
+def _call_tool(server, name, args=None):
+    async def _run():
+        result = await server.mcp.call_tool(name, args or {})
+        return result if isinstance(result, tuple) else (result, None)
+    return anyio.run(_run)
+
+
+def _resolve_test_vdb() -> str:
+    env = os.environ.get("XVERIF_TEST_VDB")
+    if env and os.path.isdir(env):
+        return env
+
+    xverif_home = os.environ.get("XVERIF_HOME") or str(
+        Path(__file__).resolve().parents[2]
+    )
+    candidates = [
+        os.path.join(xverif_home, "xcov", "fixtures", "comprehensive", "out", "comprehensive.vdb"),
+    ]
+    for c in candidates:
+        if os.path.isdir(c):
+            return c
+    pytest.skip("XVERIF_TEST_VDB not set and no default VDB found; run: pytest --xverif-prepare xcov.comprehensive")
+
+
+@pytest.fixture(scope="module")
+def test_vdb():
+    return _resolve_test_vdb()
+
+
+@pytest.fixture(scope="module")
+def exclusion_vdb():
+    xverif_home = os.environ.get("XVERIF_HOME") or str(Path(__file__).resolve().parents[2])
+    versions_dir = os.path.join(xverif_home, ".xverif-test-cache", "fixtures", "xcov.exclusion", "versions")
+    if os.path.isdir(versions_dir):
+        for vhash in sorted(os.listdir(versions_dir), reverse=True):
+            vdb = os.path.join(versions_dir, vhash, "resources", "exclusion.vdb")
+            if os.path.isdir(vdb):
+                return vdb
+    pytest.skip("exclusion VDB not found; run: pytest --xverif-prepare xcov.exclusion")
+
+
+@pytest.fixture(scope="module")
+def xverif_home():
+    return os.environ.get("XVERIF_HOME") or str(
+        Path(__file__).resolve().parents[2]
+    )
+
+
+# ── 测试 ──
+
+
+def test_cov_list_actions(monkeypatch):
+    """xverif_cov_list_actions 返回所有 xcov action."""
+    overrides = {
+        "XVERIF_HOME": str(Path(__file__).resolve().parents[2]),
+    }
+    server = _server(monkeypatch, overrides)
+    content, _ = _call_tool(server, "xverif_cov_list_actions")
+    payload = json.loads(content[0].text)
+    assert payload["ok"] is True
+    actions = payload["data"]["items"]
+    assert len(actions) >= 20
+    names = {a["name"] for a in actions}
+    assert "session.open" in names
+    assert "code_coverage.summary" in names
+    assert "scope.summary" in names
+
+
+def test_cov_session_open_close(monkeypatch, test_vdb, xverif_home):
+    """xverif_cov_session_open/close 完整生命周期."""
+    overrides = {
+        "XVERIF_HOME": xverif_home,
+        "XVERIF_MCP_BACKEND": "direct",
+    }
+    server = _server(monkeypatch, overrides)
+
+    # Open
+    content, _ = _call_tool(server, "xverif_cov_session_open", {
+        "name": "mcp_int_open_close",
+        "vdb": test_vdb,
+    })
+    opened = json.loads(content[0].text)
+    assert opened["ok"] is True, f"session.open failed: {opened.get('error')}"
+    assert opened["session"]["session_id"] == "mcp_int_open_close"
+    assert opened["session"]["state"] == "alive"
+
+    # Close
+    content, _ = _call_tool(server, "xverif_cov_session_close", {
+        "session_id": "mcp_int_open_close",
+    })
+    closed = json.loads(content[0].text)
+    assert closed["ok"] is True
+
+
+def test_cov_fake_lsf_outer_and_inner_urg_full_chain(
+    monkeypatch, test_vdb, xverif_home, tmp_path,
+):
+    """外层 bsub -I stdio-loop 与内层 bsub -K URG 同时生效。"""
+    fake_bsub = shlex.join([
+        sys.executable, "-m", "xverif_loop.lsf.fake_bsub",
+    ])
+    fake_bkill = shlex.join([
+        sys.executable, "-m", "xverif_loop.lsf.fake_bkill",
+    ])
+    overrides = {
+        "XVERIF_HOME": xverif_home,
+        "XVERIF_MCP_BACKEND": "lsf",
+        "XVERIF_LSF_BSUB": fake_bsub,
+        "XVERIF_LSF_BKILL": fake_bkill,
+        "XVERIF_XCOV_URG_BACKEND": "lsf",
+        "XVERIF_XCOV_URG_QUEUE": "inner_urg_queue",
+        "XVERIF_XCOV_CACHE_DIR": str(tmp_path / "shared-cache"),
+        "FAKE_BSUB_STDOUT_NOISE_BEFORE_READY": "1",
+        "FAKE_BSUB_SCHEDULER_FRAMING": "1",
+    }
+    server = _server(monkeypatch, overrides)
+
+    content, _ = _call_tool(server, "xverif_cov_session_open", {
+        "name": "mcp_fake_lsf_fullchain",
+        "vdb": test_vdb,
+        "queue": "outer_session_queue",
+        "resource": "select[type==any]",
+    })
+    opened = json.loads(content[0].text)
+    assert opened["ok"] is True, opened
+    outer = opened["session"]["scheduler"]
+    assert outer["mode"] == "lsf"
+    assert outer["status"] == "ready"
+    assert outer["requested"] == {
+        "queue": "outer_session_queue",
+        "resource": "select[type==any]",
+    }
+    assert outer["submitted"]["queue"] == "outer_session_queue"
+    assert outer["submitted"]["job_id"] == "123"
+
+    content, _ = _call_tool(server, "xverif_cov_session_doctor", {
+        "session_id": "mcp_fake_lsf_fullchain",
+        "verbose": True,
+    })
+    doctor = json.loads(content[0].text)
+    assert doctor["ok"] is True, doctor
+    status = doctor["backend_response"]
+    assert status["ok"] is True, status
+    assert status["data"]["session"]["npi_initialized"] is False
+    cached = status["data"]["cached_indexes"]
+    assert cached["state"] == "ready"
+    assert cached["hit"] is False
+    inner = cached["urg_execution"]
+    assert inner["backend"] == "lsf"
+    assert inner["submitted"] is True
+    assert inner["status"] == "completed"
+    assert inner["queue"] == "inner_urg_queue"
+    assert inner["job_id"] == "123"
+    assert inner["exit_status"] == 0
+
+    content, _ = _call_tool(server, "xverif_cov_session_close", {
+        "session_id": "mcp_fake_lsf_fullchain",
+    })
+    closed = json.loads(content[0].text)
+    assert closed["ok"] is True, closed
+
+    content, _ = _call_tool(server, "xverif_cov_session_open", {
+        "name": "mcp_fake_lsf_warm",
+        "vdb": test_vdb,
+        "queue": "outer_session_queue",
+        "resource": "select[type==any]",
+    })
+    warm_opened = json.loads(content[0].text)
+    assert warm_opened["ok"] is True, warm_opened
+    assert warm_opened["session"]["scheduler"]["submitted"]["queue"] == (
+        "outer_session_queue"
+    )
+
+    content, _ = _call_tool(server, "xverif_cov_session_doctor", {
+        "session_id": "mcp_fake_lsf_warm",
+        "verbose": True,
+    })
+    warm_doctor = json.loads(content[0].text)
+    assert warm_doctor["ok"] is True, warm_doctor
+    warm_status = warm_doctor["backend_response"]
+    assert warm_status["ok"] is True, warm_status
+    assert warm_status["data"]["session"]["npi_initialized"] is False
+    warm_cached = warm_status["data"]["cached_indexes"]
+    assert warm_cached["state"] == "ready"
+    assert warm_cached["hit"] is True
+    assert warm_cached["urg_execution"] == {
+        "backend": "lsf",
+        "submitted": False,
+        "status": "cache_hit",
+        "queue": "inner_urg_queue",
+        "resource": None,
+        "job_name": None,
+        "job_id": None,
+        "exit_status": None,
+    }
+
+    content, _ = _call_tool(server, "xverif_cov_session_close", {
+        "session_id": "mcp_fake_lsf_warm",
+    })
+    warm_closed = json.loads(content[0].text)
+    assert warm_closed["ok"] is True, warm_closed
+
+
+def test_cov_code_coverage_summary(monkeypatch, test_vdb, xverif_home):
+    """xverif_cov_query(code_coverage.summary) 按 metric 汇总."""
+    overrides = {
+        "XVERIF_HOME": xverif_home,
+        "XVERIF_MCP_BACKEND": "direct",
+    }
+    server = _server(monkeypatch, overrides)
+
+    _call_tool(server, "xverif_cov_session_open", {
+        "name": "mcp_int_summary", "vdb": test_vdb,
+    })
+
+    content, _ = _call_tool(server, "xverif_cov_query", {
+        "session_id": "mcp_int_summary",
+        "action": "code_coverage.summary",
+        "args": {"group_by": "metric"},
+        "output_format": "json",
+    })
+    payload = json.loads(content[0].text)
+    assert payload["ok"] is True, f"query failed: {payload.get('error')}"
+
+    items = payload["data"]["items"]
+    assert len(items) >= 5, f"expected >=5 metrics, got {len(items)}"
+
+    metrics = {item["metric"] for item in items}
+    for expected in ("line", "toggle", "branch", "condition", "fsm"):
+        assert expected in metrics, f"missing metric: {expected}"
+
+    for item in items:
+        assert isinstance(item["covered"], int)
+        assert isinstance(item["coverable"], int)
+        assert item["coverable"] > 0
+        assert "coverage_pct" in item
+
+    _call_tool(server, "xverif_cov_session_close", {
+        "session_id": "mcp_int_summary",
+    })
+
+
+def test_cov_scope_summary(monkeypatch, test_vdb, xverif_home):
+    """xverif_cov_query(scope.summary) 返回指定 scope 的覆盖率."""
+    overrides = {
+        "XVERIF_HOME": xverif_home,
+        "XVERIF_MCP_BACKEND": "direct",
+    }
+    server = _server(monkeypatch, overrides)
+
+    _call_tool(server, "xverif_cov_session_open", {
+        "name": "mcp_int_scope", "vdb": test_vdb,
+    })
+
+    content, _ = _call_tool(server, "xverif_cov_query", {
+        "session_id": "mcp_int_scope",
+        "action": "scope.summary",
+        "args": {"scope": "top"},
+        "output_format": "json",
+    })
+    payload = json.loads(content[0].text)
+    assert payload["ok"] is True
+
+    items = payload["data"]["items"]
+    assert len(items) >= 1
+
+    top_item = next((i for i in items if i.get("full_name") == "top"), None)
+    assert top_item is not None, f"no 'top' scope in items: {[i.get('full_name') for i in items]}"
+
+    _call_tool(server, "xverif_cov_session_close", {
+        "session_id": "mcp_int_scope",
+    })
+
+
+def test_cov_scope_children(monkeypatch, test_vdb, xverif_home):
+    """xverif_cov_query(scope.children) 返回子 scope 列表."""
+    overrides = {
+        "XVERIF_HOME": xverif_home,
+        "XVERIF_MCP_BACKEND": "direct",
+    }
+    server = _server(monkeypatch, overrides)
+
+    _call_tool(server, "xverif_cov_session_open", {
+        "name": "mcp_int_children", "vdb": test_vdb,
+    })
+
+    content, _ = _call_tool(server, "xverif_cov_query", {
+        "session_id": "mcp_int_children",
+        "action": "scope.children",
+        "args": {"scope": "top"},
+        "output_format": "json",
+    })
+    payload = json.loads(content[0].text)
+    assert payload["ok"] is True
+
+    items = payload["data"]["items"]
+    child_names = {c["name"] for c in items}
+    # comprehensive fixture has u_core0 and u_core1 under top
+    assert "u_core0" in child_names or "u_core1" in child_names, \
+        f"expected u_core0/u_core1 under top, got: {child_names}"
+
+    _call_tool(server, "xverif_cov_session_close", {
+        "session_id": "mcp_int_children",
+    })
+
+
+def test_cov_export_code_coverage(monkeypatch, test_vdb, xverif_home, tmp_path):
+    """xverif_cov_query(export.code_coverage) 导出严格单实例 bundle。"""
+    overrides = {
+        "XVERIF_HOME": xverif_home,
+        "XVERIF_MCP_BACKEND": "direct",
+        "XVERIF_XCOV_EXPORT_ROOTS": str(tmp_path),
+    }
+    server = _server(monkeypatch, overrides)
+
+    _call_tool(server, "xverif_cov_session_open", {
+        "name": "mcp_int_export", "vdb": test_vdb,
+    })
+
+    output_dir = str(tmp_path / "export_code")
+    content, _ = _call_tool(server, "xverif_cov_query", {
+        "session_id": "mcp_int_export",
+        "action": "export.code_coverage",
+        "args": {
+            "scopes": ["top.u_core0", "top.u_core1"],
+            "metrics": ["line"],
+            "output": {"path": output_dir, "allow_absolute_path": True},
+        },
+        "output_format": "json",
+    })
+    payload = json.loads(content[0].text)
+    assert payload["ok"] is True
+
+    assert len(payload["data"]["items"]) == 2
+    for item in payload["data"]["items"]:
+        instance_dir = Path(item["directory"])
+        assert (instance_dir / "navigation.xout").is_file()
+        assert (instance_dir / "line.json").is_file()
+        assert (instance_dir / "line.xout").is_file()
+        line_entry = next(
+            metric for metric in item["metrics"] if metric["metric"] == "line"
+        )
+        assert line_entry["raw"] == "../raw/modinfo.urg.txt"
+        assert (instance_dir / line_entry["raw"]).resolve().is_file()
+    run_dir = Path(payload["summary"]["output_dir"])
+    assert [path.name for path in (run_dir / "raw").iterdir()] == ["modinfo.urg.txt"]
+
+    _call_tool(server, "xverif_cov_session_close", {
+        "session_id": "mcp_int_export",
+    })
+
+
+def test_cov_export_functional(monkeypatch, test_vdb, xverif_home, tmp_path):
+    """xverif_cov_query(export.functional_coverage) 导出 URG grpinfo."""
+    overrides = {
+        "XVERIF_HOME": xverif_home,
+        "XVERIF_MCP_BACKEND": "direct",
+        "XVERIF_XCOV_EXPORT_ROOTS": str(tmp_path),
+    }
+    server = _server(monkeypatch, overrides)
+
+    _call_tool(server, "xverif_cov_session_open", {
+        "name": "mcp_int_export_func", "vdb": test_vdb,
+    })
+
+    output_dir = str(tmp_path / "export_func")
+    content, _ = _call_tool(server, "xverif_cov_query", {
+        "session_id": "mcp_int_export_func",
+        "action": "export.functional_coverage",
+        "args": {
+            "output": {"path": output_dir, "allow_absolute_path": True},
+        },
+        "output_format": "json",
+    })
+    payload = json.loads(content[0].text)
+    assert payload["ok"] is True
+
+    found = list(Path(output_dir).glob("*"))
+    assert len(found) > 0, f"no export output in {output_dir}"
+
+    _call_tool(server, "xverif_cov_session_close", {
+        "session_id": "mcp_int_export_func",
+    })
+
+
+def test_cov_export_assert(monkeypatch, test_vdb, xverif_home, tmp_path):
+    """xverif_cov_query(export.assert) 导出 URG assert 数据."""
+    overrides = {
+        "XVERIF_HOME": xverif_home,
+        "XVERIF_MCP_BACKEND": "direct",
+        "XVERIF_XCOV_EXPORT_ROOTS": str(tmp_path),
+    }
+    server = _server(monkeypatch, overrides)
+
+    _call_tool(server, "xverif_cov_session_open", {
+        "name": "mcp_int_export_assert", "vdb": test_vdb,
+    })
+
+    output_dir = str(tmp_path / "export_assert")
+    content, _ = _call_tool(server, "xverif_cov_query", {
+        "session_id": "mcp_int_export_assert",
+        "action": "export.assert",
+        "args": {
+            "output": {"path": output_dir, "allow_absolute_path": True},
+        },
+        "output_format": "json",
+    })
+    payload = json.loads(content[0].text)
+    assert payload["ok"] is True
+
+    found = list(Path(output_dir).glob("*"))
+    assert len(found) > 0, f"no export output in {output_dir}"
+
+    _call_tool(server, "xverif_cov_session_close", {
+        "session_id": "mcp_int_export_assert",
+    })
+
+
+def test_cov_assert_summary(monkeypatch, test_vdb, xverif_home):
+    """xverif_cov_query(assert.summary) 返回 assertion 汇总."""
+    overrides = {
+        "XVERIF_HOME": xverif_home,
+        "XVERIF_MCP_BACKEND": "direct",
+    }
+    server = _server(monkeypatch, overrides)
+
+    _call_tool(server, "xverif_cov_session_open", {
+        "name": "mcp_int_assert", "vdb": test_vdb,
+    })
+
+    content, _ = _call_tool(server, "xverif_cov_query", {
+        "session_id": "mcp_int_assert",
+        "action": "assert.summary",
+        "args": {},
+        "output_format": "json",
+    })
+    payload = json.loads(content[0].text)
+    assert payload["ok"] is True
+
+    _call_tool(server, "xverif_cov_session_close", {
+        "session_id": "mcp_int_assert",
+    })
+
+
+def test_cov_functional_summary(monkeypatch, test_vdb, xverif_home):
+    """xverif_cov_query(functional_coverage.summary) 返回 functional 汇总."""
+    overrides = {
+        "XVERIF_HOME": xverif_home,
+        "XVERIF_MCP_BACKEND": "direct",
+    }
+    server = _server(monkeypatch, overrides)
+
+    _call_tool(server, "xverif_cov_session_open", {
+        "name": "mcp_int_func_summary", "vdb": test_vdb,
+    })
+
+    content, _ = _call_tool(server, "xverif_cov_query", {
+        "session_id": "mcp_int_func_summary",
+        "action": "functional_coverage.summary",
+        "args": {"group_by": "covergroup"},
+        "output_format": "json",
+    })
+    payload = json.loads(content[0].text)
+    assert payload["ok"] is True
+
+    _call_tool(server, "xverif_cov_session_close", {
+        "session_id": "mcp_int_func_summary",
+    })
+
+
+def test_cov_metrics_list(monkeypatch, test_vdb, xverif_home):
+    """xverif_cov_query(metrics.list) 返回可用 metric 列表."""
+    overrides = {
+        "XVERIF_HOME": xverif_home,
+        "XVERIF_MCP_BACKEND": "direct",
+    }
+    server = _server(monkeypatch, overrides)
+
+    _call_tool(server, "xverif_cov_session_open", {
+        "name": "mcp_int_metrics", "vdb": test_vdb,
+    })
+
+    content, _ = _call_tool(server, "xverif_cov_query", {
+        "session_id": "mcp_int_metrics",
+        "action": "metrics.list",
+        "args": {},
+        "output_format": "json",
+    })
+    payload = json.loads(content[0].text)
+    assert payload["ok"] is True
+
+    _call_tool(server, "xverif_cov_session_close", {
+        "session_id": "mcp_int_metrics",
+    })
+
+
+def test_cov_tests_list(monkeypatch, test_vdb, xverif_home):
+    """xverif_cov_query(tests.list) 返回 test 列表."""
+    overrides = {
+        "XVERIF_HOME": xverif_home,
+        "XVERIF_MCP_BACKEND": "direct",
+    }
+    server = _server(monkeypatch, overrides)
+
+    _call_tool(server, "xverif_cov_session_open", {
+        "name": "mcp_int_tests", "vdb": test_vdb,
+    })
+
+    content, _ = _call_tool(server, "xverif_cov_query", {
+        "session_id": "mcp_int_tests",
+        "action": "tests.list",
+        "args": {},
+        "output_format": "json",
+    })
+    payload = json.loads(content[0].text)
+    assert payload["ok"] is True
+
+    _call_tool(server, "xverif_cov_session_close", {
+        "session_id": "mcp_int_tests",
+    })
+
+
+def test_cov_xout_output_format(monkeypatch, test_vdb, xverif_home):
+    """xverif_cov_query 以 xout 格式返回结构化文本."""
+    overrides = {
+        "XVERIF_HOME": xverif_home,
+        "XVERIF_MCP_BACKEND": "direct",
+    }
+    server = _server(monkeypatch, overrides)
+
+    _call_tool(server, "xverif_cov_session_open", {
+        "name": "mcp_int_xout", "vdb": test_vdb,
+    })
+
+    content, _ = _call_tool(server, "xverif_cov_query", {
+        "session_id": "mcp_int_xout",
+        "action": "code_coverage.summary",
+        "args": {"group_by": "metric"},
+        "output_format": "xout",
+    })
+    text = content[0].text
+    assert text.startswith("@xcov.code_coverage.summary.v1"), \
+        f"unexpected xout header: {text[:80]}"
+
+    _call_tool(server, "xverif_cov_session_close", {
+        "session_id": "mcp_int_xout",
+    })
+
+
+# ── export gap exclusion and removed selector contract ──
+
+
+def test_cov_exclude_add_with_export_gap(monkeypatch, test_vdb, xverif_home, tmp_path):
+    """MCP 先导出 line gap，再按结构化 gap ID 排除。"""
+    overrides = {
+        "XVERIF_HOME": xverif_home,
+        "XVERIF_MCP_BACKEND": "direct",
+        "XVERIF_XCOV_EXPORT_ROOTS": str(tmp_path),
+    }
+    server = _server(monkeypatch, overrides)
+
+    _call_tool(server, "xverif_cov_session_open", {"name": "mcp_excl_add", "vdb": test_vdb})
+    content, _ = _call_tool(server, "xverif_cov_query", {
+        "session_id": "mcp_excl_add", "action": "export.code_coverage",
+            "args": {"scopes": ["top.u_core1"], "metrics": ["toggle"],
+                 "output": {
+                     "path": str(tmp_path / "export"),
+                     "allow_absolute_path": True,
+                 }},
+        "output_format": "json",
+    })
+    exported = json.loads(content[0].text)
+    assert exported["ok"] is True, exported
+    gap_path = Path(exported["data"]["items"][0]["directory"]) / "toggle.json"
+    gap_payload = json.loads(gap_path.read_text(encoding="utf-8"))
+    gap_id = gap_payload["gaps"][0]["gap_id"]
+    content, _ = _call_tool(server, "xverif_cov_query", {
+        "session_id": "mcp_excl_add", "action": "exclude.add",
+        "args": {"exports": [{"path": str(gap_path), "items": [{
+            "gap_id": gap_id, "reason": "MCP export gap 全链路验证",
+        }]}]}, "output_format": "json",
+    })
+    excluded = json.loads(content[0].text)
+    assert excluded["ok"] is True, excluded
+    assert excluded["data"]["items"][0]["status"] == "changed"
+
+    content, _ = _call_tool(server, "xverif_cov_session_close", {
+        "session_id": "mcp_excl_add",
+    })
+    rejected_close = json.loads(content[0].text)
+    assert rejected_close["ok"] is False
+    assert rejected_close["error"]["code"] == "UNPERSISTED_EXCLUSION_REASON"
+    assert rejected_close["session_preserved"] is True
+
+    content, _ = _call_tool(server, "xverif_cov_session_doctor", {
+        "session_id": "mcp_excl_add", "verbose": True,
+    })
+    preserved = json.loads(content[0].text)
+    assert preserved["summary"]["state"] == "alive"
+
+    content, _ = _call_tool(server, "xverif_cov_session_close", {
+        "session_id": "mcp_excl_add",
+        "confirm_discard_reasons": True,
+    })
+    confirmed_close = json.loads(content[0].text)
+    assert confirmed_close["ok"] is True
+
+
+def test_cov_exclude_add_rejects_removed_selector(monkeypatch, exclusion_vdb, xverif_home):
+    """MCP 透传的旧 add selector 被 xcov schema 明确拒绝。"""
+    overrides = {"XVERIF_HOME": xverif_home, "XVERIF_MCP_BACKEND": "direct"}
+    server = _server(monkeypatch, overrides)
+
+    _call_tool(server, "xverif_cov_session_open", {"name": "mcp_excl_inv", "vdb": exclusion_vdb})
+    content, _ = _call_tool(server, "xverif_cov_query", {
+        "session_id": "mcp_excl_inv", "action": "exclude.add",
+        "args": {"selectors": [{"metric": "unknown", "scope": "top",
+                                "reason": "test"}]},
+        "output_format": "json",
+    })
+    payload = json.loads(content[0].text)
+    assert payload["ok"] is False
+    assert "SCHEMA_INVALID" in json.dumps(payload)
+
+    _call_tool(server, "xverif_cov_session_close", {"session_id": "mcp_excl_inv"})
+
+
+def test_cov_exclude_remove_rejects_removed_selector(monkeypatch, exclusion_vdb, xverif_home):
+    """MCP 透传的旧 remove selector 被 xcov schema 明确拒绝。"""
+    overrides = {"XVERIF_HOME": xverif_home, "XVERIF_MCP_BACKEND": "direct"}
+    server = _server(monkeypatch, overrides)
+
+    _call_tool(server, "xverif_cov_session_open", {"name": "mcp_excl_rm", "vdb": exclusion_vdb})
+
+    content, _ = _call_tool(server, "xverif_cov_query", {
+        "session_id": "mcp_excl_rm", "action": "exclude.remove",
+        "args": {"selectors": [{"metric": "line", "scope": "top",
+                                "file": "exclusion_fixture.sv", "line": 72}]},
+        "output_format": "json",
+    })
+    payload = json.loads(content[0].text)
+    assert payload["ok"] is False
+    assert "SCHEMA_INVALID" in json.dumps(payload)
+
+    _call_tool(server, "xverif_cov_session_close", {
+        "session_id": "mcp_excl_rm",
+        "confirm_discard_reasons": True,
+    })

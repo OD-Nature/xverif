@@ -1,5 +1,5 @@
 # xsva VCS 语义验证 Makefile
-# 编译选项参考 ~/xring/dv/cfg/Makefile
+# 编译选项参考 <xring-repo>/dv/cfg/Makefile
 # Usage:
 #   make cmp   CASE=simple_impl   # compile
 #   make run   CASE=simple_impl   # run

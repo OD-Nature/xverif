@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import json
 import os
+import sys
+import tempfile
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,6 +23,24 @@ HEAVY_KEYS = {
     "metrics_by_scope", "source_text", "trace", "all_events",
 }
 
+_FAILURE_LOCK = threading.Lock()
+_FAILURES: Dict[str, Json] = {}
+_WRITE_LOCK = threading.Lock()
+_OWNER_LOCK = threading.Lock()
+_OWNER_PID = -1
+_OWNER_ID = ""
+_EVENT_LOCK = threading.Lock()
+
+
+def _owner_id() -> str:
+    global _OWNER_PID, _OWNER_ID
+    pid = os.getpid()
+    with _OWNER_LOCK:
+        if _OWNER_PID != pid:
+            _OWNER_PID = pid
+            _OWNER_ID = f"{pid}-{time.monotonic_ns()}"
+        return _OWNER_ID
+
 
 def enabled() -> bool:
     return str(os.environ.get("XVERIF_XCOV_LOG", "1")).lower() not in {
@@ -31,7 +52,10 @@ def log_root() -> Path:
     override = os.environ.get("XVERIF_XCOV_LOG_DIR")
     if override:
         return Path(override)
-    return Path(os.environ.get("HOME", "/tmp")) / ".xverif" / "xcov"
+    test_tmp = os.environ.get("XVERIF_TEST_TMPDIR")
+    if test_tmp:
+        return Path(test_tmp) / ".xverif" / "xcov"
+    return Path.home() / ".xverif" / "xcov"
 
 
 def _safe_session_id(session_id: str | None) -> str:
@@ -43,7 +67,10 @@ def _safe_session_id(session_id: str | None) -> str:
 
 
 def public_session_dir(session_id: str | None) -> Path:
-    return log_root() / "sessions" / _safe_session_id(session_id)
+    return (
+        log_root() / "sessions" / _safe_session_id(session_id) /
+        "owners" / _owner_id()
+    )
 
 
 def public_action_log_path(session_id: str | None) -> Path:
@@ -51,8 +78,51 @@ def public_action_log_path(session_id: str | None) -> Path:
 
 
 def backend_log_path(session_id: str | None, log_name: str) -> Path:
-    return (log_root() / "backend" / "sessions" / _safe_session_id(session_id) /
-            "logs" / f"{log_name}.ndjson")
+    return (
+        log_root() / "backend" / "sessions" / _safe_session_id(session_id) /
+        "owners" / _owner_id() / "logs" / f"{log_name}.ndjson"
+    )
+
+
+def observability_status(session_id: str | None) -> Json:
+    key = _safe_session_id(session_id)
+    with _FAILURE_LOCK:
+        failure = dict(_FAILURES.get(key, {}))
+    return {
+        "ok": not bool(failure),
+        "failure_count": int(failure.get("failure_count", 0)),
+        "last_failure_operation": failure.get("operation"),
+        "last_failure_type": failure.get("error_type"),
+    }
+
+
+def _record_failure(session_id: str | None, operation: str, exc: BaseException) -> None:
+    key = _safe_session_id(session_id)
+    with _FAILURE_LOCK:
+        previous = _FAILURES.get(key, {})
+        _FAILURES[key] = {
+            "failure_count": int(previous.get("failure_count", 0)) + 1,
+            "operation": operation,
+            "error_type": type(exc).__name__,
+        }
+    try:
+        print(
+            f"xcov observability failure: operation={operation} "
+            f"error_type={type(exc).__name__}",
+            file=sys.stderr,
+            flush=True,
+        )
+    except Exception:
+        # There is no further trustworthy observability sink at this point.
+        return
+
+
+def _fsync_directory(path: Path) -> None:
+    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
 
 
 def _now_iso8601() -> str:
@@ -60,8 +130,9 @@ def _now_iso8601() -> str:
 
 
 def _event_id() -> str:
-    counter = getattr(_event_id, "_counter", 0)
-    setattr(_event_id, "_counter", counter + 1)
+    with _EVENT_LOCK:
+        counter = getattr(_event_id, "_counter", 0)
+        setattr(_event_id, "_counter", counter + 1)
     return f"{int(time.time() * 1000000):x}-{os.getpid()}-{counter:x}"
 
 
@@ -152,10 +223,7 @@ def update_session_manifest(session_id: str, session: Json) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         old: Json = {}
         if path.exists():
-            try:
-                old = json.loads(path.read_text(encoding="utf-8"))
-            except Exception:
-                old = {}
+            old = json.loads(path.read_text(encoding="utf-8"))
         now = _now_iso8601()
         manifest = {
             "session_id": session_id or "adhoc",
@@ -168,10 +236,26 @@ def update_session_manifest(session_id: str, session: Json) -> None:
             "last_log_at": now,
             "log_path": str(public_action_log_path(session_id)),
         }
-        path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-                        encoding="utf-8")
-    except Exception:
-        pass
+        descriptor, temporary = tempfile.mkstemp(
+            prefix=".session.", suffix=".tmp", dir=str(path.parent),
+        )
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+                stream.write(
+                    json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True)
+                    + "\n"
+                )
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temporary, path)
+            _fsync_directory(path.parent)
+        finally:
+            try:
+                os.unlink(temporary)
+            except FileNotFoundError:
+                pass
+    except Exception as exc:
+        _record_failure(session_id, "session_manifest", exc)
 
 
 def log_action_event(layer: str, session_id: str | None, action: str, phase: str,
@@ -225,7 +309,17 @@ def _append_event(path: Path, event: Json) -> None:
                 "context": {"message": "log event exceeded max line size and was truncated"},
             }
             line = json.dumps(event, ensure_ascii=False, sort_keys=True)
-        with path.open("a", encoding="utf-8") as fh:
-            fh.write(line + "\n")
-    except Exception:
-        pass
+        payload = (line + "\n").encode("utf-8")
+        with _WRITE_LOCK:
+            descriptor = os.open(path, os.O_APPEND | os.O_CREAT | os.O_WRONLY, 0o600)
+            try:
+                offset = 0
+                while offset < len(payload):
+                    written = os.write(descriptor, payload[offset:])
+                    if written <= 0:
+                        raise OSError("zero-byte NDJSON append")
+                    offset += written
+            finally:
+                os.close(descriptor)
+    except Exception as exc:
+        _record_failure(event.get("session_id"), "ndjson_append", exc)

@@ -9,7 +9,9 @@
 - 不引入同义字段，除非有明确迁移计划和 deprecated 说明。
 - 删除或收紧字段时，同步 runtime、schema、examples、docs、skill、MCP、tests。
 - 错误码是机器合同，不能只依赖 message 文本。
-- 参数错误必须可恢复：schema 层和 action handler 层都应尽量返回 `invalid_arg`、`expected`、`allowed_values`、`did_you_mean`、`required_any_of`、`correct_example` 等结构化字段。
+- 参数错误必须可恢复：schema 层和 action handler 层都应尽量返回 `invalid_arg`、`expected`、`available_values`、`did_you_mean`、`required_any_of`、`correct_example` 等结构化字段。错误候选只使用 `error.available_values`；action catalog descriptor 的 `allowed_values` 是参数到 enum 的元数据映射，不是错误字段。
+- `REQUEST_TOO_LARGE` 必须返回 `limit_name=request_bytes`、实际/上限字节数、`transport`、`phase` 和可执行的 `next_actions`，并固定 `recoverable=false`。不得截断后继续解析、自动提高全局上限或静默切换 transport。
+- `INVALID_CONFIG` 必须返回非空 `config_key`、`config_source=environment|default|request`、`expected` 和 `next_actions`，并固定 `recoverable=false`。敏感配置值不得写入 `received`、message 或日志；需要表达“已收到但已隐藏”时使用 `received_redacted=true`。
 
 ## JSON 处理
 
@@ -22,7 +24,7 @@
 
 - 默认 compact-first。
 - full/debug 只用于维护工具或排查工具本身。
-- 大列表、timeline、trace、source_text 必须受 action-specific `line_limit`、`args.output.verbose` 或 export action 控制；不要新增 public `include_*` 或裸 `limit`。
+- 大列表、timeline、trace、source_text 必须受 action-specific `line_limit`、schema 明确声明的 `args.output` 参数或 export action 控制；AXI transaction 的逐 beat payload 使用 `output.include_data`，其它 action 不得照抄该参数或新增裸 `limit`。
 - XOUT 与 JSON 输出都要保持结构稳定。
 - 新增错误字段时必须同时检查 JSON response 和 XOUT 渲染；AI 默认看 xout 时也应能直接修正下一次请求。
 
@@ -57,7 +59,7 @@
 
 ## Python 工具风格
 
-- Python 脚本优先使用 `~/miniconda3/bin/python` 运行。
+- Python 脚本优先使用 `python3` 运行。
 - 校验脚本应支持 check 模式，避免无意修改 tracked 文件。
 - 脚本输出要能被 CI/agent 清楚判断成功失败。
 

@@ -6,7 +6,8 @@
   "required": [
     "api_version",
     "action",
-    "args"
+    "args",
+    "target"
   ],
   "properties": {
     "api_version": {
@@ -16,7 +17,8 @@
       ]
     },
     "request_id": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "action": {
       "type": "string",
@@ -25,7 +27,44 @@
       ]
     },
     "target": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fsdb": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "session_id"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "fsdb"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "session_id"
+            ]
+          },
+          "required": [
+            "fsdb"
+          ]
+        }
+      ],
+      "additionalProperties": false
     },
     "args": {
       "type": "object",
@@ -42,16 +81,31 @@
         },
         "cnt": {
           "type": "string",
-          "description": "计数器统计使用的 counter 信号路径。"
+          "description": "要统计的 counter 信号路径；按 clock/vld 采样并计算递增、保持和异常跳变。"
         },
         "edge": {
           "type": "string",
-          "description": "clock sampling 使用的边沿：posedge、negedge 或 dual。"
+          "description": "Clock sampling edge. The schema default is authoritative; negedge often matches monitor semantics."
         },
         "line_limit": {
           "type": "integer",
           "minimum": 1,
-          "description": "控制 response/xout 中 item、finding、event、transaction 或 row 的最大返回行数。"
+          "description": "Limits returned evidence rows only, not scanning, aggregation, or the verdict; read completeness fields as well."
+        },
+        "max_samples": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "允许扫描的时钟采样预算；耗尽表示分析不完整而非仅 response 截断。"
+        },
+        "render_time_unit": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "ps",
+            "ns",
+            "us"
+          ],
+          "description": "Controls only canonical response time rendering: auto, ps, ns, or us. It never changes input parsing, sampling, filtering, or ordering."
         },
         "sample_point": {
           "type": "string",
@@ -59,70 +113,116 @@
             "before",
             "after"
           ],
-          "description": "posedge/dual 时的采样点：before 或 after；posedge 默认推荐 before。"
+          "description": "Before/after observation point for posedge or dual sampling; it does not change the raw waveform range."
         },
         "time_range": {
           "type": "object",
+          "minProperties": 1,
           "properties": {
             "begin": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1,
+              "description": "闭区间起点；省略时使用可用波形窗口起点。"
             },
             "end": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1,
+              "description": "闭区间终点；省略时使用可用波形窗口终点。"
             }
           },
           "additionalProperties": false,
-          "description": "查询或分析的时间窗口。"
+          "description": "Closed analysis interval. begin and end may be omitted independently to use the available waveform bounds."
         },
-        "time_unit": {
+        "value_format": {
           "type": "string",
           "enum": [
-            "auto",
-            "fs",
-            "ps",
-            "ns",
-            "us",
-            "ms",
-            "s"
-          ]
+            "hex",
+            "bin",
+            "dec"
+          ],
+          "default": "hex",
+          "description": "返回 LogicValue 的显示格式；不改变比较、采样或底层四态值。"
         },
         "vld": {
           "oneOf": [
             {
-              "type": "string"
+              "type": "string",
+              "minLength": 1,
+              "description": "Signal path used directly as the counter-valid predicate."
             },
             {
-              "type": "object"
+              "type": "object",
+              "required": [
+                "expr",
+                "signals"
+              ],
+              "properties": {
+                "expr": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Boolean expression over aliases declared in signals."
+                },
+                "signals": {
+                  "type": "object",
+                  "minProperties": 1,
+                  "propertyNames": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "additionalProperties": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Value for a caller-defined signal alias key. Supply the real signal path or the action-supported expression for that alias."
+                  },
+                  "x-dynamic-map": true,
+                  "description": "Alias-to-waveform-signal map consumed by expr.",
+                  "x-dynamic-contract": "Each property key is an alias referenced by this action; each value resolves that alias to a signal path or supported expression."
+                }
+              },
+              "additionalProperties": false,
+              "description": "Expression predicate with an explicit alias-to-signal map."
             }
           ],
-          "description": "计数器统计使用的 valid 信号路径。"
+          "description": "Signal path or expression defining the valid sampling condition for counter statistics."
         }
       },
       "additionalProperties": false
     },
     "limits": {
-      "type": "object"
-    },
-    "auth_token": {
-      "type": "string"
-    },
-    "id": {
-      "type": "string"
-    },
-    "trace_id": {
-      "type": "string"
-    },
-    "span_id": {
-      "type": "string"
-    },
-    "parent_span_id": {
-      "type": "string"
+      "type": "object",
+      "properties": {
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647,
+          "description": "Positive public frontend-to-engine request timeout in milliseconds. Omit limits.timeout_ms to disable the public watchdog."
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false,
-  "description": "counter.statistics: 统计计数器行为。",
+  "description": "Analyze sampled counter behavior and statistics.",
   "x-purpose": "统计计数器行为。",
   "x-how_it_works": "按 clock/vld/cnt 采样，分析递增、回绕、停顿和异常。",
   "x-when_to_use": "判断计数器是否符合预期。",
-  "x-arg_contract_notes": "required: clock, time_range, vld, cnt"
+  "x-arg_contract_notes": "required: clock, time_range, vld, cnt",
+  "x-description-zh": "统计计数器行为。",
+  "x-agent": {
+    "use_when": [
+      "需要按采样 clock 统计一个 counter 的增量、回绕或活动。"
+    ],
+    "do_not_use_when": [
+      "需要多个一般信号的活动统计或原始变化列表。"
+    ],
+    "alternatives": [
+      {
+        "action": "signal.statistics",
+        "when": "需要一般信号而非 counter 语义的统计。"
+      }
+    ],
+    "constraints": [
+      "required: clock, time_range, vld, cnt"
+    ]
+  }
 }
