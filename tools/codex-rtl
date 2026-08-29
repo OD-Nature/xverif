@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+source_path="$(readlink -f "${BASH_SOURCE[0]}")"
+script_dir="$(cd "$(dirname "$source_path")" && pwd)"
+launcher="$script_dir/xverif-mcp-auto"
+
+if [[ "$launcher" == *"'"* ]]; then
+  echo "ERROR: xverif path containing a single quote cannot be encoded as a Codex override" >&2
+  exit 2
+fi
+
+exec codex \
+  -c "mcp_servers.xverif.command='$launcher'" \
+  -c 'mcp_servers.xverif.startup_timeout_sec=300' \
+  -c 'mcp_servers.xverif.tool_timeout_sec=900' \
+  "$@"

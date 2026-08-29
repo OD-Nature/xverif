@@ -93,3 +93,4 @@ not_push_skill.md
 *.log
 *~
 xdebug_mcp/tools/test_config.json
+.xverif/

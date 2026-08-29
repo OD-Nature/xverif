@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source_command="$script_dir/codex-rtl"
+install_dir="${XVERIF_USER_BIN:-$HOME/.local/bin}"
+destination="$install_dir/codex-rtl"
+
+mkdir -p "$install_dir"
+if [[ -L "$destination" && "$(readlink -f "$destination")" == "$(readlink -f "$source_command")" ]]; then
+  echo "codex-rtl is already installed: $destination"
+  exit 0
+fi
+if [[ -e "$destination" || -L "$destination" ]]; then
+  echo "ERROR: destination already exists and is not managed by this xverif checkout: $destination" >&2
+  exit 2
+fi
+
+ln -s "$source_command" "$destination"
+echo "Installed codex-rtl -> $source_command"
+echo "Use 'codex-rtl' in RTL/DV projects; normal 'codex' remains unchanged."

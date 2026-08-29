@@ -88,6 +88,83 @@ MCP SDK 或不想走 MCP 协议、但仍需要 LSF 维护 `--stdio-loop` 后端�
 
 ## MCP 配置
 
+### 自动选择 Verdi 2018/2023（推荐）
+
+`tools/xverif-mcp-auto` 会先读取机器级
+`~/.config/xverif/eda.toml`，再扫描 `/eda/synopsys/verdi`、
+`/tools/synopsys/verdi` 和 `/opt/synopsys/verdi`。只有一个受支持 profile 时自动
+选择；同时发现 2018 和 2023 时必须由项目根目录的 `.xverif-eda.toml` 指定偏好，
+不会静默 fallback。
+
+Codex 不应把 xverif 注册成全局 MCP，否则普通软件工程也会加载数字验证工具。在每台
+机器 clone/install xverif 后安装一次按需入口：
+
+```bash
+make install-codex-rtl
+```
+
+它在 `~/.local/bin/codex-rtl` 创建指向当前 checkout 的受控符号链接，不修改 Codex
+全局 MCP 配置。任意 RTL/DV 工程运行 `codex-rtl` 时只为该进程注入 xverif；普通
+软件工程继续运行 `codex`，不会加载 xverif。已有非本 checkout 管理的同名命令时
+安装器会明确报错，不覆盖用户文件。
+
+Claude Code 项目配置 `.mcp.json`：
+
+```json
+{
+  "mcpServers": {
+    "xverif": {
+      "type": "stdio",
+      "command": "<xverif>/tools/xverif-mcp-auto"
+    }
+  }
+}
+```
+
+机器只有一个版本时不需要 EDA 配置。若机器安装了多个版本，在项目中提交：
+
+```toml
+preferred_profile = "verdi-2023" # 或 verdi-2018；单版本机器使用 auto
+```
+
+非标准安装位置、或 license 没有由系统统一提供时，只需在每台机器初始化一次
+`~/.config/xverif/eda.toml`；不要把 license 配置提交到项目仓库：
+
+```toml
+preferred_profile = "auto"
+search_roots = ["/company/eda/synopsys/verdi"]
+
+[profiles.verdi-2018]
+verdi_home = "/company/eda/synopsys/verdi/Verdi_O-2018.09-SP2"
+vcs_home = "/company/eda/synopsys/vcs-mx/O-2018.09-SP2"
+
+# 按机器实际安装情况添加；不要求两个 profile 同时存在。
+[profiles.verdi-2023]
+verdi_home = "/company/eda/synopsys/verdi/Verdi_V-2023.12-SP2"
+vcs_home = "/company/eda/synopsys/vcs/V-2023.12-SP2"
+
+[env]
+SNPSLMD_LICENSE_FILE = "<license-server>"
+```
+
+自动启动器会同时解析匹配的 `VCS_HOME`，并设置 Verdi PLI 基础库路径；
+`tools/xdebug`/`tools/xcov` 再单次注入 NPI 库，避免空路径或重复注入。诊断只打印版本
+选择证据，不打印 license：
+
+```bash
+tools/xverif-mcp-auto --doctor
+```
+
+首次在一台机器上部署时，如果 Codex/Claude 的安全 stdio 环境拿不到 license 变量，
+在已加载 EDA 环境的 shell 中执行一次：
+
+```bash
+tools/xverif-mcp-auto --init
+```
+
+它写入用户私有的 `~/.config/xverif/eda.toml`（权限 `0600`），只保存必要的机器级
+EDA/license 配置；不会写入项目、Git 或 MCP 日志。已有配置时不会覆盖。
+
 ### Claude Code
 
 在项目根目录创建 `.mcp.json`（与 `.git/` 同级，**不是** `.claude/` 目录下）。

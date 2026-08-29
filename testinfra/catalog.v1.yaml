@@ -242,6 +242,8 @@ suites:
       kind: pytest
       paths:
         - xverif_mcp/tests/test_backend_wiring.py
+        - xverif_mcp/tests/test_codex_rtl.py
+        - xverif_mcp/tests/test_eda_auto.py
         - xverif_mcp/tests/test_import_adapters.py
         - xverif_mcp/tests/test_session_capabilities.py
         - xverif_mcp/tests/test_session_errors.py

@@ -39,6 +39,16 @@ CI和多人环境推荐显式指定 profile。其他 VCS/Verdi版本目前未验
 支持范围；如需扩展，应先运行对应 profile自检并根据真实 headers、libraries和
 NPI行为增加兼容证据。
 
+Codex/Claude 日常使用推荐直接配置 `tools/xverif-mcp-auto`。它优先使用机器级
+`~/.config/xverif/eda.toml`，否则扫描本机 Verdi/VCS 安装并自动注入匹配的 profile、
+`VERDI_HOME`、`VCS_HOME`、PLI 基础库和 `PATH`；NPI 库由对应工具 wrapper 单次注入，
+避免动态库缺失或重复。用户无需在每次启动前手工 `export`。完整配置
+见 [`xverif_mcp/README.md`](xverif_mcp/README.md#自动选择-verdi-20182023推荐)。
+Codex 用户在每台机器执行一次 `make install-codex-rtl`，之后只在 RTL/DV 工程使用
+`codex-rtl`；普通工程继续使用 `codex`，不会加载 xverif。
+首次部署若 MCP 客户端隔离了 license 环境，在已加载 EDA 环境的 shell 中执行一次
+`tools/xverif-mcp-auto --init`，后续无需手工设置变量。
+
 ## 工具概览
 
 ### 默认输出格式：XOUT

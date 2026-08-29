@@ -32,8 +32,9 @@ description: >
 ## 标准流程
 
 真实 EDA 调用前确认 `XVERIF_EDA_PROFILE=verdi-2018|verdi-2023` 与
-`VERDI_HOME` 一致；2018 xcov 走 native worker，2023 走 Python backend，不自动
-fallback。
+`VERDI_HOME`、`VCS_HOME` 一致；MCP 推荐使用 `tools/xverif-mcp-auto`，它读取
+`~/.config/xverif/eda.toml` 并准备 PLI/license 环境；2018 xcov 走 native worker，
+2023 走 Python backend，不自动 fallback。
 
 1. 明确问题和必须保留的证据。
 2. 读取对应 capability/workflow；xdebug 从主流程开始，能力不足再读全量 action 索引。

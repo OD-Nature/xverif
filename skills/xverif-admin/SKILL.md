@@ -29,6 +29,10 @@ description: >
 - MCP server 及 LSF job 环境必须显式传递与 `VERDI_HOME` 一致的
   `XVERIF_EDA_PROFILE=verdi-2018|verdi-2023`；2018 xcov 走 native worker，
   2023 走 Python backend，不自动 fallback。
+- 项目 MCP 配置优先指向 `tools/xverif-mcp-auto`。自动启动器可以生成上述显式
+  环境，但只能在唯一匹配或配置明确选择时启动；歧义必须报错。
+- Codex 按需使用 `codex-rtl`，不得把 xverif 注册为所有工程默认加载的全局 MCP；
+  Claude Code 项目使用 `.mcp.json`，两者共用自动启动器。
 
 - 常规验证查询回到 `xverif`。
 - 不自动 retry、reopen 或切换 direct/LSF、UDS/TCP/file。

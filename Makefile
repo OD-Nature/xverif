@@ -1,4 +1,4 @@
-.PHONY: all xdebug xbit xentry xloc xcov xwaveform clean install-all-skill remove-legacy-xverif-skills install-xverif-skill install-xverif-admin-skill install-xeda-runner-skill install-xwiki-skill install-x-npi-skill _install-agent-skill
+.PHONY: all xdebug xbit xentry xloc xcov xwaveform clean install-codex-rtl install-all-skill remove-legacy-xverif-skills install-xverif-skill install-xverif-admin-skill install-xeda-runner-skill install-xwiki-skill install-x-npi-skill _install-agent-skill
 
 PYTHON ?= python3
 
@@ -21,6 +21,9 @@ xcov:
 
 xwaveform:
 	$(MAKE) -C xwaveform
+
+install-codex-rtl:
+	tools/install-codex-rtl
 
 install-xverif-skill:
 	$(MAKE) _install-agent-skill SKILL_SRC=skills/xverif SKILL_NAME=xverif
