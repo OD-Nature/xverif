@@ -475,3 +475,9 @@ xdebug 代码架构、添加 action 流程、统一组件、通信协议、log�
 - 错误现象：为定位 xsimdebug 文档行号，在双引号 `rg` 模式中包含 Markdown 反引号，shell 把其中的 `-l` 和 `-k` 当成命令替换执行。
 - 误判原因：组合多个搜索词时再次忽略了仓库已有的反引号搜索规则。
 - 以后规则：所有包含 Markdown 反引号的搜索模式一律使用单引号；只为组合多个 pattern 时使用多个 `-e`，不改用双引号包裹反引号。
+
+### 2026-08-30 环境错误复盘
+
+- 错误现象：在本仓库运行 pytest 时，`xverif_mcp` 报 `cannot import name 'validate_response' from 'xbit.format'`，溯源发现 import 解析到了另一个旧 checkout 的同名源码。
+- 误判原因：shell 环境中残留陈旧的 `XVERIF_HOME` 指向另一 checkout；`xverif_mcp` 的 import 路径引导会优先按 `XVERIF_HOME` 注入 `xbit` 等包路径，未先核对环境变量归属仓库就执行测试。
+- 以后规则：在任一 xverif checkout 内运行测试或 MCP 前，先把 `XVERIF_HOME` 显式设为当前 checkout 根目录；跨 checkout 工作时逐条核对 `XVERIF_HOME`、`PYTHONPATH` 等仓库指向型变量，出现跨仓库 import 时优先怀疑这类变量。
