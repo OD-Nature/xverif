@@ -125,3 +125,27 @@ xdebug 代码架构、添加 action 流程、统一组件、通信协议、log�
 - 错误现象：从 GPIO 项目根目录调用 `bin/run -cov gpio_smoke_test`，VCS 编译成功且 `work/sim/simv` 已生成，但脚本随后误报 `simv 不存在`。
 - 误判原因：忽略了该脚本的仿真阶段依赖调用者当前目录为 `work/sim`，而用户已明确给出正确运行目录。
 - 以后规则：运行外部项目脚本前同时检查脚本内部 `pushd/popd` 和主流程当前目录依赖；GPIO 的 `bin/run` 必须从 `work/sim` 调用。
+
+### 2026-07-12 环境错误复盘
+
+- 错误现象：在 GPIO 工作目录用相对路径调用 `tools/xverif-mcp-auto --doctor`，shell 报启动器不存在。
+- 误判原因：切换到外部项目目录后仍沿用了 xverif 仓库内的相对工具路径。
+- 以后规则：从被测项目调用尚未安装到系统 `PATH` 的 xverif 工具时，必须使用 `$XVERIF_HOME/tools/...` 或仓库绝对路径。
+
+### 2026-07-12 环境错误复盘
+
+- 错误现象：验证 GPIO Codex 配置时，在 GPIO 工作目录再次用相对路径读取 xverif 仓库测试文件。
+- 误判原因：同一命令同时检查外部项目配置和仓库测试，未按每个参数所属根目录分别构造绝对路径。
+- 以后规则：跨仓库组合检查的命令中，除明确属于当前工作目录的文件外，其余文件一律使用绝对路径，不依赖命令级 `workdir`。
+
+### 2026-07-12 环境错误复盘
+
+- 错误现象：主机 xdebug 对照命令未通过 stdin 传入 JSON，返回 `INVALID_JSON`。
+- 误判原因：把带 `-` 的 stdin 请求入口当成了无需输入的命令。
+- 以后规则：执行 `tools/xdebug --json -` 前必须显式用管道传入完整 request，并先做 JSON 语法检查。
+
+### 2026-07-12 环境错误复盘
+
+- 错误现象：把 xverif pytest 与 GPIO 主机 MCP 对照放在同一条命令中，并以 GPIO 为工作目录，导致 pytest 找不到仓库 catalog。
+- 误判原因：没有按命令所属仓库分别设置工作目录。
+- 以后规则：xverif 测试必须在 `/home/gua/ic_tool/xverif` 执行；外部工程的 EDA/MCP 对照单独运行，禁止混在同一条命令中复用 `workdir`。
