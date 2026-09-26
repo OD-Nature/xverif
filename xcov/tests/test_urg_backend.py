@@ -119,9 +119,8 @@ def test_urg_with_elfile(xverif_fixture, tmp_path):
 
     baseline = core0_line_metric(run_urg(tmp_path / "baseline"))
 
-    from xcov.eda import import_pynpi
-    _, _ = import_pynpi()
-    from pynpi import cov, cov_l0, npisys  # noqa: F811
+    from xcov.native import open_native
+    cov, npisys = open_native()
     from xcov.coverage_contract import SCORE_TYPES_BY_METRIC
 
     npisys.init(["test_el"])
@@ -168,15 +167,10 @@ def test_urg_with_elfile(xverif_fixture, tmp_path):
                     selected_test = candidate
                     break
             assert target is not None, "fixture must contain a covered line item"
-            changed = cov_l0.set_status(
-                cov_l0.StatusExcludedAtReportTime,
-                target.cps_obj,
-                selected_test.cps_obj,
-                1,
-            )
+            changed = target.set_status_excluded_at_report_time(selected_test, 1)
             assert changed not in (0, False), "NPI should accept the covered exclusion"
             el_path = tmp_path / "test.el"
-            cov_l0.save_exclude_file(selected_test.cps_obj, str(el_path), "w")
+            selected_test.save_exclude_file(str(el_path), "w")
         finally:
             for child in reversed(owned):
                 cov.release_handle(child)
@@ -304,3 +298,41 @@ def test_export_code_to_dir(xverif_fixture, tmp_path, monkeypatch):
         assert [path.name for path in (run_dir / "raw").iterdir()] == ["modinfo.urg.txt"]
     finally:
         sess.close()
+
+
+def test_unload_exclusions_restores_cached_urg_summary(xverif_fixture, tmp_path):
+    from xcov.actions import Dispatcher
+    from xcov.coverage_contract import is_score_bearing_row
+    from xcov.session import SessionManager
+
+    vdb = xverif_fixture('xcov.comprehensive') / 'comprehensive.vdb'
+    manager = SessionManager()
+    session = manager.open(str(vdb), name='unload-cache', cache_dir=str(tmp_path))
+    dispatcher = Dispatcher(manager)
+
+    def query(action, args):
+        response = dispatcher.dispatch({
+            'api_version': 'xcov.v1', 'action': action,
+            'target': {'session_id': session.session_id}, 'args': args,
+        })
+        assert response['ok'], response
+        return response
+
+    summary_args = {'scope': 'top', 'metrics': ['line'], 'group_by': 'metric'}
+    try:
+        baseline = query('code_coverage.summary', summary_args)['data']['items']
+        target = next(row for row in session.backend.items(metrics=['line'])
+                      if is_score_bearing_row(row) and row['covered'] == 0
+                      and row['coverable'] > 0
+                      and not any('excluded' in status for status in row.get('status', [])))
+        result = query('exclude.add', {'coverage_refs': [{
+            'coverage_ref': target['coverage_ref'], 'reason': 'temporary cache lifecycle test',
+        }]})
+        assert result['data']['items'][0]['status'] == 'changed'
+        excluded = query('code_coverage.summary', summary_args)['data']['items']
+        assert excluded != baseline
+        query('exclude.unload_all', {'confirm': True})
+        restored = query('code_coverage.summary', summary_args)['data']['items']
+        assert restored == baseline
+    finally:
+        session.close(confirm_discard_reasons=True)

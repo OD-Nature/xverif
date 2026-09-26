@@ -7,6 +7,7 @@ import signal
 import subprocess
 import sys
 import time
+from pathlib import Path
 from typing import List, Optional
 
 
@@ -75,6 +76,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     if mutate_name:
         child_env[mutate_name] = "fake-bsub-mutated"
     proc = subprocess.Popen(command, env=child_env)
+    if pid_file := os.environ.get("FAKE_BSUB_CHILD_PID_FILE"):
+        Path(pid_file).write_text(str(proc.pid), encoding="ascii")
 
     def _terminate_child(signum, frame):  # type: ignore[no-untyped-def]
         del frame

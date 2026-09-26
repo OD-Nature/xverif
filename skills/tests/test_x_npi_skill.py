@@ -588,7 +588,8 @@ def test_csv_to_el_uses_builtin_two_pass_index_and_publishes_four_native_files(
         },
     ))
     cov = SyntheticCovModule()
-    monkeypatch.setattr("x_npi.coverage._cov", lambda: cov)
+    monkeypatch.setattr(SyntheticCoverageHandle, "worker", cov, raising=False)
+    monkeypatch.setattr(SyntheticInstance, "worker", cov, raising=False)
 
     published = compile_csv_to_el(database, native_test, csv_root, tmp_path / "el")
     assert [row["coverage_kind"] for row in published] == [
@@ -659,7 +660,9 @@ def test_csv_to_el_missing_target_does_not_mutate_or_publish(
     native_test = SyntheticCompileTest(SyntheticCoverageHandle(
         "npiCovMetric", "functional", "functional",
     ))
-    monkeypatch.setattr("x_npi.coverage._cov", lambda: SyntheticCovModule())
+    worker = SyntheticCovModule()
+    monkeypatch.setattr(SyntheticCoverageHandle, "worker", worker, raising=False)
+    monkeypatch.setattr(SyntheticInstance, "worker", worker, raising=False)
     with pytest.raises(CoverageExclusionError, match="TARGET_MISSING"):
         compile_csv_to_el(database, native_test, csv_root, tmp_path / "el")
     assert native_test.calls == []
@@ -728,7 +731,9 @@ def test_csv_to_el_operation_count_is_linear(
     native_test = SyntheticCompileTest(SyntheticCoverageHandle(
         "npiCovMetric", "functional", "functional",
     ))
-    monkeypatch.setattr("x_npi.coverage._cov", lambda: SyntheticCovModule())
+    worker = SyntheticCovModule()
+    monkeypatch.setattr(SyntheticCoverageHandle, "worker", worker, raising=False)
+    monkeypatch.setattr(SyntheticInstance, "worker", worker, raising=False)
 
     published = compile_csv_to_el(database, native_test, csv_root, tmp_path / "el")
     code = published[0]

@@ -8,7 +8,7 @@ coverage 工作必须先区分读取与修改：
 | --- | --- | --- |
 | test list、scope hierarchy、code/assert/functional summary | URG fixed summary | 否 |
 | code/assert/functional gap detail | 受 scope/metric 限定的 URG text detail | 否 |
-| EL load、report-time set/remove、save、unload | Python NPI | 是 |
+| EL load、report-time set/remove、save、unload | 独立原生 NPI worker | 否 |
 | 严格 CSV 校验/格式化 | `x_npi.exclusion_csv` | 否 |
 | CSV → EL | CSV parser + exclusion-only NPI resolver/compiler | 是 |
 
@@ -125,7 +125,6 @@ code bin 模型。`tests.txt` 已包含 canonical merged test list，不再为 t
 ## Exclusion-only NPI
 
 ```python
-from x_npi.runtime import pynpi_lifecycle
 from x_npi.coverage import (
     close_covdb,
     load_exclusion_files,
@@ -136,21 +135,21 @@ from x_npi.coverage import (
     unload_exclusions,
 )
 
-with pynpi_lifecycle(["exclude-job"]):
-    db = open_covdb("merged.vdb", strict=False)
-    try:
-        test = merged_test_handle(db)
-        load_exclusion_files(test, ["existing.el"])
-        # target 必须由当前 VDB traversal 唯一解析，使用后立即 release。
-        result = set_report_time_excluded(target, test, True)
-        save_exclusion_file(test, "working.el")
-        unload_exclusions(test)
-    finally:
-        close_covdb(db)
+db = open_covdb("merged.vdb", strict=False)
+try:
+    test = merged_test_handle(db)
+    load_exclusion_files(test, ["existing.el"])
+    # target 必须由当前 VDB traversal 唯一解析，使用后立即 release。
+    result = set_report_time_excluded(target, test, True)
+    save_exclusion_file(test, "working.el")
+    unload_exclusions(test)
+finally:
+    close_covdb(db)
 ```
 
-- `open_covdb()` 先检查真实 `cov.open` 签名，每次只调用一次。旧版单参数只支持默认模式；
-  双参数版本才可传 `ExclusionInStrictMode`。不通过捕获 `TypeError` 换参数重试。
+- `open_covdb()` 启动随 xverif 部署的原生 worker，default/strict 都走 C++ NPI。
+  运行环境须能导入 `xcov.native`，并携带 `xcov/libexec/xcov-npi-worker`；无需 `pynpi_lifecycle`。
+  strict 使用原生 `npiCovExclusionInStrictMode`；不探测或兼容 Python 绑定签名。
 - load 先验证全部 EL 是普通非 symlink 文件，再按给定顺序调用 `load_exclude_file`。
 - setter 固定调用 `set_status_excluded_at_report_time(test, 1|0)`，并核对 before/after。
 - save 固定使用 `save_exclude_file(path, "w")`；不得读取、拼接、格式化或追加 EL 文本。
@@ -180,7 +179,7 @@ validate_directory("coverage_exclusions")
 format_directory("coverage_exclusions", write=True)
 ```
 
-`compile_csv_to_el()` 内建严格 resolver，不依赖项目模块或 xcov：
+`compile_csv_to_el()` 内建严格 resolver，不依赖项目自定义 resolver；原生执行由 `xcov.native` worker 提供：
 
 ```python
 from x_npi.coverage import compile_csv_to_el
@@ -204,6 +203,11 @@ source file 规范化分隔符后按完整路径段后缀匹配，最终 selecto
 native baseline 和旧文件。成功输出
 `code.el/functional.el/assertion.el/container.el` 并按该顺序 load；缺少可选 container CSV 的旧
 三文件目录仍合法，并生成空 `container.el`。
+
+line CSV 以 scope/source_file/line 定位，object/bin 必须为空。同一源码行含多个 NPI
+statement bin 时，即使一个 URG gap 能精确排除，CSV 编译仍会报 `TARGET_AMBIGUOUS`；
+不能擅自选第一个或扩大为全部目标。该 gap 的精确排除状态应保存为原生 EL，并保留 CSV
+reason 作为说明；不要宣称这类 CSV 能无损重编译。CSV 格式校验通过不等于 selector 唯一。
 
 CSV 的 `reason` 只存在 sidecar，原生 EL 不保存 reason。因此：
 

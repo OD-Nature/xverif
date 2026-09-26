@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib
 import json
 import os
+import signal
 import subprocess
 import sys
 import time
@@ -82,6 +83,7 @@ def _load_server(
         "FAKE_BSUB_EXIT_BEFORE_READY",
         "FAKE_BSUB_EXIT_AFTER_READY",
         "FAKE_BSUB_KILL_CHILD_AFTER_MS",
+        "FAKE_BSUB_CHILD_PID_FILE",
     ):
         monkeypatch.delenv(name, raising=False)
     for name, value in (extra_env or {}).items():
@@ -589,7 +591,7 @@ def test_mcp_fake_lsf_child_crash_evicts_session(
         backend="lsf",
         extra_env={
             "XVERIF_MCP_FAKE_LSF": "1",
-            "FAKE_BSUB_KILL_CHILD_AFTER_MS": "1000",
+            "FAKE_BSUB_CHILD_PID_FILE": str(isolated_home / "fake-lsf-child.pid"),
         },
     )
     try:
@@ -601,7 +603,9 @@ def test_mcp_fake_lsf_child_crash_evicts_session(
             )
         )
         assert opened["ok"] is True
-        time.sleep(1.2)
+        # Inject only after the public open/ready contract has completed.
+        child_pid = int((isolated_home / "fake-lsf-child.pid").read_text())
+        os.kill(child_pid, signal.SIGKILL)
         queried = _json(
             _call(
                 server,

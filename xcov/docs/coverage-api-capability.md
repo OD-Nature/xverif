@@ -105,12 +105,12 @@ Python Coverage API 证实 coverage object 可读取：
 
 ### exclusion
 
-当前安装的 Python Coverage API 已证实：
+当前 exclusion 统一通过随 xverif 构建的原生 worker：
 
-- 新版 `cov.open(vdb, config_opt=0)`，其中
-  `cov.ConfigOpt.ExclusionInStrictMode` 用于 strict exclusion policy。
-- 旧版 `cov.open(vdb)` 由 xcov 在调用前检查签名并用于默认模式；旧版请求 strict 时
-  返回明确不支持错误，不静默忽略 strict，也不捕获 `TypeError` 重试。
+- default/strict 均调用 `npi_cov_open`；strict 使用头文件定义的
+  `npiCovExclusionInStrictMode`。V-2023.12-SP2 的 C++ 入口支持此选项，
+  同一安装的 Python 绑定并不一定暴露 `ConfigOpt` 或第二个 open 参数。
+- 不探测或兼容旧 Python 签名；worker 独占数据库、永久句柄与参数存储，关闭以进程回收。
 - test handle 的 `load_exclude_file(path)`、`save_exclude_file(path, mode)` 和
   `unload_exclusion()`。
 - score object 的 `has_status_excluded_at_compile_time(test)`、

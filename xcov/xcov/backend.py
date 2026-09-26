@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import hashlib
-import inspect
 import json
 import secrets
 import sys
@@ -24,7 +23,7 @@ from .coverage_contract import (
     coverage_ref_for_row,
     is_score_bearing_row,
 )
-from .eda import import_pynpi
+from .native import open_native
 from .errors import XcovError
 from .logging import log_lifecycle_event
 from .urg_summary import UrgSummaryIndex
@@ -181,7 +180,7 @@ def _contract(
 NPI_METHOD_CONTRACTS: Dict[str, NpiMethodContract] = {
     "npisys.init": _contract("init", "argv"),
     "npisys.end": _contract("end"),
-    "cov.open": _contract("open", "vdb", "config_opt"),
+    "cov.open": _contract("open", "vdb", "policy"),
     "cov.merge_test": _contract("merge_test", "left_test", "right_test"),
     "cov.release_handle": _contract("release_handle", "handle"),
     "database.close": _contract("close"),
@@ -233,33 +232,6 @@ NPI_METHOD_CONTRACTS: Dict[str, NpiMethodContract] = {
 }
 
 
-def _cov_open_contract(open_fn: Callable[..., Any]) -> NpiMethodContract:
-    try:
-        signature = inspect.signature(open_fn)
-    except (TypeError, ValueError) as exc:
-        raise XcovError(
-            "NPI_CONTRACT_VIOLATION",
-            "cannot inspect pynpi.cov.open signature",
-            operation="cov.open",
-            cause_type=type(exc).__name__,
-            cause_message=str(exc),
-        ) from exc
-    parameters = list(signature.parameters.values())
-    positional = [
-        item for item in parameters
-        if item.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
-    ]
-    has_varargs = any(item.kind == inspect.Parameter.VAR_POSITIONAL for item in parameters)
-    required = [item for item in positional if item.default is inspect.Parameter.empty]
-    if has_varargs or len(required) != 1 or len(positional) not in (1, 2):
-        raise XcovError(
-            "NPI_CONTRACT_VIOLATION",
-            "unsupported pynpi.cov.open signature",
-            operation="cov.open",
-            actual_signature=str(signature),
-            supported_signatures=["open(vdb)", "open(vdb, config_opt=0)"],
-        )
-    return _contract("open", "vdb", *(() if len(positional) == 1 else ("config_opt",)))
 for _metric_method in METRIC_METHODS.values():
     NPI_METHOD_CONTRACTS[f"instance.{_metric_method}"] = _contract(
         _metric_method
@@ -387,7 +359,7 @@ class NpiApiBinding:
                     )
                 return list(value)
             return value
-        except NpiContractViolation:
+        except XcovError:
             raise
         except Exception as exc:
             raise self._violation(
@@ -1042,7 +1014,7 @@ def _normalize_transition(value: str) -> str:
 
 @dataclass
 class NpiCoverageBackend(CoverageBackend):
-    worker_kind = "npi_python"
+    worker_kind = "npi_native"
 
     vdb: str
     exclusion_policy: str = "default"
@@ -1071,14 +1043,12 @@ class NpiCoverageBackend(CoverageBackend):
     def __post_init__(self) -> None:
         log_lifecycle_event("adhoc", "npi.init.begin", True, {"vdb": self.vdb})
         try:
-            self.cov, self.npisys = import_pynpi()
+            self.cov, self.npisys = open_native()
         except XcovError as exc:
             log_lifecycle_event("adhoc", "npi.init.failed", False,
                                 {"vdb": self.vdb, "error": str(exc)})
             raise
         self.api = NpiApiBinding(self.cov, self.npisys)
-        cov_open_contract = _cov_open_contract(self.cov.open)
-        self.api._contracts["cov.open"] = cov_open_contract
         with _redirect_stdout_to_stderr():
             init_ok = self.api.module_call("npisys.init", sys.argv)
         if init_ok != 1:
@@ -1088,22 +1058,7 @@ class NpiCoverageBackend(CoverageBackend):
         log_lifecycle_event("adhoc", "npi.init.ok", True, {"vdb": self.vdb})
         try:
             log_lifecycle_event("adhoc", "vdb.open.begin", True, {"vdb": self.vdb})
-            with _redirect_stdout_to_stderr():
-                config_opt = (
-                    int(self.cov.ConfigOpt.ExclusionInStrictMode)
-                    if self.exclusion_policy == "strict"
-                    else 0
-                )
-            if len(cov_open_contract.positional_args) == 1:
-                if config_opt:
-                    raise XcovError(
-                        "NPI_COV_OPEN_STRICT_UNSUPPORTED",
-                        "installed pynpi.cov.open does not accept config_opt; strict exclusion is unavailable",
-                        actual_signature="open(vdb)",
-                    )
-                self.db = self.api.module_call("cov.open", self.vdb)
-            else:
-                self.db = self.api.module_call("cov.open", self.vdb, config_opt)
+            self.db = self.api.module_call("cov.open", self.vdb, self.exclusion_policy)
             if not self.db:
                 log_lifecycle_event("adhoc", "vdb.open.failed", False, {"vdb": self.vdb})
                 raise XcovError(
@@ -1148,32 +1103,33 @@ class NpiCoverageBackend(CoverageBackend):
                     )
         except Exception:
             try:
-                if self.db:
-                    with _redirect_stdout_to_stderr():
-                        self.api.call("database.close", self.db)
-            finally:
-                with _redirect_stdout_to_stderr():
-                    self.api.module_call("npisys.end")
-                self.npisys = None
+                self.close()
+            except Exception as cleanup_error:
+                # Preserve the original failed RPC, not a secondary close on
+                # the already-dead native worker.
+                log_lifecycle_event("adhoc", "npi.cleanup.failed", False,
+                                    {"vdb": self.vdb, "error": str(cleanup_error)})
             raise
 
     def close(self) -> None:
         try:
-            for handle in self.locator_handles.values():
-                self._api().module_call("cov.release_handle", handle)
-            self.locator_handles.clear()
-            self._pinned_handle_ids.clear()
             if self.db:
-                log_lifecycle_event("adhoc", "vdb.close.begin", True, {"vdb": self.vdb})
-                with _redirect_stdout_to_stderr():
+                try:
                     self._api().call("database.close", self.db)
-                log_lifecycle_event("adhoc", "vdb.close.ok", True, {"vdb": self.vdb})
+                except XcovError as exc:
+                    # A lost worker owns no reusable state. Explicit close must
+                    # still release the Python session and its working files.
+                    if exc.code != "NPI_WORKER_LOST":
+                        raise
         finally:
             if self.npisys:
-                log_lifecycle_event("adhoc", "npi.end.begin", True, {"vdb": self.vdb})
-                with _redirect_stdout_to_stderr():
-                    self._api().module_call("npisys.end")
-                log_lifecycle_event("adhoc", "npi.end.ok", True, {"vdb": self.vdb})
+                self._api().module_call("npisys.end")
+            self.db = None
+            self.npisys = None
+            self.locator_handles.clear()
+            self._pinned_handle_ids.clear()
+            self.test_map.clear()
+            self.merged_test = None
             self._urg_loaded = False
             self._urg_scopes.clear()
             self._urg_metrics.clear()

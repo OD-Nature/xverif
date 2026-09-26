@@ -1,4 +1,4 @@
-"""Exclude-only Synopsys Python NPI coverage helpers.
+"""Exclude-only Synopsys native NPI coverage helpers.
 
 Coverage reading intentionally lives in :mod:`x_npi.urg`. Python NPI has no
 bulk summary API and must recursively traverse coverage handles, so using it
@@ -6,7 +6,6 @@ for normal reads scales poorly and can drift from URG scoring semantics.
 """
 from __future__ import annotations
 
-import inspect
 import os
 from pathlib import Path
 import tempfile
@@ -20,22 +19,22 @@ Json = Dict[str, Any]
 
 
 class CoverageExclusionError(RuntimeError):
-    """Raised when a native pynpi exclusion operation fails."""
+    """Raised when a native NPI exclusion operation fails."""
 
 
 def _cov() -> Any:
-    from pynpi import cov  # type: ignore
+    from xcov.native import NativeCoverage
 
-    return cov
+    return NativeCoverage()
 
 
 def _method(obj: Any, name: str) -> Callable[..., Any]:
     try:
         value = getattr(obj, name)
     except Exception as exc:
-        raise CoverageExclusionError(f"missing pynpi method {name}") from exc
+        raise CoverageExclusionError(f"missing native NPI method {name}") from exc
     if not callable(value):
-        raise CoverageExclusionError(f"pynpi attribute {name} is not callable")
+        raise CoverageExclusionError(f"native NPI attribute {name} is not callable")
     return value
 
 
@@ -45,58 +44,35 @@ def _handles(obj: Any, name: str) -> List[Any]:
     except CoverageExclusionError:
         raise
     except Exception as exc:
-        raise CoverageExclusionError(f"pynpi {name} call failed") from exc
+        raise CoverageExclusionError(f"native NPI {name} call failed") from exc
     if value is None:
         return []
     try:
         return list(value)
     except TypeError as exc:
-        raise CoverageExclusionError(f"pynpi {name} did not return a handle list") from exc
+        raise CoverageExclusionError(f"native NPI {name} did not return a handle list") from exc
 
 
 def open_covdb(vdb: str, strict: bool = False) -> Any:
-    """Open one VDB exactly once; never retry another cov.open signature."""
-
+    """Open an isolated native worker using the explicit exclusion policy."""
     cov = _cov()
     try:
-        signature = inspect.signature(cov.open)
-    except (TypeError, ValueError) as exc:
-        raise CoverageExclusionError(f"cannot inspect cov.open signature: {exc}") from exc
-    positional = [
-        item for item in signature.parameters.values()
-        if item.kind in (
-            inspect.Parameter.POSITIONAL_ONLY,
-            inspect.Parameter.POSITIONAL_OR_KEYWORD,
-        )
-    ]
-    required = [item for item in positional if item.default is inspect.Parameter.empty]
-    has_varargs = any(
-        item.kind == inspect.Parameter.VAR_POSITIONAL
-        for item in signature.parameters.values()
-    )
-    if has_varargs or len(required) != 1 or len(positional) not in (1, 2):
-        raise CoverageExclusionError(f"unsupported cov.open signature: {signature}")
-    if len(positional) == 1:
-        if strict:
-            raise CoverageExclusionError(
-                "installed cov.open(vdb) does not support strict exclusion config_opt"
-            )
-        db = cov.open(vdb)
-    else:
-        config_opt = int(cov.ConfigOpt.ExclusionInStrictMode) if strict else 0
-        db = cov.open(vdb, config_opt)
-    if not db:
-        raise CoverageExclusionError(f"cov.open failed: {vdb}")
-    return db
+        if cov.init([]) != 1:
+            raise CoverageExclusionError("native coverage initialization failed")
+        db = cov.open(vdb, "strict" if strict else "default")
+        if not db:
+            raise CoverageExclusionError(f"native coverage open failed: {vdb}")
+        return db
+    except BaseException:
+        cov.end()
+        raise
 
 
 def close_covdb(db: Any) -> None:
     try:
-        _method(db, "close")()
-    except CoverageExclusionError:
-        raise
-    except Exception as exc:
-        raise CoverageExclusionError("pynpi database.close failed") from exc
+        db.close()
+    finally:
+        db.worker.end()
 
 
 def test_names(db: Any) -> List[str]:
@@ -105,12 +81,12 @@ def test_names(db: Any) -> List[str]:
         try:
             names.append(str(_method(test, "name")()))
         except Exception as exc:
-            raise CoverageExclusionError("pynpi test.name failed") from exc
+            raise CoverageExclusionError("native NPI test.name failed") from exc
     return sorted(names)
 
 
 def merged_test_handle(db: Any) -> Any:
-    cov = _cov()
+    cov = db.worker
     merged = None
     for test in _handles(db, "test_handles"):
         if merged is None:
@@ -119,9 +95,9 @@ def merged_test_handle(db: Any) -> Any:
         try:
             merged = cov.merge_test(merged, test)
         except Exception as exc:
-            raise CoverageExclusionError("pynpi cov.merge_test failed") from exc
+            raise CoverageExclusionError("native NPI cov.merge_test failed") from exc
         if not merged:
-            raise CoverageExclusionError("pynpi cov.merge_test returned no handle")
+            raise CoverageExclusionError("native NPI cov.merge_test returned no handle")
     if merged is None:
         raise CoverageExclusionError("coverage database has no tests")
     return merged
@@ -131,7 +107,7 @@ def load_exclusion_files(
     test: Any,
     paths: Sequence[str | os.PathLike[str]],
 ) -> List[Json]:
-    """Load opaque native EL files in order; pynpi defines union semantics."""
+    """Load opaque native EL files in order; native NPI defines union semantics."""
 
     normalized = [os.fspath(path) for path in paths]
     for path in normalized:
@@ -144,7 +120,7 @@ def load_exclusion_files(
         try:
             value = loader(path)
         except Exception as exc:
-            raise CoverageExclusionError("pynpi load_exclude_file call failed") from exc
+            raise CoverageExclusionError("native NPI load_exclude_file call failed") from exc
         _require_exclusion_success("load_exclude_file", value, path=path)
         results.append({"path": path, "status": "loaded"})
     return results
@@ -158,7 +134,7 @@ def set_report_time_excluded(item: Any, test: Any, excluded: bool) -> Json:
         before = bool(_method(item, "has_status_excluded_at_report_time")(test))
         compile_time = bool(_method(item, "has_status_excluded_at_compile_time")(test))
     except Exception as exc:
-        raise CoverageExclusionError("pynpi exclusion status query failed") from exc
+        raise CoverageExclusionError("native NPI exclusion status query failed") from exc
     if not target and compile_time and not before:
         return {"status": "immutable_compile_time", "before": before, "after": before}
     if before == target:
@@ -169,7 +145,7 @@ def set_report_time_excluded(item: Any, test: Any, excluded: bool) -> Json:
         )
         after = bool(_method(item, "has_status_excluded_at_report_time")(test))
     except Exception as exc:
-        raise CoverageExclusionError("pynpi report-time exclusion setter failed") from exc
+        raise CoverageExclusionError("native NPI report-time exclusion setter failed") from exc
     if value != 1 or after != target:
         status = "failed"
     elif not target and compile_time:
@@ -186,7 +162,7 @@ def save_exclusion_file(test: Any, path: str | os.PathLike[str]) -> str:
     try:
         value = _method(test, "save_exclude_file")(normalized, "w")
     except Exception as exc:
-        raise CoverageExclusionError("pynpi save_exclude_file call failed") from exc
+        raise CoverageExclusionError("native NPI save_exclude_file call failed") from exc
     _require_exclusion_success("save_exclude_file", value, path=normalized)
     return normalized
 
@@ -197,7 +173,7 @@ def unload_exclusions(test: Any) -> None:
     try:
         value = _method(test, "unload_exclusion")()
     except Exception as exc:
-        raise CoverageExclusionError("pynpi unload_exclusion call failed") from exc
+        raise CoverageExclusionError("native NPI unload_exclusion call failed") from exc
     _require_exclusion_success("unload_exclusion", value)
 
 
@@ -335,13 +311,13 @@ def _optional_call(obj: Any, name: str, *args: Any) -> Any:
     except CoverageExclusionError:
         raise
     except Exception as exc:
-        raise CoverageExclusionError(f"pynpi {name} call failed") from exc
+        raise CoverageExclusionError(f"native NPI {name} call failed") from exc
 
 
 def _string_call(obj: Any, name: str, *args: Any) -> str:
     value = _optional_call(obj, name, *args)
     if not isinstance(value, str) or not value:
-        raise CoverageExclusionError(f"pynpi {name} did not return a non-empty string")
+        raise CoverageExclusionError(f"native NPI {name} did not return a non-empty string")
     return value
 
 
@@ -350,16 +326,16 @@ def _optional_string_call(obj: Any, name: str, *args: Any) -> str:
     if value is None:
         return ""
     if not isinstance(value, str):
-        raise CoverageExclusionError(f"pynpi {name} did not return a string or null")
+        raise CoverageExclusionError(f"native NPI {name} did not return a string or null")
     return value
 
 
 def _release(handle: Any) -> None:
     if handle:
         try:
-            _cov().release_handle(handle)
+            handle.worker.release_handle(handle)
         except Exception as exc:
-            raise CoverageExclusionError("pynpi cov.release_handle failed") from exc
+            raise CoverageExclusionError("native NPI cov.release_handle failed") from exc
 
 
 class _SelectorRecord:
@@ -622,12 +598,12 @@ def _source_context(handle: Any, test: Any, parent: _WalkContext) -> _WalkContex
     if isinstance(source_file, str) and source_file:
         updates["source_file"] = source_file
     elif source_file is not None and not isinstance(source_file, str):
-        raise CoverageExclusionError("pynpi file_name did not return a string or null")
+        raise CoverageExclusionError("native NPI file_name did not return a string or null")
     if isinstance(source_line, int) and not isinstance(source_line, bool) and source_line > 0:
         updates["source_line"] = source_line
     elif source_line not in (None, -1):
         raise CoverageExclusionError(
-            "pynpi line_no did not return a positive integer, -1, or null"
+            "native NPI line_no did not return a positive integer, -1, or null"
         )
     if updates:
         return _WalkContext(**{
@@ -793,7 +769,7 @@ def _functional_scope(full_name: str, context: _WalkContext, bin_name: str) -> s
     parts = _functional_parts(full_name)
     if not suffix or len(parts) < len(suffix) or parts[-len(suffix):] != suffix:
         raise CoverageExclusionError(
-            "pynpi functional full_name does not match traversal components"
+            "native NPI functional full_name does not match traversal components"
         )
     return ".".join(parts[:-len(suffix)])
 
@@ -898,4 +874,4 @@ def _require_exclusion_success(
     if value == 1:
         return
     suffix = f": {path}" if path is not None else ""
-    raise CoverageExclusionError(f"pynpi {operation} returned failure{suffix}")
+    raise CoverageExclusionError(f"native NPI {operation} returned failure{suffix}")

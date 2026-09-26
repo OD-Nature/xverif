@@ -27,7 +27,7 @@ tools/xcov_lsf --json -  # 仅无 MCP 且必须经 LSF 时
 `xverif-mcp`；SDK-free LSF 的同 envelope 入口见 `xverif-admin`。
 
 普通 coverage 查询与三类 gap 导出固定使用 URG，不加载 NPI。只有 exclusion
-处理才惰性加载 pynpi、打开 VDB 并执行必要遍历；真实 exclusion 需要 Synopsys
+处理才惰性启动原生 worker、打开 VDB 并执行必要遍历；真实 exclusion 需要 Synopsys
 license，受限沙箱内 license 可能不可达。
 
 离线 Python 自定义 coverage 报告也使用 x-npi 的 `x_npi.urg`：固定命令为
@@ -35,8 +35,8 @@ license，受限沙箱内 license 可能不可达。
 已有 exclusion 时只追加 `-elfile <el>`。Python NPI coverage wrapper 没有 bulk summary，必须按
 instance/metric/object/bin 全树遍历且容易重复计入 aggregate/leaf，因此不再用于 coverage read。
 x-npi 的 NPI coverage helper 只保留 exclusion target 遍历和 EL load/set/save/unload；CSV→EL
-内建 indexed resolver，不依赖项目模块或 xcov。code/assertion 按 scope+metric 裁剪，functional
-受 pynpi 限制扫描该类全树；每个非空 kind 固定预检、应用两遍，不按 CSV 行重扫。CSV reason
+内建 indexed resolver，不依赖项目自定义 resolver；原生执行由 `xcov.native` worker 提供。code/assertion 按 scope+metric 裁剪，functional
+受 NPI 遍历接口限制扫描该类全树；每个非空 kind 固定预检、应用两遍，不按 CSV 行重扫。CSV reason
 是 sidecar，原生 EL 无法无损转换回带 reason 的 CSV。`+` 仅能用于 URG help 明确声明的 metric
 list（如 `-show brief line+cond`），不能写成 `-show summary+tests` 组合多个信息类别。
 
@@ -218,3 +218,10 @@ assert export（输出目录内保留 `asserts.txt`，并生成 `assert.json`、
 - action 参数不确定：先用原生 `actions` 和 `schema` action 查询。
 - 大结果：设置 limit，必要时 `overflow:"to_file"` 或 output path。
 - MCP/LSF/session 问题：改用 `xverif-mcp` 对应 troubleshooting。
+
+## 原生 exclusion worker
+
+运行目录须包含 `xcov/libexec/xcov-npi-worker`。default/strict 都使用该独立 C++ 进程；
+strict 直接调用当前 Verdi 的原生选项，不依赖 Python `ConfigOpt`，也不兼容旧绑定签名。
+`NPI_WORKER_LOST` 表示进程已丢失，必须显式关闭并重新打开会话；不得把失败变更当作已持久化。
+URG 查询/导出仍使用固定 full64 路径，reason 仍须通过 CSV sidecar 持久化。

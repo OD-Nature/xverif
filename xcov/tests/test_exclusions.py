@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import csv
 import io
-import os
 from pathlib import Path
 import subprocess
 
@@ -28,27 +27,27 @@ _EXCLUSION_VDB: str | None = None
 _NPI_DISPATCHER: Dispatcher | None = None
 
 
+@pytest.fixture(autouse=True)
+def _coverage_fixture(xverif_fixture):
+    """Declare real EDA use and close native workers after each test."""
+    global _EXCLUSION_VDB, _NPI_DISPATCHER
+    _EXCLUSION_VDB = str(xverif_fixture("xcov.exclusion") / "exclusion.vdb")
+    try:
+        yield
+    finally:
+        if _NPI_DISPATCHER is not None:
+            _NPI_DISPATCHER.sessions.close("cov", confirm_discard_reasons=True)
+        _NPI_DISPATCHER = None
+        _EXCLUSION_VDB = None
+
+
 def _exclusion_vdb() -> str:
-    global _EXCLUSION_VDB
-    if _EXCLUSION_VDB is not None:
-        return _EXCLUSION_VDB
-    xverif_home = os.environ.get("XVERIF_HOME") or os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "..", "..")
-    )
-    versions_dir = os.path.join(
-        xverif_home, ".xverif-test-cache", "fixtures", "xcov.exclusion", "versions"
-    )
-    if os.path.isdir(versions_dir):
-        for vhash in sorted(os.listdir(versions_dir), reverse=True):
-            vdb = os.path.join(versions_dir, vhash, "resources", "exclusion.vdb")
-            if os.path.isdir(vdb):
-                _EXCLUSION_VDB = vdb
-                return vdb
-    pytest.skip("exclusion VDB not found; run: pytest --xverif-prepare xcov.exclusion")
+    assert _EXCLUSION_VDB is not None, "catalog fixture must be bound before use"
+    return _EXCLUSION_VDB
 
 
 def _npi_dispatcher(policy: str = "default") -> Dispatcher:
-    """创建使用 NPI 后端的 dispatcher（进程级单例，避免 NPI 重复 init）."""
+    """创建本用例内使用的 dispatcher；原生 worker 由 fixture 关闭。"""
     global _NPI_DISPATCHER
     if _NPI_DISPATCHER is not None:
         sess = _NPI_DISPATCHER.sessions.get("cov")
@@ -404,7 +403,7 @@ opened = dispatcher.dispatch({
 assert opened["ok"], opened
 ref = next(
     row["coverage_ref"]
-    for row in dispatcher.sessions.get("cov").backend.items()
+    for row in dispatcher.sessions.get("cov").backend.items(metrics=["line"])
     if row["metric"] == "line"
 )
 response = dispatcher.dispatch({
@@ -414,6 +413,7 @@ response = dispatcher.dispatch({
     "args": {"coverage_refs": [{"coverage_ref": ref, "reason": "严格策略验证"}]},
 })
 print("XCOV_TEST_RESULT=" + json.dumps(response))
+dispatcher.sessions.close("cov")
 '''
     result = subprocess.run(
         [sys.executable, "-c", script, _exclusion_vdb()],

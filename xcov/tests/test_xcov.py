@@ -2748,53 +2748,72 @@ def _x_npi_coverage_helper_for_open_compat():
     return module
 
 
-def test_cov_open_contract_accepts_supported_signatures():
-    from xcov.backend import _cov_open_contract
-
-    def old_open(vdb):
-        return vdb
-
-    def new_open(vdb, config_opt=0):
-        return vdb, config_opt
-
-    assert _cov_open_contract(old_open).positional_args == ("vdb",)
-    assert _cov_open_contract(new_open).positional_args == ("vdb", "config_opt")
-
-
-def test_x_npi_open_covdb_calls_old_interface_once(monkeypatch):
+def test_x_npi_native_open_uses_explicit_policy(monkeypatch):
     from types import SimpleNamespace
-    import pytest
-
     helper = _x_npi_coverage_helper_for_open_compat()
     calls = []
-
-    def old_open(vdb):
-        calls.append((vdb,))
-        return object()
-
-    monkeypatch.setattr(helper, "_cov", lambda: SimpleNamespace(open=old_open))
-    helper.open_covdb("old.vdb")
-    assert calls == [("old.vdb",)]
-    with pytest.raises(RuntimeError, match="does not support strict"):
-        helper.open_covdb("old.vdb", strict=True)
-    assert calls == [("old.vdb",)]
-
-
-def test_x_npi_open_covdb_calls_new_interface_once(monkeypatch):
-    from types import SimpleNamespace
-
-    helper = _x_npi_coverage_helper_for_open_compat()
-    calls = []
-
-    def new_open(vdb, config_opt=0):
-        calls.append((vdb, config_opt))
-        return object()
-
-    cov = SimpleNamespace(
-        open=new_open,
-        ConfigOpt=SimpleNamespace(ExclusionInStrictMode=7),
+    worker = SimpleNamespace(
+        init=lambda argv: 1,
+        open=lambda vdb, policy: calls.append((vdb, policy)) or object(),
+        end=lambda: calls.append("end"),
     )
-    monkeypatch.setattr(helper, "_cov", lambda: cov)
+    monkeypatch.setattr(helper, "_cov", lambda: worker)
     helper.open_covdb("default.vdb")
     helper.open_covdb("strict.vdb", strict=True)
-    assert calls == [("default.vdb", 0), ("strict.vdb", 7)]
+    assert calls == [("default.vdb", "default"), ("strict.vdb", "strict")]
+
+
+def test_x_npi_failed_open_reaps_worker(monkeypatch):
+    from types import SimpleNamespace
+    import pytest
+    helper = _x_npi_coverage_helper_for_open_compat()
+    ended = []
+    worker = SimpleNamespace(init=lambda argv: 1, open=lambda *args: None,
+                             end=lambda: ended.append(True))
+    monkeypatch.setattr(helper, "_cov", lambda: worker)
+    with pytest.raises(helper.CoverageExclusionError):
+        helper.open_covdb("bad.vdb")
+    assert ended == [True]
+
+
+def test_native_open_preserves_original_worker_failure_during_cleanup(monkeypatch):
+    from types import SimpleNamespace
+    from xcov import backend
+    from xcov.errors import XcovError
+    import pytest
+
+    ended = []
+    def failed_read():
+        raise XcovError("NPI_WORKER_LOST", "original test handle read failure")
+    def failed_close():
+        raise XcovError("NPI_WORKER_LOST", "secondary close failure")
+    db = SimpleNamespace(test_handles=failed_read, close=failed_close)
+    worker = SimpleNamespace(init=lambda argv: 1, open=lambda *args: db,
+                             end=lambda: ended.append(True),
+                             merge_test=lambda left, right: left,
+                             release_handle=lambda handle: 1)
+    monkeypatch.setattr(backend, "open_native", lambda: (worker, worker))
+    with pytest.raises(XcovError, match="original test handle read failure"):
+        backend.NpiCoverageBackend("failed.vdb")
+    assert ended == [True]
+
+
+def test_export_line_gap_reason_csv_roundtrips_public_schema(tmp_path):
+    from xcov.actions import _gap_csv_rows
+    from xcov.exclusions_csv import ExclusionDocument, ExclusionGroup, format_document, parse_document
+
+    row = _gap_csv_rows({
+        'metric': 'line', 'scope': 'top.u_assertions', 'source_files': ['frame_sva.sv'],
+        'gap': {'gap_id': 'L0001', 'at': 'frame_sva.sv:14'},
+        'targets': [{'csv_line': 14, 'csv_bin': '14.1', 'csv_object': ''}],
+    })[0]
+    kind = row.pop('coverage_kind')
+    source_file = row.pop('source_file')
+    row['reason'] = 'unreachable test line'
+    path = tmp_path / 'code_exclusions.csv'
+    document = ExclusionDocument(kind, path, [ExclusionGroup(source_file, [row])])
+    path.write_text(format_document(document), encoding='utf-8')
+    parsed = parse_document(path, kind)
+    assert parsed.row_count == 1
+    assert parsed.groups[0].rows[0]['bin'] == ''
+    assert parsed.groups[0].rows[0]['reason'] == row['reason']

@@ -35,6 +35,12 @@ bool is_alias_kind(const std::string& kind) {
 
 bool is_primary_input(npiHandle signal_hdl) {
     if (!signal_hdl) return false;
+    // An interface input modport is a connection to another instance, not
+    // an external primary input. Keep tracing its explicit reference target.
+    if (npi_get(npiType, signal_hdl) == npiRefObj) {
+        NpiHandleGuard actual(npi_handle(npiActual, signal_hdl));
+        if (actual && npi_get(npiType, actual.get()) == npiMpPort) return false;
+    }
     int dir = npi_get(npiDirection, signal_hdl);
     return is_input_like_direction(dir);
 }

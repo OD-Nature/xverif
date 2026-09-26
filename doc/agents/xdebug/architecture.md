@@ -343,3 +343,8 @@ tracked `args`/`limits` 合并、结构化 cache error、历史 `end` 归一化�
 
 - 新增环境变量时必须写清默认值、优先级和日志可见性。
 - 不要把本机绝对路径泄漏到用户可见文档，除非是执行证据必需。
+
+## Interface driver 边界
+
+combined 的静态候选收集显式穿透 NPI 返回的 modport 句柄，再按 FSDB 时刻检查赋值活性。
+modport 声明不算最终驱动，interface 输入引用不算外部 primary input；循环和边界上限必须报告。

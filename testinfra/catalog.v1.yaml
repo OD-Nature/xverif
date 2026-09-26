@@ -102,10 +102,11 @@ suites:
         - xcov/tests/test_exclusions.py
         - xcov/tests/test_urg_summary.py
         - xcov/tests/test_xcov.py
-    capabilities: [child_process]
+    fixtures: [xcov.exclusion]
+    capabilities: [child_process, npi]
     hermetic: false
     deterministic: true
-    cost: {class: fast, estimate_sec: 3}
+    cost: {class: medium, estimate_sec: 60}
 
   - id: xcov.exclusion_npi
     owner: xcov
@@ -400,7 +401,8 @@ suites:
         - xverif_mcp/tests/test_mcp_sdk_smoke.py
         - xverif_mcp/tests/test_mcp_ssh_loopback.py
         - xverif_mcp/tests/test_stdio_loop_session_lifecycle.py
-    capabilities: [child_process, mcp_process]
+    fixtures: [xcov.comprehensive]
+    capabilities: [child_process, mcp_process, npi]
     hermetic: false
     deterministic: true
     cost: {class: medium, estimate_sec: 45}

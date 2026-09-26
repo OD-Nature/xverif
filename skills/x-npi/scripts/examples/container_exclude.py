@@ -12,7 +12,7 @@ sys.path.insert(0, str(ROOT))
 from x_npi.container import plan_container_records, write_csv_set
 from x_npi.coverage import close_covdb, compile_csv_to_el, merged_test_handle, open_covdb
 from x_npi.jsonio import error, ok, print_json
-from x_npi.runtime import json_stdout_quarantine, pynpi_lifecycle
+from x_npi.runtime import json_stdout_quarantine
 from x_npi.urg import export_summary, parse_summary
 
 
@@ -60,15 +60,14 @@ def main() -> int:
                 crosses=args.cross, reason=args.reason,
             )
             csv_paths = write_csv_set(args.csv_directory, records)
-            with pynpi_lifecycle([sys.argv[0]]):
-                db = open_covdb(args.vdb, strict=args.strict)
-                try:
-                    published = compile_csv_to_el(
-                        db, merged_test_handle(db),
-                        args.csv_directory, args.output_directory,
-                    )
-                finally:
-                    close_covdb(db)
+            db = open_covdb(args.vdb, strict=args.strict)
+            try:
+                published = compile_csv_to_el(
+                    db, merged_test_handle(db),
+                    args.csv_directory, args.output_directory,
+                )
+            finally:
+                close_covdb(db)
             print_json(ok("container_exclude", {"items": published}, {
                 "requested_exact_target_count": len(records),
                 "csv_paths": csv_paths,

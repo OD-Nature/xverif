@@ -51,7 +51,7 @@ stdio 请求
 
 ## 真实 exclusion NPI 运行
 
-URG coverage 查询需要 Synopsys URG；原生 exclusion 处理另需 Verdi/Python NPI
+URG coverage 查询需要 Synopsys URG；原生 exclusion 处理另需 Verdi native NPI
 和 license。按项目规则，NPI、VCS、VIP、真实 coverage probe 必须在沙箱外运行。
 
 已验证的本地形态：
@@ -89,8 +89,8 @@ MCP 始终提供 coverage 工具。MCP 原样传递导出参数，不改写相�
 
 - `VCS_HOME`：必填；URG 只允许使用规范化后的 `$VCS_HOME/bin/urg`，不会从 `PATH`
   查找或改用其它安装。
-- `VERDI_HOME`：首次 exclusion 操作时必填；pynpi/cov/npisys 必须全部来自该安装的
-  `share/NPI/python`，不会接受预加载的外部同名模块。
+- `VERDI_HOME`：首次 exclusion 操作时必填；worker 的原生 NPI 库来自该安装的
+  `share/NPI/lib/LINUX64`，不会接受预加载的外部同名模块。
 - `XVERIF_XCOV_BIN`：覆盖 xcov 可执行文件。
 - `XVERIF_XCOV_PYTHON`：覆盖 xcov Python runtime。
 - `XVERIF_XCOV_VERDI_HOME`：覆盖 `VERDI_HOME`。
@@ -150,7 +150,7 @@ bsub process；失败不会改走 direct。
 `session.open` 的公开 `args` 只有 `name` 和可选
 `exclusion_policy:"default|strict"`。打开 session 只生成/读取固定 URG summary，
 不会 import pynpi 或调用 `cov.open`。首次 exclusion 操作才创建 NPI 上下文；此时
-`strict` 在双参数接口上把 `cov.ConfigOpt.ExclusionInStrictMode` 传给 `cov.open`，
+`strict` 由独立 `xcov-npi-worker` 把头文件定义的 `npiCovExclusionInStrictMode` 传给 `npi_cov_open`，
 拒绝把已覆盖对象设为 report-time exclusion；xcov 从不公开 `ExcludeByStmtLevel`。同名
 alive session 返回 `SESSION_EXISTS`；同一 native 进程的其它 alive name 返回
 `SESSION_CAPACITY_EXCEEDED`。xcov 不比较旧、新 VDB，不复用旧 backend，也不隐式关闭后重开。
@@ -159,9 +159,14 @@ alive session 返回 `SESSION_EXISTS`；同一 native 进程的其它 alive name
 `target.vdb:"fake"` 也没有特殊含义；`FakeCoverageBackend` 只允许测试通过
 `SessionManager` 的 backend factory 注入。
 
-首次 exclusion 操作会检查当前 pynpi 的真实 `cov.open` 签名。单参数旧版在默认模式调用
-`cov.open(vdb)`；双参数版本调用 `cov.open(vdb, config_opt)`。单参数旧版不支持 strict，
-会返回明确错误；不会先调用失败再 fallback。
+首次 exclusion 操作启动独立原生进程，默认与 strict 均使用同一 C++ 实现。
+构建使用 `make xcov`；部署须携带 `xcov/libexec/xcov-npi-worker`。
+Python 不加载 coverage 的厂商绑定，也不探测旧版签名；worker 内部独占 NPI 生命周期和句柄，
+进程间只传结构化 JSON 与会话内对象 ID。worker 失败返回 `NPI_WORKER_LOST`，不自动重启或重放变更。
+worker 启动时仅在子进程设置 `VCS_USE_MALLOC=1`：本机 V-2023.12-SP2 加载 SPI VDB 的
+branch shape 时，默认分配器在 `libsnpsmalloc::mem_malloc` 崩溃，系统分配器的打开/保存/关闭
+对照通过。该设置不会修改 MCP、xdebug 或其他 EDA 进程的环境，也不会限制 CPU 数量。
+
 
 ### 可复现输入：run manifest
 
@@ -243,7 +248,7 @@ CSV 用 `# source_file=...` 划分连续源码分组；`reason` 必填，同一
 
 - `exclude.list`：列出 merged test 的 compile/report-time exclusion，并给出当前
   session 的 `coverage_ref`。
-- `exclude.load`：按输入顺序加载一个或多个 EL，使用 pynpi union 语义。
+- `exclude.load`：按输入顺序加载一个或多个 EL，使用原生 NPI union 语义。
 - `exclude.add`：每个 `coverage_ref` 或 export gap 都必须携带非空 `reason`；reason 仅保存在当前 session
 - `exclude.remove`：按精确 `coverage_ref` 撤销 report-time exclusion
   before/after，返回 `changed`、`already_in_state`、
@@ -328,7 +333,7 @@ export `args.output` 的未知字段都会返回 `SCHEMA_INVALID`。handler 返�
 控制 inline 数量；三个 coverage report export 写 Markdown，`export.exclude` 写原生
 EL。
 
-惰性 Python NPI exclusion backend 在初始化时绑定唯一的已声明 method/signature 合同，并且每次
+惰性原生 NPI exclusion backend 在初始化时绑定唯一的已声明 method/signature 合同，并且每次
 调用只执行该签名一次。缺失方法、参数不匹配、调用异常、遍历返回非 iterable，
 以及必需事实类型错误都会返回 `NPI_CONTRACT_VIOLATION`，错误中包含 operation、
 method、expected_signature 和 cause；不会改用零参数签名，也不会把异常转换成
@@ -342,7 +347,7 @@ bin。score 的 primitive、值域、`covered <= coverable`、`missing`、百分
 和 evidence 任一不一致都会 fail-closed：真实 NPI 返回
 `NPI_CONTRACT_VIOLATION`，注入 backend 返回 `BACKEND_CONTRACT_VIOLATION`。
 backend/action 合同不接受 `-1` score/count sentinel；不适用值必须是 JSON `null`。
-Python NPI 层只把文档定义的 SDK “不适用”返回值映射为 `null`，未知或位置错误的
+原生 NPI adapter 只把文档定义的 SDK “不适用”返回值映射为 `null`，未知或位置错误的
 负值仍由统一边界拒绝。
 
 - `scope.summary`：返回当前层次的扁平覆盖率字段，例如
@@ -484,3 +489,15 @@ XVERIF_TEST_EXECUTION_ENV=host .conda-xverif/bin/pytest \
 
 - summary 查询固定使用 merged selection；请求 schema 不接受 per-test `test` selector。
 - source file/type 和 functional bin 不属于 summary 合同；需要具体 gap 时使用对应 export。
+
+### Native worker 退出边界
+
+V-2023.12-SP2 的 libucapi 后台 PdrDomainNameReader 在线程尚未退出时调用
+`npi_cov_close` 可触发 SIGSEGV。worker 的 `close/end` 发送成功响应后直接退出进程，
+由 OS 回收内存、文件及 license socket，不调用存在竞态的数据库析构/全局析构。
+所有 EL 必须通过显式 save 持久化；关闭不会自动保存。异常退出和超时返回
+`NPI_WORKER_LOST`，不会自动重放变更。这个 workaround 不改变 URG/VCS/xdebug 的 CPU 配置。
+
+原生句柄按 worker 会话持有，并通过官方 `npi_cov_set_permanent_handle` 固定；
+RPC release 只注销该次 ID，不提前销毁仍被别名或后台读取引用的原生对象。
+内存随 session 关闭统一回收，大批任务应分为有明确关闭边界的会话。

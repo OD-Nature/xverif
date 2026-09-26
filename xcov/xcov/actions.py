@@ -1701,6 +1701,7 @@ class Dispatcher:
                 for document in documents:
                     staged_path = temp_root / FILE_NAMES[document.kind]
                     staged_path.write_text(formatted[document.kind], encoding="utf-8")
+                    parse_document(staged_path, document.kind)
                     _fsync_file(staged_path)
                     staged[document.kind] = staged_path
                 for document in documents:
@@ -1972,8 +1973,10 @@ def _gap_csv_rows(item: Json) -> List[Json]:
         }]
     rows = []
     for target in item["targets"]:
-        obj = target.get("csv_object", "")
-        bin_name = target.get("csv_bin", "")
+        # Public line CSV identity is scope/file/line. Native statement-bin
+        # names (for example 14.1) are not valid CSV bin selectors for line.
+        obj = "" if metric == "line" else target.get("csv_object", "")
+        bin_name = "" if metric == "line" else target.get("csv_bin", "")
         if metric != "line" and (not obj or not bin_name):
             raise XcovError(
                 "EXCLUSION_CSV_IDENTITY_MISSING",

@@ -165,9 +165,55 @@ inline ActiveTraceResolveResult resolve_active_driver_precise(
         return result;
     }
 
+    // L1 stops at interface modport declarations even with pass-through enabled.
+    // Expand those explicit NPI handles before checking activity; a declaration
+    // at line 6 is connectivity evidence, not the procedural driver of the net.
+    std::vector<std::string> expanded_modports;
+    for (size_t index = 0; index < candidates.size(); ++index) {
+        const auto candidate = candidates[index];
+        if (!candidate.useHdl || npi_get(npiType, candidate.useHdl) != npiMpPort)
+            continue;
+        const std::string key = npi_string(npiFullName, candidate.useHdl);
+        if (std::find(expanded_modports.begin(), expanded_modports.end(), key) != expanded_modports.end())
+            continue;
+        if (expanded_modports.size() >= 64) {
+            result.limitations.push_back("modport driver expansion exceeded 64 boundaries");
+            break;
+        }
+        expanded_modports.push_back(key);
+        drvLoadStmtVec_t connected;
+        npi_trace_driver_by_hdl2(candidate.useHdl, connected, true, nullptr, options);
+        // An input modport reports itself plus its connected interface signal.
+        // Those handles are explicit connectivity from L1, not guessed RHS names.
+        const int direction = npi_get(npiDirection, candidate.useHdl);
+        if (direction == npiInput || direction == npiInout) {
+            for (auto signal : candidate.sigHdlVec) {
+                if (!signal || npi_compare_objects(signal, candidate.useHdl) == 1) continue;
+                drvLoadStmtVec_t upstream;
+                npi_trace_driver_by_hdl2(signal, upstream, true, nullptr, options);
+                connected.insert(connected.end(), upstream.begin(), upstream.end());
+            }
+        }
+        {
+            for (const auto& item : connected) {
+                const bool duplicate = std::any_of(candidates.begin(), candidates.end(),
+                    [&](const drvLoadStmt_s& existing) {
+                        return existing.useHdl && item.useHdl &&
+                            npi_compare_objects(existing.useHdl, item.useHdl) == 1 &&
+                            ((!existing.scopeHdl && !item.scopeHdl) ||
+                             (existing.scopeHdl && item.scopeHdl &&
+                              npi_compare_objects(existing.scopeHdl, item.scopeHdl) == 1));
+                    });
+                if (!duplicate) candidates.push_back(item);
+            }
+        }
+    }
+    result.static_candidate_count = static_cast<int>(candidates.size());
+
     int active_assignment_count = 0;
     for (const auto& candidate : candidates) {
         if (!candidate.useHdl) continue;
+        if (npi_get(npiType, candidate.useHdl) == npiMpPort) continue;
         int active_rc = npi_check_active_handle(candidate.useHdl, result.active_time.c_str());
         if (active_rc != 1) continue;
         result.active.drvLoadStmtVec.push_back(candidate);
