@@ -10,6 +10,10 @@
 #include <stdexcept>
 #include <string>
 #include <unistd.h>
+#include <signal.h>
+#ifdef __linux__
+#include <sys/prctl.h>
+#endif
 using json = nlohmann::json;
 
 class CoverageWorker {
@@ -128,7 +132,13 @@ public:
 };
 
 int main(int argc, char** argv) {
-    if (argc != 2) return 2;
+    if (argc != 3) return 2;
+#ifdef __linux__
+    // Also terminate if the Python owner is killed while vendor code blocks.
+    // The explicit parent PID closes the race before PR_SET_PDEATHSIG is armed.
+    const auto parent = static_cast<pid_t>(std::stol(argv[2]));
+    if (prctl(PR_SET_PDEATHSIG, SIGKILL) != 0 || getppid() != parent) return 2;
+#endif
     const int fd = std::stoi(argv[1]);
     FILE* input = fdopen(dup(fd), "r");
     FILE* output = fdopen(fd, "w");

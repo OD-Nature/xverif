@@ -229,3 +229,9 @@ assert export（输出目录内保留 `asserts.txt`，并生成 `assert.json`、
 strict 直接调用当前 Verdi 的原生选项，不依赖 Python `ConfigOpt`，也不兼容旧绑定签名。
 `NPI_WORKER_LOST` 表示进程已丢失，必须显式关闭并重新打开会话；不得把失败变更当作已持久化。
 URG 查询/导出仍使用固定 full64 路径，reason 仍须通过 CSV sidecar 持久化。
+
+
+原生初始化期限可用本机环境变量 `XVERIF_XCOV_NATIVE_INIT_TIMEOUT_SECONDS` 调整，
+默认 120 秒；超时保持 `NPI_WORKER_LOST`，附带具体操作、耗时和诊断文件路径。
+详见 [原生等待排障](../../xverif-admin/references/mcp/troubleshooting.md#原生-coverage-初始化等待)。
+不要自动重开会话或重放排除操作。

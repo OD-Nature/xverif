@@ -2913,3 +2913,27 @@ def test_missing_code_detail_requires_explicit_empty_metric_evidence():
         result = parse_metric_report("", "top.assertions_only", metric, allow_empty_selection=True)
         assert result["analysis_complete"] is True
         assert result["coverage"] == {"covered": 0, "coverable": 0, "missing": 0, "pct": None}
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "nan", "inf", "invalid", "3601"])
+def test_native_init_timeout_rejects_invalid_configuration(monkeypatch, value):
+    import os
+    from xcov.native import _init_timeout_seconds, INIT_TIMEOUT_ENV
+    from xcov.errors import XcovError
+    monkeypatch.setattr(os, "environ", dict(os.environ))
+    monkeypatch.setenv(INIT_TIMEOUT_ENV, value)
+    with pytest.raises(XcovError) as failure:
+        _init_timeout_seconds()
+    assert failure.value.code == "NPI_TIMEOUT_INVALID"
+    exc = failure.value
+    validate_response("session.open", error_response("session.open", "invalid-init-timeout", exc.code, exc.message, **exc.detail))
+
+
+def test_native_init_timeout_default_and_override(monkeypatch):
+    import os
+    from xcov.native import _init_timeout_seconds, INIT_TIMEOUT_ENV
+    monkeypatch.setattr(os, "environ", dict(os.environ))
+    monkeypatch.delenv(INIT_TIMEOUT_ENV, raising=False)
+    assert _init_timeout_seconds() == 120
+    monkeypatch.setenv(INIT_TIMEOUT_ENV, "30.5")
+    assert _init_timeout_seconds() == 30.5

@@ -68,3 +68,100 @@ def test_native_worker_crash_isolated_and_explicit_close_reopens(xverif_fixture)
         process = reopened.cov.process
         reopened.close()
     assert process.returncode == 0
+
+
+def test_native_init_timeout_is_bounded_and_reaps_stopped_worker(tmp_path, monkeypatch):
+    import signal
+    import time
+    import pytest
+    from xcov.native import NativeCoverage
+    from xcov.errors import XcovError
+
+    monkeypatch.setattr(os, "environ", dict(os.environ))
+    monkeypatch.setenv("XVERIF_XCOV_LOG_DIR", str(tmp_path))
+    monkeypatch.setenv("XVERIF_XCOV_NATIVE_INIT_TIMEOUT_SECONDS", "0.15")
+    worker = NativeCoverage()
+    try:
+        os.kill(worker.process.pid, signal.SIGSTOP)
+        started = time.monotonic()
+        with pytest.raises(XcovError) as failure:
+            worker.init([])
+        elapsed = time.monotonic() - started
+        assert failure.value.code == "NPI_WORKER_LOST"
+        assert failure.value.detail["failure_kind"] == "timeout"
+        assert failure.value.detail["operation"] == "init"
+        assert failure.value.detail["timeout_seconds"] == 0.15
+        assert failure.value.detail["automatic_retry"] is False
+        from xcov.errors import error_response
+        from xcov.schemas import validate_response
+        exc = failure.value
+        response = error_response("session.open", "native-init-timeout", exc.code, exc.message, **exc.detail)
+        validate_response("session.open", response)
+        assert response["error"]["detail.failure_kind"] == "timeout"
+        assert elapsed < 3, "timeout cleanup must not add the old 5-second grace period"
+        assert worker.process.returncode == -signal.SIGKILL
+        status = json.loads(Path(failure.value.detail["diagnostic_path"]).read_text())
+        assert status["state"] == "failed" and status["operation"] == "init"
+        assert status["process_returncode"] == -signal.SIGKILL
+        assert "network" in status
+        with pytest.raises(XcovError, match="closed"):
+            worker.init([])
+    finally:
+        worker.shutdown(force=True)
+
+
+def test_native_worker_dies_with_owner_even_when_stopped(tmp_path):
+    # Isolate subreaper state in a helper, so the adopted native process can be
+    # reaped without affecting pytest or leaving a zombie in a container PID 1.
+    owner = r'''
+import os, sys
+from xcov.native import NativeCoverage
+from xcov.errors import XcovError
+worker = NativeCoverage()
+try:
+    worker.call("readiness_probe")
+except XcovError as exc:
+    assert exc.code == "NPI_NATIVE_FAILED"
+else:
+    raise AssertionError("uninitialized worker unexpectedly accepted a request")
+print(worker.process.pid, flush=True)
+sys.stdin.readline()
+worker.shutdown(force=True)
+'''
+    supervisor = r'''
+import ctypes, os, signal, subprocess, sys, time
+libc = ctypes.CDLL(None)
+assert libc.prctl(36, 1, 0, 0, 0) == 0  # PR_SET_CHILD_SUBREAPER
+parent = subprocess.Popen([sys.executable, "-c", sys.argv[1]], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+worker_pid = None
+try:
+    line = parent.stdout.readline()
+    assert line.strip().isdigit(), line
+    worker_pid = int(line)
+    os.kill(worker_pid, signal.SIGSTOP)
+    parent.kill()
+    parent.wait(timeout=5)
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        pid, status = os.waitpid(worker_pid, os.WNOHANG)
+        if pid:
+            assert os.WIFSIGNALED(status) and os.WTERMSIG(status) == signal.SIGKILL
+            worker_pid = None
+            print("OWNER_DEATH_REAPED")
+            break
+        time.sleep(0.02)
+    else:
+        raise AssertionError("native worker survived its owner")
+finally:
+    if parent.poll() is None:
+        parent.kill(); parent.wait(timeout=5)
+    if worker_pid:
+        try: os.kill(worker_pid, signal.SIGKILL)
+        except ProcessLookupError: pass
+        os.waitpid(worker_pid, 0)
+'''
+    env = {**os.environ, "XVERIF_XCOV_LOG_DIR": str(tmp_path)}
+    result = subprocess.run([sys.executable, "-c", supervisor, owner], env=env,
+                            capture_output=True, text=True, timeout=20)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "OWNER_DEATH_REAPED" in result.stdout

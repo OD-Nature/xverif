@@ -501,3 +501,21 @@ V-2023.12-SP2 的 libucapi 后台 PdrDomainNameReader 在线程尚未退出时�
 原生句柄按 worker 会话持有，并通过官方 `npi_cov_set_permanent_handle` 固定；
 RPC release 只注销该次 ID，不提前销毁仍被别名或后台读取引用的原生对象。
 内存随 session 关闭统一回收，大批任务应分为有明确关闭边界的会话。
+
+
+### 原生 coverage 初始化等待
+
+`XVERIF_XCOV_NATIVE_INIT_TIMEOUT_SECONDS` 可在本机 MCP/EDA 环境设置 NPI 初始化
+等待上限，默认 120 秒，必须为 `(0, 3600]` 的有限秒数；只影响 `init`，不会缩短
+VDB 打开或其它原生 RPC 的既有 120 秒期限，也不改变 URG 的执行期限。
+设置后需显式关闭已有会话并重新连接。先导出尚未保存的 exclusion reason 和 EL。
+
+超时仍返回 `NPI_WORKER_LOST`，`detail.failure_kind=timeout`，附带 operation、
+elapsed_seconds、timeout_seconds 和可用的 diagnostic_path。每个 worker 的
+`native-status.json` 记录初始化/打开阶段；超时时在 Linux 上尽力记录该 worker
+自身 TCP 连接的地址、端口、状态和重传数，不读取网络 payload 或许可证环境内容。
+诊断写入失败不掩盖原始错误。`init` 超时可能涉及许可证和网络，不能一概判为缺 feature。
+
+不可恢复的 RPC 失败会立即终止并回收 worker；Linux 上拥有它的 Python 进程
+意外退出时，worker 也由内核终止，即使正卡在厂商初始化中。新 wrapper 与 native
+worker 必须一起部署；没有自动重试、重放 mutation 或切换 backend。
