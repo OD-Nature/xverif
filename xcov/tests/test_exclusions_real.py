@@ -165,3 +165,34 @@ finally:
                             capture_output=True, text=True, timeout=20)
     assert result.returncode == 0, result.stdout + result.stderr
     assert "OWNER_DEATH_REAPED" in result.stdout
+
+
+def test_native_repeated_reads_record_memory_and_reap_session(xverif_fixture, tmp_path):
+    """Observe session-owned allocation without pretending release frees NPI memory."""
+    from xcov.backend import NpiCoverageBackend
+    backend = NpiCoverageBackend(str(xverif_fixture("xcov.exclusion") / "exclusion.vdb"))
+    worker = backend.cov.process
+    samples = []
+    def rss_kib():
+        fields = dict(line.split(":", 1) for line in Path(f"/proc/{worker.pid}/status").read_text().splitlines() if ":" in line)
+        return int(fields["VmRSS"].split()[0])
+    try:
+        samples.append(rss_kib())
+        baseline = None
+        for _ in range(20):
+            rows = backend.items(metrics=["line"])
+            signature = [(r.get("full_name"), r.get("covered"), r.get("coverable")) for r in rows]
+            assert signature
+            if baseline is None:
+                baseline = signature
+            assert signature == baseline
+            samples.append(rss_kib())
+    finally:
+        backend.close()
+    assert worker.poll() == 0
+    assert not Path(f"/proc/{worker.pid}").exists()
+    evidence = {"iterations": 20, "rows_per_iteration": len(baseline), "rss_kib": samples,
+                "growth_kib": samples[-1] - samples[0], "peak_kib": max(samples),
+                "reaped": True, "scope": "bounded fixture observation, not an unlimited-session guarantee"}
+    (tmp_path / "native-lifecycle.json").write_text(json.dumps(evidence, indent=2))
+    print("NATIVE_LIFECYCLE=" + json.dumps(evidence))

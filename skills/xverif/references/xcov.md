@@ -235,3 +235,14 @@ URG 查询/导出仍使用固定 full64 路径，reason 仍须通过 CSV sidecar
 默认 120 秒；超时保持 `NPI_WORKER_LOST`，附带具体操作、耗时和诊断文件路径。
 详见 [原生等待排障](../../xverif-admin/references/mcp/troubleshooting.md#原生-coverage-初始化等待)。
 不要自动重开会话或重放排除操作。
+
+
+### coverage worker 的站点分配器设置
+
+共享默认不强制内存分配器，保留继承的 `VCS_USE_MALLOC`。仅当本机原生加载发生
+分配器崩溃且对照确认有效时，在仓库外的 MCP/EDA 环境设置
+`XVERIF_XCOV_NATIVE_USE_MALLOC=1`（仅接受 `0`/`1`）。此选项只作用于 coverage 子进程，
+不改变其它 EDA 工具；非法值返回 `NPI_ALLOCATOR_INVALID`，不会自动重试或切换。
+已有 worker 不受后续环境变化影响；先显式保存 CSV/EL 并关闭，再建立新会话。
+永久句柄和退出回收仍是当前原生实现的适用边界，长任务应划分明确的会话关闭点，
+不能把短会话成功视为无界内存保证或所有 Verdi 安装的通用验证。

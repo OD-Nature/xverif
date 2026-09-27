@@ -32,6 +32,20 @@ def _init_timeout_seconds():
     return value
 
 
+ALLOCATOR_ENV = "XVERIF_XCOV_NATIVE_USE_MALLOC"
+
+
+def _worker_environment(environment):
+    """Preserve the site environment unless it explicitly selects an allocator."""
+    env = dict(environment)
+    if ALLOCATOR_ENV in env:
+        value = env[ALLOCATOR_ENV]
+        if value not in {"0", "1"}:
+            raise XcovError("NPI_ALLOCATOR_INVALID", "native allocator option must be 0 or 1", variable=ALLOCATOR_ENV)
+        env["VCS_USE_MALLOC"] = value
+    return env
+
+
 def _worker_connections(pid):
     """Best-effort Linux diagnostics for this worker only; never inspect payloads."""
     root = Path("/proc") / str(pid)
@@ -84,9 +98,8 @@ class NativeCoverage:
             raise XcovError("NPI_WORKER_MISSING", "build and install xcov/libexec/xcov-npi-worker")
         env = os.environ.copy()
         env["VERDI_HOME"] = str(home)
-        # SPI VDB loading crashes in libsnpsmalloc::mem_malloc on this runtime.
-        # Keep the allocator selection local to the coverage worker.
-        env["VCS_USE_MALLOC"] = "1"
+        # A site can opt in without changing MCP, xdebug or other EDA processes.
+        env = _worker_environment(env)
         env["LD_LIBRARY_PATH"] = str(home / "share/NPI/lib/LINUX64") + os.pathsep + env.get("LD_LIBRARY_PATH", "")
         log_dir = log_root().resolve() / "native"
         log_dir.mkdir(parents=True, exist_ok=True)

@@ -35,9 +35,10 @@ xverif 修复纳入 OD-Nature/xverif 的源码历史。它包含实质性的 cov
 
 以下 workaround 当前属于本分支行为，需要在后续版本中持续审查：
 
-1. worker 子进程固定设置 `VCS_USE_MALLOC=1`。本次 SPI VDB 加载在
-   `libsnpsmalloc::mem_malloc` 崩溃，系统分配器对照通过。该设置不改变父进程或
-   xdebug 的环境，但会作用于所有使用本分支 coverage worker 的机器。
+1. 初始实现曾固定设置 `VCS_USE_MALLOC=1`；维护复审后已撤销共享强制值。
+   本次 SPI VDB 加载曾在 `libsnpsmalloc::mem_malloc` 崩溃、系统分配器对照通过，
+   因此本机显式选择 `XVERIF_XCOV_NATIVE_USE_MALLOC=1`，其它站点默认继承自身环境。
+   该选择只影响 worker；详见 `RUNTIME_MAINTENANCE_REVIEW_2026-09-27.md`。
 2. worker 保留参数存储和永久原生句柄。RPC release 注销对象 ID，底层内存随会话
    进程退出统一回收；长会话应关注内存增长。
 3. 为避开观察到的关闭阶段原生后台线程崩溃，close/end 回复后使用进程退出回收，

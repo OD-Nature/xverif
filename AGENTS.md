@@ -180,3 +180,10 @@ xdebug 代码架构、添加 action 流程、统一组件、通信协议、log�
 - 测试会捕获、映射或发布环境变量的函数时，先用 monkeypatch 把 `os.environ` 替换为独立副本，避免派生变量跨测试泄漏。（09-07）
 - 复现 MCP stdio server 时把配置环境变量显式绑定到 server/`timeout` 命令一侧或用 `env ... <server>`；先验证 module import 再解释握手结果。（07-16）
 - pynpi coverage：`handle_by_name` 只用于 database instance fullname，不用 L0 绕过 wrapper 查 signal/bin；probe 用仓库 conda Python 并通过 backend 的 handle release helper 清理。（08-11）
+
+
+### 2026-09-27 环境错误复盘
+
+- 错误现象：维护回归的独立 Python 子进程无法导入 xcov，MCP action guide 因缺少本工作树 xdebug 前端失败。
+- 误判原因：只配置 pytest 的导入路径，未将子进程所需的源码包目录加入 PYTHONPATH；未核对本工作树前端构建产物。
+- 以后规则：真实进程测试前显式绑定当前工作树 XVERIF_HOME，同时核对 Python 子进程导入路径与所需前端二进制；环境准备失败与产品失败分别记录，不换用其它 checkout 的可执行文件。

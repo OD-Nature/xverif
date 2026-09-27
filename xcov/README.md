@@ -163,9 +163,11 @@ alive session 返回 `SESSION_EXISTS`；同一 native 进程的其它 alive name
 构建使用 `make xcov`；部署须携带 `xcov/libexec/xcov-npi-worker`。
 Python 不加载 coverage 的厂商绑定，也不探测旧版签名；worker 内部独占 NPI 生命周期和句柄，
 进程间只传结构化 JSON 与会话内对象 ID。worker 失败返回 `NPI_WORKER_LOST`，不自动重启或重放变更。
-worker 启动时仅在子进程设置 `VCS_USE_MALLOC=1`：本机 V-2023.12-SP2 加载 SPI VDB 的
-branch shape 时，默认分配器在 `libsnpsmalloc::mem_malloc` 崩溃，系统分配器的打开/保存/关闭
-对照通过。该设置不会修改 MCP、xdebug 或其他 EDA 进程的环境，也不会限制 CPU 数量。
+worker 默认继承站点环境，不强制改变厂商内存分配器。只有本机复现分配器故障并完成
+对照后，才在仓库外设置 `XVERIF_XCOV_NATIVE_USE_MALLOC=1`；该选项只为 coverage
+worker 设置 `VCS_USE_MALLOC=1`，不改变 MCP、URG、xdebug 或其它 EDA 进程。
+选项仅接受 `0` 或 `1`；未设置时保留站点已有的 `VCS_USE_MALLOC`，非法值在启动前
+返回 `NPI_ALLOCATOR_INVALID`。这不是自动 fallback，也不表示所有 Verdi 安装都需要它。
 
 
 ### 可复现输入：run manifest
@@ -519,3 +521,11 @@ elapsed_seconds、timeout_seconds 和可用的 diagnostic_path。每个 worker �
 不可恢复的 RPC 失败会立即终止并回收 worker；Linux 上拥有它的 Python 进程
 意外退出时，worker 也由内核终止，即使正卡在厂商初始化中。新 wrapper 与 native
 worker 必须一起部署；没有自动重试、重放 mutation 或切换 backend。
+
+
+### 测试依赖边界
+
+`xcov.unit` 保留 CSV、解析器、schema 和 stub 合同测试，不需要 NPI 或生成 VDB。
+真实 exclusion/worker 生命周期归入 `xcov.exclusion_npi`，真实 MCP coverage 用
+`xverif_mcp.coverage_real`；两者明确声明 fixture 和 EDA 依赖，未准备环境时不能跳过冒充通过。
+普通 `xverif_mcp.process` 不再因为少数真实 coverage 用例而要求整个 suite 准备 VDB。

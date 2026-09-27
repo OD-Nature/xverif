@@ -43,3 +43,14 @@ elapsed_seconds、timeout_seconds 和可用的 diagnostic_path。每个 worker �
 不可恢复的 RPC 失败会立即终止并回收 worker；Linux 上拥有它的 Python 进程
 意外退出时，worker 也由内核终止，即使正卡在厂商初始化中。新 wrapper 与 native
 worker 必须一起部署；没有自动重试、重放 mutation 或切换 backend。
+
+
+### coverage worker 的站点分配器设置
+
+共享默认不强制内存分配器，保留继承的 `VCS_USE_MALLOC`。仅当本机原生加载发生
+分配器崩溃且对照确认有效时，在仓库外的 MCP/EDA 环境设置
+`XVERIF_XCOV_NATIVE_USE_MALLOC=1`（仅接受 `0`/`1`）。此选项只作用于 coverage 子进程，
+不改变其它 EDA 工具；非法值返回 `NPI_ALLOCATOR_INVALID`，不会自动重试或切换。
+已有 worker 不受后续环境变化影响；先显式保存 CSV/EL 并关闭，再建立新会话。
+永久句柄和退出回收仍是当前原生实现的适用边界，长任务应划分明确的会话关闭点，
+不能把短会话成功视为无界内存保证或所有 Verdi 安装的通用验证。

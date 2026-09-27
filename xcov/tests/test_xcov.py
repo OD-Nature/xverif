@@ -2937,3 +2937,32 @@ def test_native_init_timeout_default_and_override(monkeypatch):
     assert _init_timeout_seconds() == 120
     monkeypatch.setenv(INIT_TIMEOUT_ENV, "30.5")
     assert _init_timeout_seconds() == 30.5
+
+
+@pytest.mark.parametrize("inherited,selection,expected", [
+    (None, None, None), ("0", None, "0"), ("1", None, "1"),
+    (None, "1", "1"), ("0", "1", "1"), ("1", "0", "0"),
+])
+def test_native_allocator_is_explicit_and_preserves_parent(inherited, selection, expected):
+    from xcov.native import _worker_environment, ALLOCATOR_ENV
+    env = {"unrelated": "preserved"}
+    if inherited is not None:
+        env["VCS_USE_MALLOC"] = inherited
+    if selection is not None:
+        env[ALLOCATOR_ENV] = selection
+    before = dict(env)
+    child = _worker_environment(env)
+    assert child.get("VCS_USE_MALLOC") == expected
+    assert child["unrelated"] == "preserved"
+    assert env == before
+
+
+@pytest.mark.parametrize("value", ["", "true", "2", " 1"])
+def test_native_allocator_rejects_invalid_site_configuration(value):
+    from xcov.native import _worker_environment, ALLOCATOR_ENV
+    from xcov.errors import XcovError
+    with pytest.raises(XcovError) as caught:
+        _worker_environment({ALLOCATOR_ENV: value})
+    exc = caught.value
+    assert exc.code == "NPI_ALLOCATOR_INVALID"
+    validate_response("session.open", error_response("session.open", "allocator-option", exc.code, exc.message, **exc.detail))
