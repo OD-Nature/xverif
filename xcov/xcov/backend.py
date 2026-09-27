@@ -91,6 +91,10 @@ def _semantic_gap_key(metric: str, row: Json) -> tuple[Any, ...]:
         )
     bin_name = str(row.get("bin") or row.get("name") or "")
     bin_name = bin_name.replace("] [", "|")
+    # URG's expanded auto bins omit the outer brackets used by some NPI
+    # class covergroups. Normalize only this known spelling, not user bins.
+    if not row.get("cross") and __import__("re").fullmatch(r"\[auto\[[^\]]+\]\]", bin_name):
+        bin_name = bin_name[1:-1]
     return (
         str(row.get("scope") or ""),
         str(row.get("covergroup") or ""),
@@ -1915,8 +1919,6 @@ class NpiCoverageBackend(CoverageBackend):
         path = dict(functional_path)
         if typ == "npiCovCovergroup":
             path = {"covergroup": name}
-            if group_filter is not None and name not in group_filter and full_name not in group_filter:
-                return
         elif typ == "npiCovCoverpoint":
             path["coverpoint"] = name
         elif typ == "npiCovCross":
@@ -1932,6 +1934,9 @@ class NpiCoverageBackend(CoverageBackend):
                     str(path.get("bin") or ""),
                 ) if value
             ) or name
+        if typ == "npiCovCovergroup" and group_filter is not None:
+            if name not in group_filter and full_name not in group_filter:
+                return
         scope = _validate_functional_identity(api, hdl, full_name, path)
         raw_evidence = {
             "file": _optional_string(api, "coverage.file_name", hdl),

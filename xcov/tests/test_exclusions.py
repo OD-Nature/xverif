@@ -593,3 +593,12 @@ def test_exclusion_action_xout_is_human_readable(tmp_path):
     output = render_xout(response)
     assert "summary:\n" in output
     assert "pointer\tkind\tvalue" not in output
+
+
+
+def test_native_functional_filter_skips_unrequested_groups():
+    backend = NpiCoverageBackend(vdb=_exclusion_vdb())
+    try:
+        assert backend.functional_items_filtered({"absent_group"}) == []
+    finally:
+        backend.close()

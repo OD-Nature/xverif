@@ -106,7 +106,11 @@ code coverage export（首次读取同一 VDB/selection/EL 时生成并缓存固
 ```
 
 functional coverage export（输出目录内保留 `grpinfo.txt`，并生成 `functional.json`、
-`functional.xout`；gap ID 为 `FC0001` 起）：
+`functional.xout`；gap ID 为 `FC0001` 起）。交叉 bin 使用完整展开视图；
+自动 bin 的合并范围保留原生排除粒度，一个 gap 可代表多个 bin，数量见 `coverable`。
+范围原文保存在 `variable-view/grpinfo.txt`，与展开视图核对总数；未知计数为 null。
+选择范围 gap 会排除整个范围，不能把它当成其中一个自动 bin。URG 类型视图和实例
+视图可能同时存在，不能将两者行数相加作为唯一 bin 数：
 
 ```json
 {"api_version":"xcov.v1","action":"export.functional_coverage","target":{"session_id":"cov0"},"args":{"output":{"path":"functional_coverage"}}}

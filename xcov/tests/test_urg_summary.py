@@ -904,3 +904,118 @@ def test_parser_rejects_missing_required_artifact(tmp_path):
     with pytest.raises(XcovError) as raised:
         parse_urg_summary(report)
     assert raised.value.code == "URG_SUMMARY_INCOMPLETE"
+
+
+@pytest.mark.parametrize("root", ["chip_tb.dut", "top", "pkg.\\class_name::method "])
+@pytest.mark.parametrize("indent", ["", "  "])
+def test_assert_gaps_accept_design_roots_and_do_not_duplicate_without_attempts(tmp_path, root, indent):
+    report = tmp_path / "asserts.txt"
+    report.write_text(f"""Summary for Assertions
+NUMBER PERCENT
+Uncovered 1 100.00
+-------------------------------------------------------------------------------
+Assertions Uncovered:
+ASSERTIONS CATEGORY SEVERITY ATTEMPTS REAL SUCCESSES FAILURES INCOMPLETE
+{indent}{root}.a_missing 0 0 0 0 0 0
+
+Assertions Without Attempts:
+ASSERTIONS CATEGORY SEVERITY ATTEMPTS REAL SUCCESSES FAILURES INCOMPLETE
+{indent}{root}.a_missing 0 0 0 0 0 0
+-------------------------------------------------------------------------------
+Summary for Cover Properties
+NUMBER PERCENT
+Uncovered 1 100.00
+-------------------------------------------------------------------------------
+Cover Properties Uncovered:
+COVER PROPERTIES CATEGORY SEVERITY ATTEMPTS MATCHES INCOMPLETE
+{indent}{root}.c_missing 0 0 41 0 0
+-------------------------------------------------------------------------------
+""")
+    rows = parse_urg_gap_report("assert", report)
+    assert len(rows) == 2
+    assert [row["scope"] for row in rows] == [root, root]
+    assert [row["name"] for row in rows] == ["a_missing", "c_missing"]
+    report.write_text(report.read_text().replace(f"{indent}{root}.c_missing 0 0 41 0 0", "unparsed detail"))
+    with pytest.raises(XcovError, match="assertion gap count does not match URG summary"):
+        parse_urg_gap_report("assert", report)
+
+
+
+def test_functional_expanded_cross_is_complete_and_compressed_or_truncated_rows_fail(tmp_path):
+    report = tmp_path / "grpinfo.txt"
+    text = """Group : chip_tb::cg
+Summary for Cross pair
+CATEGORY EXPECTED UNCOVERED COVERED PERCENT MISSING
+Automatically Generated Cross Bins 2 2 0 0.00 2
+Decompressed uncovered bins for pair
+left right COUNT AT LEAST
+rx auto[0] 0 1
+tx auto[0] 0 1
+-------------------------------------------------------------------------------
+"""
+    report.write_text(text)
+    rows = parse_urg_gap_report("functional", report)
+    assert [row["bin"] for row in rows] == ["[rx] [auto[0]]", "[tx] [auto[0]]"]
+    assert all(row["cross"] == "pair" and row["scope"] == "chip_tb" for row in rows)
+    report.write_text(text.replace("tx auto[0] 0 1\n", ""))
+    with pytest.raises(XcovError, match="functional gap count does not match"):
+        parse_urg_gap_report("functional", report)
+    report.write_text(text.replace("left right COUNT AT LEAST", "left right COUNT AT LEAST NUMBER").replace("rx auto[0] 0 1\ntx auto[0] 0 1", "* * -- -- 2"))
+    with pytest.raises(XcovError, match="compressed or unsupported"):
+        parse_urg_gap_report("functional", report)
+
+
+
+def test_functional_expanded_auto_bin_preserves_native_identity(tmp_path):
+    report = tmp_path / "grpinfo.txt"
+    report.write_text("""Group : tb_pkg::monitor::cg
+Summary for Variable mode
+CATEGORY EXPECTED UNCOVERED COVERED PERCENT
+Automatically Generated Bins 2 1 1 50.00
+Decompressed uncovered bins for mode
+NAME COUNT AT LEAST
+auto[1] 0 1
+-------------------------------------------------------------------------------
+""")
+    rows = parse_urg_gap_report("functional", report)
+    assert len(rows) == 1
+    assert rows[0]["scope"] == "tb_pkg.monitor"
+    assert rows[0]["covergroup"] == "tb_pkg::monitor::cg"
+    assert rows[0]["bin"] == "auto[1]"
+    from xcov.backend import _semantic_gap_key
+    native = {**rows[0], "bin": "[auto[1]]"}
+    assert _semantic_gap_key("functional", rows[0]) == _semantic_gap_key("functional", native)
+    assert _semantic_gap_key("functional", {**rows[0], "bin": "[user_bin]"}) != _semantic_gap_key("functional", {**rows[0], "bin": "user_bin"})
+
+
+def test_functional_variable_ranges_preserve_exclusion_granularity(tmp_path):
+    expanded = tmp_path / "expanded.txt"
+    variables = tmp_path / "variables.txt"
+    text = """Group : top::cg
+Summary for Variable mode
+Automatically Generated Bins 4 3 1 25.00
+Decompressed uncovered bins for mode
+NAME COUNT AT LEAST
+auto[1] 0 1
+auto[2] 0 1
+auto[3] 0 1
+-------------------------------------------------------------------------------
+Summary for Cross pair
+Automatically Generated Cross Bins 1 1 0 0.00
+Decompressed uncovered bins for pair
+left right COUNT AT LEAST
+a auto[1] 0 1
+-------------------------------------------------------------------------------
+"""
+    compressed = text.replace("Decompressed uncovered bins for mode\nNAME COUNT AT LEAST\nauto[1] 0 1\nauto[2] 0 1\nauto[3] 0 1", "Uncovered bins\nNAME COUNT AT LEAST NUMBER\n[auto[1] - auto[3]] -- -- 3")
+    expanded.write_text(text)
+    variables.write_text(compressed)
+    rows = parse_urg_gap_report("functional", expanded, variable_report_path=variables)
+    assert [(r["bin"], r["coverable"]) for r in rows] == [("[auto[1] - auto[3]]", 3), ("[a] [auto[1]]", 1)]
+    assert rows[0]["count"] is None
+    variables.write_text(compressed.replace("auto[3]] -- -- 3", "auto[2]] -- -- 3"))
+    with pytest.raises(XcovError, match="auto-bin range is unsupported"):
+        parse_urg_gap_report("functional", expanded, variable_report_path=variables)
+    variables.write_text(compressed.replace("Automatically Generated Bins 4 3 1 25.00", "Automatically Generated Bins 4 2 2 50.00").replace("auto[3]] -- -- 3", "auto[2]] -- -- 2"))
+    with pytest.raises(XcovError, match="variable views disagree"):
+        parse_urg_gap_report("functional", expanded, variable_report_path=variables)

@@ -2670,7 +2670,14 @@ Event               0        0
     assert "\n\n  uncovered:\n" not in xout
 
 
-def test_fsm_v2_groups_multiple_fsms_and_renders_gap_tables():
+@pytest.mark.parametrize("heading", [
+    "FSM Coverage for Instance : top.u_dut",
+    "FSM Coverage for Module : dut",
+    "FSM Coverage for Module : dut   ",
+    "FSM Coverage for Module : dut (from source)",
+    "FSM Coverage for Module : dut\r",
+])
+def test_fsm_v2_groups_multiple_fsms_and_renders_gap_tables(heading):
     from xcov.code_export import parse_metric_report, render_metric_xout
 
     scope = "top.u_dut"
@@ -2718,6 +2725,7 @@ MON_BUSY->MON_HALT 211 Not Covered
 MON_RETRY->MON_HALT 212 Not Covered
 """
 
+    report = report.replace("FSM Coverage for Instance : top.u_dut", heading)
     payload = parse_metric_report(report, scope, "fsm")
 
     assert payload["schema"] == "xcov.code_coverage.fsm.v2"
@@ -2817,3 +2825,91 @@ def test_export_line_gap_reason_csv_roundtrips_public_schema(tmp_path):
     assert parsed.row_count == 1
     assert parsed.groups[0].rows[0]['bin'] == ''
     assert parsed.groups[0].rows[0]['reason'] == row['reason']
+
+
+def _detail_layout_report(metric, body, source="/workspace/dut.sv"):
+    return f"""Module : dut
+Source File(s) :
+{source}
+Module self-instances :
+
+SCORE {metric.upper()} NAME
+0.00 0.00 top.u_dut
+--------
+{metric} Coverage for Module : dut
+{body}
+"""
+
+
+def test_fsm_module_heading_keeps_single_summary_and_rejects_missing_summary():
+    from xcov.code_export import CoverageExportParseError, parse_metric_report
+    body = """Summary for FSM :: state
+Transitions 2 1 50.00
+transitions Line No. Covered
+IDLE->RUN 9 Not Covered
+"""
+    report = _detail_layout_report("FSM", body)
+    result = parse_metric_report(report, "top.u_dut", "fsm")
+    assert result["coverage"] == {"covered": 1, "coverable": 2, "missing": 1, "pct": 50.0}
+    assert result["fsm_groups"][0]["gaps"][0]["object"] == "IDLE->RUN"
+    with pytest.raises(CoverageExportParseError, match="FSM summary is missing"):
+        parse_metric_report(report.replace("Summary for FSM :: state\n", ""), "top.u_dut", "fsm")
+    with pytest.raises(CoverageExportParseError, match="exact target module detail is missing"):
+        parse_metric_report(report.replace("Coverage for Module : dut", "Coverage for Module : dut2"), "top.u_dut", "fsm")
+
+
+@pytest.mark.parametrize("expression,annotation,terms", [
+    ("(en && go)", " -1    -2", ["en", "go"]),
+    ("(a && b)", " 1    2", ["a", "b"]),
+    ("(sel ? 1 : 0)", " -1-", ["sel"]),
+])
+def test_condition_short_markers_and_status_headers_stay_on_one_line(expression, annotation, terms):
+    from xcov.code_export import parse_metric_report
+    # The last case has an annotation identical to the following status header.
+    markers = " ".join(f"-{i}-" for i in range(1, len(terms) + 1))
+    values = " ".join("0" for _ in terms)
+    body = ("Conditions 1 0 0.00\n LINE 7\n EXPRESSION " + expression + "\n"
+            + " " * len(" EXPRESSION ") + annotation + "\n\n"
+            + markers + " Status\n" + values + " Not Covered\n")
+    result = parse_metric_report(_detail_layout_report("Cond", body), "top.u_dut", "condition")
+    assert result["coverage_object_gap_count"] == result["gap_count"] == 1
+    assert [term["expression"] for term in result["condition_groups"][0]["terms"]] == terms
+
+
+def test_branch_multiline_if_and_nested_ternaries_have_distinct_predicates(tmp_path):
+    from xcov.code_export import parse_metric_report
+    lines = [
+        "if (enable &&",
+        "    (state == 1 || valid)) begin",
+        "  result = flush ? 2 : (pop ? 1 : (clear ? 3 : 0));",
+        "end",
+    ]
+    source = tmp_path / "dut.sv"
+    source.write_text("\n".join(lines) + "\n")
+    numbered = [f"{i}  {line}" for i, line in enumerate(lines, 1)]
+    mark_if = " " * numbered[0].index("if") + "-1-"
+    mark_ternary = [" "] * (len(numbered[2]) + 3)
+    for index, match in enumerate(__import__("re").finditer(r"\?", numbered[2]), 2):
+        mark_ternary[match.start():match.start() + 3] = f"-{index}-"
+    body = ("Branches 4 0 0.00\n" + numbered[0] + "\n" + mark_if + "\n"
+            + numbered[1] + "\n" + numbered[2] + "\n" + "".join(mark_ternary) + "\n"
+            + numbered[3] + "\nBranches:\n-1- -2- -3- -4- Status\n"
+            + "1   1   -   -   Not Covered\n1   0   1   -   Not Covered\n"
+            + "1   0   0   1   Not Covered\n1   0   0   0   Not Covered\n")
+    result = parse_metric_report(_detail_layout_report("Branch", body, source), "top.u_dut", "branch")
+    decisions = result["decision_groups"][0]["decision_path"]
+    assert [decision["expression"] for decision in decisions] == [
+        "enable && (state == 1 || valid)", "flush", "pop", "clear",
+    ]
+    assert result["gap_count"] == 4
+    assert [decision["at"] for decision in decisions] == ["dut.sv:1", "dut.sv:3", "dut.sv:3", "dut.sv:3"]
+
+
+def test_missing_code_detail_requires_explicit_empty_metric_evidence():
+    from xcov.code_export import CoverageExportParseError, parse_metric_report
+    for metric in ("line", "condition", "branch", "toggle", "fsm"):
+        with pytest.raises(CoverageExportParseError, match="target instance detail section is missing"):
+            parse_metric_report("", "top.assertions_only", metric)
+        result = parse_metric_report("", "top.assertions_only", metric, allow_empty_selection=True)
+        assert result["analysis_complete"] is True
+        assert result["coverage"] == {"covered": 0, "coverable": 0, "missing": 0, "pct": None}

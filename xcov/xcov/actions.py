@@ -589,6 +589,11 @@ class Dispatcher:
                 "urg", "-full64", "-dir", sess.vdb, "-report", str(stage_dir),
                 "-format", "text", "-show", "brief", "-metric", metric,
             ]
+            if action == "export.functional_coverage":
+                # Default URG compression hides individual cross-bin identities;
+                # its default maxmissing=256 can silently truncate detail.
+                urg_args[urg_args.index("brief") + 1:urg_args.index("brief") + 1] = ["group"]
+                urg_args.extend(["-group", "expand_bins", "-group", "maxmissing", str(MAX_GAP_ROWS + 1)])
             urg_args.extend(sess.el_file_arg)
             scope = args.get("scope")
             if scope:
@@ -620,7 +625,24 @@ class Dispatcher:
                         f"URG did not produce {report_name}",
                     )
                 _ensure_artifact_budget(report_path, f"urg_{structured_metric}_text")
-                rows = parse_urg_gap_report(structured_metric, report_path)
+                variable_report_path = None
+                if structured_metric == "functional":
+                    # The expanded view is required for complete cross bins;
+                    # the default variable view preserves NPI auto-bin ranges.
+                    # Both are mandatory, not a fallback after parse failure.
+                    variable_dir = stage_dir / "variable-view"
+                    variable_args = list(urg_args)
+                    variable_args[variable_args.index("-report") + 1] = str(variable_dir)
+                    expand_index = variable_args.index("expand_bins")
+                    del variable_args[expand_index - 1:expand_index + 1]
+                    variable_result = UrgRunner(session_id=sess.session_id).run(variable_args, timeout=300)
+                    if variable_result.returncode != 0:
+                        raise XcovError("URG_FAILED", "URG variable view export failed", stderr=variable_result.stderr[:500], urg_execution=variable_result.scheduler)
+                    variable_report_path = variable_dir / "grpinfo.txt"
+                    if not variable_report_path.is_file():
+                        raise XcovError("URG_ARTIFACT_MISSING", "URG variable view is missing")
+                    _ensure_artifact_budget(variable_report_path, "urg_functional_variable_text")
+                rows = parse_urg_gap_report(structured_metric, report_path, variable_report_path=variable_report_path)
                 if scope:
                     rows = [
                         row for row in rows
@@ -766,7 +788,11 @@ class Dispatcher:
                             combined_text,
                             scope,
                             metric,
-                            allow_empty_selection=empty_selection,
+                            # The fixed URG XML also includes assertion-only
+                            # instances, omitted from the code-only text report.
+                            allow_empty_selection=(
+                                empty_selection or metric not in scope_metrics[scope]
+                            ),
                         )
                         payload["exclusion_locator"] = {
                             "version": "xcov.urg_semantic.v1",
