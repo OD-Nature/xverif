@@ -24,7 +24,7 @@ from .coverage_contract import (
     coverage_ref_for_row,
     is_score_bearing_row,
 )
-from .eda import import_pynpi
+from .eda import import_pynpi, legacy_strict_cov_opener
 from .errors import XcovError
 from .logging import log_lifecycle_event
 from .urg_summary import UrgSummaryIndex
@@ -256,8 +256,8 @@ def _cov_open_contract(open_fn: Callable[..., Any]) -> NpiMethodContract:
             "NPI_CONTRACT_VIOLATION",
             "unsupported pynpi.cov.open signature",
             operation="cov.open",
-            actual_signature=str(signature),
-            supported_signatures=["open(vdb)", "open(vdb, config_opt=0)"],
+            value=str(signature),
+            expected_signature="open(vdb) or open(vdb, config_opt=0)",
         )
     return _contract("open", "vdb", *(() if len(positional) == 1 else ("config_opt",)))
 for _metric_method in METRIC_METHODS.values():
@@ -1041,7 +1041,7 @@ def _normalize_transition(value: str) -> str:
 
 
 @dataclass
-class NpiCoverageBackend(CoverageBackend):
+class _LocalNpiCoverageBackend(CoverageBackend):
     worker_kind = "npi_python"
 
     vdb: str
@@ -1079,28 +1079,28 @@ class NpiCoverageBackend(CoverageBackend):
         self.api = NpiApiBinding(self.cov, self.npisys)
         cov_open_contract = _cov_open_contract(self.cov.open)
         self.api._contracts["cov.open"] = cov_open_contract
+        legacy_strict_open = None
+        config_opt = 0
+        if self.exclusion_policy == "strict":
+            if len(cov_open_contract.positional_args) == 1:
+                legacy_strict_open = legacy_strict_cov_opener(self.cov)
+            else:
+                config_opt = int(self.cov.ConfigOpt.ExclusionInStrictMode)
         with _redirect_stdout_to_stderr():
-            init_ok = self.api.module_call("npisys.init", sys.argv)
+            init_ok = self.api.module_call("npisys.init", [sys.argv[0]])
         if init_ok != 1:
-            log_lifecycle_event("adhoc", "npi.init.failed", False,
-                                {"vdb": self.vdb, "init_ok": init_ok})
             raise XcovError("NPI_INIT_FAILED", "npisys.init failed")
+        # This class is only constructed once in a dedicated NPI worker.
+        # End at process exit: the vendor library cannot safely restart.
+        import atexit
+        atexit.register(self.npisys.end)
         log_lifecycle_event("adhoc", "npi.init.ok", True, {"vdb": self.vdb})
         try:
             log_lifecycle_event("adhoc", "vdb.open.begin", True, {"vdb": self.vdb})
-            with _redirect_stdout_to_stderr():
-                config_opt = (
-                    int(self.cov.ConfigOpt.ExclusionInStrictMode)
-                    if self.exclusion_policy == "strict"
-                    else 0
-                )
-            if len(cov_open_contract.positional_args) == 1:
-                if config_opt:
-                    raise XcovError(
-                        "NPI_COV_OPEN_STRICT_UNSUPPORTED",
-                        "installed pynpi.cov.open does not accept config_opt; strict exclusion is unavailable",
-                        actual_signature="open(vdb)",
-                    )
+            if legacy_strict_open is not None:
+                with _redirect_stdout_to_stderr():
+                    self.db = legacy_strict_open(self.vdb)
+            elif len(cov_open_contract.positional_args) == 1:
                 self.db = self.api.module_call("cov.open", self.vdb)
             else:
                 self.db = self.api.module_call("cov.open", self.vdb, config_opt)
@@ -1147,33 +1147,28 @@ class NpiCoverageBackend(CoverageBackend):
                         predicate=bool,
                     )
         except Exception:
-            try:
-                if self.db:
-                    with _redirect_stdout_to_stderr():
-                        self.api.call("database.close", self.db)
-            finally:
-                with _redirect_stdout_to_stderr():
-                    self.api.module_call("npisys.end")
-                self.npisys = None
+            self.close()
             raise
 
     def close(self) -> None:
+        if self.db is None:
+            return
         try:
-            for handle in self.locator_handles.values():
-                self._api().module_call("cov.release_handle", handle)
-            self.locator_handles.clear()
-            self._pinned_handle_ids.clear()
-            if self.db:
+            try:
+                for handle in self.locator_handles.values():
+                    self._api().module_call("cov.release_handle", handle)
+            finally:
                 log_lifecycle_event("adhoc", "vdb.close.begin", True, {"vdb": self.vdb})
                 with _redirect_stdout_to_stderr():
                     self._api().call("database.close", self.db)
                 log_lifecycle_event("adhoc", "vdb.close.ok", True, {"vdb": self.vdb})
         finally:
-            if self.npisys:
-                log_lifecycle_event("adhoc", "npi.end.begin", True, {"vdb": self.vdb})
-                with _redirect_stdout_to_stderr():
-                    self._api().module_call("npisys.end")
-                log_lifecycle_event("adhoc", "npi.end.ok", True, {"vdb": self.vdb})
+            self.db = None
+            self.npisys = None
+            self.merged_test = None
+            self.test_map.clear()
+            self.locator_handles.clear()
+            self._pinned_handle_ids.clear()
             self._urg_loaded = False
             self._urg_scopes.clear()
             self._urg_metrics.clear()
@@ -2204,6 +2199,101 @@ class NpiCoverageBackend(CoverageBackend):
                 self.release_if_handle(child)
 
 
+def _restore_json_in_place(target: Any, source: Any) -> Any:
+    """Preserve caller-held gap references across the worker JSON boundary."""
+    if isinstance(target, dict) and isinstance(source, dict):
+        for key in target.keys() - source.keys():
+            del target[key]
+        for key, value in source.items():
+            target[key] = _restore_json_in_place(target.get(key), value)
+        return target
+    if isinstance(target, list) and isinstance(source, list):
+        shared = min(len(target), len(source))
+        for index in range(shared):
+            target[index] = _restore_json_in_place(target[index], source[index])
+        target[shared:] = source[shared:]
+        return target
+    return source
+
+
+class NpiCoverageBackend(CoverageBackend):
+    """Keep each VDB in a fresh process, including consecutive native sessions."""
+
+    worker_kind = "npi_python"
+
+    def __init__(self, vdb: str, exclusion_policy: str = "default") -> None:
+        from .npi_worker import NpiWorker
+        self.vdb = vdb
+        self.exclusion_policy = exclusion_policy
+        self._worker = NpiWorker(vdb, exclusion_policy)
+
+    def close(self) -> None:
+        self._worker.close()
+
+    def tests(self) -> List[Json]:
+        return self._worker.call("tests")
+
+    def summary(self) -> Json:
+        return self._worker.call("summary")
+
+    def top_scopes(self) -> List[Json]:
+        return self._worker.call("top_scopes")
+
+    def scopes(self) -> List[Json]:
+        return self._worker.call("scopes")
+
+    def scope_metrics(self) -> Dict[str, Json]:
+        return self._worker.call("scope_metrics")
+
+    def scope_functional_from_urg(self) -> List[Json]:
+        return self._worker.call("scope_functional_from_urg")
+
+    def scope_assert_from_urg(self) -> List[Json]:
+        return self._worker.call("scope_assert_from_urg")
+
+    def items(self, metrics=None, scope=None, test="merged", functional_only=False) -> List[Json]:
+        return self._worker.call("items", metrics, scope, test, functional_only)
+
+    def _npi_items(self, wanted_metrics=None) -> List[Json]:
+        return self.items(metrics=wanted_metrics)
+
+    def exact_scope_items(self, metrics, scope, test="merged") -> List[Json]:
+        return self._worker.call("exact_scope_items", metrics, scope, test)
+
+    def functional_items_filtered(self, covergroups, test="merged") -> List[Json]:
+        return self._worker.call("functional_items_filtered", sorted(covergroups), test)
+
+    def gap_items(self, metric, scope=None, test="merged") -> List[Json]:
+        return self._worker.call("gap_items", metric, scope, test)
+
+    def load_exclusions(self, paths, test="merged") -> List[Json]:
+        return self._worker.call("load_exclusions", paths, test)
+
+    def set_exclusion(self, coverage_ref, excluded, test="merged") -> Json:
+        return self._worker.call("set_exclusion", coverage_ref, excluded, test)
+
+    def save_exclusions(self, path, test="merged") -> None:
+        self._worker.call("save_exclusions", path, test)
+
+    def unload_exclusions(self, test="merged") -> None:
+        self._worker.call("unload_exclusions", test)
+
+    def attach_gap_locators(self, payload, test="merged") -> Json:
+        return _restore_json_in_place(payload, self._worker.call("attach_gap_locators", payload, test))
+
+    def set_exclusion_locator(self, locator, excluded=True, test="merged") -> Json:
+        return self._worker.call("set_exclusion_locator", locator, excluded, test)
+
+    def resolve_gap_payload(self, payload, test="merged") -> Json:
+        return _restore_json_in_place(payload, self._worker.call("resolve_gap_payload", payload, test))
+
+    def resolve_container_records(self, records, test="merged") -> List[Json]:
+        return self._worker.call("resolve_container_records", records, test)
+
+    def expand_xml_instances(self, root, recursive) -> List[str]:
+        return self._worker.call("expand_xml_instances", root, recursive)
+
+
 @dataclass
 class UrgCoverageBackend(CoverageBackend):
     """URG read backend with an exclude-only, lazily-created NPI context."""
@@ -2259,10 +2349,8 @@ class UrgCoverageBackend(CoverageBackend):
 
     def close(self) -> None:
         if self._npi is not None:
-            try:
-                self._npi.close()
-            finally:
-                self._npi = None
+            self._npi.close()
+            self._npi = None
         self._urg_index = None
 
     def tests(self) -> List[Json]:

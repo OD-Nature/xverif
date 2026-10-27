@@ -1,5 +1,13 @@
 # xdebug 架构说明书维护日志
 
+## 2026-10-27 真实环境兼容与生命周期回归
+
+- static driver trace 沿 NPI 返回的 modport 句柄继续查询，并用原信号的精确
+  FSDB change time 筛选 active assignment；补充排除未激活分支的真实接口断言。
+- session helper 的外层 watchdog 为启动、TERM/KILL 收容及 tombstone 落盘预留 5s，
+  transport deadline 保持原值；真实暂停引擎的 UDS/file 用例验证完整收容。
+- fake LSF 崩溃测试在 native open 完成后精确终止该 loop，消除启动计时竞态。
+
 ## 2026-09-07 MCP 环境配置清理
 
 - MCP 始终注册全部工具并提供状态修改、通用输出和 batch；移除工具权限判断与输出根目录限制。

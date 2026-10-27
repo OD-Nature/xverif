@@ -1220,7 +1220,7 @@ class Dispatcher:
                             "path": item["path"],
                             "gap_id": item["gap_id"],
                             "code": "EXPORT_GAP_RESOLVE_MISSING",
-                            "message": item["gap"].get("_exclude_error"),
+                            "message": item["gap"].get("_exclude_error") or "NPI target resolution returned no exclusion targets",
                         })
                     continue
                 item["targets"] = targets

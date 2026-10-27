@@ -67,7 +67,7 @@ coverage database session、VDB/NPI handle、scope/cache/query 状态由 xcov �
 | 组件 | 要求 |
 |---|---|
 | GCC | **5.0+** |
-| Python | **3.11+**（`pip install "mcp[cli]"`） |
+| Python | **3.11+**（`pip install "mcp[cli]<2"`；当前入口使用 1.x 的 FastMCP） |
 | Verdi | 当前基于 **V-2023.12-SP2** 开发与测试 |
 | NPI | 随 Verdi 版本不同可能存在 API 参数差异 |
 
@@ -186,7 +186,7 @@ session 空闲最长存活时间看 `XDEBUG_SESSION_IDLE_TIMEOUT_SEC`（默认 8
 ```
 
 替换说明：
-- `<conda-env>`：安装了 `mcp[cli]` 的 Python 3.11 环境路径
+- `<conda-env>`：安装了 `mcp[cli]<2` 的 Python 3.11 环境路径
 - `<xverif>`：xverif 仓库根目录
 - `<verdi-install>`：Synopsys Verdi 安装根目录
 - `<lsf-install>`：LSF 安装根目录

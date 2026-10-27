@@ -7,6 +7,12 @@
     "xverif_mcp/tests/test_xdebug_session_action_guard.py": "非法 session/action 组合的拒绝路径故障注入"
   },
   "test_exceptions": {
+    "xcov/tests/test_xcov.py::test_unresolved_export_gap_returns_schema_valid_error": "故障注入 NPI 未解析出排除目标，验证原始错误保留且响应符合 schema",
+    "xcov/tests/test_xcov.py::test_unsupported_npi_open_errors_match_public_schema": "故障注入不支持的 NPI open 签名和缺失 strict 接口，验证公开错误合同",
+    "xcov/tests/test_npi_worker.py::test_worker_unexpected_startup_error_matches_public_schema": "故障注入 worker 初始化异常，验证跨进程错误转发和公开响应 schema",
+    "xcov/tests/test_npi_worker.py::test_worker_failure_reaps_child_without_restarting": "独立 NPI worker 启动、请求、关闭超时与崩溃故障注入，验证回收且不重启",
+    "xcov/tests/test_urg_backend.py::test_npi_worker_exits_when_owner_is_killed": "杀死本测试创建的 owner，验证已初始化真实 NPI 的 worker 仍响应 parent-death 信号退出",
+    "xdebug/tests/session/test_session_lifecycle.py::test_timeout_contains_stopped_real_engine": "对本测试创建的真实 engine 注入 SIGSTOP，验证 TERM/KILL 收容与 tombstone 持久化",
     "xcov/tests/test_urg_summary.py::test_content_addressed_urg_cache_cold_warm_corrupt_and_el_invalidation": "URG cache 损坏隔离、重建与 EL identity 失效故障注入",
     "xcov/tests/test_urg_summary.py::test_urg_runner_direct_timeout_reclaims_whole_group": "direct URG 超时后进程组回收故障注入（子进程与孙进程都必须被回收）",
     "xcov/tests/test_xcov.py::test_dispatcher_rejects_oversized_inline_response": "inline response 资源预算超限故障注入",

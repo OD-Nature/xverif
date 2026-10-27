@@ -14,7 +14,7 @@ namespace xdebug {
 namespace {
 
 const int kDirectResourceTerminationGraceMs = 5000;
-const int kSessionDiagnosticCompletionGraceMs = 250;
+const int kSessionDiagnosticCompletionGraceMs = 5000;
 
 std::string request_session_id_for_log(const Json& request) {
     Json target = request.value("target", Json::object());
@@ -113,9 +113,10 @@ bool EngineAdapter::invoke(const Json& public_request,
                public_timeout_ms <=
                    std::numeric_limits<int>::max() -
                        kSessionDiagnosticCompletionGraceMs) {
-        // The helper enforces the public deadline on its session socket.  Give
-        // it a small, non-operational completion window to persist the timeout
-        // event and serialize the canonical error before the parent kills it.
+        // The helper enforces the public deadline on the transport. Its outer
+        // watchdog must also allow startup and timeout containment: local
+        // termination alone can take 50 + 750 + 750 ms before the tombstone
+        // and canonical error are persisted. This does not extend the RPC.
         process_req.timeout_ms =
             public_timeout_ms + kSessionDiagnosticCompletionGraceMs;
     }

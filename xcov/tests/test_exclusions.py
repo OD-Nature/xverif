@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import csv
 import io
-import os
 from pathlib import Path
 import subprocess
 
@@ -28,27 +27,26 @@ _EXCLUSION_VDB: str | None = None
 _NPI_DISPATCHER: Dispatcher | None = None
 
 
+@pytest.fixture(autouse=True)
+def exclusion_session(xverif_fixture):
+    global _EXCLUSION_VDB, _NPI_DISPATCHER
+    _EXCLUSION_VDB = str(xverif_fixture("xcov.exclusion") / "exclusion.vdb")
+    try:
+        yield
+    finally:
+        dispatcher, _NPI_DISPATCHER = _NPI_DISPATCHER, None
+        _EXCLUSION_VDB = None
+        if dispatcher is not None and "cov" in dispatcher.sessions.sessions:
+            dispatcher.sessions.close("cov", confirm_discard_reasons=True)
+
+
 def _exclusion_vdb() -> str:
-    global _EXCLUSION_VDB
-    if _EXCLUSION_VDB is not None:
-        return _EXCLUSION_VDB
-    xverif_home = os.environ.get("XVERIF_HOME") or os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "..", "..")
-    )
-    versions_dir = os.path.join(
-        xverif_home, ".xverif-test-cache", "fixtures", "xcov.exclusion", "versions"
-    )
-    if os.path.isdir(versions_dir):
-        for vhash in sorted(os.listdir(versions_dir), reverse=True):
-            vdb = os.path.join(versions_dir, vhash, "resources", "exclusion.vdb")
-            if os.path.isdir(vdb):
-                _EXCLUSION_VDB = vdb
-                return vdb
-    pytest.skip("exclusion VDB not found; run: pytest --xverif-prepare xcov.exclusion")
+    assert _EXCLUSION_VDB is not None, "exclusion fixture has not been resolved"
+    return _EXCLUSION_VDB
 
 
 def _npi_dispatcher(policy: str = "default") -> Dispatcher:
-    """创建使用 NPI 后端的 dispatcher（进程级单例，避免 NPI 重复 init）."""
+    """用例内复用 dispatcher；数据库在用例结束时关闭，NPI 由进程持有。"""
     global _NPI_DISPATCHER
     if _NPI_DISPATCHER is not None:
         sess = _NPI_DISPATCHER.sessions.get("cov")
@@ -59,11 +57,7 @@ def _npi_dispatcher(policy: str = "default") -> Dispatcher:
                 "target": {"session_id": "cov"},
                 "args": {"confirm": True},
             })
-        # 进程级 session 复用时必须恢复本用例请求的 policy，避免 strict
-        # 状态污染后续 default 用例。
-        if sess is not None:
-            sess.exclusion_policy = policy
-            sess.backend._delegate.exclusion_policy = policy
+        assert sess.exclusion_policy == policy
         return _NPI_DISPATCHER
 
     vdb = _exclusion_vdb()
@@ -405,7 +399,7 @@ assert opened["ok"], opened
 ref = next(
     row["coverage_ref"]
     for row in dispatcher.sessions.get("cov").backend.items()
-    if row["metric"] == "line"
+    if row["metric"] == "line" and row["covered"] > 0
 )
 response = dispatcher.dispatch({
     "api_version": "xcov.v1",

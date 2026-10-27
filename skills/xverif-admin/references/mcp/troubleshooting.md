@@ -12,7 +12,7 @@
 ## 定位顺序
 
 1. 工具不可见：确认连接的是当前版本 MCP server 并刷新客户端工具列表；全部工具组始终注册。工具详情用 `xverif_tool_help`，xdebug action 发现用 `xverif_tools`。
-2. FastMCP/SDK 启动失败：确认 Python 3.11+ 和 `mcp[cli]`。
+2. FastMCP/SDK 启动失败：确认 Python 3.11+ 和 `mcp[cli]<2`；当前 server 使用 1.x 的 FastMCP 接口。
 3. session open 失败：看 `session.ndjson` 和 `stdio.ndjson`。
 4. ready timeout/stdout pollution/backend exit：看 `stdio.ndjson`。
 5. LSF job id、bsub、bkill、cleanup：看 `lsf.ndjson`。

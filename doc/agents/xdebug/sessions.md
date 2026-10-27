@@ -124,6 +124,11 @@ backend session：
 - 检查 transport log 的 phase 和 endpoint。
 - 如果是沙箱网络/文件系统差异，先做 sandbox-vs-host 对照。
 
+native session 请求超时后，helper 负责终止本机 engine 并写入
+`terminated_on_timeout` tombstone。外层 watchdog 另留 5s 给启动和清理，
+不延长 transport 的 `limits.timeout_ms`；只有确认进程退出才能发布
+`cancel_state=confirmed`，远端进程仍遵循未确认的收容语义。
+
 ## MCP Session 语义
 
 MCP debug 工具：

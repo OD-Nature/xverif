@@ -1,4 +1,5 @@
 -e .
+-e ./xcov
 -e ./xwaveform
 -e ./xverif_mcp
 anyio>=4

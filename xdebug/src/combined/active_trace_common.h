@@ -14,9 +14,11 @@
 #include <cmath>
 #include <cstdio>
 #include <fcntl.h>
+#include <set>
 #include <sstream>
 #include <string>
 #include <unistd.h>
+#include <utility>
 #include <vector>
 
 namespace xdebug {
@@ -134,6 +136,42 @@ inline bool is_assignment_like_statement(const drvLoadStmt_s& stmt) {
     return kind == "assignment" || kind == "force";
 }
 
+inline drvLoadStmtVec_t expand_modport_drivers(
+    drvLoadStmtVec_t candidates, const trcOption_t& options) {
+    drvLoadStmtVec_t expanded;
+    std::set<std::string> visited;
+    for (size_t index = 0; index < candidates.size(); ++index) {
+        const drvLoadStmt_s candidate = candidates[index];
+        const int type = candidate.useHdl ? npi_get(npiType, candidate.useHdl) : 0;
+        if (statement_kind(type) != "modport_port") {
+            expanded.push_back(candidate);
+            continue;
+        }
+        const std::string name = npi_string(npiFullName, candidate.useHdl);
+        if (name.empty() || !visited.insert(name).second) {
+            expanded.push_back(candidate);
+            continue;
+        }
+        // Some NPI versions stop at the modport even with pass-through set.
+        // Trace that explicit handle using the original waveform's precise
+        // time: modport names themselves need not exist in the FSDB.
+        drvLoadStmtVec_t drivers;
+        const int rc = npi_trace_driver_by_hdl2(
+            candidate.useHdl, drivers, true, nullptr, options);
+        const size_t before = candidates.size();
+        if (rc > 0) {
+            for (const auto& driver : drivers) {
+                if (driver.useHdl &&
+                    npi_string(npiFullName, driver.useHdl) != name) {
+                    candidates.push_back(driver);
+                }
+            }
+        }
+        if (candidates.size() == before) expanded.push_back(candidate);
+    }
+    return expanded;
+}
+
 inline ActiveTraceResolveResult resolve_active_driver_precise(
     npiFsdbFileHandle fsdb,
     npiHandle signal_hdl,
@@ -157,6 +195,7 @@ inline ActiveTraceResolveResult resolve_active_driver_precise(
     int static_rc = signal_hdl
         ? npi_trace_driver_by_hdl2(signal_hdl, candidates, true, nullptr, options)
         : 0;
+    if (static_rc > 0) candidates = expand_modport_drivers(std::move(candidates), options);
     result.static_candidate_count = static_rc > 0
         ? static_cast<int>(candidates.size()) : 0;
     if (static_rc <= 0 || candidates.empty()) {

@@ -149,8 +149,11 @@ with pynpi_lifecycle(["exclude-job"]):
         close_covdb(db)
 ```
 
-- `open_covdb()` 先检查真实 `cov.open` 签名，每次只调用一次。旧版单参数只支持默认模式；
-  双参数版本才可传 `ExclusionInStrictMode`。不通过捕获 `TypeError` 换参数重试。
+- `open_covdb()` 先检查真实 `cov.open` 签名，每次只调用一次。本 helper 的旧版单参数
+  路径仅支持默认模式；双参数版本可传 `ExclusionInStrictMode`，不捕获 `TypeError` 换参数重试。
+  这不代表底层 SDK 缺少 strict；xcov 已对旧 wrapper 使用同一安装的 C++ strict 接口。
+- 旧版 NPI 不可在同一进程关闭后重开 VDB；每个进程只处理一个数据库，退出后再开新进程。
+  本 helper 不负责进程隔离；xcov 的正式 exclusion 入口会管理独立 NPI worker。
 - load 先验证全部 EL 是普通非 symlink 文件，再按给定顺序调用 `load_exclude_file`。
 - setter 固定调用 `set_status_excluded_at_report_time(test, 1|0)`，并核对 before/after。
 - save 固定使用 `save_exclude_file(path, "w")`；不得读取、拼接、格式化或追加 EL 文本。

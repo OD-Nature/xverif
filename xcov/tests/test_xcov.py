@@ -156,6 +156,31 @@ def _fake_dispatcher() -> Dispatcher:
     )
 
 
+def test_unresolved_export_gap_returns_schema_valid_error(tmp_path, monkeypatch):
+    monkeypatch.setattr(_TestBackend, "resolve_gap_payload", lambda self, payload, test="merged": payload)
+    dispatcher = _fake_dispatcher()
+    vdb = str(tmp_path / "fixture.vdb")
+    opened = dispatcher.dispatch({
+        "api_version": "xcov.v1", "action": "session.open",
+        "target": {"vdb": vdb}, "args": {"name": "cov"},
+    })
+    assert opened["ok"] is True
+    exported = tmp_path / "line.json"
+    exported.write_text(json.dumps({
+        "metric": "line", "scope": "top",
+        "exclusion_locator": {"version": "xcov.urg_semantic.v1", "vdb": vdb},
+        "line_groups": [{"uncovered": [{"gap_id": "L0001"}]}],
+    }), encoding="utf-8")
+    response = dispatcher.dispatch({
+        "api_version": "xcov.v1", "action": "exclude.add",
+        "target": {"session_id": "cov"},
+        "args": {"exports": [{"path": str(exported), "items": [{"gap_id": "L0001", "reason": "unreachable"}]}]},
+    })
+    assert response["ok"] is False
+    assert response["error"]["code"] == "EXCLUSION_EXPORT_RESOLVE_FAILED"
+    assert response["error"]["detail.errors"][0]["message"]
+
+
 def test_container_actions_expand_exact_targets_and_remove_recorded_ownership():
     dispatcher = Dispatcher(SessionManager(backend_factory=_TestBackend))
     opened = dispatcher.dispatch({
@@ -2759,6 +2784,25 @@ def test_cov_open_contract_accepts_supported_signatures():
 
     assert _cov_open_contract(old_open).positional_args == ("vdb",)
     assert _cov_open_contract(new_open).positional_args == ("vdb", "config_opt")
+
+
+def test_unsupported_npi_open_errors_match_public_schema(monkeypatch, tmp_path):
+    from types import ModuleType
+    from xcov.backend import _cov_open_contract
+    from xcov import eda
+
+    monkeypatch.setattr(eda, "get_npi_python_path", lambda: str(tmp_path))
+    for operation, expected_code in (
+        (lambda: _cov_open_contract(lambda: None), "NPI_CONTRACT_VIOLATION"),
+        (lambda: eda.legacy_strict_cov_opener(ModuleType("pynpi.cov")), "NPI_COV_OPEN_STRICT_UNSUPPORTED"),
+    ):
+        with pytest.raises(XcovError) as caught:
+            operation()
+        assert caught.value.code == expected_code
+        validate_response("session.open", error_response(
+            "session.open", "unsupported-npi", caught.value.code,
+            caught.value.message, **caught.value.detail,
+        ))
 
 
 def test_x_npi_open_covdb_calls_old_interface_once(monkeypatch):

@@ -1220,6 +1220,65 @@ def test_session_file_query_timeout_retains_terminated_tombstone(
         _kill_all(cli_runner)
 
 
+@pytest.mark.session
+@pytest.mark.waveform
+@pytest.mark.parametrize("transport", ["uds", "file"])
+def test_timeout_contains_stopped_real_engine(
+    resource_targets: dict,
+    cli_runner: CliRunner,
+    isolated_home: Path,
+    transport: str,
+) -> None:
+    name = "stopped_engine"
+    pid = None
+    try:
+        opened = cli_runner.run(_request(
+            "session.open", target=resource_targets["waveform"],
+            args={"name": name, "transport": transport},
+        ))
+        assert opened.ok
+        pid = _registry_session(isolated_home, name)["server_pid"]
+        os.kill(pid, signal.SIGSTOP)
+        status_path = Path(f"/proc/{pid}/status")
+        deadline = time.monotonic() + 5
+        while True:
+            state = next(line for line in status_path.read_text().splitlines() if line.startswith("State:"))
+            if state.split()[1] == "T":
+                break
+            assert time.monotonic() < deadline, "engine did not stop"
+            time.sleep(0.01)
+
+        # A stopped real engine cannot handle SIGTERM. Containment must finish
+        # the TERM wait and SIGKILL before the outer helper watchdog fires.
+        result = cli_runner.run({
+            **_request("value.at", target={"session_id": name}, args=_wave_value_at_args()),
+            "limits": {"timeout_ms": 100},
+        }, timeout_sec=10)
+        assert not result.timed_out
+        error = result.response["error"]
+        assert error["code"] == "ENGINE_TIMEOUT"
+        assert error["cancel_state"] == "confirmed"
+        assert error["termination_confirmed"] is True
+        assert error["cleanup_succeeded"] is True
+        assert _registry_session(isolated_home, name)["lifecycle_state"] == "terminated_on_timeout"
+        try:
+            status = status_path.read_text()
+        except FileNotFoundError:
+            pass
+        else:
+            state = next(line for line in status.splitlines() if line.startswith("State:"))
+            assert state.split()[1] == "Z", "timed out engine is still alive"
+        pid = None
+    finally:
+        # Resume only this test's engine if an assertion interrupted cleanup.
+        if pid is not None:
+            try:
+                os.kill(pid, signal.SIGCONT)
+            except ProcessLookupError:
+                pass
+        _kill_all(cli_runner)
+
+
 def test_session_uds_connect_failure_is_logged(
     resource_targets: dict,
     cli_runner: CliRunner,

@@ -434,12 +434,15 @@ def summary_analysis_complete(expected: bool):
     return fn
 
 
-def path_line(expected_line: int):
+def path_line(expected_line: int, *, inactive_lines=()):
     def fn(resp, raw):
         paths = resp.get("data", {}).get("paths", [])
         lines = {path.get("line", 0) for path in paths if isinstance(path, dict)}
         if expected_line not in lines:
             return False, f"data.paths lines are {sorted(lines)}, expected {expected_line}"
+        unexpected = lines.intersection(inactive_lines)
+        if unexpected:
+            return False, f"inactive assignments appear in data.paths: {sorted(unexpected)}"
         for path in paths:
             if path.get("line") == expected_line:
                 if not path.get("signal_path"):
@@ -590,7 +593,7 @@ def main():
           if_sid, "if_root_tb.u_sink.observed_q", "30ns",
           extra_args={},
           checks=[
-              path_line(23),
+              path_line(23, inactive_lines=(19, 21)),
               signal_path_contains("if_root_tb.u_sink.observed_q"),
               no_legacy_active_fields(),
           ])
@@ -599,7 +602,7 @@ def main():
     check("if_link_data_20ns: modport data trace to line 21",
           if_sid, "if_root_tb.link.data", "20ns",
           checks=[
-              path_line(21),
+              path_line(21, inactive_lines=(19, 23)),
               no_legacy_active_fields(),
           ])
 
@@ -607,7 +610,7 @@ def main():
     check("if_link_data_30ns: modport data trace to line 23",
           if_sid, "if_root_tb.link.data", "30ns",
           checks=[
-              path_line(23),
+              path_line(23, inactive_lines=(19, 21)),
               no_legacy_active_fields(),
           ])
 

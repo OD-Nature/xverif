@@ -163,8 +163,18 @@ alive session 返回 `SESSION_EXISTS`；同一 native 进程的其它 alive name
 `SessionManager` 的 backend factory 注入。
 
 首次 exclusion 操作会检查当前 pynpi 的真实 `cov.open` 签名。单参数旧版在默认模式调用
-`cov.open(vdb)`；双参数版本调用 `cov.open(vdb, config_opt)`。单参数旧版不支持 strict，
-会返回明确错误；不会先调用失败再 fallback。
+`cov.open(vdb)`；双参数版本调用 `cov.open(vdb, config_opt)`。单参数旧版的 strict
+通过同一已验证安装中的 `npi_cov_open(const char *, int)` C++ 接口传入
+`npiCovExclusionInStrictMode`，返回 vendor Python handle。该接口不可用时返回
+`NPI_COV_OPEN_STRICT_UNSUPPORTED`；不会关闭 strict 或切换后端。
+
+每个 NPI 数据库使用独立 Python worker，仍加载同一已验证的 vendor NPI 库。
+`session.close` 关闭数据库并等待 worker 退出；之后在同一 native loop 打开新 session
+会创建新 worker。每个 worker 只初始化一次 NPI，退出时调用一次 `npisys.end`。
+旧版库在 `cov.close` 后可能保留已释放的 coverage 对象，不能靠反复 open 或 init/end
+安全复用其进程。普通 URG 查询仍不启动 NPI worker。
+worker 启动限时 120s、单次操作 600s，超时终止并回收该 worker、返回明确错误；
+不会重试、重开数据库或切换后端。MCP/LSF managed close 还会退出其独立 loop。
 
 ### 可复现输入：run manifest
 

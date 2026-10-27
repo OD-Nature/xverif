@@ -99,7 +99,7 @@ suites:
     runner:
       kind: pytest
       paths:
-        - xcov/tests/test_exclusions.py
+        - xcov/tests/test_npi_worker.py
         - xcov/tests/test_urg_summary.py
         - xcov/tests/test_xcov.py
     capabilities: [child_process]
@@ -112,11 +112,16 @@ suites:
     level: system
     intent: [contract, semantics, lifecycle]
     domains: [coverage]
-    runner: {kind: pytest, path: xcov/tests/test_exclusions_real.py}
+    runner:
+      kind: pytest
+      paths:
+        - xcov/tests/test_exclusions.py
+        - xcov/tests/test_exclusions_real.py
     fixtures: [xcov.exclusion]
     capabilities: [child_process, npi]
     hermetic: false
     deterministic: true
+    gates: [regression, nightly]
     cost: {class: slow, estimate_sec: 30}
     timeouts: {execute_sec: 180, cleanup_sec: 20}
 
@@ -182,7 +187,7 @@ suites:
     intent: [contract, lifecycle, integration]
     domains: [coverage, mcp]
     runner: {kind: pytest, path: xverif_mcp/tests/test_xcov_mcp_integration.py}
-    fixtures: [xcov.comprehensive]
+    fixtures: [xcov.comprehensive, xcov.exclusion]
     capabilities: [child_process, npi]
     hermetic: false
     deterministic: true
@@ -402,7 +407,8 @@ suites:
         - xverif_mcp/tests/test_mcp_shutdown.py
         - xverif_mcp/tests/test_mcp_ssh_loopback.py
         - xverif_mcp/tests/test_stdio_loop_session_lifecycle.py
-    capabilities: [child_process, mcp_process]
+    fixtures: [xcov.comprehensive]
+    capabilities: [child_process, mcp_process, npi]
     hermetic: false
     deterministic: true
     cost: {class: medium, estimate_sec: 45}

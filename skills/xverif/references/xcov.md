@@ -30,6 +30,11 @@ tools/xcov_lsf --json -  # 仅无 MCP 且必须经 LSF 时
 处理才惰性加载 pynpi、打开 VDB 并执行必要遍历；真实 exclusion 需要 Synopsys
 license，受限沙箱内 license 可能不可达。
 
+`exclusion_policy:"strict"` 由原生 NPI 拒绝排除已覆盖对象。旧版 Python 单参数
+`cov.open` 使用同一安装的 C++ strict 接口；缺少该接口时明确报错，不降级策略。
+每个 VDB 的 NPI 状态放在独立 worker 中，`session.close` 释放句柄并退出 worker；
+同一 native loop 可再打开 session，新 session 使用新 worker，避免旧版库重开崩溃。
+
 离线 Python 自定义 coverage 报告也使用 x-npi 的 `x_npi.urg`：固定命令为
 `$VCS_HOME/bin/urg -full64 -dir <vdb> -report <staging> -xml_verbose -format text -show summary`，
 已有 exclusion 时只追加 `-elfile <el>`。Python NPI coverage wrapper 没有 bulk summary，必须按

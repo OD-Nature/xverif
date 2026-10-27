@@ -14,7 +14,8 @@
 agent / MCP client
   └─ xverif-mcp（MCP stdio server，长驻；拥有若干 managed session）
        ├─ direct: tools/xdebug|x|cov --stdio-loop（独立进程组）
-       │    └─ xdebug detached engine（setsid，持有 FSDB/NPI 句柄）
+       │    ├─ xdebug detached engine（setsid，持有 FSDB/NPI 句柄）
+       │    └─ xcov NPI worker（首次 exclusion 启动，同进程组，每个 VDB 独立）
        └─ lsf:    bsub -I ... --stdio-loop（独立进程组 + LSF job，带 -W）
   └─ xdebug_lsf / xcov_lsf（SDK-free CLI，短命）
        └─ manager（UDS 守护进程，start_new_session，idle 后退出）
@@ -22,8 +23,9 @@ agent / MCP client
   └─ 原生 CLI（tools/xdebug、tools/xcov）one-shot：不经过 loop
 ```
 
-关键事实：**父子关系没有任何 `PR_SET_PDEATHSIG` 之类的内核兜底**，进程回收完全依赖显式
-`killpg`/`bkill` 与调停者（MCP server、manager）存活。因此每个 timeout 都必须回答两个问题：
+关键事实：除 xcov NPI worker 对其直接 owner 设置 `PR_SET_PDEATHSIG` 外，父子关系没有
+通用内核兜底；整体进程回收仍依赖显式 `killpg`/`bkill` 与调停者（MCP server、manager）存活。
+因此每个 timeout 都必须回答两个问题：
 「超时后谁负责杀」和「如果调停者已经不在，谁来兜底」。
 
 ## 2. timeout 清单
@@ -61,6 +63,12 @@ agent / MCP client
 | file claim 陈旧 | `XDEBUG_FILE_CLAIM_TIMEOUT_MS` | 600000ms | 只判 claim 失败，**不杀 worker** |
 | helper 子进程 | `limits.timeout_ms`（0=不限时） | 0 | `kill(-pid, SIGTERM)` → grace → `kill(-pid, SIGKILL)`（整组） |
 
+带 session target 的 helper 外层 watchdog 在正数 `limits.timeout_ms` 上额外预留
+5000ms，用于进程加载、超时收容及结果落盘；transport 仍使用原始请求 deadline。
+本地收容的进程等待阶梯为 50ms → SIGTERM 后 750ms → SIGKILL 后 750ms，
+不能仅给 helper 250ms 的输出宽限，否则外层会在 tombstone 写完前终止 helper。
+direct resource 不使用这段 session 宽限，仍由自身进程组和终止 grace 清理。
+
 ### 2.4 xcov
 
 | 名称 | 环境变量 | 默认 | 超时后 |
@@ -70,6 +78,20 @@ agent / MCP client
 | URG wall time | `XVERIF_XCOV_URG_WALL_TIME_SEC` | 7200s（→ `-W 120`） | 内层 `bsub -K` job 的 LSF runtime limit |
 | cache 构建权等待 | 无（硬编码） | 300s | 抛 `XCOV_CACHE_CLAIM_TIMEOUT`，不杀持锁者 |
 | cache 陈旧隔离 | `ABANDONED_STAGING_SECONDS` | 24h | claim/staging 移入 `quarantine/` 或删除 |
+| NPI worker 启动 | 无，`STARTUP_TIMEOUT_SEC` | 120s | 终止并回收 worker，返回 `NPI_WORKER_TIMEOUT` |
+| NPI worker 请求 | 无，`REQUEST_TIMEOUT_SEC` | 600s | 终止并回收 worker；不重试、不重开、不切换后端 |
+| NPI worker close / 退出等待 | 无，`CLOSE_TIMEOUT_SEC` | 各 5s | 进入强制清理，保留明确失败 |
+| NPI worker 强制清理 | 无，`STOP_TIMEOUT_SEC` | TERM 后 5s，KILL 后 5s | 回收该 owned PID，关闭协议 pipe |
+
+`xcov/xcov/npi_worker.py` 为每个数据库创建独立 worker；首次 exclusion 才启动，
+session close 关闭数据库并等待 worker 退出，后续 session 必须新建进程。
+worker 只初始化一次 NPI，退出前关闭数据库，并在进程退出时 end 一次。
+旧版 vendor 同进程重开会使用已释放的 coverage 对象，重复 init/end 也不安全。
+worker 保留 owner 的 process group，因此 managed killpg/LSF job 清理继续覆盖它；
+另设 Linux parent-death SIGTERM，owner 非正常退出时回收 worker。正常 EOF 会关闭数据库。
+协议读写共享单次操作的 deadline；任何通信失败都会关闭 worker，不保留半失效会话进程。
+SIGKILL 后仍无法确认退出则返回 `NPI_WORKER_CLEANUP_UNCONFIRMED`，保留 owner 引用和
+退出清理回调供重试，不把它报成成功 close。
 
 ### 2.5 硬编码但不属于 timeout 的常量
 

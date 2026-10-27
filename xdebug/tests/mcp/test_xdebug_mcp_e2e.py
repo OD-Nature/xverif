@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib
 import json
 import os
+import signal
 import subprocess
 import sys
 import time
@@ -589,7 +590,6 @@ def test_mcp_fake_lsf_child_crash_evicts_session(
         backend="lsf",
         extra_env={
             "XVERIF_MCP_FAKE_LSF": "1",
-            "FAKE_BSUB_KILL_CHILD_AFTER_MS": "1000",
         },
     )
     try:
@@ -601,7 +601,12 @@ def test_mcp_fake_lsf_child_crash_evicts_session(
             )
         )
         assert opened["ok"] is True
-        time.sleep(1.2)
+        # Inject the crash only after the real native open has completed. A
+        # timer started by bsub can otherwise kill the child during startup.
+        session = server.debug._sessions.sessions["fake_lsf_crash"]
+        assert session.pid and session.handle is not None
+        os.kill(session.pid, signal.SIGKILL)
+        session.handle.proc.wait(timeout=10)
         queried = _json(
             _call(
                 server,

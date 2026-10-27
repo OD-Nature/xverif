@@ -466,26 +466,13 @@ def test_removed_env_does_not_change_tools_or_schemas(monkeypatch, env_name, val
         assert {"xverif_output_path", "xverif_output_append"} <= schema["properties"].keys()
 
 
-def _resolve_smoke_test_vdb() -> str:
-    xverif_home = os.environ.get("XVERIF_HOME") or str(
-        Path(__file__).resolve().parents[2]
-    )
-    candidates = [
-        os.path.join(xverif_home, "xcov", "fixtures", "comprehensive", "out", "comprehensive.vdb"),
-    ]
-    for c in candidates:
-        if os.path.isdir(c):
-            return c
-    pytest.skip("comprehensive VDB not found; run: pytest --xverif-prepare xcov.comprehensive")
-
-
-def test_cov_session_real_lifecycle(monkeypatch: pytest.MonkeyPatch):
+def test_cov_session_real_lifecycle(monkeypatch: pytest.MonkeyPatch, xverif_fixture):
     """通过真实 xcov --stdio-loop 子进程测试 session 生命周期."""
     overrides = {
         "XVERIF_HOME": str(Path(__file__).resolve().parents[2]),
         "XVERIF_MCP_BACKEND": "direct",
     }
-    test_vdb = _resolve_smoke_test_vdb()
+    test_vdb = str(xverif_fixture("xcov.comprehensive") / "comprehensive.vdb")
     server = _server(monkeypatch, overrides)
 
     async def _run():
@@ -646,7 +633,7 @@ def test_output_path_invalid_dir_returns_structured_failure(monkeypatch: pytest.
     assert content.structuredContent is None
 
 
-def test_batch_real_lifecycle(tmp_path, monkeypatch: pytest.MonkeyPatch):
+def test_batch_real_lifecycle(tmp_path, monkeypatch: pytest.MonkeyPatch, xverif_fixture):
     """xverif_batch with real cov session + ping + bit_eval in one file."""
     batch_file = tmp_path / "batch.ndjson"
     output_file = tmp_path / "results.ndjson"
@@ -655,7 +642,7 @@ def test_batch_real_lifecycle(tmp_path, monkeypatch: pytest.MonkeyPatch):
         "XVERIF_HOME": str(Path(__file__).resolve().parents[2]),
         "XVERIF_MCP_BACKEND": "direct",
     }
-    test_vdb = _resolve_smoke_test_vdb()
+    test_vdb = str(xverif_fixture("xcov.comprehensive") / "comprehensive.vdb")
     server = _server(monkeypatch, overrides)
 
     batch_file.write_text("\n".join([

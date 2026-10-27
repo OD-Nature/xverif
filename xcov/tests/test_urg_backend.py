@@ -55,6 +55,86 @@ def test_npi_line_items_follow_score_contract(xverif_fixture):
         assert isinstance(item.get("covered"), int) and item["covered"] >= 0
         assert isinstance(item.get("coverable"), int) and item["coverable"] >= 0
 
+
+def test_npi_database_reopens_in_same_process(xverif_fixture):
+    """Closing a database must leave the process runtime usable for another VDB."""
+    from xcov.backend import NpiCoverageBackend
+
+    vdb = xverif_fixture("xcov.comprehensive") / "comprehensive.vdb"
+    snapshots = []
+    workers = []
+    for _ in range(2):
+        backend = NpiCoverageBackend(vdb=str(vdb))
+        workers.append(backend._worker.process)
+        try:
+            rows = backend.items(metrics=["line"])
+            assert rows
+            snapshots.append([
+                {key: value for key, value in row.items() if key != "coverage_ref"}
+                for row in rows
+            ])
+        finally:
+            backend.close()
+        backend.close()  # Explicit close remains idempotent.
+        assert workers[-1].poll() == 0, "session close must reap its NPI worker"
+    assert snapshots[0] == snapshots[1]
+    assert workers[0].pid != workers[1].pid
+
+
+def test_npi_worker_exits_when_owner_is_killed(xverif_fixture, tmp_path):
+    """Native SDK initialization must not disable worker parent-death cleanup."""
+    import select
+    import signal
+    import subprocess
+    import sys
+    import time
+
+    vdb = xverif_fixture("xcov.comprehensive") / "comprehensive.vdb"
+    script = """
+import sys
+from xcov.backend import NpiCoverageBackend
+backend = NpiCoverageBackend(sys.argv[1])
+print(backend._worker.process.pid, flush=True)
+sys.stdin.read(1)
+backend.close()
+"""
+    with (tmp_path / "owner.stderr").open("w") as stderr:
+        owner = subprocess.Popen(
+            [sys.executable, "-u", "-c", script, str(vdb)],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=stderr,
+            text=True, start_new_session=True,
+        )
+        try:
+            assert select.select([owner.stdout], [], [], 130)[0], "NPI owner did not become ready"
+            worker_pid = int(owner.stdout.readline())
+            owner.kill()
+            owner.wait(timeout=5)
+            status_path = Path(f"/proc/{worker_pid}/status")
+            deadline = time.monotonic() + 5
+            while True:
+                try:
+                    status = status_path.read_text()
+                except FileNotFoundError:
+                    break
+                state = next(line for line in status.splitlines() if line.startswith("State:"))
+                if state.split()[1] == "Z":
+                    break
+                assert time.monotonic() < deadline, "NPI worker outlived its killed owner"
+                time.sleep(0.01)
+            try:
+                os.waitpid(worker_pid, os.WNOHANG)
+            except ChildProcessError:
+                pass
+        finally:
+            try:
+                os.killpg(owner.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            owner.wait(timeout=5)
+            owner.stdin.close()
+            owner.stdout.close()
+
+
 def test_multi_inst_diff_coverage(xverif_fixture):
     """u_core0 (pipeline) and u_core1 (burst) have different coverage."""
     resources = xverif_fixture("xcov.comprehensive")
@@ -119,70 +199,22 @@ def test_urg_with_elfile(xverif_fixture, tmp_path):
 
     baseline = core0_line_metric(run_urg(tmp_path / "baseline"))
 
-    from xcov.eda import import_pynpi
-    _, _ = import_pynpi()
-    from pynpi import cov, cov_l0, npisys  # noqa: F811
+    from xcov.backend import NpiCoverageBackend
     from xcov.coverage_contract import SCORE_TYPES_BY_METRIC
-
-    npisys.init(["test_el"])
-    db = cov.open(str(vdb))
+    backend = NpiCoverageBackend(str(vdb))
     try:
-        tests = db.test_handles()
-        top = db.instance_handles()[0]
-        u0 = top.instance_handles()[0]
-        owned = []
-
-        def find_covered(handle, selected_test):
-            for child in handle.child_handles():
-                owned.append(child)
-                if (
-                    child.type() in SCORE_TYPES_BY_METRIC["line"]
-                    and child.covered(selected_test) > 0
-                ):
-                    return child
-                found = find_covered(child, selected_test)
-                if found is not None:
-                    return found
-            return None
-
-        def find_in_instance(instance, selected_test):
-            metric_handle = instance.line_metric_handle()
-            if metric_handle:
-                owned.append(metric_handle)
-                target = find_covered(metric_handle, selected_test)
-                if target is not None:
-                    return target
-            for child_instance in instance.instance_handles():
-                owned.append(child_instance)
-                target = find_in_instance(child_instance, selected_test)
-                if target is not None:
-                    return target
-            return None
-
-        try:
-            selected_test = None
-            target = None
-            for candidate in tests:
-                target = find_in_instance(u0, candidate)
-                if target is not None:
-                    selected_test = candidate
-                    break
-            assert target is not None, "fixture must contain a covered line item"
-            changed = cov_l0.set_status(
-                cov_l0.StatusExcludedAtReportTime,
-                target.cps_obj,
-                selected_test.cps_obj,
-                1,
-            )
-            assert changed not in (0, False), "NPI should accept the covered exclusion"
-            el_path = tmp_path / "test.el"
-            cov_l0.save_exclude_file(selected_test.cps_obj, str(el_path), "w")
-        finally:
-            for child in reversed(owned):
-                cov.release_handle(child)
+        target = next(
+            row for row in backend.items(metrics=["line"])
+            if "u_core0" in row["scope"]
+            and row["type"] in SCORE_TYPES_BY_METRIC["line"]
+            and row["covered"] > 0
+        )
+        changed = backend.set_exclusion(target["coverage_ref"], True)
+        assert changed["status"] == "changed", changed
+        el_path = tmp_path / "test.el"
+        backend.save_exclusions(str(el_path))
     finally:
-        db.close()
-        npisys.end()
+        backend.close()
 
     after = core0_line_metric(run_urg(tmp_path / "with-el", el_path))
     assert after[2] > baseline[2], "EL should increase the excluded line count"

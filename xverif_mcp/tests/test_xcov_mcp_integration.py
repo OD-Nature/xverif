@@ -47,38 +47,26 @@ def _call_tool(server, name, args=None):
     return anyio.run(_run)
 
 
-def _resolve_test_vdb() -> str:
-    env = os.environ.get("XVERIF_TEST_VDB")
-    if env and os.path.isdir(env):
-        return env
-
-    xverif_home = os.environ.get("XVERIF_HOME") or str(
-        Path(__file__).resolve().parents[2]
-    )
-    candidates = [
-        os.path.join(xverif_home, "xcov", "fixtures", "comprehensive", "out", "comprehensive.vdb"),
-    ]
-    for c in candidates:
-        if os.path.isdir(c):
-            return c
-    pytest.skip("XVERIF_TEST_VDB not set and no default VDB found; run: pytest --xverif-prepare xcov.comprehensive")
+@pytest.fixture
+def test_vdb(xverif_fixture):
+    return str(xverif_fixture("xcov.comprehensive") / "comprehensive.vdb")
 
 
-@pytest.fixture(scope="module")
-def test_vdb():
-    return _resolve_test_vdb()
+@pytest.fixture
+def exclusion_vdb(xverif_fixture):
+    return str(xverif_fixture("xcov.exclusion") / "exclusion.vdb")
 
 
-@pytest.fixture(scope="module")
-def exclusion_vdb():
-    xverif_home = os.environ.get("XVERIF_HOME") or str(Path(__file__).resolve().parents[2])
-    versions_dir = os.path.join(xverif_home, ".xverif-test-cache", "fixtures", "xcov.exclusion", "versions")
-    if os.path.isdir(versions_dir):
-        for vhash in sorted(os.listdir(versions_dir), reverse=True):
-            vdb = os.path.join(versions_dir, vhash, "resources", "exclusion.vdb")
-            if os.path.isdir(vdb):
-                return vdb
-    pytest.skip("exclusion VDB not found; run: pytest --xverif-prepare xcov.exclusion")
+@pytest.fixture(autouse=True)
+def cleanup_test_sessions(monkeypatch):
+    yield
+    server = sys.modules.get("xverif_mcp.server")
+    if server is not None:
+        manager = server.cov._sessions
+        # Failed assertions must not leave this test's native loops alive.
+        for name in list(manager.sessions):
+            manager.kill_session(name)
+        assert manager.close_all()["ok"]
 
 
 @pytest.fixture(scope="module")

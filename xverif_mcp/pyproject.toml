@@ -9,7 +9,7 @@ description = "MCP server and SDK-free UDS loop runtime for xverif"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-  "mcp[cli]",
+  "mcp[cli]<2",
 ]
 
 [project.scripts]
