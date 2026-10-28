@@ -175,5 +175,39 @@ int main() {
     assert(!normalize_rc_user_marker_times(bad_cfg, nullptr, err));
     assert(err.find("explicit unit") != std::string::npos);
 
+    err.clear();
+    assert(rc_fsdb_path_to_slash("top.u.packet.field", "top.u", err) ==
+           "/top/u/packet.field");
+    assert(rc_fsdb_path_to_slash("top.u.packet.field", "top.u.packet", err) ==
+           "/top/u/packet/field");
+    assert(rc_fsdb_path_to_slash("top.g[2].packets[1].header.opcode[3:0]",
+                                 "top.g[2]", err) ==
+           "/top/g[2]/packets[1].header.opcode[3:0]");
+    assert(rc_fsdb_path_to_slash("packet.field", "", err) == "/packet.field");
+    assert(err.empty());
+    assert(rc_fsdb_path_to_slash("top.u2.packet.field", "top.u", err).empty());
+    assert(!err.empty());
+
+    RcConfig member_cfg;
+    err.clear();
+    assert(parse_rc_config_json(Json::parse(R"({"groups":[{
+        "name":"Outer","subgroups":[{
+            "name":"Members","signals":["top.u.packet.field"],
+            "expr_signals":[{"name":"member_expr","bit_size":8,
+                "expr":"$field","signals":{"field":"top.u.packet.field"}}]
+        }]
+    }]})"), member_cfg, err));
+    assert(bind_rc_signal_paths(member_cfg,
+        {{"top.u.packet.field", "/top/u/packet.field"}}, err));
+    const std::string member_rc = render_signal_rc(member_cfg);
+    assert(member_rc.find("addSignal /top/u/packet.field\n") != std::string::npos);
+    assert(member_rc.find("addExprSig -b 8 member_expr \"/top/u/packet.field\"") != std::string::npos);
+    const auto member_refs = collect_rc_signal_refs(member_cfg);
+    assert(member_refs.size() == 2);
+    assert(member_refs[0].rc_path == "/top/u/packet.field");
+    assert(member_refs[1].rc_path == "/top/u/packet.field");
+    assert(!bind_rc_signal_paths(member_cfg, {}, err));
+    assert(err.find("unresolved rc signal path") != std::string::npos);
+
     return 0;
 }

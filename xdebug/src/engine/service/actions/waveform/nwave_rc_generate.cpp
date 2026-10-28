@@ -39,7 +39,6 @@ public:
         std::string config_path = a.value("config_path", "");
         ContractJsonView output = a["output"];
         std::string rc_path = output.value("path", "");
-        bool allow_invalid = a.value("allow_invalid", false);
         if (config_path.empty() || rc_path.empty())
             return make_handler_error(
                 "MISSING_FIELD",
@@ -94,21 +93,41 @@ public:
 
         auto refs = xdebug_waveform::collect_rc_signal_refs(cfg);
 
-        // Validate signals exist in FSDB
-        if (!allow_invalid) {
-            for (auto& ref : refs) {
-                if (ref.kind != "signal") continue;
-                if (!npi_fsdb_sig_by_name(g_fsdb_file, ref.input_path.c_str(), NULL)) {
-                    return make_handler_error(
-                        "SIGNAL_NOT_FOUND",
-                        "signal not in FSDB: " + ref.input_path,
-                        {{"invalid_arg", "args.config_path"},
-                         {"missing_name", ref.input_path},
-                         {"missing_resource", "signal"},
-                         {"expected", "rc config signals that exist in the active FSDB"}});
-                }
+        // Resolve each distinct signal once, including expression aliases.
+        // FSDB scope metadata distinguishes hierarchy dots from member dots.
+        std::map<std::string, std::string> rc_paths;
+        for (const auto& ref : refs) {
+            if (rc_paths.count(ref.input_path)) continue;
+            auto signal = npi_fsdb_sig_by_name(g_fsdb_file, ref.input_path.c_str(), nullptr);
+            if (!signal) {
+                return make_handler_error(
+                    "SIGNAL_NOT_FOUND",
+                    "signal not in FSDB: " + ref.input_path,
+                    {{"invalid_arg", "args.config_path"},
+                     {"missing_name", ref.input_path},
+                     {"missing_resource", "signal"},
+                     {"expected", "rc config signals and expression aliases that exist in the active FSDB"}});
             }
+            const char* full = npi_fsdb_sig_property_str(npiFsdbSigFullName, signal);
+            const std::string full_name = full ? full : "";
+            auto scope = npi_fsdb_sig_scope(signal);
+            const char* scope_full = scope
+                ? npi_fsdb_scope_property_str(npiFsdbScopeFullName, scope) : nullptr;
+            if (scope && (!scope_full || !*scope_full)) {
+                return make_handler_error("ACTION_FAILED", "FSDB scope name is unavailable",
+                                          {{"cause_code", "RC_PATH_RESOLUTION_FAILED"}});
+            }
+            const std::string rc_name = xdebug_waveform::rc_fsdb_path_to_slash(
+                full_name, scope_full ? scope_full : "", err);
+            if (!err.empty()) {
+                return make_handler_error("ACTION_FAILED", err,
+                                          {{"cause_code", "RC_PATH_RESOLUTION_FAILED"}});
+            }
+            rc_paths.emplace(ref.input_path, rc_name);
         }
+        if (!xdebug_waveform::bind_rc_signal_paths(cfg, rc_paths, err))
+            return make_handler_error("ACTION_FAILED", err,
+                                      {{"cause_code", "RC_PATH_RESOLUTION_FAILED"}});
 
         std::string rc_text = xdebug_waveform::render_signal_rc(cfg);
         if (!xdebug_waveform::write_text_file_creating_dirs(rc_path, rc_text, err))

@@ -166,3 +166,11 @@
   byte hard limit。
 - MCP `xverif_tools` 改为原样返回 native guide；SDK-free LSF CLI 透明转发相同
   envelope，不新增 wrapper 参数或格式化逻辑。
+
+## 2026-10-28
+
+- 修复 `nwave.rc.generate` 将结构体成员点号误转为层次斜杠的问题。路径基于
+  FSDB scope/full-name，普通信号与 expression alias 共用解析，重复引用只查一次；
+  不增加波形值扫描。无效 alias 返回 `SIGNAL_NOT_FOUND` 且不覆盖已有 RC。
+- C++ 单测与真实 XIF FSDB 回归覆盖成员、切片、子分组表达式及失败文件保护；
+  nWave 批处理对照以实际显示信号和保存的 RC 验收，不能只看 restore 返回值。

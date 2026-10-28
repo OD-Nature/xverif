@@ -88,6 +88,10 @@ stream JSON/XOUT golden。冻结数据与阶段阈值维护在
 Phase 0 至少 25% RSS 降幅；Phase 4B 再要求 stream cold scanner 为 1、热请求 scanner
 为 0 且满足 hot P95 门槛。阈值失败必须修正实现或重新取得正式基线，不能放宽断言。
 
+`xdebug.cpp_unit` 的 `test_rc_generator` 区分相同点分路径的实例/结构体边界，覆盖
+嵌套成员、数组切片及子分组表达式绑定；`xdebug.xif_event` 使用真实 FSDB 验证
+结构体根、成员、切片与 alias 的 RC 路径，以及无效 alias 不覆盖已有文件。
+
 `xdebug.cpp_unit` 的 `test_analysis_repository` 用 fake entry 覆盖版本化 key、full/range、
 strict env、building 重入、failure/bad_alloc 回滚、index-first 与跨协议 LRU、soft
 oversize entry/index、hard/saturated accounting、typed ensure、无 access side effect 的

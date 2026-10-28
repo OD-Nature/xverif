@@ -98,6 +98,12 @@ bool parse_rc_config_json(const Json& doc, RcConfig& cfg, std::string& err);
 bool validate_rc_time_refs(const RcConfig& cfg, npiFsdbFileHandle fsdb, std::string& err);
 bool normalize_rc_user_marker_times(RcConfig& cfg, npiFsdbFileHandle fsdb, std::string& err);
 std::string rc_dot_path_to_slash(const std::string& path, std::string& err);
+std::string rc_fsdb_path_to_slash(const std::string& full_name,
+                                const std::string& scope_name,
+                                std::string& err);
+bool bind_rc_signal_paths(RcConfig& cfg,
+                          const std::map<std::string, std::string>& paths,
+                          std::string& err);
 std::string render_signal_rc(const RcConfig& cfg);
 std::vector<RcSignalRef> collect_rc_signal_refs(const RcConfig& cfg);
 std::vector<RcTimeRef> collect_rc_time_refs(const RcConfig& cfg);

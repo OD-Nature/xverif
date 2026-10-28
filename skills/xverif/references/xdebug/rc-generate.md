@@ -6,13 +6,13 @@
 
 - 配置文件只支持 JSON。
 - 配置里的信号路径使用点分层次，例如 `top.u.sig[3:0]`。
-- 生成 rc 时自动转成 nWave slash 路径，例如 `/top/u/sig[3:0]`。
+- 生成 rc 时根据 FSDB 的真实 scope 转换层次路径，例如 `/top/u/sig[3:0]`；结构体/union 成员保留点号，例如 `/top/u/packet.opcode`。
 - 支持 `addSignal`、`addSignal -w analog`、`addExprSig`、`addGroup/addSubGroup`、`cursor/marker/userMarker/zoom`。
 - group 配置不接受 `expanded`；生成的 `addGroup` / `addSubGroup` 固定不带 `-e`。
 - 第一条非注释 RC 语句固定为 `windowTimeUnit 1ns`；配置中不得出现 `window_time_unit`。
 - `user_markers[].time` 必须是带单位的时间字符串，生成的 `userMarker` 使用无后缀 ns 数值。
 - 不写 `openDirFile` 和 `activeDirFile`。
-- 校验失败默认不写 rc；`allow_invalid:true` 才允许带 warning 生成。
+- 普通信号和表达式 alias 都必须在 FSDB 中存在；校验失败不写入或覆盖 rc，不支持 `allow_invalid`。
 
 ## JSON request
 
@@ -128,7 +128,13 @@
 ```text
 top.clk -> /top/clk
 top.u_axi.awaddr[31:0] -> /top/u_axi/awaddr[31:0]
+top.u.packet.opcode -> /top/u/packet.opcode
+top.u.packets[1].header.opcode[3:0] -> /top/u/packets[1].header.opcode[3:0]
 ```
+
+层次与成员的边界由 FSDB 信号的 scope/full-name 元数据确定，不能把全部 `.` 替换为 `/`。
+同一路径 `top.u.packet.field`，若 `packet` 是实例，输出 `/top/u/packet/field`；若是结构体，输出 `/top/u/packet.field`。
+`expr_signals[].signals` 使用相同规则。转换只读取所选信号元数据，不扫描波形值。
 
 输入路径若以 `/` 开头，默认报 `RC_CONFIG_INVALID`，提示使用点分格式。
 

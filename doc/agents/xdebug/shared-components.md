@@ -235,6 +235,14 @@ modport/mpport 是侧向关系，计入 visited/object budget，但不增加 hie
 - 成功发布后删除临时名并对父目录执行 `fsync`。新增协议 exporter 必须复用该组件，并在
   `test_atomic_artifact_publisher` 中覆盖 collision、writer failure 与 concurrent writer。
 
+## nWave RC 路径
+
+`src/waveform/service/rc_generator.*` 解析配置并渲染 RC。handler 使用每个唯一信号
+（包含 expression alias）的 FSDB handle 取得 scope/full-name，由
+`rc_fsdb_path_to_slash` 只转换 scope 分隔符，再经 `bind_rc_signal_paths` 同步分组、
+子分组和表达式。结构体/union 成员点号、数组下标和切片必须保留，不能用全串替换
+推断边界。校验完成后才写文件；该路径不扫描 value change，也不引入额外 worker。
+
 ## Transport/File Exchange
 
 路径：

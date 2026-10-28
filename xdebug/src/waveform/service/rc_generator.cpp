@@ -375,6 +375,33 @@ void collect_group_signals(const RcGroup& group, std::vector<RcSignalRef>& refs)
     for (const auto& sub : group.subgroups) collect_group_signals(sub, refs);
 }
 
+bool bind_group_signal_paths(RcGroup& group,
+                             const std::map<std::string, std::string>& paths,
+                             std::string& err) {
+    auto bind = [&](const std::string& input, std::string& output) {
+        auto it = paths.find(input);
+        if (it == paths.end() || it->second.empty()) {
+            err = "unresolved rc signal path: " + input;
+            return false;
+        }
+        output = it->second;
+        return true;
+    };
+    for (auto& sig : group.signals) {
+        if (!bind(sig.input_path, sig.rc_path)) return false;
+    }
+    for (auto& expr : group.expr_signals) {
+        for (const auto& alias : expr.alias_paths) {
+            if (!bind(alias.second, expr.alias_rc_paths[alias.first])) return false;
+        }
+        if (!render_expr_aliases(expr, err)) return false;
+    }
+    for (auto& sub : group.subgroups) {
+        if (!bind_group_signal_paths(sub, paths, err)) return false;
+    }
+    return true;
+}
+
 void count_group(const RcGroup& group, int& group_count, int& signal_count, int& expr_count) {
     group_count++;
     signal_count += static_cast<int>(group.signals.size());
@@ -476,6 +503,36 @@ std::string rc_dot_path_to_slash(const std::string& path, std::string& err) {
     std::string out = "/";
     for (char c : path) out.push_back(c == '.' ? '/' : c);
     return out;
+}
+
+std::string rc_fsdb_path_to_slash(const std::string& full_name,
+                                const std::string& scope_name,
+                                std::string& err) {
+    if (full_name.empty()) {
+        err = "FSDB signal full name must not be empty";
+        return "";
+    }
+    // Only the scope uses hierarchy separators. A struct/union member name
+    // remains dotted, including nested members and array/part selections.
+    if (scope_name.empty()) return "/" + full_name;
+    const std::string prefix = scope_name + ".";
+    if (full_name.compare(0, prefix.size(), prefix) != 0 ||
+        full_name.size() == prefix.size()) {
+        err = "FSDB signal name does not belong to its scope: " + full_name;
+        return "";
+    }
+    const std::string scope_path = rc_dot_path_to_slash(scope_name, err);
+    if (!err.empty()) return "";
+    return scope_path + "/" + full_name.substr(prefix.size());
+}
+
+bool bind_rc_signal_paths(RcConfig& cfg,
+                          const std::map<std::string, std::string>& paths,
+                          std::string& err) {
+    for (auto& group : cfg.groups) {
+        if (!bind_group_signal_paths(group, paths, err)) return false;
+    }
+    return true;
 }
 
 bool parse_rc_config_json(const Json& doc, RcConfig& cfg, std::string& err) {
