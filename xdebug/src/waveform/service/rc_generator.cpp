@@ -442,6 +442,7 @@ void render_group(std::ostringstream& os, const RcGroup& group, bool subgroup) {
         os << "addSignal -h 18 " << quote_if_needed("/" + expr.name) << "\n";
     }
     for (const auto& sub : group.subgroups) render_group(os, sub, true);
+    if (subgroup) os << "endSubGroup " << quote_rc(group.name) << "\n";
 }
 
 bool mkdir_one(const std::string& path, std::string& err) {

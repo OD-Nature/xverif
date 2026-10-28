@@ -9,6 +9,7 @@
 - 生成 rc 时根据 FSDB 的真实 scope 转换层次路径，例如 `/top/u/sig[3:0]`；结构体/union 成员保留点号，例如 `/top/u/packet.opcode`。
 - 支持 `addSignal`、`addSignal -w analog`、`addExprSig`、`addGroup/addSubGroup`、`cursor/marker/userMarker/zoom`。
 - group 配置不接受 `expanded`；生成的 `addGroup` / `addSubGroup` 固定不带 `-e`。
+- 每个子分组以同名 `endSubGroup` 闭合；嵌套与相邻子分组保持配置层次。
 - 第一条非注释 RC 语句固定为 `windowTimeUnit 1ns`；配置中不得出现 `window_time_unit`。
 - `user_markers[].time` 必须是带单位的时间字符串，生成的 `userMarker` 使用无后缀 ns 数值。
 - 不写 `openDirFile` 和 `activeDirFile`。

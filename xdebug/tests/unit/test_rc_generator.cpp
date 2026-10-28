@@ -110,6 +110,7 @@ int main() {
     assert(expr < axi_group);
     assert(aw_group < expr_signal);
     assert(rc.find("addExprSig", axi_group) == std::string::npos);
+    assert(rc.find("endSubGroup \"AW\"", expr_signal) != std::string::npos);
     assert(rc.find("userMarker 10347.651 test ID_CYAN5 long_dashed") != std::string::npos);
 
     auto refs = collect_rc_signal_refs(cfg);
@@ -208,6 +209,20 @@ int main() {
     assert(member_refs[1].rc_path == "/top/u/packet.field");
     assert(!bind_rc_signal_paths(member_cfg, {}, err));
     assert(err.find("unresolved rc signal path") != std::string::npos);
+
+    RcConfig nested_groups;
+    err.clear();
+    assert(parse_rc_config_json(Json::parse(R"({"groups":[{
+        "name":"Top","subgroups":[
+            {"name":"First","subgroups":[{"name":"Inner","signals":["top.a"]}]},
+            {"name":"Second","signals":["top.b"]}
+        ]
+    }]})"), nested_groups, err));
+    const std::string grouped_rc = render_signal_rc(nested_groups);
+    assert(grouped_rc.find(
+        "addSubGroup \"First\"\naddSubGroup \"Inner\"\naddSignal /top/a\n"
+        "endSubGroup \"Inner\"\nendSubGroup \"First\"\n"
+        "addSubGroup \"Second\"\naddSignal /top/b\nendSubGroup \"Second\"\n") != std::string::npos);
 
     return 0;
 }

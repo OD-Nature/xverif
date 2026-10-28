@@ -240,12 +240,14 @@ userMarker 2500.0 first_error ID_YELLOW5 l_dot
 ```rc
 addGroup [-e] "group_name"
 addSubGroup [-e] "sub_group_name"
+endSubGroup "sub_group_name"
 ```
 
 常用参数说明：
 
 - `addGroup`：添加 group。若信号在不同组中，组名会在 `signal.rc` 中显式保存。
 - `addSubGroup`：在目标 group 下添加 sub-group。
+- `endSubGroup`：闭合同名子分组；嵌套子分组先闭合内层，再闭合外层。
 - `-e`：表示 group/sub-group 是否展开。
 
 示例：
@@ -259,6 +261,7 @@ addGroup -e "AXI"
 addSubGroup -e "AW"
 addSignal -h 15 -UNSIGNED -HEX /top/u_axi/awaddr[31:0]
 addSignal -h 15 /top/u_axi/awvalid
+endSubGroup "AW"
 ```
 
 注意事项：

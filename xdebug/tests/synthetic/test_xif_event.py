@@ -47,6 +47,7 @@ def test_rc_generate_preserves_struct_members_and_expression_aliases(
         assert "addSignal /xif_event_top/if_rdy/pd.opcode" in lines
         assert "addSignal /xif_event_top/if_rdy/pd.opcode[3:0]" in lines
         assert 'addExprSig -b 8 opcode_expr "/xif_event_top/if_rdy/pd.opcode"' in lines
+        assert lines[-1] == 'endSubGroup "Expressions"'
         assert not any("/pd/" in line for line in lines)
         assert result.response["data"]["validation"] == {"signals": 5, "times": 0}
 
