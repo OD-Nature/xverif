@@ -14,7 +14,7 @@ from x_npi.coverage import (
     set_report_time_excluded,
     unload_exclusions,
 )
-from x_npi.runtime import json_stdout_quarantine, pynpi_lifecycle
+from x_npi.runtime import json_stdout_quarantine
 
 
 def _walk_children(
@@ -22,15 +22,17 @@ def _walk_children(
     parent: Any,
     callback: Callable[[Any], dict[str, Any] | None],
 ) -> dict[str, Any] | None:
-    for child in list(parent.child_handles() or []):
-        try:
+    children = list(parent.child_handles() or [])
+    try:
+        for child in children:
             result = callback(child)
             if result is not None:
                 return result
             result = _walk_children(cov, child, callback)
             if result is not None:
                 return result
-        finally:
+    finally:
+        for child in children:
             cov.release_handle(child)
     return None
 
@@ -78,15 +80,12 @@ def main() -> int:
     vdb = sys.argv[1]
     output = Path(sys.argv[2])
     with json_stdout_quarantine() as json_stream:
-        with pynpi_lifecycle([sys.argv[0]]):
-            from pynpi import cov  # type: ignore
-
-            db = open_covdb(vdb)
-            try:
-                test = merged_test_handle(db)
-                result = _exercise_line_exclusion(cov, db, test, output)
-            finally:
-                close_covdb(db)
+        db = open_covdb(vdb)
+        try:
+            test = merged_test_handle(db)
+            result = _exercise_line_exclusion(db.worker, db, test, output)
+        finally:
+            close_covdb(db)
         json.dump(result, json_stream, sort_keys=True)
         json_stream.write("\n")
     return 0

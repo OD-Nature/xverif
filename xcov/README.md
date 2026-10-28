@@ -51,7 +51,7 @@ stdio 请求
 
 ## 真实 exclusion NPI 运行
 
-URG coverage 查询需要 Synopsys URG；原生 exclusion 处理另需 Verdi/Python NPI
+URG coverage 查询需要 Synopsys URG；原生 exclusion 处理另需 Verdi native NPI
 和 license。按项目规则，NPI、VCS、VIP、真实 coverage probe 必须在沙箱外运行。
 
 已验证的本地形态：
@@ -89,8 +89,8 @@ MCP 始终提供 coverage 工具。MCP 原样传递导出参数，不改写相�
 
 - `VCS_HOME`：必填；URG 只允许使用规范化后的 `$VCS_HOME/bin/urg`，不会从 `PATH`
   查找或改用其它安装。
-- `VERDI_HOME`：首次 exclusion 操作时必填；pynpi/cov/npisys 必须全部来自该安装的
-  `share/NPI/python`，不会接受预加载的外部同名模块。
+- `VERDI_HOME`：首次 exclusion 操作时必填；worker 的原生 NPI 库来自该安装的
+  `share/NPI/lib/LINUX64`，不会接受预加载的外部同名模块。
 - `XVERIF_XCOV_BIN`：覆盖 xcov 可执行文件。
 - `XVERIF_XCOV_PYTHON`：覆盖 xcov Python runtime。
 - `XVERIF_XCOV_VERDI_HOME`：覆盖 `VERDI_HOME`。
@@ -153,7 +153,7 @@ bsub process；失败不会改走 direct。
 `session.open` 的公开 `args` 只有 `name` 和可选
 `exclusion_policy:"default|strict"`。打开 session 只生成/读取固定 URG summary，
 不会 import pynpi 或调用 `cov.open`。首次 exclusion 操作才创建 NPI 上下文；此时
-`strict` 在双参数接口上把 `cov.ConfigOpt.ExclusionInStrictMode` 传给 `cov.open`，
+`strict` 由独立 `xcov-npi-worker` 把头文件定义的 `npiCovExclusionInStrictMode` 传给 `npi_cov_open`，
 拒绝把已覆盖对象设为 report-time exclusion；xcov 从不公开 `ExcludeByStmtLevel`。同名
 alive session 返回 `SESSION_EXISTS`；同一 native 进程的其它 alive name 返回
 `SESSION_CAPACITY_EXCEEDED`。xcov 不比较旧、新 VDB，不复用旧 backend，也不隐式关闭后重开。
@@ -162,19 +162,16 @@ alive session 返回 `SESSION_EXISTS`；同一 native 进程的其它 alive name
 `target.vdb:"fake"` 也没有特殊含义；`FakeCoverageBackend` 只允许测试通过
 `SessionManager` 的 backend factory 注入。
 
-首次 exclusion 操作会检查当前 pynpi 的真实 `cov.open` 签名。单参数旧版在默认模式调用
-`cov.open(vdb)`；双参数版本调用 `cov.open(vdb, config_opt)`。单参数旧版的 strict
-通过同一已验证安装中的 `npi_cov_open(const char *, int)` C++ 接口传入
-`npiCovExclusionInStrictMode`，返回 vendor Python handle。该接口不可用时返回
-`NPI_COV_OPEN_STRICT_UNSUPPORTED`；不会关闭 strict 或切换后端。
+首次 exclusion 操作启动独立原生进程，默认与 strict 均使用同一 C++ 实现。
+构建使用 `make xcov`；部署须携带 `xcov/libexec/xcov-npi-worker`。
+Python 不加载 coverage 的厂商绑定，也不探测旧版签名；worker 内部独占 NPI 生命周期和句柄，
+进程间只传结构化 JSON 与会话内对象 ID。worker 失败返回 `NPI_WORKER_LOST`，不自动重启或重放变更。
+worker 默认继承站点环境，不强制改变厂商内存分配器。只有本机复现分配器故障并完成
+对照后，才在仓库外设置 `XVERIF_XCOV_NATIVE_USE_MALLOC=1`；该选项只为 coverage
+worker 设置 `VCS_USE_MALLOC=1`，不改变 MCP、URG、xdebug 或其它 EDA 进程。
+选项仅接受 `0` 或 `1`；未设置时保留站点已有的 `VCS_USE_MALLOC`，非法值在启动前
+返回 `NPI_ALLOCATOR_INVALID`。这不是自动 fallback，也不表示所有 Verdi 安装都需要它。
 
-每个 NPI 数据库使用独立 Python worker，仍加载同一已验证的 vendor NPI 库。
-`session.close` 关闭数据库并等待 worker 退出；之后在同一 native loop 打开新 session
-会创建新 worker。每个 worker 只初始化一次 NPI，退出时调用一次 `npisys.end`。
-旧版库在 `cov.close` 后可能保留已释放的 coverage 对象，不能靠反复 open 或 init/end
-安全复用其进程。普通 URG 查询仍不启动 NPI worker。
-worker 启动限时 120s、单次操作 600s，超时终止并回收该 worker、返回明确错误；
-不会重试、重开数据库或切换后端。MCP/LSF managed close 还会退出其独立 loop。
 
 ### 可复现输入：run manifest
 
@@ -256,7 +253,7 @@ CSV 用 `# source_file=...` 划分连续源码分组；`reason` 必填，同一
 
 - `exclude.list`：列出 merged test 的 compile/report-time exclusion，并给出当前
   session 的 `coverage_ref`。
-- `exclude.load`：按输入顺序加载一个或多个 EL，使用 pynpi union 语义。
+- `exclude.load`：按输入顺序加载一个或多个 EL，使用原生 NPI union 语义。
 - `exclude.add`：每个 `coverage_ref` 或 export gap 都必须携带非空 `reason`；reason 仅保存在当前 session
 - `exclude.remove`：按精确 `coverage_ref` 撤销 report-time exclusion
   before/after，返回 `changed`、`already_in_state`、
@@ -273,6 +270,7 @@ CSV 用 `# source_file=...` 划分连续源码分组；`reason` 必填，同一
 
 ```json
 {"api_version":"xcov.v1","action":"exclude.add","target":{"session_id":"cov0"},"args":{"exports":[{"path":"/abs/path/branch.json","items":[{"gap_id":"B0001","reason":"非法输入组合"},{"gap_id":"B0002","reason":"规格禁止路径"}]}]}}
+```
 
 关闭 session 不允许静默丢失尚未持久化的 reason。存在 dirty reason 时，普通
 `session.close` 返回 `UNPERSISTED_EXCLUSION_REASON` 并保留可继续查询/导出的 live session；
@@ -285,7 +283,6 @@ CSV 用 `# source_file=...` 划分连续源码分组；`reason` 必填，同一
 ```json
 {"api_version":"xcov.v1","action":"exclude.csv.export","target":{"session_id":"cov0"},"args":{"directory":"coverage_exclusions"}}
 ```
-```
 
 导出 JSON 只保存 `xcov.urg_semantic.v1` 语义身份，不启动 NPI，也不泄露或持久化
 NPI traversal path/handle。`exclude.add` 首先用 URG hierarchy 拒绝未知 scope，随后才
@@ -293,6 +290,10 @@ NPI traversal path/handle。`exclude.add` 首先用 URG hierarchy 拒绝未知 s
 line/condition/branch/toggle 保持原子提交；只有 FSM 允许因 NPI 不可见对象返回
 `partial_success`，响应逐 gap 标明成功或失败。旧 artifact 在目标已被排除后可能因
 NPI score 视图隐藏而不再可解析，应重新导出当前 gap，不会调用不稳定的低层查询强行恢复。
+
+functional 导出只运行一次 URG，完整展开交叉及自动 bin，并校验报告总数。
+若 NPI 只支持排除整个自动 bin 范围，必须把范围内所有 gap 以相同 reason 一次提交；
+部分选择或原因冲突会在修改前报错，不会扩大排除范围。CSV 保存实际 NPI 范围身份。
 
 ```json
 {"api_version":"xcov.v1","action":"exclude.load","target":{"session_id":"cov0"},"args":{"paths":["code.el","functional.el","assertion.el","container.el"]}}
@@ -341,12 +342,14 @@ export `args.output` 的未知字段都会返回 `SCHEMA_INVALID`。handler 返�
 控制 inline 数量；三个 coverage report export 写 Markdown，`export.exclude` 写原生
 EL。
 
-惰性 Python NPI exclusion backend 在初始化时绑定唯一的已声明 method/signature 合同，并且每次
+惰性原生 NPI exclusion backend 在初始化时绑定唯一的已声明 method/signature 合同，并且每次
 调用只执行该签名一次。缺失方法、参数不匹配、调用异常、遍历返回非 iterable，
 以及必需事实类型错误都会返回 `NPI_CONTRACT_VIOLATION`，错误中包含 operation、
 method、expected_signature 和 cause；不会改用零参数签名，也不会把异常转换成
 `None` 或空列表。此类错误响应的 `scan_complete` 和 `analysis_complete` 均为
 `false`，不能被当作完整 coverage 结果。
+worker 的超时、崩溃和原生错误保留 `NPI_WORKER_LOST`、`NPI_NATIVE_FAILED` 等原始诊断，
+不改写成一般的合同错误。关闭时仍会报告本次超时；已经失效的会话允许显式清理。
 
 `SessionManager` 会强制把真实 NPI、测试 Fake 和 factory 注入 backend 包装成同一个
 严格 adapter。`summary/tests/scopes/items` 在 action 可见前统一校验；coverage item
@@ -355,7 +358,7 @@ bin。score 的 primitive、值域、`covered <= coverable`、`missing`、百分
 和 evidence 任一不一致都会 fail-closed：真实 NPI 返回
 `NPI_CONTRACT_VIOLATION`，注入 backend 返回 `BACKEND_CONTRACT_VIOLATION`。
 backend/action 合同不接受 `-1` score/count sentinel；不适用值必须是 JSON `null`。
-Python NPI 层只把文档定义的 SDK “不适用”返回值映射为 `null`，未知或位置错误的
+原生 NPI adapter 只把文档定义的 SDK “不适用”返回值映射为 `null`，未知或位置错误的
 负值仍由统一边界拒绝。
 
 - `scope.summary`：返回当前层次的扁平覆盖率字段，例如
@@ -497,3 +500,70 @@ XVERIF_TEST_EXECUTION_ENV=host .conda-xverif/bin/pytest \
 
 - summary 查询固定使用 merged selection；请求 schema 不接受 per-test `test` selector。
 - source file/type 和 functional bin 不属于 summary 合同；需要具体 gap 时使用对应 export。
+
+### Native worker 退出边界
+
+V-2023.12-SP2 的 libucapi 后台 PdrDomainNameReader 在线程尚未退出时调用
+`npi_cov_close` 可触发 SIGSEGV。worker 的 `close/end` 发送成功响应后直接退出进程，
+由 OS 回收内存、文件及 license socket，不调用存在竞态的数据库析构/全局析构。
+所有 EL 必须通过显式 save 持久化；关闭不会自动保存。异常退出和超时返回
+`NPI_WORKER_LOST`，不会自动重放变更。这个 workaround 不改变 URG/VCS/xdebug 的 CPU 配置。
+
+普通句柄按引用计数释放，不再永久固定所有遍历对象。SDK 自身持有的 functional
+对象可能持续到数据库退出；整个 worker 的资源最终在 close 时统一回收。
+读取按实例合并指标、预取有限层次的条目属性，采用紧凑向量协议；release 合并到
+下一次 RPC（积累 1024 个时主动 flush）。修改、load 和 unload 会使状态快照失效，
+跨 test 的读取也会重新取值。公开结果不截断来换取速度。同一后端操作的全部 RPC 共用 600 秒期限，
+close/end 请求为 5 秒；没有常驻监控线程或自动重试。
+
+先在设置好 `VERDI_HOME` 的环境运行 `make xcov`。worker 启动握手核验协议和
+编译时的 SDK 路径、库大小及修改时间；不一致返回 `NPI_SDK_MISMATCH`，需显式
+重新构建，不临时编译、不改用 Python binding。正常只读 URG 路径不会启动 worker。
+
+
+### 原生 coverage 初始化等待
+
+`XVERIF_XCOV_NATIVE_INIT_TIMEOUT_SECONDS` 可在本机 MCP/EDA 环境设置 NPI 初始化
+等待上限，默认 120 秒，必须为 `(0, 3600]` 的有限秒数；用于握手和 `init`，不会缩短
+VDB 打开或其它原生 RPC 的既有 120 秒期限，也不改变 URG 的执行期限。
+设置后需显式关闭已有会话并重新连接。先导出尚未保存的 exclusion reason 和 EL。
+
+超时仍返回 `NPI_WORKER_LOST`，`detail.failure_kind=timeout`，附带 operation、
+elapsed_seconds、timeout_seconds 和可用的 diagnostic_path。每个 worker 的
+`native-status.json` 记录初始化/打开阶段；超时时在 Linux 上尽力记录该 worker
+自身 TCP 连接的地址、端口、状态和重传数，不读取网络 payload 或许可证环境内容。
+诊断写入失败不掩盖原始错误。`init` 超时可能涉及许可证和网络，不能一概判为缺 feature。
+
+不可恢复的 RPC 失败会立即终止并回收 worker；Linux 上拥有它的 Python 进程
+意外退出时，worker 也由内核终止，即使正卡在厂商初始化中。新 wrapper 与 native
+worker 必须一起部署；没有自动重试、重放 mutation 或切换 backend。
+
+
+### 测试依赖边界
+
+`xcov.unit` 保留 CSV、解析器、schema 和 stub 合同测试，不需要 NPI 或生成 VDB。
+真实 exclusion/worker 生命周期归入 `xcov.exclusion_npi`，真实 MCP coverage 用
+`xverif_mcp.coverage_real`；两者明确声明 fixture 和 EDA 依赖，未准备环境时不能跳过冒充通过。
+普通 `xverif_mcp.process` 不再因为少数真实 coverage 用例而要求整个 suite 准备 VDB。
+
+### 重现运行开销对照
+
+准备好的 `xcov.exclusion`、`xcov.comprehensive` 缓存可用于以下宿主机测量。
+`--package-root` 必须指向待测 checkout 的 xcov 包根，原生版本先在该 checkout
+执行 `make xcov`。输出记录完整结果摘要、每轮耗时、父子进程合计 CPU 及进程树 RSS；
+测量线程仅存在于本脚本，生产运行不采样。脚本另核验排除/取消、EL 保存/卸载/重载，
+不修改输入 VDB；输出目录须预先存在。
+
+```bash
+benchmark_dir=$(mktemp -d)
+XVERIF_TEST_EXECUTION_ENV=host .conda-xverif/bin/python xcov/tools/benchmark_runtime.py \
+  --package-root "$PWD/xcov" --fixture-root "$PWD/.xverif-test-cache/fixtures" \
+  --output "$benchmark_dir/result.json"
+```
+
+基线与候选应交替串行测量，比较相同 fixture 的 `result_digest` 和行数，再比较耗时、
+CPU、RSS；不要与构建或回归同时运行。license 初始化等待单独记为 `open_sec`，
+不能将外部等待差异当作算法改进。`--include-large` 另外消费 `xcov.large_summary` 缓存，
+对其一个宽位信号实例读取全部 code metrics，验证较大结果集；不扫描全部 3,001 scopes。
+`--rounds 500` 可观察长会话内存趋势；当前 SDK
+仍会保留部分内部对象，观察值不代表无限会话内存不增长，close 必须确认 worker 已退出。

@@ -65,7 +65,7 @@ def test_npi_database_reopens_in_same_process(xverif_fixture):
     workers = []
     for _ in range(2):
         backend = NpiCoverageBackend(vdb=str(vdb))
-        workers.append(backend._worker.process)
+        workers.append(backend.cov.process)
         try:
             rows = backend.items(metrics=["line"])
             assert rows
@@ -94,7 +94,7 @@ def test_npi_worker_exits_when_owner_is_killed(xverif_fixture, tmp_path):
 import sys
 from xcov.backend import NpiCoverageBackend
 backend = NpiCoverageBackend(sys.argv[1])
-print(backend._worker.process.pid, flush=True)
+print(backend.cov.process.pid, flush=True)
 sys.stdin.read(1)
 backend.close()
 """
@@ -336,3 +336,41 @@ def test_export_code_to_dir(xverif_fixture, tmp_path, monkeypatch):
         assert [path.name for path in (run_dir / "raw").iterdir()] == ["modinfo.urg.txt"]
     finally:
         sess.close()
+
+
+def test_unload_exclusions_restores_cached_urg_summary(xverif_fixture, tmp_path):
+    from xcov.actions import Dispatcher
+    from xcov.coverage_contract import is_score_bearing_row
+    from xcov.session import SessionManager
+
+    vdb = xverif_fixture('xcov.comprehensive') / 'comprehensive.vdb'
+    manager = SessionManager()
+    session = manager.open(str(vdb), name='unload-cache', cache_dir=str(tmp_path))
+    dispatcher = Dispatcher(manager)
+
+    def query(action, args):
+        response = dispatcher.dispatch({
+            'api_version': 'xcov.v1', 'action': action,
+            'target': {'session_id': session.session_id}, 'args': args,
+        })
+        assert response['ok'], response
+        return response
+
+    summary_args = {'scope': 'top', 'metrics': ['line'], 'group_by': 'metric'}
+    try:
+        baseline = query('code_coverage.summary', summary_args)['data']['items']
+        target = next(row for row in session.backend.items(metrics=['line'])
+                      if is_score_bearing_row(row) and row['covered'] == 0
+                      and row['coverable'] > 0
+                      and not any('excluded' in status for status in row.get('status', [])))
+        result = query('exclude.add', {'coverage_refs': [{
+            'coverage_ref': target['coverage_ref'], 'reason': 'temporary cache lifecycle test',
+        }]})
+        assert result['data']['items'][0]['status'] == 'changed'
+        excluded = query('code_coverage.summary', summary_args)['data']['items']
+        assert excluded != baseline
+        query('exclude.unload_all', {'confirm': True})
+        restored = query('code_coverage.summary', summary_args)['data']['items']
+        assert restored == baseline
+    finally:
+        session.close(confirm_discard_reasons=True)

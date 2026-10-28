@@ -589,6 +589,11 @@ class Dispatcher:
                 "urg", "-full64", "-dir", sess.vdb, "-report", str(stage_dir),
                 "-format", "text", "-show", "brief", "-metric", metric,
             ]
+            if action == "export.functional_coverage":
+                # Default URG compression hides individual cross-bin identities;
+                # its default maxmissing=256 can silently truncate detail.
+                urg_args[urg_args.index("brief") + 1:urg_args.index("brief") + 1] = ["group"]
+                urg_args.extend(["-group", "expand_bins", "-group", "maxmissing", str(MAX_GAP_ROWS + 1)])
             urg_args.extend(sess.el_file_arg)
             scope = args.get("scope")
             if scope:
@@ -766,7 +771,11 @@ class Dispatcher:
                             combined_text,
                             scope,
                             metric,
-                            allow_empty_selection=empty_selection,
+                            # The fixed URG XML also includes assertion-only
+                            # instances, omitted from the code-only text report.
+                            allow_empty_selection=(
+                                empty_selection or metric not in scope_metrics[scope]
+                            ),
                         )
                         payload["exclusion_locator"] = {
                             "version": "xcov.urg_semantic.v1",
@@ -1179,6 +1188,9 @@ class Dispatcher:
                 successful_gap_count=0, applied_gap_count=0, applied_target_count=0,
                 rollback_performed=False, errors=preflight_errors,
             )
+        selected_reasons: Dict[str, Json] = {}
+        for item in requested:
+            selected_reasons.setdefault(item["path"], {})[item["gap_id"]] = item["reason"]
         with tempfile.TemporaryDirectory(prefix=".xcov-gap-exclude-") as temporary:
             baseline = Path(temporary) / "baseline.el"
             try:
@@ -1205,6 +1217,7 @@ class Dispatcher:
                 payload_key = id(payload)
                 if payload_key not in resolved_payloads:
                     try:
+                        payload["_selected_gap_reasons"] = selected_reasons[item["path"]]
                         sess.backend.resolve_gap_payload(payload, test="merged")
                     except Exception as exc:
                         resolve_errors.append({
@@ -1253,15 +1266,19 @@ class Dispatcher:
                 ),
                 reverse=True,
             )
+            resolved_results: Dict[str, Json] = {}
             for request_index, item in execution_order:
                 target_results = []
                 for target in sorted(
                     item["targets"], key=lambda value: tuple(value.get("path") or []), reverse=True
                 ):
                     try:
-                        result = sess.backend.set_exclusion_locator(
-                            target, True, test="merged"
-                        )
+                        target_key = json.dumps(target, sort_keys=True, separators=(",", ":"))
+                        if target_key not in resolved_results:
+                            resolved_results[target_key] = sess.backend.set_exclusion_locator(
+                                target, True, test="merged"
+                            )
+                        result = resolved_results[target_key]
                     except Exception as exc:
                         result = {
                             "status": "failed",
@@ -1701,6 +1718,7 @@ class Dispatcher:
                 for document in documents:
                     staged_path = temp_root / FILE_NAMES[document.kind]
                     staged_path.write_text(formatted[document.kind], encoding="utf-8")
+                    parse_document(staged_path, document.kind)
                     _fsync_file(staged_path)
                     staged[document.kind] = staged_path
                 for document in documents:
@@ -1961,7 +1979,8 @@ def _gap_csv_rows(item: Json) -> List[Json]:
             "scope": str(gap.get("scope") or ""), "line": str(line),
             "covergroup": str(gap.get("covergroup") or ""),
             "coverpoint": str(gap.get("coverpoint") or ""),
-            "cross": str(gap.get("cross") or ""), "bin": str(gap.get("bin") or ""),
+            "cross": str(gap.get("cross") or ""),
+            "bin": str(gap.get("_resolved_bin", gap.get("bin")) or ""),
         }]
     if metric == "assert":
         return [{
@@ -1972,8 +1991,10 @@ def _gap_csv_rows(item: Json) -> List[Json]:
         }]
     rows = []
     for target in item["targets"]:
-        obj = target.get("csv_object", "")
-        bin_name = target.get("csv_bin", "")
+        # Public line CSV identity is scope/file/line. Native statement-bin
+        # names (for example 14.1) are not valid CSV bin selectors for line.
+        obj = "" if metric == "line" else target.get("csv_object", "")
+        bin_name = "" if metric == "line" else target.get("csv_bin", "")
         if metric != "line" and (not obj or not bin_name):
             raise XcovError(
                 "EXCLUSION_CSV_IDENTITY_MISSING",

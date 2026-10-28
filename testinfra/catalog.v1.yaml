@@ -99,6 +99,7 @@ suites:
     runner:
       kind: pytest
       paths:
+        - xcov/tests/test_exclusions.py
         - xcov/tests/test_npi_worker.py
         - xcov/tests/test_urg_summary.py
         - xcov/tests/test_xcov.py
@@ -115,15 +116,15 @@ suites:
     runner:
       kind: pytest
       paths:
-        - xcov/tests/test_exclusions.py
         - xcov/tests/test_exclusions_real.py
+        - xcov/tests/test_exclusions_integration.py
     fixtures: [xcov.exclusion]
     capabilities: [child_process, npi]
     hermetic: false
     deterministic: true
     gates: [regression, nightly]
-    cost: {class: slow, estimate_sec: 30}
-    timeouts: {execute_sec: 180, cleanup_sec: 20}
+    cost: {class: medium, estimate_sec: 120}
+    timeouts: {execute_sec: 300, cleanup_sec: 20}
 
   - id: xcov.urg_backend
     owner: xcov
@@ -407,11 +408,24 @@ suites:
         - xverif_mcp/tests/test_mcp_shutdown.py
         - xverif_mcp/tests/test_mcp_ssh_loopback.py
         - xverif_mcp/tests/test_stdio_loop_session_lifecycle.py
+    capabilities: [child_process, mcp_process]
+    hermetic: false
+    deterministic: true
+    cost: {class: medium, estimate_sec: 45}
+    timeouts: {execute_sec: 180, cleanup_sec: 20}
+
+  - id: xverif_mcp.coverage_real
+    owner: xverif_mcp
+    level: integration
+    intent: [contract, lifecycle]
+    domains: [mcp, coverage]
+    runner: {kind: pytest, path: xverif_mcp/tests/test_mcp_cov_real.py}
     fixtures: [xcov.comprehensive]
     capabilities: [child_process, mcp_process, npi]
     hermetic: false
     deterministic: true
-    cost: {class: medium, estimate_sec: 45}
+    gates: [regression, nightly]
+    cost: {class: medium, estimate_sec: 30}
     timeouts: {execute_sec: 180, cleanup_sec: 20}
 
   - id: xverif_mcp.runtime_package

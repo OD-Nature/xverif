@@ -200,3 +200,15 @@ xdebug 代码架构、添加 action 流程、统一组件、通信协议、log�
 - 测试会捕获、映射或发布环境变量的函数时，先用 monkeypatch 把 `os.environ` 替换为独立副本，避免派生变量跨测试泄漏。（09-07）
 - 复现 MCP stdio server 时把配置环境变量显式绑定到 server/`timeout` 命令一侧或用 `env ... <server>`；先验证 module import 再解释握手结果。（07-16）
 - pynpi coverage：`handle_by_name` 只用于 database instance fullname，不用 L0 绕过 wrapper 查 signal/bin；probe 用仓库 conda Python 并通过 backend 的 handle release helper 清理。（08-11）
+
+### 2026-10-27 环境错误复盘
+
+- 错误现象：临时性能脚本命名为 `profile.py` 导致 `cProfile` 循环导入；本机 `objdump` 不支持带符号参数的 `--disassemble`；按 fixture id 猜 VDB 文件名导致探测在路径断言处停止。
+- 误判原因：忽略临时目录参与模块搜索、工具版本的选项差异，以及 fixture id 与产物名并不相同。
+- 以后规则：实验脚本避免与标准库同名；版本相关选项先查本机帮助；fixture 文件名先查 registry outputs；入口失败不计入产品或性能结论。
+
+### 2026-10-27 环境错误复盘
+
+- 错误现象：fast 中的 MCP stdio 用例在沙箱停滞，而同一用例在宿主机通过；误把仍返回 session id 的 pytest 当作已退出，提前启动性能测量，已中止并作废重叠数据。
+- 误判原因：只按 gate 名称判断进程权限，且没有检查持久执行的最终 exit_code。
+- 以后规则：涉及 MCP stdio 的 gate 整体在宿主机执行；性能测量必须先确认所有构建和测试 session 返回最终结果，不能以工具调用返回或日志进度代替退出确认；宿主进程只能在宿主环境检查，不用沙箱 PID 视图推断。

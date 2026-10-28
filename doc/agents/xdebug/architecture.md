@@ -307,7 +307,9 @@ tracked `args`/`limits` 合并、结构化 cache error、历史 `end` 归一化�
 
 - combined action 必须保留 design evidence 和 waveform time evidence。
 - NPI static driver trace 遇到 modport 边界时，沿返回的 modport 句柄继续查询驱动，
-  并检测循环；所有候选仍须在原信号的精确 FSDB change time 上通过 active check。
+  input/inout 还沿其显式连接句柄继续查询；interface 输入引用不视为外部 primary input。
+  扩展按对象和 scope 去重，最多穿越 64 个边界，达到上限必须报告；
+  所有候选仍须在原信号的精确 FSDB change time 上通过 active check。
   不假设 modport 名称在 FSDB 中存在，也不把所有静态赋值直接当作 active driver。
 - 对未解析、control-only、zero evidence 等状态要稳定表达，不要假装 resolved。
 - active driver chain 只在 `npiRhs` 明确给出直接 signal 时继续追踪。多个 active

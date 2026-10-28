@@ -44,7 +44,7 @@ def test_large_summary_fixture_is_typed_read_only_and_cache_stable(
     def forbidden_npi():
         raise AssertionError("read-only large summary must not import pynpi")
 
-    monkeypatch.setattr(backend_module, "import_pynpi", forbidden_npi)
+    monkeypatch.setattr(backend_module, "open_native", forbidden_npi)
     original_run = UrgRunner.run
     executions: list[list[str]] = []
 

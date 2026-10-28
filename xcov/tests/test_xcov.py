@@ -2695,7 +2695,14 @@ Event               0        0
     assert "\n\n  uncovered:\n" not in xout
 
 
-def test_fsm_v2_groups_multiple_fsms_and_renders_gap_tables():
+@pytest.mark.parametrize("heading", [
+    "FSM Coverage for Instance : top.u_dut",
+    "FSM Coverage for Module : dut",
+    "FSM Coverage for Module : dut   ",
+    "FSM Coverage for Module : dut (from source)",
+    "FSM Coverage for Module : dut\r",
+])
+def test_fsm_v2_groups_multiple_fsms_and_renders_gap_tables(heading):
     from xcov.code_export import parse_metric_report, render_metric_xout
 
     scope = "top.u_dut"
@@ -2743,6 +2750,7 @@ MON_BUSY->MON_HALT 211 Not Covered
 MON_RETRY->MON_HALT 212 Not Covered
 """
 
+    report = report.replace("FSM Coverage for Instance : top.u_dut", heading)
     payload = parse_metric_report(report, scope, "fsm")
 
     assert payload["schema"] == "xcov.code_coverage.fsm.v2"
@@ -2773,72 +2781,213 @@ def _x_npi_coverage_helper_for_open_compat():
     return module
 
 
-def test_cov_open_contract_accepts_supported_signatures():
-    from xcov.backend import _cov_open_contract
-
-    def old_open(vdb):
-        return vdb
-
-    def new_open(vdb, config_opt=0):
-        return vdb, config_opt
-
-    assert _cov_open_contract(old_open).positional_args == ("vdb",)
-    assert _cov_open_contract(new_open).positional_args == ("vdb", "config_opt")
-
-
-def test_unsupported_npi_open_errors_match_public_schema(monkeypatch, tmp_path):
-    from types import ModuleType
-    from xcov.backend import _cov_open_contract
-    from xcov import eda
-
-    monkeypatch.setattr(eda, "get_npi_python_path", lambda: str(tmp_path))
-    for operation, expected_code in (
-        (lambda: _cov_open_contract(lambda: None), "NPI_CONTRACT_VIOLATION"),
-        (lambda: eda.legacy_strict_cov_opener(ModuleType("pynpi.cov")), "NPI_COV_OPEN_STRICT_UNSUPPORTED"),
-    ):
-        with pytest.raises(XcovError) as caught:
-            operation()
-        assert caught.value.code == expected_code
-        validate_response("session.open", error_response(
-            "session.open", "unsupported-npi", caught.value.code,
-            caught.value.message, **caught.value.detail,
-        ))
-
-
-def test_x_npi_open_covdb_calls_old_interface_once(monkeypatch):
+def test_x_npi_native_open_uses_explicit_policy(monkeypatch):
     from types import SimpleNamespace
-    import pytest
-
     helper = _x_npi_coverage_helper_for_open_compat()
     calls = []
-
-    def old_open(vdb):
-        calls.append((vdb,))
-        return object()
-
-    monkeypatch.setattr(helper, "_cov", lambda: SimpleNamespace(open=old_open))
-    helper.open_covdb("old.vdb")
-    assert calls == [("old.vdb",)]
-    with pytest.raises(RuntimeError, match="does not support strict"):
-        helper.open_covdb("old.vdb", strict=True)
-    assert calls == [("old.vdb",)]
-
-
-def test_x_npi_open_covdb_calls_new_interface_once(monkeypatch):
-    from types import SimpleNamespace
-
-    helper = _x_npi_coverage_helper_for_open_compat()
-    calls = []
-
-    def new_open(vdb, config_opt=0):
-        calls.append((vdb, config_opt))
-        return object()
-
-    cov = SimpleNamespace(
-        open=new_open,
-        ConfigOpt=SimpleNamespace(ExclusionInStrictMode=7),
+    worker = SimpleNamespace(
+        init=lambda argv: 1,
+        open=lambda vdb, policy: calls.append((vdb, policy)) or object(),
+        end=lambda: calls.append("end"),
     )
-    monkeypatch.setattr(helper, "_cov", lambda: cov)
+    monkeypatch.setattr(helper, "_cov", lambda: worker)
     helper.open_covdb("default.vdb")
     helper.open_covdb("strict.vdb", strict=True)
-    assert calls == [("default.vdb", 0), ("strict.vdb", 7)]
+    assert calls == [("default.vdb", "default"), ("strict.vdb", "strict")]
+
+
+def test_x_npi_failed_open_reaps_worker(monkeypatch):
+    from types import SimpleNamespace
+    import pytest
+    helper = _x_npi_coverage_helper_for_open_compat()
+    ended = []
+    worker = SimpleNamespace(init=lambda argv: 1, open=lambda *args: None,
+                             end=lambda: ended.append(True))
+    monkeypatch.setattr(helper, "_cov", lambda: worker)
+    with pytest.raises(helper.CoverageExclusionError):
+        helper.open_covdb("bad.vdb")
+    assert ended == [True]
+
+
+def test_native_open_preserves_original_worker_failure_during_cleanup(monkeypatch):
+    from types import SimpleNamespace
+    from xcov import backend
+    from xcov.errors import XcovError
+    import pytest
+
+    ended = []
+    def failed_read():
+        raise XcovError("NPI_WORKER_LOST", "original test handle read failure")
+    def failed_close():
+        raise XcovError("NPI_WORKER_LOST", "secondary close failure")
+    db = SimpleNamespace(test_handles=failed_read, close=failed_close)
+    worker = SimpleNamespace(init=lambda argv: 1, open=lambda *args: db,
+                             end=lambda: ended.append(True),
+                             merge_test=lambda left, right: left,
+                             release_handle=lambda handle: 1)
+    monkeypatch.setattr(backend, "open_native", lambda: (worker, worker))
+    with pytest.raises(XcovError, match="original test handle read failure"):
+        backend.NpiCoverageBackend("failed.vdb")
+    assert ended == [True]
+
+
+def test_export_line_gap_reason_csv_roundtrips_public_schema(tmp_path):
+    from xcov.actions import _gap_csv_rows
+    from xcov.exclusions_csv import ExclusionDocument, ExclusionGroup, format_document, parse_document
+
+    row = _gap_csv_rows({
+        'metric': 'line', 'scope': 'top.u_assertions', 'source_files': ['frame_sva.sv'],
+        'gap': {'gap_id': 'L0001', 'at': 'frame_sva.sv:14'},
+        'targets': [{'csv_line': 14, 'csv_bin': '14.1', 'csv_object': ''}],
+    })[0]
+    kind = row.pop('coverage_kind')
+    source_file = row.pop('source_file')
+    row['reason'] = 'unreachable test line'
+    path = tmp_path / 'code_exclusions.csv'
+    document = ExclusionDocument(kind, path, [ExclusionGroup(source_file, [row])])
+    path.write_text(format_document(document), encoding='utf-8')
+    parsed = parse_document(path, kind)
+    assert parsed.row_count == 1
+    assert parsed.groups[0].rows[0]['bin'] == ''
+    assert parsed.groups[0].rows[0]['reason'] == row['reason']
+
+
+def _detail_layout_report(metric, body, source="/workspace/dut.sv"):
+    return f"""Module : dut
+Source File(s) :
+{source}
+Module self-instances :
+
+SCORE {metric.upper()} NAME
+0.00 0.00 top.u_dut
+--------
+{metric} Coverage for Module : dut
+{body}
+"""
+
+
+def test_fsm_module_heading_keeps_single_summary_and_rejects_missing_summary():
+    from xcov.code_export import CoverageExportParseError, parse_metric_report
+    body = """Summary for FSM :: state
+Transitions 2 1 50.00
+transitions Line No. Covered
+IDLE->RUN 9 Not Covered
+"""
+    report = _detail_layout_report("FSM", body)
+    result = parse_metric_report(report, "top.u_dut", "fsm")
+    assert result["coverage"] == {"covered": 1, "coverable": 2, "missing": 1, "pct": 50.0}
+    assert result["fsm_groups"][0]["gaps"][0]["object"] == "IDLE->RUN"
+    with pytest.raises(CoverageExportParseError, match="FSM summary is missing"):
+        parse_metric_report(report.replace("Summary for FSM :: state\n", ""), "top.u_dut", "fsm")
+    with pytest.raises(CoverageExportParseError, match="exact target module detail is missing"):
+        parse_metric_report(report.replace("Coverage for Module : dut", "Coverage for Module : dut2"), "top.u_dut", "fsm")
+
+
+@pytest.mark.parametrize("expression,annotation,terms", [
+    ("(en && go)", " -1    -2", ["en", "go"]),
+    ("(a && b)", " 1    2", ["a", "b"]),
+    ("(sel ? 1 : 0)", " -1-", ["sel"]),
+])
+def test_condition_short_markers_and_status_headers_stay_on_one_line(expression, annotation, terms):
+    from xcov.code_export import parse_metric_report
+    # The last case has an annotation identical to the following status header.
+    markers = " ".join(f"-{i}-" for i in range(1, len(terms) + 1))
+    values = " ".join("0" for _ in terms)
+    body = ("Conditions 1 0 0.00\n LINE 7\n EXPRESSION " + expression + "\n"
+            + " " * len(" EXPRESSION ") + annotation + "\n\n"
+            + markers + " Status\n" + values + " Not Covered\n")
+    result = parse_metric_report(_detail_layout_report("Cond", body), "top.u_dut", "condition")
+    assert result["coverage_object_gap_count"] == result["gap_count"] == 1
+    assert [term["expression"] for term in result["condition_groups"][0]["terms"]] == terms
+
+
+def test_branch_multiline_if_and_nested_ternaries_have_distinct_predicates(tmp_path):
+    from xcov.code_export import parse_metric_report
+    lines = [
+        "if (enable &&",
+        "    (state == 1 || valid)) begin",
+        "  result = flush ? 2 : (pop ? 1 : (clear ? 3 : 0));",
+        "end",
+    ]
+    source = tmp_path / "dut.sv"
+    source.write_text("\n".join(lines) + "\n")
+    numbered = [f"{i}  {line}" for i, line in enumerate(lines, 1)]
+    mark_if = " " * numbered[0].index("if") + "-1-"
+    mark_ternary = [" "] * (len(numbered[2]) + 3)
+    for index, match in enumerate(__import__("re").finditer(r"\?", numbered[2]), 2):
+        mark_ternary[match.start():match.start() + 3] = f"-{index}-"
+    body = ("Branches 4 0 0.00\n" + numbered[0] + "\n" + mark_if + "\n"
+            + numbered[1] + "\n" + numbered[2] + "\n" + "".join(mark_ternary) + "\n"
+            + numbered[3] + "\nBranches:\n-1- -2- -3- -4- Status\n"
+            + "1   1   -   -   Not Covered\n1   0   1   -   Not Covered\n"
+            + "1   0   0   1   Not Covered\n1   0   0   0   Not Covered\n")
+    result = parse_metric_report(_detail_layout_report("Branch", body, source), "top.u_dut", "branch")
+    decisions = result["decision_groups"][0]["decision_path"]
+    assert [decision["expression"] for decision in decisions] == [
+        "enable && (state == 1 || valid)", "flush", "pop", "clear",
+    ]
+    assert result["gap_count"] == 4
+    assert [decision["at"] for decision in decisions] == ["dut.sv:1", "dut.sv:3", "dut.sv:3", "dut.sv:3"]
+
+
+def test_missing_code_detail_requires_explicit_empty_metric_evidence():
+    from xcov.code_export import CoverageExportParseError, parse_metric_report
+    for metric in ("line", "condition", "branch", "toggle", "fsm"):
+        with pytest.raises(CoverageExportParseError, match="target instance detail section is missing"):
+            parse_metric_report("", "top.assertions_only", metric)
+        result = parse_metric_report("", "top.assertions_only", metric, allow_empty_selection=True)
+        assert result["analysis_complete"] is True
+        assert result["coverage"] == {"covered": 0, "coverable": 0, "missing": 0, "pct": None}
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "nan", "inf", "invalid", "3601"])
+def test_native_init_timeout_rejects_invalid_configuration(monkeypatch, value):
+    import os
+    from xcov.native import _init_timeout_seconds, INIT_TIMEOUT_ENV
+    from xcov.errors import XcovError
+    monkeypatch.setattr(os, "environ", dict(os.environ))
+    monkeypatch.setenv(INIT_TIMEOUT_ENV, value)
+    with pytest.raises(XcovError) as failure:
+        _init_timeout_seconds()
+    assert failure.value.code == "NPI_TIMEOUT_INVALID"
+    exc = failure.value
+    validate_response("session.open", error_response("session.open", "invalid-init-timeout", exc.code, exc.message, **exc.detail))
+
+
+def test_native_init_timeout_default_and_override(monkeypatch):
+    import os
+    from xcov.native import _init_timeout_seconds, INIT_TIMEOUT_ENV
+    monkeypatch.setattr(os, "environ", dict(os.environ))
+    monkeypatch.delenv(INIT_TIMEOUT_ENV, raising=False)
+    assert _init_timeout_seconds() == 120
+    monkeypatch.setenv(INIT_TIMEOUT_ENV, "30.5")
+    assert _init_timeout_seconds() == 30.5
+
+
+@pytest.mark.parametrize("inherited,selection,expected", [
+    (None, None, None), ("0", None, "0"), ("1", None, "1"),
+    (None, "1", "1"), ("0", "1", "1"), ("1", "0", "0"),
+])
+def test_native_allocator_is_explicit_and_preserves_parent(inherited, selection, expected):
+    from xcov.native import _worker_environment, ALLOCATOR_ENV
+    env = {"unrelated": "preserved"}
+    if inherited is not None:
+        env["VCS_USE_MALLOC"] = inherited
+    if selection is not None:
+        env[ALLOCATOR_ENV] = selection
+    before = dict(env)
+    child = _worker_environment(env)
+    assert child.get("VCS_USE_MALLOC") == expected
+    assert child["unrelated"] == "preserved"
+    assert env == before
+
+
+@pytest.mark.parametrize("value", ["", "true", "2", " 1"])
+def test_native_allocator_rejects_invalid_site_configuration(value):
+    from xcov.native import _worker_environment, ALLOCATOR_ENV
+    from xcov.errors import XcovError
+    with pytest.raises(XcovError) as caught:
+        _worker_environment({ALLOCATOR_ENV: value})
+    exc = caught.value
+    assert exc.code == "NPI_ALLOCATOR_INVALID"
+    validate_response("session.open", error_response("session.open", "allocator-option", exc.code, exc.message, **exc.detail))

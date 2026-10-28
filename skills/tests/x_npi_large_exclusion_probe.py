@@ -5,7 +5,6 @@ import csv
 import io
 import json
 from pathlib import Path
-import sys
 from typing import Any
 
 from x_npi.coverage import (
@@ -14,7 +13,7 @@ from x_npi.coverage import (
     merged_test_handle,
     open_covdb,
 )
-from x_npi.runtime import json_stdout_quarantine, pynpi_lifecycle
+from x_npi.runtime import json_stdout_quarantine
 
 
 def _release(cov: Any, handle: Any) -> None:
@@ -30,38 +29,37 @@ def _first_line(cov: Any, parent: Any, test: Any,
     line = own_line if isinstance(own_line, int) and own_line > 0 else line
     if parent.type() == "npiCovStmtBin" and source and line > 0:
         return source, line
-    for child in list(parent.child_handles() or []):
-        try:
+    children = list(parent.child_handles() or [])
+    try:
+        for child in children:
             found = _first_line(cov, child, test, source, line)
             if found:
                 return found
-        finally:
+    finally:
+        for child in children:
             _release(cov, child)
     return None
 
 
 def _target_line(cov: Any, db: Any, test: Any, scope: str) -> tuple[str, int]:
-    pending = list(db.instance_handles() or [])
-    while pending:
-        instance = pending.pop()
+    instance = db.handle_by_name(scope)
+    if not instance:
+        raise RuntimeError(f"coverage scope is missing: {scope}")
+    try:
+        if instance.full_name() != scope:
+            raise RuntimeError(f"coverage scope does not match: {scope}")
+        metric = instance.line_metric_handle()
+        if not metric:
+            raise RuntimeError(f"scope has no line metric: {scope}")
         try:
-            full_name = instance.full_name()
-            if full_name == scope:
-                metric = instance.line_metric_handle()
-                if not metric:
-                    raise RuntimeError(f"scope has no line metric: {scope}")
-                try:
-                    found = _first_line(cov, metric, test)
-                finally:
-                    _release(cov, metric)
-                if not found:
-                    raise RuntimeError(f"scope has no line score target: {scope}")
-                return found
-            if scope.startswith(str(full_name) + "."):
-                pending.extend(list(instance.instance_handles() or []))
+            found = _first_line(cov, metric, test)
         finally:
-            _release(cov, instance)
-    raise RuntimeError(f"coverage scope is missing: {scope}")
+            _release(cov, metric)
+        if not found:
+            raise RuntimeError(f"scope has no line score target: {scope}")
+        return found
+    finally:
+        _release(cov, instance)
 
 
 def _write_csv(root: Path, source: str, line: int, scope: str) -> None:
@@ -98,20 +96,17 @@ def main() -> int:
     parser.add_argument("--scope", default="top.u_leaf_0000")
     args = parser.parse_args()
     with json_stdout_quarantine() as output:
-        with pynpi_lifecycle([sys.argv[0]]):
-            from pynpi import cov  # type: ignore
-
-            db = open_covdb(args.vdb)
-            try:
-                test = merged_test_handle(db)
-                source, line = _target_line(cov, db, test, args.scope)
-                csv_root = args.output_root / "csv"
-                _write_csv(csv_root, source, line, args.scope)
-                published = compile_csv_to_el(
-                    db, test, csv_root, args.output_root / "el",
-                )
-            finally:
-                close_covdb(db)
+        db = open_covdb(args.vdb)
+        try:
+            test = merged_test_handle(db)
+            source, line = _target_line(db.worker, db, test, args.scope)
+            csv_root = args.output_root / "csv"
+            _write_csv(csv_root, source, line, args.scope)
+            published = compile_csv_to_el(
+                db, test, csv_root, args.output_root / "el",
+            )
+        finally:
+            close_covdb(db)
         json.dump({"source": source, "line": line, "items": published}, output,
                   sort_keys=True)
         output.write("\n")

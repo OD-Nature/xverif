@@ -91,3 +91,6 @@ from x_npi.container import plan_container_records, write_csv_set
 - `scripts/examples/csv_to_el.py`
 - `scripts/examples/container_exclude.py`
 - `scripts/examples/trace_driver_summary.py`
+
+Coverage exclusion 使用随 xverif 部署的原生 worker；Python helper 需要可导入 `xcov.native`。
+strict 直接使用原生 NPI 选项，coverage 不需要 Python `ConfigOpt` 或 `pynpi_lifecycle`。

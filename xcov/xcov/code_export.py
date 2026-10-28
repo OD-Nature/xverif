@@ -95,8 +95,9 @@ def _section(
             return ""
         if module == "unknown" or not _module_has_only_target(text, module, scope):
             raise CoverageExportParseError(metric, scope, "target instance detail section is missing")
+        # Horizontal whitespace only: the next line may be the FSM summary.
         pattern = re.compile(
-            rf"^{heading} Coverage for Module : {re.escape(module)}(?:\s|\().*$",
+            rf"^{heading} Coverage for Module : {re.escape(module)}(?:[ \t(][^\r\n]*)?\r?$",
             re.MULTILINE,
         )
         match = pattern.search(text)
@@ -177,7 +178,7 @@ def _logical_terms(expression: str) -> List[str]:
 
 
 def _not_covered_vectors(block: str) -> Tuple[List[int], List[List[str]]]:
-    header = re.search(r"^\s*((?:-\d+-\s+)+)Status\s*$", block, re.MULTILINE)
+    header = re.search(r"^[ \t]*((?:-\d+-[ \t]+)+)Status[ \t]*\r?$", block, re.MULTILINE)
     if not header:
         return [], []
     ids = [int(value) for value in re.findall(r"-(\d+)-", header.group(1))]
@@ -221,7 +222,7 @@ def _condition_terms(label_line: str, annotation_line: str, ids: List[int]) -> L
         raise CoverageExportParseError("condition", "", "condition expression label is missing")
     expression = label.group(1)
     expression_column = label.start(1)
-    spans = list(re.finditer(r"-+(\d+)-+", annotation_line))
+    spans = list(re.finditer(r"(?<!\S)-*(\d+)-*(?=\s|$)", annotation_line))
     by_id: Dict[int, str] = {}
     for span in spans:
         start = max(0, span.start() - expression_column)
@@ -334,6 +335,44 @@ def _assignment_rhs(source: str) -> str | None:
     return match.group(1).strip() if match else None
 
 
+def _balanced_condition(source: str, opening: int) -> str:
+    depth = 0
+    for token in re.finditer(r'"(?:\\.|[^"\\])*"|[()]', source[opening:]):
+        if token.group() == "(":
+            depth += 1
+        elif token.group() == ")":
+            depth -= 1
+            if depth == 0:
+                return source[opening + 1:opening + token.start()].strip()
+    raise CoverageExportParseError("branch", "", "branch condition is incomplete")
+
+
+def _ternary_predicate(prefix: str) -> str:
+    # Stop at the enclosing group, assignment or preceding ternary arm; retain
+    # balanced calls, concatenations and indices inside the predicate itself.
+    tokens = list(re.finditer(r'"(?:\\.|[^"\\])*"|===|!==|==|!=|<=|>=|::|[^\s]', prefix))
+    stack: List[str] = []
+    begin = 0
+    pairs = {")": "(", "]": "[", "}": "{"}
+    for token in reversed(tokens):
+        value = token.group()
+        if value in pairs:
+            stack.append(pairs[value])
+        elif value in {"(", "[", "{"}:
+            if not stack:
+                begin = token.end()
+                break
+            if stack.pop() != value:
+                raise CoverageExportParseError("branch", "", "unbalanced ternary predicate")
+        elif not stack and value in {"?", ":", ";", ",", "="}:
+            begin = token.end()
+            break
+    predicate = _strip_balanced_outer_parens(prefix[begin:].strip())
+    if stack or not predicate:
+        raise CoverageExportParseError("branch", "", "branch ternary condition is missing")
+    return predicate
+
+
 def _branch_terms(block: str, source_files: List[str], absolute_sources: List[str]) -> List[Json]:
     terms: List[Json] = []
     source_lines = block.splitlines()
@@ -346,21 +385,37 @@ def _branch_terms(block: str, source_files: List[str], absolute_sources: List[st
         if index + 1 >= len(source_lines):
             continue
         marker_ids = [int(value) for value in re.findall(r"-(\d+)-", source_lines[index + 1])]
-        for term_id in marker_ids:
+        for marker_index, term_id in enumerate(marker_ids):
             case_match = re.search(r"\b(casez|casex|case)\s*\((.+)\)", source)
-            if_match = re.search(r"\bif\s*\((.+)\)", source)
+            if_match = re.search(r"\bif\s*\(", source)
+            condition_source = source
+            if if_match:
+                # URG prints continuation lines between the marker and body.
+                for continuation in source_lines[index + 1:]:
+                    try:
+                        _balanced_condition(condition_source, if_match.end() - 1)
+                        break
+                    except CoverageExportParseError:
+                        pass
+                    numbered_continuation = re.match(r"^\s*(\d+)\s+(.+)$", continuation)
+                    if numbered_continuation:
+                        condition_source += " " + numbered_continuation.group(2).strip()
             if case_match:
                 kind, expression = case_match.group(1), case_match.group(2).strip()
                 at_line = line_no
                 rendered_source = source
             elif if_match:
-                kind, expression = "if", if_match.group(1).strip()
+                kind = "if"
+                expression = _balanced_condition(condition_source, if_match.end() - 1)
                 at_line = line_no
-                rendered_source = source
+                rendered_source = condition_source
             elif "?" in source:
-                before_question = source.split("?", 1)[0].strip()
+                questions = [match.start() for match in re.finditer(r"\?", source)]
+                if len(questions) != len(marker_ids):
+                    raise CoverageExportParseError("branch", "", "ternary markers do not match predicates")
+                before_question = source[:questions[marker_index]].strip()
                 if before_question:
-                    expression = before_question.strip("() ")
+                    expression = _ternary_predicate(before_question)
                     at_line = line_no
                     start_line = prior_numbered[0] if prior_numbered and prior_numbered[1].rstrip().endswith(("=", "<=", ">=")) else line_no
                 elif prior_numbered:
@@ -394,7 +449,7 @@ def _branch_tables(section: str) -> List[Tuple[str, List[int], List[List[str]]]]
     for label in re.finditer(r"^Branches:\s*$", section, re.MULTILINE):
         source_block = section[cursor:label.start()]
         suffix = section[label.end():]
-        header = re.search(r"^\s*((?:-\d+-\s+)+)Status\s*$", suffix, re.MULTILINE)
+        header = re.search(r"^[ \t]*((?:-\d+-[ \t]+)+)Status[ \t]*\r?$", suffix, re.MULTILINE)
         if not header:
             raise CoverageExportParseError("branch", "", "branch status header is missing")
         ids = [int(value) for value in re.findall(r"-(\d+)-", header.group(1))]

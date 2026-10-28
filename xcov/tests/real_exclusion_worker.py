@@ -80,18 +80,17 @@ def run_strict(vdb: str) -> dict:
         NpiCoverageBackend(vdb, exclusion_policy="strict")
     )
     try:
-        rows = backend.items(metrics=["line"], test="merged")
-        covered = next(
-            row
-            for row in rows
-            if row["type"] == "npiCovStmtBin"
-            and (row["coverable"] or 0) > 0
-            and row["covered"] == row["coverable"]
-        )
-        uncovered = _target(rows, "line", uncovered=True)
-        denied = backend.set_exclusion(covered["coverage_ref"], True)
-        allowed = backend.set_exclusion(uncovered["coverage_ref"], True)
-        return {"covered": denied["status"], "uncovered": allowed["status"]}
+        rows = backend.items(test="merged")
+        result = {}
+        for metric, types in SCORE_TYPES.items():
+            covered = next(row for row in rows if row["metric"] == metric
+                           and row["type"] in types and (row["coverable"] or 0) > 0
+                           and row["covered"] == row["coverable"])
+            uncovered = _target(rows, metric, uncovered=True)
+            denied = backend.set_exclusion(covered["coverage_ref"], True)
+            allowed = backend.set_exclusion(uncovered["coverage_ref"], True)
+            result[metric] = {"covered": denied["status"], "uncovered": allowed["status"]}
+        return result
     finally:
         backend.close()
 

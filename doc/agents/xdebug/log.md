@@ -4,6 +4,8 @@
 
 - static driver trace 沿 NPI 返回的 modport 句柄继续查询，并用原信号的精确
   FSDB change time 筛选 active assignment；补充排除未激活分支的真实接口断言。
+- 合并旧修复分支的 input/inout 显式连接展开、对象与 scope 去重及 64 层边界限制，
+  interface 输入引用继续追踪，不误归类为外部 primary input。
 - session helper 的外层 watchdog 为启动、TERM/KILL 收容及 tombstone 落盘预留 5s，
   transport deadline 保持原值；真实暂停引擎的 UDS/file 用例验证完整收容。
 - fake LSF 崩溃测试在 native open 完成后精确终止该 loop，消除启动计时竞态。

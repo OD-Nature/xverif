@@ -120,3 +120,13 @@ def test_explicit_resource_token_serializes_complete_suite() -> None:
 def test_native_xout_suite_declares_final_phase() -> None:
     suite = load_catalog().suite_by_id("xdebug.native_xout_all")
     assert suite.runner_env() == {"XDEBUG_XOUT_PHASE": "final"}
+
+
+def test_coverage_unit_and_process_suites_do_not_require_eda():
+    suites = {suite.id: suite for suite in load_catalog().suites}
+    for name in ("xcov.unit", "xverif_mcp.process"):
+        assert not suites[name].fixtures
+        assert "npi" not in suites[name].capabilities
+    assert "xcov.exclusion" in suites["xcov.exclusion_npi"].fixtures
+    assert "xcov.comprehensive" in suites["xverif_mcp.coverage_real"].fixtures
+    assert "npi" in suites["xverif_mcp.coverage_real"].capabilities

@@ -78,20 +78,24 @@ direct resource 不使用这段 session 宽限，仍由自身进程组和终止 
 | URG wall time | `XVERIF_XCOV_URG_WALL_TIME_SEC` | 7200s（→ `-W 120`） | 内层 `bsub -K` job 的 LSF runtime limit |
 | cache 构建权等待 | 无（硬编码） | 300s | 抛 `XCOV_CACHE_CLAIM_TIMEOUT`，不杀持锁者 |
 | cache 陈旧隔离 | `ABANDONED_STAGING_SECONDS` | 24h | claim/staging 移入 `quarantine/` 或删除 |
-| NPI worker 启动 | 无，`STARTUP_TIMEOUT_SEC` | 120s | 终止并回收 worker，返回 `NPI_WORKER_TIMEOUT` |
-| NPI worker 请求 | 无，`REQUEST_TIMEOUT_SEC` | 600s | 终止并回收 worker；不重试、不重开、不切换后端 |
-| NPI worker close / 退出等待 | 无，`CLOSE_TIMEOUT_SEC` | 各 5s | 进入强制清理，保留明确失败 |
-| NPI worker 强制清理 | 无，`STOP_TIMEOUT_SEC` | TERM 后 5s，KILL 后 5s | 回收该 owned PID，关闭协议 pipe |
+| NPI worker 握手 / 初始化 | `XVERIF_XCOV_NATIVE_INIT_TIMEOUT_SECONDS` | 各 120s，有限 `(0,3600]` | 立即 SIGKILL 并回收 worker，返回 `NPI_WORKER_LOST`，不重试 |
+| NPI worker 请求 | 无，`RPC_TIMEOUT_SECONDS` | 每次 RPC 120s | 读写共用绝对 deadline，失败立即 kill/reap；不重放变更、不切换后端 |
+| NPI worker 后端操作 | 无，`OPERATION_TIMEOUT_SECONDS` | 600s | 同一操作的全部 RPC 共享 deadline，嵌套调用不延长；不创建 watchdog |
+| NPI worker close/end | 无，`CLOSE_TIMEOUT_SECONDS` / `STOP_TIMEOUT_SECONDS` | RPC 5s，成功响应后退出等待 5s | worker 响应后直接 `_Exit(0)`；未退出则 kill |
+| NPI worker 强制清理 | 无，`STOP_TIMEOUT_SECONDS` | KILL 后最多 5s | 回收该 owned PID，关闭私有 socketpair |
 
-`xcov/xcov/npi_worker.py` 为每个数据库创建独立 worker；首次 exclusion 才启动，
-session close 关闭数据库并等待 worker 退出，后续 session 必须新建进程。
-worker 只初始化一次 NPI，退出前关闭数据库，并在进程退出时 end 一次。
-旧版 vendor 同进程重开会使用已释放的 coverage 对象，重复 init/end 也不安全。
+`xcov/xcov/native.py` 管理 `xcov/src/npi_worker.cpp`，每个数据库独立 worker，首次
+exclusion 才启动。握手核验编译 SDK 身份，然后只初始化一次 NPI、只打开一个 VDB。
+session close 等待 worker 退出；后续 session 必须新建进程。V-2023.12-SP2 的
+数据库析构会与后台 reader 竞争，因此 close/end/EOF 以进程退出收回资源，不调用
+`npi_cov_close` 或全局析构；EL 必须在退出前显式 save。
 worker 保留 owner 的 process group，因此 managed killpg/LSF job 清理继续覆盖它；
-另设 Linux parent-death SIGTERM，owner 非正常退出时回收 worker。正常 EOF 会关闭数据库。
+另设 Linux parent-death SIGKILL，owner 非正常退出时即使 worker 被 SIGSTOP 也能回收。
 协议读写共享单次操作的 deadline；任何通信失败都会关闭 worker，不保留半失效会话进程。
 SIGKILL 后仍无法确认退出则返回 `NPI_WORKER_CLEANUP_UNCONFIRMED`，保留 owner 引用和
 退出清理回调供重试，不把它报成成功 close。
+本次 close/end 的超时或崩溃诊断在清理后继续返回；只有之前已失效的 worker 可显式
+close 完成会话清理。初始化被取消时也回收已经启动的 worker。
 
 ### 2.5 硬编码但不属于 timeout 的常量
 

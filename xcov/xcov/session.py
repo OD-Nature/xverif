@@ -139,6 +139,8 @@ class XcovSession:
     def clear_exclusions(self) -> None:
         self._el_path = None
         self._el_dirty = False
+        self.backend.set_summary_exclusion(None)
+        self.backend.invalidate_summary()
         self.exclusion_records.clear()
         self.loaded_el_without_reasons = False
         self.loaded_el_file_count = 0

@@ -17,7 +17,7 @@ xloc:
 	$(MAKE) -C xloc
 
 xcov:
-	@true
+	$(MAKE) -C xcov
 
 xwaveform:
 	$(MAKE) -C xwaveform
@@ -102,3 +102,4 @@ clean:
 	$(MAKE) -C xentry clean
 	$(MAKE) -C xloc clean
 	$(MAKE) -C xwaveform clean
+	$(MAKE) -C xcov clean

@@ -27,11 +27,12 @@ tools/xcov_lsf --json -  # 仅无 MCP 且必须经 LSF 时
 `xverif-mcp`；SDK-free LSF 的同 envelope 入口见 `xverif-admin`。
 
 普通 coverage 查询与三类 gap 导出固定使用 URG，不加载 NPI。只有 exclusion
-处理才惰性加载 pynpi、打开 VDB 并执行必要遍历；真实 exclusion 需要 Synopsys
+处理才惰性启动原生 worker、打开 VDB 并执行必要遍历；真实 exclusion 需要 Synopsys
 license，受限沙箱内 license 可能不可达。
 
-`exclusion_policy:"strict"` 由原生 NPI 拒绝排除已覆盖对象。旧版 Python 单参数
-`cov.open` 使用同一安装的 C++ strict 接口；缺少该接口时明确报错，不降级策略。
+`exclusion_policy:"strict"` 直接使用 C++ NPI strict 接口，拒绝排除已覆盖对象。
+先用配置的 `VERDI_HOME` 执行 `make xcov`；启动核验编译 SDK 身份，不匹配明确
+报 `NPI_SDK_MISMATCH`，不降级策略、不加载 vendor Python binding。
 每个 VDB 的 NPI 状态放在独立 worker 中，`session.close` 释放句柄并退出 worker；
 同一 native loop 可再打开 session，新 session 使用新 worker，避免旧版库重开崩溃。
 
@@ -40,8 +41,8 @@ license，受限沙箱内 license 可能不可达。
 已有 exclusion 时只追加 `-elfile <el>`。Python NPI coverage wrapper 没有 bulk summary，必须按
 instance/metric/object/bin 全树遍历且容易重复计入 aggregate/leaf，因此不再用于 coverage read。
 x-npi 的 NPI coverage helper 只保留 exclusion target 遍历和 EL load/set/save/unload；CSV→EL
-内建 indexed resolver，不依赖项目模块或 xcov。code/assertion 按 scope+metric 裁剪，functional
-受 pynpi 限制扫描该类全树；每个非空 kind 固定预检、应用两遍，不按 CSV 行重扫。CSV reason
+内建 indexed resolver，不依赖项目自定义 resolver；原生执行由 `xcov.native` worker 提供。code/assertion 按 scope+metric 裁剪，functional
+受 NPI 遍历接口限制扫描该类全树；每个非空 kind 固定预检、应用两遍，不按 CSV 行重扫。CSV reason
 是 sidecar，原生 EL 无法无损转换回带 reason 的 CSV。`+` 仅能用于 URG help 明确声明的 metric
 list（如 `-show brief line+cond`），不能写成 `-show summary+tests` 组合多个信息类别。
 
@@ -111,7 +112,11 @@ code coverage export（首次读取同一 VDB/selection/EL 时生成并缓存固
 ```
 
 functional coverage export（输出目录内保留 `grpinfo.txt`，并生成 `functional.json`、
-`functional.xout`；gap ID 为 `FC0001` 起）：
+`functional.xout`；gap ID 为 `FC0001` 起）。一次 URG 调用完整展开交叉 bin 和自动 bin，
+并核对报告总数。NPI 有时只能排除合并后的自动 bin 范围；此时必须同时选择整个原生
+范围内的 gap，并使用相同 reason。只选择其中一部分会明确失败，不会排除相邻 bin；
+成功后 CSV 保存 NPI 原生范围身份。读取导出不会启动 NPI。URG 类型视图和实例
+视图可能同时存在，不能将两者行数相加作为唯一 bin 数：
 
 ```json
 {"api_version":"xcov.v1","action":"export.functional_coverage","target":{"session_id":"cov0"},"args":{"output":{"path":"functional_coverage"}}}
@@ -223,3 +228,27 @@ assert export（输出目录内保留 `asserts.txt`，并生成 `assert.json`、
 - action 参数不确定：先用原生 `actions` 和 `schema` action 查询。
 - 大结果：设置 limit，必要时 `overflow:"to_file"` 或 output path。
 - MCP/LSF/session 问题：改用 `xverif-mcp` 对应 troubleshooting。
+
+## 原生 exclusion worker
+
+运行目录须包含 `xcov/libexec/xcov-npi-worker`。default/strict 都使用该独立 C++ 进程；
+strict 直接调用当前 Verdi 的原生选项，不依赖 Python `ConfigOpt`，也不兼容旧绑定签名。
+`NPI_WORKER_LOST` 表示进程已丢失，必须显式关闭并重新打开会话；不得把失败变更当作已持久化。
+URG 查询/导出仍使用固定 full64 路径，reason 仍须通过 CSV sidecar 持久化。
+
+
+原生初始化期限可用本机环境变量 `XVERIF_XCOV_NATIVE_INIT_TIMEOUT_SECONDS` 调整，
+默认 120 秒；超时保持 `NPI_WORKER_LOST`，附带具体操作、耗时和诊断文件路径。
+详见 [原生等待排障](../../xverif-admin/references/mcp/troubleshooting.md#原生-coverage-初始化等待)。
+不要自动重开会话或重放排除操作。
+
+
+### coverage worker 的站点分配器设置
+
+共享默认不强制内存分配器，保留继承的 `VCS_USE_MALLOC`。仅当本机原生加载发生
+分配器崩溃且对照确认有效时，在仓库外的 MCP/EDA 环境设置
+`XVERIF_XCOV_NATIVE_USE_MALLOC=1`（仅接受 `0`/`1`）。此选项只作用于 coverage 子进程，
+不改变其它 EDA 工具；非法值返回 `NPI_ALLOCATOR_INVALID`，不会自动重试或切换。
+已有 worker 不受后续环境变化影响；先显式保存 CSV/EL 并关闭，再建立新会话。
+普通句柄按引用计数释放，SDK 内部仍可能保留部分对象直到进程退出；长任务应有明确的会话关闭点，
+不能把短会话成功视为无界内存保证或所有 Verdi 安装的通用验证。

@@ -352,6 +352,7 @@ def test_assert_and_functional_exports_are_structured_and_fully_excludable(
     from xcov.actions import Dispatcher
     from xcov.backend import UrgCoverageBackend
     from xcov.session import SessionManager
+    from xcov.urg_runner import UrgRunner
 
     resources = xverif_fixture("xcov.modinfo_complex")
     vdb = resources / "complex.vdb"
@@ -363,6 +364,14 @@ def test_assert_and_functional_exports_are_structured_and_fully_excludable(
     assert backend.npi_initialized is False
     dispatcher = Dispatcher(sessions=sessions)
     exports = []
+    urg_calls = []
+    original_run = UrgRunner.run
+
+    def counted_run(self, argv, **kwargs):
+        urg_calls.append(list(argv))
+        return original_run(self, argv, **kwargs)
+
+    monkeypatch.setattr(UrgRunner, "run", counted_run)
     try:
         payloads = {}
         for action, metric, raw_name, prefix in (
@@ -370,6 +379,7 @@ def test_assert_and_functional_exports_are_structured_and_fully_excludable(
             ("export.functional_coverage", "functional", "grpinfo.txt", "FC"),
         ):
             output = tmp_path / metric
+            before_calls = len(urg_calls)
             response = dispatcher.dispatch({
                 "api_version": "xcov.v1", "request_id": f"export-{metric}",
                 "action": action, "target": {"session_id": session.session_id},
@@ -378,6 +388,7 @@ def test_assert_and_functional_exports_are_structured_and_fully_excludable(
                 }},
             })
             assert response["ok"] is True, json.dumps(response, ensure_ascii=False, indent=2)
+            assert len(urg_calls) - before_calls == 1
             assert (output / raw_name).is_file()
             payload = json.loads((output / f"{metric}.json").read_text(encoding="utf-8"))
             xout = (output / f"{metric}.xout").read_text(encoding="utf-8")
@@ -403,6 +414,41 @@ def test_assert_and_functional_exports_are_structured_and_fully_excludable(
         assert any("lane_instance_cg" in group for group in functional_groups)
         assert any("lane_aggregate_cg" in group for group in functional_groups)
         assert any(group == "top::traffic_cg" for group in functional_groups)
+        auto_gap = next(
+            gap for gap in payloads["functional"]["gaps"]
+            if gap["coverpoint"] == "cp_response" and gap["bin"] == "auto[1]"
+        )
+        partial = dispatcher.dispatch({
+            "api_version": "xcov.v1", "request_id": "exclude-partial-auto-range",
+            "action": "exclude.add", "target": {"session_id": session.session_id},
+            "args": {"exports": [{
+                "path": str(tmp_path / "functional" / "functional.json"),
+                "items": [{"gap_id": auto_gap["gap_id"], "reason": "仅选择一个 bin"}],
+            }]},
+        })
+        assert partial["ok"] is False
+        assert partial["error"]["code"] == "EXCLUSION_EXPORT_RESOLVE_FAILED"
+        assert "complete native auto-bin range" in json.dumps(partial)
+        assert session.exclusion_records == {}
+
+        range_gaps = [
+            gap for gap in payloads["functional"]["gaps"]
+            if (gap["scope"], gap["covergroup"], gap["coverpoint"]) == (
+                auto_gap["scope"], auto_gap["covergroup"], auto_gap["coverpoint"],
+            ) and gap["bin"] in {"auto[1]", "auto[2]", "auto[3]"}
+        ]
+        assert len(range_gaps) == 3
+        mixed_reasons = dispatcher.dispatch({
+            "api_version": "xcov.v1", "request_id": "exclude-auto-range-mixed-reasons",
+            "action": "exclude.add", "target": {"session_id": session.session_id},
+            "args": {"exports": [{
+                "path": str(tmp_path / "functional" / "functional.json"),
+                "items": [{"gap_id": gap["gap_id"], "reason": gap["gap_id"]} for gap in range_gaps],
+            }]},
+        })
+        assert mixed_reasons["ok"] is False
+        assert mixed_reasons["error"]["code"] == "EXCLUSION_EXPORT_RESOLVE_FAILED"
+        assert session.exclusion_records == {}
         excluded = dispatcher.dispatch({
             "api_version": "xcov.v1", "request_id": "exclude-structured-gaps",
             "action": "exclude.add", "target": {"session_id": session.session_id},
@@ -414,5 +460,12 @@ def test_assert_and_functional_exports_are_structured_and_fully_excludable(
         assert excluded["summary"]["successful_gap_count"] == sum(
             payload["gap_count"] for payload in payloads.values()
         )
+        range_records = [
+            record["csv_row"] for record in session.exclusion_records.values()
+            if record["csv_row"].get("scope") == auto_gap["scope"]
+            and record["csv_row"].get("covergroup") == auto_gap["covergroup"]
+            and record["csv_row"].get("coverpoint") == auto_gap["coverpoint"]
+        ]
+        assert [row["bin"] for row in range_records] == ["[auto[1] - auto[3]]"]
     finally:
         session.close(confirm_discard_reasons=True)

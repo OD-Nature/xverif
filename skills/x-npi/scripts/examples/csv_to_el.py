@@ -17,7 +17,7 @@ from x_npi.coverage import (
 )
 from x_npi.exclusion_csv import validate_directory
 from x_npi.jsonio import error, ok, print_json
-from x_npi.runtime import json_stdout_quarantine, pynpi_lifecycle
+from x_npi.runtime import json_stdout_quarantine
 
 def main() -> int:
     parser = argparse.ArgumentParser()
@@ -29,18 +29,17 @@ def main() -> int:
     with json_stdout_quarantine() as output:
         try:
             csv_status = validate_directory(args.csv_directory)
-            with pynpi_lifecycle([sys.argv[0]]):
-                db = open_covdb(args.vdb, strict=args.strict)
-                try:
-                    test = merged_test_handle(db)
-                    published = compile_csv_to_el(
-                        db,
-                        test,
-                        args.csv_directory,
-                        args.output_directory,
-                    )
-                finally:
-                    close_covdb(db)
+            db = open_covdb(args.vdb, strict=args.strict)
+            try:
+                test = merged_test_handle(db)
+                published = compile_csv_to_el(
+                    db,
+                    test,
+                    args.csv_directory,
+                    args.output_directory,
+                )
+            finally:
+                close_covdb(db)
             print_json(ok(
                 "csv_to_el",
                 {"items": published},
