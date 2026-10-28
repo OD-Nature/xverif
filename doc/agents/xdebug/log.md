@@ -176,3 +176,6 @@
   nWave 批处理对照以实际显示信号和保存的 RC 验收，不能只看 restore 返回值。
 - nWave 实际导入同时发现既有子分组缺少结束语句；生成器补齐同名
   `endSubGroup`，C++ 单测覆盖嵌套和相邻子分组，避免恢复时报警或层次错位。
+- 新增独立 `xdebug.rc_arrays` fixture/suite，覆盖 packed/unpacked 结构体数组、
+  二维数组、成员数组、切片和 expression alias；真实 nWave 导入显示 12 项，
+  在两个非零取值时刻完成 20 次值比对，不依赖已有项目的 dump 范围。

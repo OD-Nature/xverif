@@ -137,6 +137,11 @@ top.u.packets[1].header.opcode[3:0] -> /top/u/packets[1].header.opcode[3:0]
 同一路径 `top.u.packet.field`，若 `packet` 是实例，输出 `/top/u/packet/field`；若是结构体，输出 `/top/u/packet.field`。
 `expr_signals[].signals` 使用相同规则。转换只读取所选信号元数据，不扫描波形值。
 
+固定大小的 packed/unpacked 结构体数组支持整体、固定下标元素、嵌套成员和成员切片；
+二维数组及结构体内的数组成员也保留下标，例如 `top.u.matrix[1][0].header.opcode`
+和 `top.u.packets[1].words[0][7:0]`。这些路径必须已被 dump 到当前 FSDB。
+更新工具后，应由原 JSON 配置重新生成旧 RC；工具不会自动改写已经生成的文件。
+
 输入路径若以 `/` 开头，默认报 `RC_CONFIG_INVALID`，提示使用点分格式。
 
 普通 signal：

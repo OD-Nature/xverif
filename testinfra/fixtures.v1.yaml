@@ -463,6 +463,21 @@ fixtures:
         timeout_sec: 1200
     tool_env: [VERDI_HOME]
 
+  - id: xdebug.rc_arrays
+    build_capabilities: [make, vcs, npi]
+    source_dir: xdebug/testdata/waveform/rc_arrays
+    inputs: [Makefile, "*.sv"]
+    builder:
+      argv: [make, fixture, "RUN_DIR={resources}/out"]
+      cwd: "{source}"
+      timeout_sec: 600
+    outputs:
+      - {name: fsdb, path: out/waves.fsdb, kind: file, min_bytes: 1024}
+      - {name: simulation_log, path: out/run.log, kind: file, min_bytes: 1}
+    probes:
+      - argv: [python3, "{repo}/testinfra/leaf/probe_fixture.py", --resources, "{resources}", --xdebug, "{repo}/tools/xdebug", --fsdb-glob, out/waves.fsdb, --text-glob, out/run.log, --require-text, RC_ARRAYS_PASS]
+    tool_env: [VCS_HOME, VERDI_HOME]
+
   - id: xdebug.xif_event
     build_capabilities: [make, vcs, npi, vendored_xif]
     source_dir: xdebug/testdata/waveform/xif_agent_event
