@@ -43,3 +43,48 @@ def test_rc_array_roots_elements_members_and_slices(cli_runner, xverif_fixture, 
             "api_version": "xdebug.v1", "action": "session.close", "target": target,
         }, output_format="json")
         assert closed.ok, closed.stdout_raw + closed.stderr_raw
+
+
+def test_rc_enum_paths_preserve_default_and_explicit_radix(cli_runner, xverif_fixture, tmp_path: Path) -> None:
+    fsdb = xverif_fixture("xdebug.rc_arrays") / "out/waves.fsdb"
+    enum_paths = [
+        "enum_state", "enum_packet.state", "enum_packets[0].state",
+        "enum_packets[1].state", "enum_states[0]", "enum_states[1]",
+    ]
+    numeric_paths = ["enum_state[0]", "enum_state[1:0]", "enum_state_bit", "enum_state_slice"]
+    opened = cli_runner.run({
+        "api_version": "xdebug.v1", "action": "session.open",
+        "target": {"fsdb": str(fsdb)}, "args": {"name": "rc_enum_contract"},
+    }, output_format="json")
+    assert opened.ok, opened.stdout_raw + opened.stderr_raw
+    target = {"session_id": opened.response["session"]["session_id"]}
+    try:
+        config, output = tmp_path / "enums.json", tmp_path / "enums.rc"
+        config.write_text(json.dumps({"groups": [
+            {"name": "Default", "signals": ["rc_arrays_tb." + p for p in enum_paths + numeric_paths]},
+            {"name": "Styled", "signals": [
+                {"path": "rc_arrays_tb." + p, "height": 24} for p in enum_paths
+            ]},
+            {"name": "ExplicitHex", "signals": [
+                {"path": "rc_arrays_tb." + p, "radix": "hex"} for p in enum_paths
+            ]},
+        ]}), encoding="utf-8")
+        result = cli_runner.run({
+            "api_version": "xdebug.v1", "action": "nwave.rc.generate", "target": target,
+            "args": {"config_path": str(config), "output": {"path": str(output)}},
+        }, output_format="json")
+        assert result.ok, result.stdout_raw + result.stderr_raw
+        lines = output.read_text(encoding="utf-8").splitlines()
+        # nWave restores enum literals when a row has no numeric radix override.
+        # String/object configs must preserve that default, including struct and array members.
+        for path in enum_paths + numeric_paths:
+            assert "addSignal /rc_arrays_tb/" + path in lines
+        for path in enum_paths:
+            assert "addSignal -h 24 /rc_arrays_tb/" + path in lines
+            assert "addSignal -HEX /rc_arrays_tb/" + path in lines
+        assert result.response["data"]["validation"]["signals"] == 3 * len(enum_paths) + len(numeric_paths)
+    finally:
+        closed = cli_runner.run({
+            "api_version": "xdebug.v1", "action": "session.close", "target": target,
+        }, output_format="json")
+        assert closed.ok, closed.stdout_raw + closed.stderr_raw

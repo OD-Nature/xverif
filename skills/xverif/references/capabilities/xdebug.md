@@ -114,6 +114,12 @@ TSV/CSV data artifact 及 meta。用 `scanned_transaction_count`、
 
 图片不是唯一证据。需要交付 nWave 可复查视图时使用 `nwave.rc.generate`，不要手写 RC。其它产物/export action 见 [全量 action 索引](../generated/xdebug-actions.md)。
 
+生成 RC 时默认省略信号 `radix`，保留 FSDB 枚举名称的显示；不要对全部信号批量设置
+`radix:"hex"`。普通数据可单独指定 radix，枚举及类型未确认的信号保持默认；用户明确要求
+枚举显示数字时除外。旧 RC 中枚举显示为数字时，
+修改原 JSON 后重新生成；当前 GUI 可选中枚举信号，用 **Waveform → Signal Value Radix →
+Enumerated Literal** 立即恢复文字，无需重新拉波形。详见 [RC 生成](../xdebug/rc-generate.md#枚举名称与-radix)。
+
 ## 7. 保存并复用 config
 
 - `stream.config.load`、`axi.config.load`、`apb.config.load` 的稳定映射必须优先从项目已有 config 加载。

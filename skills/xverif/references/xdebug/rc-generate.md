@@ -2,6 +2,9 @@
 
 `nwave.rc.generate` 根据外部 JSON 配置生成 nWave `signal.rc`。xdebug 会使用包含 fsdb 的 `session_id` 校验信号是否存在、marker 时间是否合法，然后写出 rc 文件。
 
+生成配置时默认省略信号 `radix`，尤其是枚举和类型未确认的信号；不要全量套用 hex。
+地址、数据可单独指定进制，用户明确要求枚举显示数字时除外。详见[枚举名称与 radix](#枚举名称与-radix)。
+
 第一版约束：
 
 - 配置文件只支持 JSON。
@@ -143,6 +146,34 @@ top.u.packets[1].header.opcode[3:0] -> /top/u/packets[1].header.opcode[3:0]
 更新工具后，应由原 JSON 配置重新生成旧 RC；工具不会自动改写已经生成的文件。
 
 输入路径若以 `/` 开头，默认报 `RC_CONFIG_INVALID`，提示使用点分格式。
+
+### 枚举名称与 radix
+
+默认省略 `radix`，生成的 `addSignal` 不覆盖 nWave 的显示方式。FSDB 保存了枚举类型时，
+首次恢复 RC 即可显示 `IDLE`、`BUSY` 等枚举名称。不要对全部信号批量设置 `radix:"hex"`：
+显式 `hex` 会生成 `-HEX`，使枚举显示为数字。普通地址、数据等信号可按需单独设置 radix，
+枚举及类型未确认的信号保持默认；不需要为此额外扫描波形值。用户明确要求枚举显示数字时，
+可以为该信号指定数字进制。例如默认保留枚举名称，同时把数据设为 hex：
+
+```json
+{
+  "groups": [{
+    "name": "StateAndData",
+    "signals": [
+      "top.u.state",
+      {"path": "top.u.data", "radix": "hex"}
+    ]
+  }]
+}
+```
+
+已有 RC 出现枚举数字时，先从原 JSON 中移除枚举信号的 `radix`，以及 `options` 中的
+`-HEX`、`-BIN` 等数字显示覆盖，再调用 `nwave.rc.generate` 重新生成；不要手改 RC。
+已打开的 Verdi/nWave 窗口可选中枚举信号，使用 **Waveform → Signal Value Radix →
+Enumerated Literal** 立即恢复文字显示，无需重新拉入波形。
+当前接口不支持 `radix:"enum"`，本机 RC 官方选项也没有 `-ENUM`，不要虚构这些参数。
+
+### 信号显示选项
 
 普通 signal：
 

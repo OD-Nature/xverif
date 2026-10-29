@@ -31,6 +31,7 @@ description: >
 | 恢复 `L_XXXXXXXX` 源码位置 | [xloc](references/xloc.md) |
 | SVA temporal semantics | [xsva](references/xsva.md) |
 | `list.export` 后渲染 JPG/stats | [xwaveform workflow](references/workflows/waveform-render.md) |
+| 生成或修复 Verdi/nWave RC、枚举名称显示 | [RC 生成](references/xdebug/rc-generate.md) |
 | 全量 xdebug action 的用途和合同入口 | [全量 action 索引](references/generated/xdebug-actions.md) |
 | MCP/CLI 请求包装 | [surface 选择](references/core/execution-model.md) |
 | XOUT/JSON 输出选择 | [token-first 输出策略](references/core/output-formats.md) |
@@ -41,6 +42,10 @@ description: >
 其固定 full64 URG helper，不能启动 NPI 全树遍历。x-npi 的 coverage NPI 仅用于 exclusion target
 必要遍历和 EL load/set/save/unload。安装、LSF、transport、timeout、session 运维使用
 `xverif-admin`；项目长期知识使用 `xwiki`。
+
+生成 nWave `.rc` 必须先编写 JSON 配置，再由脚本调用 `nwave.rc.generate`，不要手写 RC。
+默认省略信号 `radix`，保留枚举名称；类型未确认时也保留默认，不能对全部信号批量套用 hex。
+仅对确认的地址、数据等普通数值信号按需指定 radix；用户明确要求枚举显示数字时按其要求设置。
 
 ## 标准流程
 

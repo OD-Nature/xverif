@@ -243,6 +243,13 @@ modport/mpport 是侧向关系，计入 visited/object budget，但不增加 hie
 子分组和表达式。结构体/union 成员点号、数组下标和切片必须保留，不能用全串替换
 推断边界。校验完成后才写文件；该路径不扫描 value change，也不引入额外 worker。
 
+显示 radix 默认为空，渲染时不输出 radix 选项；FSDB 带枚举类型的信号首次恢复 RC 时
+由 nWave 保留枚举名称显示。显式 `radix:"hex"` 会输出 `-HEX` 并覆盖为数字显示，
+因此生成配置不得对全部信号统一设置数字 radix；普通数据按需设置，枚举保持默认。
+修复旧视图应修改 JSON 后重新生成 RC；当前 GUI 可选中枚举信号，通过
+**Waveform → Signal Value Radix → Enumerated Literal** 恢复文字，无需重新拉波形。
+此行为不需要枚举类型探测、值扫描或新接口；不要新增本机 RC 未提供的 `-ENUM` 选项。
+
 ## Transport/File Exchange
 
 路径：
