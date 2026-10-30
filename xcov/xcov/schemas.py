@@ -278,7 +278,10 @@ def _limits() -> Json:
 def _export_output() -> Json:
     return _object({
         "path": _string(min_length=1),
-        "allow_absolute_path": _bool(),
+        "allow_absolute_path": {
+            **_bool(),
+            "description": "Allow absolute syntax only; the resolved path must still be inside .xverif/xcov_exports or XVERIF_XCOV_EXPORT_ROOTS.",
+        },
     }, required=["path"])
 
 
@@ -332,7 +335,10 @@ def _request(
         required.append("args")
     return _object({
         "api_version": {"const": "xcov.v1"},
-        "request_id": _string(min_length=1),
+        "request_id": {
+            **_string(min_length=1),
+            "description": "Required for each stdio-loop request; optional for one-shot CLI requests. MCP manages this transport field.",
+        },
         "action": {"const": action},
         "target": target or _target(),
         "args": args or _args(),
@@ -424,6 +430,9 @@ def _error_schema(action: str | None = None) -> Json:
         "detail.covered": _integer(0),
         "detail.error_layer": _string(min_length=1),
         "detail.expected": _string(min_length=1),
+        "detail.expected_count": _integer(0),
+        "detail.object": _string(min_length=1),
+        "detail.category": _string(min_length=1),
         "detail.expected_signature": _string(min_length=1),
         "detail.field": _string(min_length=1),
         "detail.failed_count": _integer(0),
@@ -455,7 +464,7 @@ def _error_schema(action: str | None = None) -> Json:
         "detail.pattern_mode": _string(min_length=1),
         "detail.parse_error": _string(min_length=1),
         "detail.report_dir": _string(min_length=1),
-        "detail.returncode": _integer(0),
+        "detail.returncode": _integer(),
         "detail.urg_execution": _object({
             "backend": _string(enum=["direct", "lsf"]),
             "submitted": _bool(),
@@ -492,6 +501,7 @@ def _error_schema(action: str | None = None) -> Json:
         "detail.supported": _string(min_length=1),
         "detail.stderr": _string(),
         "detail.stderr_tail": _string(),
+        "detail.stdout_tail": _string(),
         "detail.test": _string(min_length=1),
         "detail.total_count": _integer(0),
         "detail.declared": _integer(0),
@@ -1485,6 +1495,7 @@ def _is_type(value: Any, expected: str) -> bool:
 
 
 _SCHEMA_NODE_KEYWORDS = {
+    "description",
     "type",
     "const",
     "enum",
@@ -1531,6 +1542,9 @@ def _validate_schema_node(value: Any, path: str) -> None:
                 "x-schema-node must be the exact declared dynamic schema node",
             )
         return
+
+    if "description" in value and not isinstance(value["description"], str):
+        raise SchemaValidationError(path, "description must be a string")
 
     declared_type = value.get("type")
     declared_types: List[str] = []
@@ -1797,10 +1811,7 @@ def validate_stdio_request(req: Json) -> None:
                     path="$.request_id",
                 )
             return
-        schema = deepcopy(entry["request"])
-        required = schema.setdefault("required", [])
-        if "request_id" not in required:
-            required.append("request_id")
+        schema = schema_for_action(action, stdio=True)
     try:
         _validate(req, schema)
     except SchemaValidationError as exc:
@@ -1928,13 +1939,18 @@ def _validate_response_semantics(rsp: Json) -> None:
     )
 
 
-def schema_for_action(action: str, kind: str = "request") -> Json:
+def schema_for_action(action: str, kind: str = "request", *, stdio: bool = False) -> Json:
     entry = SCHEMAS.get(action)
     if not entry:
         raise KeyError(action)
     if kind not in ("request", "response"):
         raise KeyError(kind)
-    return deepcopy(entry[kind])
+    schema = deepcopy(entry[kind])
+    if kind == "request" and stdio:
+        required = schema.setdefault("required", [])
+        if "request_id" not in required:
+            required.append("request_id")
+    return schema
 
 
 def schema_actions() -> List[str]:

@@ -36,9 +36,16 @@ SESSION_XML = """\
         <scope type="Covergroup Variant" name="top.u0::cg">
           <metric name="Group" value="3/4" excl="0" />
           <attr name="Score" value="75%" />
-          <scope type="Coverage Point" name="cp_direct">
+          <attr name="weight" value="1" />
+          <scope type="Coverage Point" name="cp">
             <metric name="Point" value="1/2" excl="0" />
             <attr name="Score" value="50%" />
+            <attr name="weight" value="1" />
+          </scope>
+          <scope type="Cross Coverage" name="cx">
+            <metric name="Cross" value="2/2" excl="0" />
+            <attr name="Score" value="100%" />
+            <attr name="weight" value="1" />
           </scope>
           <scope type="Coverage Instance" name="cg_i">
             <metric name="Group" value="3/4" excl="0" />
@@ -902,7 +909,8 @@ def test_streaming_parser_keeps_code_assert_and_functional_types(tmp_path):
     group = next(row for row in index.functional_rows if row["type"] == "npiCovCovergroup")
     assert group["covergroup_type"] == "dut::cg"
     assert group["variant"] == "top.u0::cg"
-    assert group["instance"] == "cg_i"
+    assert group["instance"] is None
+    assert group["node_kind"] == "Covergroup Variant"
     assert {row.get("coverpoint") for row in index.functional_rows} == {None, "cp"}
     assert {row.get("cross") for row in index.functional_rows} == {None, "cx"}
 
@@ -945,7 +953,15 @@ def test_zero_denominator_exclusion_ratio_keeps_null_percentage(tmp_path):
     ).replace(
         '<metric name="Group" value="3/4" excl="0" />',
         '<metric name="Group" value="0/0" excl="4" />',
-    ).replace('<attr name="Score" value="75%" />', "")
+    ).replace(
+        '<metric name="Point" value="1/2" excl="0" />',
+        '<metric name="Point" value="0/0" excl="2" />',
+    ).replace(
+        '<metric name="Cross" value="2/2" excl="0" />',
+        '<metric name="Cross" value="0/0" excl="2" />',
+    ).replace('<attr name="Score" value="75%" />', "").replace(
+        '<attr name="Score" value="50%" />', "",
+    ).replace('<attr name="Score" value="100%" />', "")
     index = parse_urg_summary(_report(tmp_path, xml))
 
     assert index.scope_metrics["top.u0"]["line"] == {

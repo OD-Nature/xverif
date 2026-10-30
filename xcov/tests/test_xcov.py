@@ -1697,12 +1697,13 @@ def test_code_summary_uses_urg_score_rows_only():
     assert summary["assert"]["coverable"] == 1
 
 
-def test_functional_covergroup_summary_uses_urg_score_average():
+def test_functional_covergroup_summary_preserves_canonical_type_score():
     from xcov.actions import _functional_summary_rows
 
     rows = [
-        {"metric": "functional", "type": "npiCovCovergroup", "covergroup": "cg",
-         "covered": 5, "coverable": 8, "missing": 3, "coverage_pct": 62.5},
+        {"metric": "functional", "type": "npiCovCovergroup", "covergroup": "top::cg",
+         "full_name": "top::cg", "covered": 5, "coverable": 8, "missing": 3,
+         "coverage_pct": 75.0},
         {"metric": "functional", "type": "npiCovCoverpoint", "covergroup": "cg",
          "coverpoint": "cp_a", "covered": 2, "coverable": 2, "coverage_pct": 100.0},
         {"metric": "functional", "type": "npiCovCoverpoint", "covergroup": "cg",
@@ -1711,9 +1712,10 @@ def test_functional_covergroup_summary_uses_urg_score_average():
          "cross": "cx", "covered": 2, "coverable": 4, "coverage_pct": 50.0},
     ]
     summary = _functional_summary_rows(rows, "covergroup")
-    assert summary[0]["coverage_pct"] == 66.6667
-    assert summary[0]["raw_coverage_pct"] == 62.5
-    assert summary[0]["score_basis"] == "average_direct_coverpoint_cross_pct"
+    assert summary[0]["coverage_pct"] == 75.0
+    assert summary[0]["covered"] == 5
+    assert summary[0]["coverable"] == 8
+    assert summary[0]["covergroup"] == "top::cg"
 
 
 
@@ -2295,6 +2297,163 @@ def test_stdio_uses_only_request_id_and_rejects_id_alias():
     assert out[1]["ok"] is False
     assert out[1]["json"]["error"]["code"] == "SCHEMA_INVALID"
     assert out[1]["json"]["error"]["detail.path"] == "$"
+
+
+def test_stdio_publishes_the_request_schema_it_validates():
+    from xcov.schemas import _validate, validate_stdio_request
+
+    rc, responses = _stdio_exchange([
+        {"api_version": "xcov.v1", "request_id": "schema", "action": "schema",
+         "args": {"action": "actions"}},
+        {"api_version": "xcov.v1", "action": "actions"},
+        {"api_version": "xcov.v1", "request_id": "list", "action": "actions"},
+    ])
+    assert rc == 0
+    published = responses[1]["json"]["data"]["schema"]
+    assert published == schema_for_action("actions", stdio=True)
+    assert "request_id" in published["required"]
+    assert responses[2]["json"]["error"]["code"] == "SCHEMA_INVALID"
+    valid = {"api_version": "xcov.v1", "request_id": "list", "action": "actions"}
+    _validate(valid, published)
+    validate_stdio_request(valid)
+    assert responses[3]["ok"] is True
+    native = Dispatcher().dispatch({
+        "api_version": "xcov.v1", "action": "schema", "args": {"action": "actions"},
+    })
+    assert native["ok"] is True
+    assert "request_id" not in native["data"]["schema"]["required"]
+
+
+@pytest.mark.parametrize("metric,report,detail", [
+    ("functional", """Group : top::cg
+Summary for Variable mode
+Automatically Generated Bins 2 1 1 50.00
+-------------------------------------------------------------------------------
+""", "detail.object"),
+    ("functional", """Group : top::cg
+Summary for Cross pair
+Automatically Generated Cross Bins 2 2 0 0.00
+Decompressed uncovered bins for pair
+left right COUNT AT LEAST NUMBER
+* * -- -- 2
+-------------------------------------------------------------------------------
+""", "detail.object"),
+    ("functional", """Group : top::cg
+Summary for Variable mode
+Automatically Generated Bins 2 2 0 0.00
+Decompressed uncovered bins for mode
+NAME COUNT AT LEAST
+auto[0] 0 1
+-------------------------------------------------------------------------------
+""", "detail.expected_count"),
+    ("assert", """Summary for Assertions
+NUMBER PERCENT
+Uncovered 1 100.00
+-------------------------------------------------------------------------------
+Assertions Uncovered:
+ASSERTIONS CATEGORY SEVERITY ATTEMPTS REAL SUCCESSES FAILURES INCOMPLETE
+unparsed detail
+-------------------------------------------------------------------------------
+""", "detail.category"),
+])
+def test_export_parse_errors_survive_stdio_and_retain_report(
+    tmp_path, monkeypatch, metric, report, detail,
+):
+    from types import SimpleNamespace
+    from xcov.urg_runner import UrgRunner
+
+    monkeypatch.setattr(os, "environ", os.environ.copy())
+    monkeypatch.setenv("XVERIF_XCOV_EXPORT_ROOTS", str(tmp_path))
+    report_name = "grpinfo.txt" if metric == "functional" else "asserts.txt"
+
+    def malformed_report(self, argv, *, timeout):
+        stage = Path(argv[argv.index("-report") + 1])
+        (stage / report_name).write_text(report, encoding="utf-8")
+        return SimpleNamespace(returncode=0, stdout="", stderr="", scheduler={})
+
+    monkeypatch.setattr(UrgRunner, "run", malformed_report)
+    action = "export.functional_coverage" if metric == "functional" else "export.assert"
+    destination = tmp_path / "export"
+    rc, responses = _stdio_exchange([
+        {"api_version": "xcov.v1", "request_id": "open", "action": "session.open",
+         "target": {"vdb": "test.vdb"}, "args": {"name": "cov0"}},
+        {"api_version": "xcov.v1", "request_id": "export", "action": action,
+         "target": {"session_id": "cov0"},
+         "args": {"output": {"path": str(destination), "allow_absolute_path": True}}},
+    ])
+    assert rc == 0
+    response = responses[2]["json"]
+    validate_response(action, response)
+    assert response["error"]["code"] == "URG_DETAIL_PARSE_INCOMPLETE"
+    assert detail in response["error"]
+    assert response["summary"]["analysis_complete"] is False
+    diagnostic = Path(response["error"]["detail.diagnostic_path"])
+    assert diagnostic.parent == tmp_path
+    assert (diagnostic / report_name).read_text(encoding="utf-8") == report
+    assert not destination.exists()
+
+
+def test_code_export_parse_failure_retains_raw_report(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from xcov.urg_runner import UrgRunner
+
+    monkeypatch.setattr(os, "environ", os.environ.copy())
+    monkeypatch.setenv("XVERIF_XCOV_EXPORT_ROOTS", str(tmp_path))
+    report = "Module Instance : top\nunsupported line report\n"
+
+    def malformed_report(self, argv, *, timeout):
+        stage = Path(argv[argv.index("-report") + 1])
+        (stage / "modinfo.txt").write_text(report, encoding="utf-8")
+        return SimpleNamespace(returncode=0, stdout="", stderr="", scheduler={})
+
+    monkeypatch.setattr(UrgRunner, "run", malformed_report)
+    dispatcher = _fake_dispatcher()
+    dispatcher.dispatch({"api_version": "xcov.v1", "action": "session.open",
+                         "target": {"vdb": "test.vdb"}, "args": {"name": "cov0"}})
+    response = dispatcher.dispatch({
+        "api_version": "xcov.v1", "action": "export.code_coverage",
+        "target": {"session_id": "cov0"},
+        "args": {"scopes": ["top"], "metrics": ["line"],
+                 "output": {"path": str(tmp_path / "code"), "allow_absolute_path": True}},
+    })
+    validate_response("export.code_coverage", response)
+    assert response["error"]["code"] == "URG_DETAIL_PARSE_INCOMPLETE"
+    diagnostic = Path(response["error"]["detail.diagnostic_path"])
+    assert (diagnostic / "raw" / "modinfo.urg.txt").read_text(encoding="utf-8") == report
+    assert not list((tmp_path / "code").glob("xcov_code_coverage_*"))
+
+
+def test_diagnostic_filesystem_failure_never_masks_original_error(tmp_path, monkeypatch):
+    from xcov.actions import _retain_failed_export
+
+    stage = tmp_path / "stage"
+    stage.mkdir()
+    original = XcovError("URG_DETAIL_PARSE_INCOMPLETE", "unmapped branch", metric="branch")
+
+    def denied(*args, **kwargs):
+        raise PermissionError("injected diagnostic filesystem failure")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "rename", denied)
+        patch.setattr(Path, "is_dir", denied)
+        retained = _retain_failed_export(stage, original)
+    assert retained.code == original.code
+    assert retained.message == original.message
+    assert retained.detail == original.detail
+
+
+def test_functional_export_cannot_stage_outside_default_root(tmp_path, monkeypatch):
+    monkeypatch.setattr(os, "environ", os.environ.copy())
+    monkeypatch.delenv("XVERIF_XCOV_EXPORT_ROOTS", raising=False)
+    monkeypatch.chdir(tmp_path)
+    # Path validation precedes session access and must reject before staging.
+    with pytest.raises(XcovError) as caught:
+        Dispatcher()._export({
+            "api_version": "xcov.v1", "action": "export.functional_coverage",
+            "args": {"output": {"path": "."}},
+        }, None)
+    assert caught.value.code == "OUTPUT_PATH_UNSAFE"
+    assert not (tmp_path / ".xverif").exists()
 
 
 def test_stdio_quit_uses_a_separate_strict_control_envelope():

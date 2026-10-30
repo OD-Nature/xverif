@@ -5,6 +5,7 @@ import re
 from pathlib import Path
 import hashlib
 import json
+import math
 import secrets
 import sys
 import tempfile
@@ -541,6 +542,8 @@ def _canonical_scope_metric(scope: str, metric: Any, values: Any) -> Json:
         )
     required = {"covered", "coverable", "missing", "pct"}
     allowed = {*required, "excluded"}
+    if metric == "functional":
+        allowed.update({"analysis_complete", "score_sum", "score_weight"})
     unknown = set(values) - allowed
     if unknown:
         raise XcovError(
@@ -566,6 +569,54 @@ def _canonical_scope_metric(scope: str, metric: Any, values: Any) -> Json:
     coverable = values["coverable"]
     missing = values["missing"]
     pct = values["pct"]
+    extra = {}
+    if {"score_sum", "score_weight"} & values.keys():
+        score_sum = values.get("score_sum")
+        score_weight = values.get("score_weight")
+        unverified = values.get("analysis_complete") is False
+        valid = (
+            {"score_sum", "score_weight"} <= values.keys()
+            and (
+                (unverified and score_sum is None and score_weight is None)
+                or (
+                    not unverified
+                    and isinstance(score_weight, int) and not isinstance(score_weight, bool)
+                    and score_weight >= 0
+                    and isinstance(score_sum, (int, float)) and not isinstance(score_sum, bool)
+                    and math.isfinite(score_sum) and 0 <= score_sum <= 100 * score_weight
+                )
+            )
+        )
+        if not valid:
+            raise XcovError(
+                "BACKEND_CONTRACT_VIOLATION", "invalid functional score numerator or weight",
+                operation=operation, field="score_sum/score_weight", scope=scope, metric=metric,
+            )
+        extra.update({"score_sum": score_sum, "score_weight": score_weight})
+    if "excluded" in values:
+        excluded = values["excluded"]
+        if isinstance(excluded, bool) or not isinstance(excluded, int) or excluded < 0:
+            raise XcovError(
+                "BACKEND_CONTRACT_VIOLATION",
+                "scope metric excluded count must be a non-negative integer",
+                operation=operation, field="excluded", scope=scope, metric=metric,
+            )
+        extra["excluded"] = excluded
+    if "analysis_complete" in values:
+        complete = values["analysis_complete"]
+        if not isinstance(complete, bool):
+            raise XcovError(
+                "BACKEND_CONTRACT_VIOLATION", "analysis_complete must be boolean",
+                operation=operation, field="analysis_complete", scope=scope, metric=metric,
+            )
+        extra["analysis_complete"] = complete
+        if not complete:
+            if any(values[key] is not None for key in required):
+                raise XcovError(
+                    "BACKEND_CONTRACT_VIOLATION", "unverified functional counts and score must be null",
+                    operation=operation, field="metric_values", scope=scope, metric=metric,
+                )
+            return {**{key: None for key in required}, **extra}
     for field_name, value in (
         ("covered", covered),
         ("coverable", coverable),
@@ -600,6 +651,8 @@ def _canonical_scope_metric(scope: str, metric: Any, values: Any) -> Json:
                 metric=metric,
             )
         canonical_pct = None
+    elif metric == "functional" and pct is None and extra.get("score_weight") == 0:
+        canonical_pct = None
     else:
         if isinstance(pct, bool) or not isinstance(pct, (int, float)) or not 0 <= pct <= 100:
             raise XcovError(
@@ -611,6 +664,16 @@ def _canonical_scope_metric(scope: str, metric: Any, values: Any) -> Json:
                 metric=metric,
             )
         canonical_pct = float(pct)
+    if "score_weight" in extra:
+        weighted_pct = (
+            round(extra["score_sum"] / extra["score_weight"], 4)
+            if extra["score_weight"] else None
+        )
+        if canonical_pct != weighted_pct:
+            raise XcovError(
+                "BACKEND_CONTRACT_VIOLATION", "functional pct disagrees with TYPE score weights",
+                operation=operation, field="pct/score_sum/score_weight", scope=scope, metric=metric,
+            )
     expected = round(100.0 * covered / coverable, 4) if coverable else None
     if (
         metric != "functional"
@@ -631,19 +694,7 @@ def _canonical_scope_metric(scope: str, metric: Any, values: Any) -> Json:
         "missing": missing,
         "pct": canonical_pct,
     }
-    if "excluded" in values:
-        excluded = values["excluded"]
-        if isinstance(excluded, bool) or not isinstance(excluded, int) or excluded < 0:
-            raise XcovError(
-                "BACKEND_CONTRACT_VIOLATION",
-                "scope metric excluded count must be a non-negative integer",
-                operation=operation,
-                field="excluded",
-                scope=scope,
-                metric=metric,
-            )
-        out["excluded"] = excluded
-    return out
+    return {**out, **extra}
 
 
 class CanonicalCoverageBackend(CoverageBackend):

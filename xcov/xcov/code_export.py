@@ -373,8 +373,74 @@ def _ternary_predicate(prefix: str) -> str:
     return predicate
 
 
+def _branch_warning_terms(
+    block: str, source_files: List[str], absolute_sources: List[str],
+) -> List[Json]:
+    """Read URG's explicit expressions when generated code cannot be annotated."""
+    warning = "Warning: the following expressions can not be annotated"
+    if warning not in block:
+        return []
+    terms: List[Json] = []
+    numbered: Tuple[int, str] | None = None
+    prior_numbered: Tuple[int, str] | None = None
+    in_warning = False
+    warning_has_terms = False
+    for line in block.splitlines():
+        source_match = re.match(r"^\s*(\d+)\s+(.+)$", line)
+        if source_match or line.strip() == warning:
+            if in_warning and not warning_has_terms:
+                raise CoverageExportParseError("branch", "", "branch warning expression table is empty")
+            if source_match:
+                prior_numbered, numbered = numbered, (
+                    int(source_match.group(1)), source_match.group(2).strip(),
+                )
+                in_warning = False
+                continue
+            if numbered is None:
+                raise CoverageExportParseError("branch", "", "branch warning source is missing")
+            in_warning, warning_has_terms = True, False
+            continue
+        if not in_warning or not line.strip():
+            continue
+        expression_match = re.fullmatch(r"\s*-(\d+)-\s+(\(.+\))\s*\?\s*\.\.\.;\s*", line)
+        if not expression_match:
+            raise CoverageExportParseError("branch", "", "branch warning expression is unsupported")
+        predicate = expression_match.group(2)
+        expression = _balanced_condition(predicate, 0)
+        if not expression or predicate[1:-1].strip() != expression:
+            raise CoverageExportParseError("branch", "", "branch warning predicate is malformed")
+        line_no, source = numbered
+        if "?" not in source:
+            raise CoverageExportParseError("branch", "", "branch warning source is unsupported")
+        at_line = line_no
+        start_line = line_no
+        if prior_numbered and prior_numbered[1].rstrip().endswith(("=", "<=", ">=")):
+            start_line = prior_numbered[0]
+        if not source.split("?", 1)[0].strip():
+            if prior_numbered is None:
+                raise CoverageExportParseError("branch", "", "branch warning source is incomplete")
+            at_line = start_line = prior_numbered[0]
+        term_id = int(expression_match.group(1))
+        terms.append({
+            "id": term_id,
+            "marker": f"-{term_id}-",
+            "kind": "ternary",
+            "at": _at(source_files, at_line),
+            # Keep elaborated indices from URG, not the source's genvar name.
+            "expression": expression,
+            "source": _source_statement(
+                absolute_sources[0] if len(absolute_sources) == 1 else None, start_line,
+            ),
+        })
+        warning_has_terms = True
+    if in_warning and not warning_has_terms:
+        raise CoverageExportParseError("branch", "", "branch warning expression table is empty")
+    return terms
+
+
 def _branch_terms(block: str, source_files: List[str], absolute_sources: List[str]) -> List[Json]:
     terms: List[Json] = []
+    warning_terms = _branch_warning_terms(block, source_files, absolute_sources)
     source_lines = block.splitlines()
     prior_numbered: Tuple[int, str] | None = None
     for index, line in enumerate(source_lines):
@@ -385,7 +451,12 @@ def _branch_terms(block: str, source_files: List[str], absolute_sources: List[st
         if index + 1 >= len(source_lines):
             continue
         marker_ids = [int(value) for value in re.findall(r"-(\d+)-", source_lines[index + 1])]
-        for marker_index, term_id in enumerate(marker_ids):
+        warning_ids = {
+            term["id"] for term in warning_terms
+            if term["at"] == _at(source_files, line_no)
+        }
+        all_ids = sorted(set(marker_ids) | warning_ids) if warning_ids else marker_ids
+        for term_id in marker_ids:
             case_match = re.search(r"\b(casez|casex|case)\s*\((.+)\)", source)
             if_match = re.search(r"\bif\s*\(", source)
             condition_source = source
@@ -411,9 +482,9 @@ def _branch_terms(block: str, source_files: List[str], absolute_sources: List[st
                 rendered_source = condition_source
             elif "?" in source:
                 questions = [match.start() for match in re.finditer(r"\?", source)]
-                if len(questions) != len(marker_ids):
+                if len(questions) != len(all_ids):
                     raise CoverageExportParseError("branch", "", "ternary markers do not match predicates")
-                before_question = source[:questions[marker_index]].strip()
+                before_question = source[:questions[all_ids.index(term_id)]].strip()
                 if before_question:
                     expression = _ternary_predicate(before_question)
                     at_line = line_no
@@ -439,7 +510,12 @@ def _branch_terms(block: str, source_files: List[str], absolute_sources: List[st
             }
             terms.append(term)
         prior_numbered = (line_no, source)
-    unique = {item["id"]: item for item in terms}
+    unique: Dict[int, Json] = {}
+    for item in terms + warning_terms:
+        existing = unique.get(item["id"])
+        if existing is not None and existing != item:
+            raise CoverageExportParseError("branch", "", "branch marker has conflicting source mappings")
+        unique[item["id"]] = item
     return [unique[key] for key in sorted(unique)]
 
 
@@ -499,6 +575,8 @@ def _branch_groups(section: str, source_files: List[str], absolute_sources: List
         by_id = {item["id"]: item for item in _branch_terms(source_block, source_files, absolute_sources)}
         if any(term_id not in by_id for term_id in ids):
             raise CoverageExportParseError("branch", "", "branch marker cannot be mapped to source")
+        if len(set(ids)) != len(ids) or set(by_id) != set(ids):
+            raise CoverageExportParseError("branch", "", "branch source markers do not match status header")
         path = []
         for term_id in ids:
             item = {key: by_id[term_id][key]

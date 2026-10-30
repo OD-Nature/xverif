@@ -10,6 +10,9 @@ xcov 的 summary 读取固定使用 URG
 和五个 summary 文本文件，不生成完整 HTML、`modinfo.txt` 或 `grpinfo.txt`。
 code、assertion 和 functional coverage 按各自 XML `type` 建模；详细 gap 导出
 使用受限 URG text report。公开 summary 只发布该固定产物能够稳定支持的字段。
+若完整 XML 确认没有 functional/assertion 指标与对象，相应的 `groups.txt`/`asserts.txt`
+可以缺省；其它必要 artifact 仍须完整有效。缓存记录实际验证的文件集合及 hash/size，
+不会把文件缺失直接解释成“没有覆盖”。
 
 action、session、transport、backend 或 VDB 查询失败时不会静默切换 surface、
 backend、data source 或测试层级。失败返回结构化错误；任何不同路径必须由调用方
@@ -31,7 +34,7 @@ tools/xcov --stdio-loop
 ```
 
 stdio-loop 启动后输出 `protocol:"xcov-stdio-loop"` ready 行，后续每行接收一个
-JSON request，并返回包含 `xout` 和 `json` payload 的 JSONL envelope。stdio 请求
+JSON request，并返回包含 `xout` 和 `json` payload 的 JSONL envelope。
 一个 native stdio-loop 进程最多拥有一个 live xcov session；第二个不同 name 的
 `session.open` 返回 `SESSION_CAPACITY_EXCEEDED`。MCP 多 session 由 manager 为每个 session
 分别启动独立 `tools/xcov --stdio-loop`，不在同一 native loop 内复用多个 VDB。
@@ -43,6 +46,9 @@ stdio 请求
 ```json
 {"api_version":"xcov.v1","request_id":"quit","action":"stdio.quit"}
 ```
+
+在 stdio-loop 中调用 `schema` 时，返回的 request schema 同样将 `request_id` 列为必填。
+一次性 CLI 的 request schema 保留可选约定，MCP 管理器自行提供 transport ID。
 
 普通 session/read/export 路径不会加载 pynpi。只有 `exclude.*`、
 `exclude.csv.*` 和 `export.exclude` 首次需要修改或读取原生 exclusion 状态时，
@@ -118,7 +124,7 @@ MCP 始终提供 coverage 工具。MCP 原样传递导出参数，不改写相�
 
 固定 URG summary 使用内容寻址 cache。key 包含 VDB 内容 hash、可选 run-manifest
 hash、URG 绝对路径/release/文件身份、固定 argv、parser/cache version、merged selection
-和当前 EL hash。每个 entry 校验六文件 hash/size 与 semantic counts；per-key `fcntl`
+和当前 EL hash。每个 entry 校验必要文件集合、hash/size 与 semantic counts；per-key `fcntl`
 per-key claim 保证同 key 并发 miss 只执行一次 URG，完成后经 fsync 和 atomic rename
 发布。容量采用 `best_effort_soft_admission`：cold build 只检查当时已发布 entry，不为
 其它 key 的 staging 预留条目或字节，因此不同 key 同时 cold miss 时可超过配置阈值；
@@ -329,9 +335,17 @@ CSV action：
 `coverage_pct` 按 URG SCORE 语义取所选 metric percentages 的算术平均；因为不同
 metric 的计数单位不可相加，多 metric scope 不返回 aggregate covered/coverable/missing。
 
-`functional_coverage.summary` 的 covergroup score 按 URG group 页语义计算：优先取直接
-coverpoint/cross coverage 百分比的平均值；交互输出不暴露 score_basis/raw count
-等中间计算字段。
+`functional_coverage.summary` 固定采用 URG group 页的 TYPE 视图：每个唯一 variant 一行，
+用直接 coverpoint/cross 的 TYPE 权重加权其百分比。计数是未加权 bin 个数，零权重点的 bin
+仍计入个数；`goal` 是达标阈值，不重新缩放 score。INSTANCE 权重和分数不与 TYPE 混用。
+point/cross 使用包含 TYPE 的完整名称，避免不同组的同名点被合并。
+全局 `metrics.list` 纳入 package/class TYPE；命名 block 的分数向已知设计祖先汇总。
+这些逻辑归属不会伪造 RTL instance，`scope.*` 的设计层级保持来自数据库。
+
+固定 XML 对空组和全零权重组可能完全省略 TYPE 元数据，无法区分 0/0 与有 bin 但不计分。
+这时相应行及 scope 功能汇总的分数、计数保留 `null`，返回 `analysis_complete=false` 和
+warning；点/cross 列表也可能不完整。正常组仍返回可核查数据，不能将未知值当作零覆盖。
+真实分数对照见 [功能覆盖 fixture](fixtures/functional_scores/README.md)。
 
 ## Action 合同
 
@@ -339,7 +353,7 @@ dispatcher 在填充 `request_id/target/args` 默认值前，先使用 action-sp
 schema 校验原始请求；top-level、`target`、`args`、`query`、`sort`、`limits` 和
 export `args.output` 的未知字段都会返回 `SCHEMA_INVALID`。handler 返回后、公开输出
 前还会使用同一 action 的严格 response schema 校验结果。普通查询只在 `args.limits`
-控制 inline 数量；三个 coverage report export 写 Markdown，`export.exclude` 写原生
+控制 inline 数量；三个 coverage report export 写 JSON/XOUT 并保留 URG 原文，`export.exclude` 写原生
 EL。
 
 惰性原生 NPI exclusion backend 在初始化时绑定唯一的已声明 method/signature 合同，并且每次
@@ -389,6 +403,11 @@ backend/action 合同不接受 `-1` score/count sentinel；不适用值必须是
 
 ## 文件导出
 
+解析失败返回原始 `URG_DETAIL_PARSE_INCOMPLETE` 及对象/计数信息，
+`error["detail.diagnostic_path"]` 指向受控输出根内的 `.xcov-failed-*` 诊断目录。
+保留已生成的 URG 原文及未完成产物，原成功路径不会发布；应先检查原文再清理该目录。
+失败诊断不能当作完整 bundle，摘要查询成功也不代表明细导出成功。
+
 `export.code_coverage` 不输出 Markdown。它要求 `scopes` 指定一个或多个具体 elaborated
 instance，在 `output.path` 下建立秒级时间戳目录，并为每个 instance、每个请求 metric
 分别输出 JSON 和 XOUT；`xcov_code_coverage_bundle.v2` 只在根目录保存一份
@@ -435,13 +454,13 @@ framing 字段，header 仍保留 action 合同标识。
 - 相对路径写到 `.xverif/xcov_exports/`。
 - 包含 `..` 的路径会被拒绝。
 - 绝对路径必须显式设置 `output.allow_absolute_path=true`，并位于
-  `XVERIF_XCOV_EXPORT_ROOTS` 声明的根目录内。
+  默认导出根或 `XVERIF_XCOV_EXPORT_ROOTS` 声明的允许根目录内；该开关不绕过根目录检查。
 - 任一中间路径为 symlink、规范化后逃逸允许根或发布预算超限都会 fail-closed；要求新建的
   report bundle 还会拒绝既有目标。文件/目录在同一文件系统 staging 中完整生成、校验并
   fsync 后才发布；CSV 多文件更新会先保留逐文件 backup，任一步失败即按逆序恢复。
 
 请求 transport 上限为 1 MiB；inline response 上限为 16 MiB，并硬限制最多 10,000 行。
-固定 summary 的单 artifact 上限为 1 GiB、六件套合计 2 GiB；scope、typed row、gap、CSV
+固定 summary 的单 artifact 上限为 1 GiB、全部 artifact 合计 2 GiB；scope、typed row、gap、CSV
 文件/record/field 也有前置 hard budget。超限返回 `REQUEST_BUDGET_EXCEEDED`、
 `RESPONSE_BUDGET_EXCEEDED` 或 `RESOURCE_BUDGET_EXCEEDED`，不会先构造无限内存对象再截断。
 

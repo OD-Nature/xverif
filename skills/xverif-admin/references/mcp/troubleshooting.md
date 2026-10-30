@@ -37,6 +37,23 @@
 - `OUTPUT_SERIALIZATION_FAILED`：响应不能编码为严格 JSON；写入失败不能当作调用成功。
 - `BAD_JSON` 或 envelope 异常：检查 MCP tool 参数壳和 `output_format`；xdebug 原生 envelope 请改用 `xverif`。
 
+## Coverage 工具来源校验
+
+`EDA_PROVENANCE_INVALID` 需要按 message 区分目录/可执行文件检查与 URG 版本查询失败。
+xcov 固定使用配置的 `$VCS_HOME/bin/urg -full64 -version`，不从 PATH 改选另一套工具。
+版本查询失败会给出 `detail.operation=urg.version`、可用的 `detail.returncode`、缺失标识
+和限长脱敏的 stdout/stderr 摘录；不要仅凭这个错误码认定缺少 license。
+
+CLI 成功不能证明 MCP 使用相同环境。核对 MCP 实际启动脚本、工具根、解释器、VCS_HOME、
+VERDI_HOME，以及站点的库/架构设置；只检查 license 变量是否设置，不打印其值。
+在另一个 shell 执行 `source env.sh` 不会更新已经启动的 MCP。项目可在自己的 MCP wrapper
+加载该 checkout 的环境脚本，或在启动客户端前显式加载并配置必要变量转发；改完后重新
+连接客户端，让新进程继承配置。不要让通用 xverif 自动猜项目目录或 source 任意 shell 配置。
+
+对照实验在相同主机、权限和环境下执行，保留失败输出；不因 MCP 失败自动切换 CLI、
+LSF 或另一个安装。缺少历史版本查询原文时，应明确根因尚未确定，不能事后归咎于某个
+未验证的环境变量。
+
 ## 客户端退出后的清理
 
 - 正常 EOF / 正常退出：MCP lifespan 与 `atexit` 都会执行 `close_all`。

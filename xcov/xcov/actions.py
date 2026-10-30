@@ -137,31 +137,31 @@ ACTION_REGISTRY: Dict[str, ActionContract] = {
     "code_coverage.summary": ActionContract(
         "code_coverage.summary", "_code_coverage", True,
         "Aggregate code-coverage scores by a declared grouping field.",
-        "Do not use for hierarchy-level holes or detailed Markdown evidence.",
+        "Do not use for detailed uncovered code objects; use export.code_coverage.",
     ),
     "functional_coverage.summary": ActionContract(
         "functional_coverage.summary", "_functional", True,
-        "Aggregate functional coverage at covergroup, coverpoint, cross, or bin level.",
+        "Summarize functional TYPE coverage at covergroup, coverpoint, or cross level; report weighted scores separately from unweighted bin counts.",
         "Do not use when only uncovered functional items are required.",
     ),
     "assert.summary": ActionContract(
         "assert.summary", "_assert_report", True,
         "Summarize assertion attempts, successes, and basic coverage.",
-        "Do not use for the detailed assertion Markdown report.",
+        "Do not use for detailed assertion gaps; use export.assert.",
     ),
     "export.code_coverage": ActionContract(
         "export.code_coverage", "_export", True,
-        "Write strict per-instance code-coverage JSON, XOUT, and raw URG artifacts.",
+        "Write code-coverage JSON, XOUT, and raw URG artifacts for each selected instance itself; descendants must be selected explicitly.",
         "Do not use for inline hierarchy summaries.",
     ),
     "export.functional_coverage": ActionContract(
         "export.functional_coverage", "_export", True,
-        "Write detailed functional-coverage holes to a Markdown artifact.",
+        "Write functional-coverage gaps as JSON/XOUT and retain the raw URG report.",
         "Do not use for inline functional coverage rows.",
     ),
     "export.assert": ActionContract(
         "export.assert", "_export", True,
-        "Write detailed assertion coverage evidence to a Markdown artifact.",
+        "Write assertion coverage gaps as JSON/XOUT and retain the raw URG report.",
         "Do not use for the compact assertion summary.",
     ),
     "exclude.load": ActionContract(
@@ -278,11 +278,32 @@ def _safe_error_response(req: Json, exc: XcovError) -> Json:
     )
 
 
+def _retain_failed_export(stage_dir: Path, exc: Exception) -> XcovError:
+    """Keep failure evidence without publishing an incomplete success bundle."""
+    diagnostic_dir = stage_dir
+    failed_dir = stage_dir.with_name(".xcov-failed-" + stage_dir.name.lstrip("."))
+    try:
+        stage_dir.rename(failed_dir)
+        diagnostic_dir = failed_dir
+    except OSError:
+        # A diagnostic rename must never replace the original export failure.
+        pass
+    detail = dict(exc.detail) if isinstance(exc, XcovError) else {}
+    try:
+        if diagnostic_dir.is_dir():
+            detail["diagnostic_path"] = str(diagnostic_dir)
+    except OSError:
+        pass
+    if isinstance(exc, XcovError):
+        return XcovError(exc.code, exc.message, **detail)
+    return XcovError("INTERNAL_ERROR", str(exc), **detail)
+
+
 class Dispatcher:
     def __init__(self, sessions: SessionManager | None = None) -> None:
         self.sessions = sessions or SessionManager()
 
-    def dispatch(self, req: Json) -> Json:
+    def dispatch(self, req: Json, *, stdio: bool = False) -> Json:
         start = time.monotonic()
         action = req.get("action", "")
         sid = _log_session_id(req)
@@ -302,6 +323,8 @@ class Dispatcher:
                 if action in COVERAGE_READ_ACTIONS:
                     session.prepare_coverage_read()
                 rsp = handler(normalized, session)
+            elif action == "schema":
+                rsp = self._schema(normalized, stdio=stdio)
             else:
                 rsp = handler(normalized)
             enforce_response_budget(rsp)
@@ -358,13 +381,13 @@ class Dispatcher:
             {"items": rows},
         )
 
-    def _schema(self, req: Json) -> Json:
+    def _schema(self, req: Json, *, stdio: bool = False) -> Json:
         action = action_args(req).get("action")
         if action not in ACTION_REGISTRY:
             raise XcovError("UNKNOWN_ACTION", "schema action not found", requested_action=action)
         kind = str(action_args(req).get("kind", "request"))
         try:
-            schema = schema_for_action(str(action), kind)
+            schema = schema_for_action(str(action), kind, stdio=stdio)
         except KeyError:
             raise XcovError("UNKNOWN_ACTION", "schema action not found",
                             requested_action=action, kind=kind)
@@ -456,8 +479,10 @@ class Dispatcher:
                 if s == sf or s.startswith(sf + ".")
             }
         rows = _metrics_from_urg(scope_metrics)
+        analysis_complete = all(row.get("analysis_complete", True) for row in rows)
         rows = _project_code_coverage_summary_rows(rows)
         summary, inline, warnings = apply_output("metrics.list", args, rows)
+        _mark_functional_completeness(summary, warnings, analysis_complete)
         summary.update({"session_id": sess.session_id, "scope": args.get("scope"),
                         "test": "merged"})
         return ok_response(req, summary, {"items": inline}, warnings)
@@ -473,16 +498,19 @@ class Dispatcher:
         coverage = _coverage_from_urg(urg_metrics, scopes, metrics)
         if action == "scope.summary":
             rows = _scope_summary_rows(scopes, coverage, args)
-            rows = _project_scope_summary_rows(rows)
         elif action == "scope.children":
             rows = _scope_children_rows(scopes, coverage, args)
-            rows = _project_scope_brief_rows(rows)
         else:
             rows = _scope_search_rows(scopes, coverage, args)
-            rows = _project_scope_brief_rows(rows)
         rows = filter_items(rows, query)
+        analysis_complete = all(row.get("analysis_complete", True) for row in rows)
+        rows = (
+            _project_scope_summary_rows(rows) if action == "scope.summary"
+            else _project_scope_brief_rows(rows)
+        )
         rows = sort_items(action, rows, args.get("sort"))
         summary, inline, warnings = apply_output(action, args, rows)
+        _mark_functional_completeness(summary, warnings, analysis_complete)
         summary.update({"session_id": sess.session_id, "scope": args.get("scope"),
                         "test": "merged"})
         return ok_response(req, summary, {"filters": filters_summary(query), "items": inline}, warnings)
@@ -529,11 +557,15 @@ class Dispatcher:
                 if row.get("scope") == selected_scope
                 or str(row.get("scope") or "").startswith(selected_scope + ".")
             ]
+        # Empty TYPE nodes can hide point/cross rows, so check completeness
+        # before selecting a level or filtering the rows that are available.
+        analysis_complete = all(row.get("analysis_complete", True) for row in rows)
         rows = _functional_summary_rows(rows, group_by)
         rows = filter_items(rows, query)
         rows = _project_functional_coverage_summary_rows(rows, group_by)
         rows = sort_items(action, rows, args.get("sort"))
         summary, inline, warnings = apply_output(action, args, rows)
+        _mark_functional_completeness(summary, warnings, analysis_complete)
         summary.update({"session_id": sess.session_id, "test": "merged"})
         return ok_response(req, summary, {"filters": filters_summary(query), "items": inline}, warnings)
 
@@ -562,6 +594,9 @@ class Dispatcher:
         if action == "export.code_coverage":
             return self._export_code_coverage(req, sess, args)
         output_dir = Path(_export_output_path(args))
+        # Staging and retained diagnostics are siblings of the published output;
+        # their parent must itself be inside an allowed export root.
+        resolve_artifact_path(str(output_dir.parent), allow_absolute_path=True)
         _prepare_publish_parent(output_dir, args["output"])
         if os.path.lexists(output_dir):
             raise XcovError(
@@ -645,9 +680,8 @@ class Dispatcher:
             _fsync_tree(stage_dir)
             os.replace(stage_dir, output_dir)
             _fsync_directory(output_dir.parent)
-        except Exception:
-            shutil.rmtree(stage_dir, ignore_errors=True)
-            raise
+        except Exception as exc:
+            raise _retain_failed_export(stage_dir, exc) from exc
 
         summary: Json = {
             "session_id": sess.session_id,
@@ -722,14 +756,15 @@ class Dispatcher:
             prefix=f".{run_name}.tmp-", dir=str(output_root),
         ))
 
-        # ── Single URG call for all scopes × all metrics ──
-        with tempfile.TemporaryDirectory(
-            prefix=".xcov-urg-export-", dir=stage_dir,
-        ) as urg_dir:
-            hier_path = Path(urg_dir) / "combined.hier"
+        # One URG call for all scopes and metrics; retain evidence on failure.
+        items: List[Json] = []
+        try:
+            urg_dir = stage_dir / ".xcov-urg-export"
+            urg_dir.mkdir()
+            hier_path = urg_dir / "combined.hier"
             hier_path.write_text(combined_hier, encoding="utf-8")
             urg_args = [
-                "urg", "-full64", "-dir", sess.vdb, "-report", urg_dir,
+                "urg", "-full64", "-dir", sess.vdb, "-report", str(urg_dir),
                 "-format", "text", "-legacy", "-metric", combined_urg_metric,
                 "-hier", str(hier_path),
             ]
@@ -741,7 +776,7 @@ class Dispatcher:
                     stderr=result.stderr[:500],
                     urg_execution=result.scheduler,
                 )
-            modinfo_path = Path(urg_dir) / "modinfo.txt"
+            modinfo_path = urg_dir / "modinfo.txt"
             empty_selection = not modinfo_path.is_file()
             if empty_selection:
                 combined_text = ""
@@ -749,12 +784,11 @@ class Dispatcher:
                 _ensure_artifact_budget(modinfo_path, "urg_modinfo_text")
                 combined_text = modinfo_path.read_text(encoding="utf-8", errors="replace")
 
-        items: List[Json] = []
-        try:
             raw_dir = stage_dir / "raw"
             raw_dir.mkdir()
             shared_raw_name = "modinfo.urg.txt"
             (raw_dir / shared_raw_name).write_text(combined_text, encoding="utf-8")
+            shutil.rmtree(urg_dir)
             raw_reference = f"../raw/{shared_raw_name}"
             for scope_index, scope in enumerate(scopes, 1):
                 instance_dir = stage_dir / f"instance-{scope_index:04d}"
@@ -812,9 +846,8 @@ class Dispatcher:
             _fsync_tree(stage_dir)
             os.replace(stage_dir, final_dir)
             _fsync_directory(output_root)
-        except Exception:
-            shutil.rmtree(stage_dir, ignore_errors=True)
-            raise
+        except Exception as exc:
+            raise _retain_failed_export(stage_dir, exc) from exc
 
         for item in items:
             item["directory"] = str(final_dir / item["directory"])
@@ -2153,6 +2186,16 @@ def _scope_children_rows(scopes: Dict[str, Json], coverage: Dict[str, Json], arg
 _URG_METRICS = frozenset(METRICS)
 
 
+def _mark_functional_completeness(summary: Json, warnings: List[str], complete: bool) -> None:
+    if not complete:
+        summary["analysis_complete"] = False
+        warnings.append(
+            "URG XML omits metadata for some functional TYPE groups; "
+            "their scores and bin counts cannot be verified and remain null. "
+            "Point/cross listings may also be incomplete."
+        )
+
+
 def _coverage_from_urg(
     scope_metrics: Dict[str, Json],
     scopes: Dict[str, Json],
@@ -2176,23 +2219,23 @@ def _coverage_from_urg(
                 "metric": mname,
                 "covered": mt["covered"],
                 "coverable": mt["coverable"],
-                "missing": mt["coverable"] - mt["covered"],
-                "coverage_pct": mt.get(
-                    "pct",
-                    coverage_pct(mt["covered"], mt["coverable"]),
-                ),
+                "missing": mt["missing"],
+                "coverage_pct": mt["pct"],
+                "analysis_complete": mt.get("analysis_complete", True),
             })
         percentages = [
             row["coverage_pct"]
             for row in metric_rows
             if row["coverage_pct"] is not None
         ]
+        complete = all(row["analysis_complete"] for row in metric_rows)
         row: Json = {
             "coverage_pct": (
                 round(sum(percentages) / len(percentages), 4)
-                if percentages else None
+                if percentages and complete else None
             ),
             "metrics": metric_rows,
+            "analysis_complete": complete,
         }
         if len(metric_rows) == 1:
             only = metric_rows[0]
@@ -2219,6 +2262,8 @@ def _code_coverage_from_urg(
     for sname in sorted(scope_metrics):
         mets = scope_metrics[sname]
         selected = [mets[name] for name in metrics if name in mets]
+        if not selected:
+            continue
         percentages = [
             value.get(
                 "pct",
@@ -2251,13 +2296,20 @@ def _metrics_from_urg(
 ) -> List[Json]:
     """Aggregate only independent top-scope subtree metrics."""
     names = set(scope_metrics)
-    roots = [
-        name for name in names
-        if "." not in name or name.rsplit(".", 1)[0] not in names
-    ]
+    roots = []
+    for name in names:
+        # Functional lexical scopes may skip non-instance intermediate blocks.
+        parent = name.rpartition(".")[0]
+        while parent and parent not in names:
+            parent = parent.rpartition(".")[0]
+        if not parent:
+            roots.append(name)
     wanted = metrics or sorted({metric for row in scope_metrics.values() for metric in row})
     totals: Dict[str, Dict[str, Any]] = {
-        metric: {"covered": 0, "coverable": 0, "percentages": []}
+        metric: {
+            "covered": 0, "coverable": 0, "percentages": [], "analysis_complete": True,
+            "score_sum": 0.0, "score_weight": 0, "weighted_scopes": 0,
+        }
         for metric in wanted
     }
     for scope_name in roots:
@@ -2265,26 +2317,49 @@ def _metrics_from_urg(
         for mname, vals in mets.items():
             if mname not in totals:
                 continue
-            totals[mname]["covered"] += vals["covered"]
-            totals[mname]["coverable"] += vals["coverable"]
-            totals[mname]["percentages"].append(
-                vals.get("pct", coverage_pct(vals["covered"], vals["coverable"]))
-            )
+            total = totals[mname]
+            total["percentages"].append(vals["pct"])
+            if vals.get("analysis_complete") is False:
+                total["analysis_complete"] = False
+                continue
+            total["covered"] += vals["covered"]
+            total["coverable"] += vals["coverable"]
+            if mname == "functional" and "score_weight" in vals:
+                total["score_sum"] += vals["score_sum"]
+                total["score_weight"] += vals["score_weight"]
+                total["weighted_scopes"] += 1
     rows: List[Json] = []
     for mname in wanted:
         vals = totals[mname]
         if not vals["percentages"]:
             continue
+        if not vals["analysis_complete"]:
+            rows.append({
+                "metric": mname, "covered": None, "coverable": None,
+                "missing": None, "coverage_pct": None, "analysis_complete": False,
+            })
+            continue
+        if mname == "functional" and len(vals["percentages"]) > 1:
+            if vals["weighted_scopes"] != len(vals["percentages"]):
+                raise XcovError(
+                    "BACKEND_CONTRACT_VIOLATION", "functional aggregation requires TYPE score weights",
+                    operation="metrics.aggregate", field="score_weight", metric=mname,
+                )
+            pct = (
+                round(vals["score_sum"] / vals["score_weight"], 4)
+                if vals["score_weight"] else None
+            )
+        else:
+            pct = (
+                vals["percentages"][0] if len(vals["percentages"]) == 1
+                else coverage_pct(vals["covered"], vals["coverable"])
+            )
         rows.append({
             "metric": mname,
             "covered": vals["covered"],
             "coverable": vals["coverable"],
             "missing": vals["coverable"] - vals["covered"],
-            "coverage_pct": (
-                vals["percentages"][0]
-                if len(vals["percentages"]) == 1
-                else coverage_pct(vals["covered"], vals["coverable"])
-            ),
+            "coverage_pct": pct,
         })
     return rows
 
@@ -2298,6 +2373,7 @@ def _merge_scope_coverage(scope: Json, cov: Optional[Json]) -> Json:
     out = dict(scope)
     cov = cov or {"coverage_pct": None, "metrics": []}
     out["coverage_pct"] = cov.get("coverage_pct")
+    out["analysis_complete"] = cov.get("analysis_complete", True)
     for key in ("covered", "coverable", "missing"):
         if key in cov:
             out[key] = cov[key]
@@ -2331,7 +2407,7 @@ def _project_scope_summary_rows(rows: List[Json]) -> List[Json]:
 
 
 def _project_code_coverage_summary_rows(rows: List[Json]) -> List[Json]:
-    forbidden = {"name", "full_name", "functional_pct"}
+    forbidden = {"name", "full_name", "functional_pct", "analysis_complete"}
     return [{key: value for key, value in row.items() if key not in forbidden}
             for row in rows]
 
@@ -2630,48 +2706,32 @@ def _code_item_label(row: Json) -> str:
 def _functional_summary_rows(rows: List[Json], group_by: str) -> List[Json]:
     if group_by == "covergroup":
         return _functional_covergroup_score_rows(rows)
-    return _summary_from_items(_functional_summary_level_rows(rows, group_by), group_by)
+    return _functional_type_score_rows(rows, group_by)
 
 
 def _functional_covergroup_score_rows(rows: List[Json]) -> List[Json]:
-    by_cg: Dict[str, List[Json]] = defaultdict(list)
-    for row in rows:
-        cg = row.get("covergroup")
-        if cg:
-            by_cg[str(cg)].append(row)
+    return _functional_type_score_rows(rows, "covergroup")
+
+
+def _functional_type_score_rows(rows: List[Json], group_by: str) -> List[Json]:
+    """Publish one TYPE object per row without recomputing its verified score."""
     out: List[Json] = []
-    for cg, subset in by_cg.items():
-        direct = [row for row in subset if _functional_level(row) in {"coverpoint", "cross"}]
-        raw = next((row for row in subset if _functional_level(row) == "covergroup"), None)
-        score_rows = direct or ([raw] if raw else [])
-        pct_values = [
-            float(row["coverage_pct"]) for row in score_rows
-            if row and row.get("coverage_pct") is not None
-        ]
-        score_pct = round(sum(pct_values) / len(pct_values), 4) if pct_values else None
-        raw_covered = raw["covered"] if raw else None
-        raw_coverable = raw["coverable"] if raw else None
-        out_row = {
-            "covergroup": cg,
+    for row in _functional_summary_level_rows(rows, group_by):
+        full_name = row["full_name"]
+        out.append({
+            group_by: full_name,
             "metric": "summary",
-            "name": cg,
-            "full_name": cg,
-            "coverage_pct": score_pct,
-            "score_basis": "average_direct_coverpoint_cross_pct" if direct else "covergroup_raw_pct",
-            "score_item_count": len(score_rows),
-            "raw_covered": raw_covered,
-            "raw_coverable": raw_coverable,
-            "raw_missing": raw["missing"] if raw else None,
-            "raw_coverage_pct": raw["coverage_pct"] if raw else None,
-        }
-        if raw:
-            out_row.update({
-                "covered": raw["covered"],
-                "coverable": raw["coverable"],
-                "missing": raw["missing"],
-            })
-        out.append(out_row)
+            "name": full_name,
+            "full_name": full_name,
+            "coverage_pct": row["coverage_pct"],
+            "covered": row["covered"],
+            "coverable": row["coverable"],
+            "missing": row["missing"],
+            "analysis_complete": row.get("analysis_complete", True),
+        })
     return out
+
+
 def _functional_level(row: Json) -> str:
     typ = row["type"]
     type_to_level = {

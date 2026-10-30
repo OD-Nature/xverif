@@ -23,6 +23,10 @@ tools/xcov_lsf --json -  # 仅无 MCP 且必须经 LSF 时
 一个 native stdio-loop 最多一个 live xcov session；需要多个 VDB session 时，由 MCP 或
 `xcov_lsf` 内部 manager 为每个 session 启动独立 loop（LSF 下即独立 `bsub -I` job）。
 
+stdio-loop 每条请求必须提供非空 `request_id`，不能写成 `id`。在该 loop 内查询 `schema`
+得到的 request schema 也将它列为必填；一次性 CLI 仍允许省略，MCP 则由 manager 管理。
+下面的原生示例统一显式提供 `request_id`，批量脚本应为各条请求分配可区分的值。
+
 本文件只讲原生 `xcov.v1` JSON envelope。MCP tool 参数和 MCP session 请使用
 `xverif-mcp`；SDK-free LSF 的同 envelope 入口见 `xverif-admin`。
 
@@ -79,36 +83,36 @@ EL 是 Synopsys 原生 exclusion 状态的持久化来源，两者都应在关�
 open：
 
 ```json
-{"api_version":"xcov.v1","action":"session.open","target":{"vdb":"merged.vdb"},"args":{"name":"cov0"}}
+{"api_version":"xcov.v1","request_id":"req-1","action":"session.open","target":{"vdb":"merged.vdb"},"args":{"name":"cov0"}}
 ```
 
 assert summary：
 
 ```json
-{"api_version":"xcov.v1","action":"assert.summary","target":{"session_id":"cov0"}}
+{"api_version":"xcov.v1","request_id":"req-2","action":"assert.summary","target":{"session_id":"cov0"}}
 ```
 
 code coverage export（首次读取同一 VDB/selection/EL 时生成并缓存固定 URG summary；
 后续命中缓存，不再次调用 URG）：
 
 ```json
-{"api_version":"xcov.v1","action":"export.code_coverage","target":{"session_id":"cov0"},"args":{"scopes":["uart_tb.u_uart"],"metrics":["line","toggle"],"output":{"path":"coverage_artifacts"}}}
+{"api_version":"xcov.v1","request_id":"req-3","action":"export.code_coverage","target":{"session_id":"cov0"},"args":{"scopes":["uart_tb.u_uart"],"metrics":["line","toggle"],"output":{"path":"coverage_artifacts"}}}
 ```
 
 按导出 gap 添加 exclusion；每个条目必须单独给出原因：
 
 ```json
-{"api_version":"xcov.v1","action":"exclude.add","target":{"session_id":"cov0"},"args":{"exports":[{"path":"/abs/path/branch.json","items":[{"gap_id":"B0001","reason":"规格禁止该模式组合"},{"gap_id":"B0002","reason":"该分支仅用于失效保护"}]}]}}
+{"api_version":"xcov.v1","request_id":"req-4","action":"exclude.add","target":{"session_id":"cov0"},"args":{"exports":[{"path":"/abs/path/branch.json","items":[{"gap_id":"B0001","reason":"规格禁止该模式组合"},{"gap_id":"B0002","reason":"该分支仅用于失效保护"}]}]}}
 ```
 
 关闭 session 前先导出 reason-bearing CSV，再导出原生 EL：
 
 ```json
-{"api_version":"xcov.v1","action":"exclude.csv.export","target":{"session_id":"cov0"},"args":{"directory":"coverage_exclusions"}}
+{"api_version":"xcov.v1","request_id":"req-5","action":"exclude.csv.export","target":{"session_id":"cov0"},"args":{"directory":"coverage_exclusions"}}
 ```
 
 ```json
-{"api_version":"xcov.v1","action":"export.exclude","target":{"session_id":"cov0"},"args":{"output":{"path":"coverage_exclusions/merged.el"}}}
+{"api_version":"xcov.v1","request_id":"req-6","action":"export.exclude","target":{"session_id":"cov0"},"args":{"output":{"path":"coverage_exclusions/merged.el"}}}
 ```
 
 functional coverage export（输出目录内保留 `grpinfo.txt`，并生成 `functional.json`、
@@ -119,23 +123,24 @@ functional coverage export（输出目录内保留 `grpinfo.txt`，并生成 `fu
 视图可能同时存在，不能将两者行数相加作为唯一 bin 数：
 
 ```json
-{"api_version":"xcov.v1","action":"export.functional_coverage","target":{"session_id":"cov0"},"args":{"output":{"path":"functional_coverage"}}}
+{"api_version":"xcov.v1","request_id":"req-7","action":"export.functional_coverage","target":{"session_id":"cov0"},"args":{"output":{"path":"functional_coverage"}}}
 ```
 
 assert export（输出目录内保留 `asserts.txt`，并生成 `assert.json`、`assert.xout`；gap ID 为
 `A0001` 起）：
 
 ```json
-{"api_version":"xcov.v1","action":"export.assert","target":{"session_id":"cov0"},"args":{"scope":"uart_tb","output":{"path":"assert_coverage"}}}
+{"api_version":"xcov.v1","request_id":"req-8","action":"export.assert","target":{"session_id":"cov0"},"args":{"scope":"uart_tb","output":{"path":"assert_coverage"}}}
 ```
 
 ## 读取规则
 
 - 先看 `ok`。
-- 看 `summary.matched_count/returned/truncated/output_path/note`。
+- 看 `summary.total_count/returned_count/response_truncated/scan_complete/analysis_complete/truncation_scopes`。
 - coverage item 关注 action 当前返回的字段；不要假设所有 action 都输出
   `metric/type/name/full_name/covered/coverable/missing/status/evidence.file/evidence.line`。
-- coverage pct 用 `covered/coverable`，不要用 hit count 代替覆盖率。
+- 普通 code 单 metric 的百分比按 covered/coverable 计算；functional score 与 bin 比例不同，
+  不要用 bin 比例、hit count 或多个 case 百分比的平均值替代功能覆盖分数。
 - 保留 `excluded/unreachable/illegal` 状态，不要误判为普通 hole。
 - 交互查询优先用 `scope.summary`、`scope.children`、`scope.search`、
   `code_coverage.summary` 看层次覆盖率。
@@ -150,7 +155,18 @@ assert export（输出目录内保留 `asserts.txt`，并生成 `assert.json`、
 - `functional_coverage.summary` 不输出
   `metric/name/full_name/score_basis/score_item_count/raw_covered/raw_coverable/raw_missing`，
   也不输出 `raw_coverage_pct`；只支持 `covergroup|coverpoint|cross`，不支持 bin summary。
-- scope 父节点直接使用 URG 已提供的 subtree metrics；多 metric `coverage_pct` 是所选 metric
+- 功能摘要固定为 URG 的 TYPE 视图，每个唯一 covergroup variant 一行；不要与 INSTANCE
+  分数混用。组分数按直接 coverpoint/cross 的 TYPE 权重加权，`covered/coverable` 则是
+  未加权的 bin 个数，包含零权重点的 bin。`goal` 是达标阈值，不用于将百分比重新归一化。
+  point/cross 名称包含所属 TYPE，避免不同组的同名点被合并。
+- 全局 `metrics.list` 包含 package/class 中的 TYPE；命名 block 中的组沿已知祖先计入
+  所属设计 scope。package 组不会伪装成 RTL instance，`scope.*` 仍用于设计层级。
+  查 package 组可用 `functional_coverage.summary(scope="<package>")`。
+- URG XML 对空组和全零权重组可能省略全部 TYPE 元数据；此时计数及分数为 `null`，
+  `analysis_complete=false` 并有 warning。相关 scope 功能汇总也为 `null`，点/cross 列表
+  可能不完整；不能把这些值解释为 0%、100% 或没有 bin。正常组仍分别返回已验证数据。
+- scope 父节点的 code 指标直接使用 URG 已提供的 subtree metrics；功能指标按 TYPE 分数
+  和组权重汇总。多 metric `coverage_pct` 是所选 metric
   percentages 的算术平均，不要把不同 metric 的 covered/coverable 相加。
 - xout 的 `items:` 是对齐纯文本表格，不是 Markdown 表格；JSON 响应结构不变。
 - 详细 code coverage 未覆盖项使用 `export.code_coverage` 的分 metric JSON/XOUT 查看；
@@ -197,14 +213,20 @@ assert export（输出目录内保留 `asserts.txt`，并生成 `assert.json`、
 - toggle coverage 的 NPI 对象可能没有源码行号；CSV 允许 toggle 的 `line` 为空，并通过
   `scope + signal + transition` 精确解析。其它 coverage 类型仍要求可验证的源码行号。
 - `navigation.xout` 的覆盖率是 subtree 统计；metric XOUT 的覆盖率是 self 统计，不得混用。
+- `scope.summary(scope="u_dut")` 包含子树，`export.code_coverage(scopes=["u_dut"])` 只导出自身。
+  要看全部子实例，先用 `scope.children` 的 `recursive:true` 枚举并检查完整性，再把根及
+  所需子实例的完整名称一次提交到 `scopes`；超过 schema 的数量上限时分批，不能把截断枚举
+  当作全子树。generate 下标是路径的一部分，不要删掉或按 glob 展开。
 - `assert.summary` 输出基础覆盖率和 attempts/real successes/without attempts；不输出
-  kind/category/severity/failures/incomplete/first_match/file/line。需要完整 assertion
-  Markdown 时使用 `export.assert`。
+  kind/category/severity/failures/incomplete/first_match/file/line。需要 assertion 缺口明细时
+  使用 `export.assert` 的 JSON/XOUT 和原始 URG 报告。
 - 找不到 NPI API 支撑的 URG 字段时，不要做 fallback，不要要求 xcov 返回占位字段；应说明该字段做不到。
 
 ## 排障
 
-- 普通查询失败：检查 URG、VDB 和固定六件套错误，不要切换到 NPI fallback。
+- 普通查询失败：检查 URG、VDB 和 summary artifact 错误，不要切换到 NPI fallback。
+  合法无功能覆盖/无 assertion 的数据库可以不生成 `groups.txt`/`asserts.txt`；工具依据
+  完整 XML 的指标与对象判断是否需要这些文件，不靠文件缺失直接推断“没有覆盖”。
 - URG summary 默认缓存于 `.xverif/xcov/cache/urg-summary`；可用
   `XVERIF_XCOV_CACHE_DIR` 指定共享可见的绝对缓存根。`session.status` 的
   `cached_indexes.state/key/hit/urg_execution` 可区分尚未读取、cold miss、warm hit 与
@@ -226,8 +248,40 @@ assert export（输出目录内保留 `asserts.txt`，并生成 `assert.json`、
   显式维护窗口清理旧 immutable entry，不会在 action 返回路径同步 LRU 驱逐。
 - exclusion 的 license/NPI 错误：在沙箱外确认 Verdi/NPI 和 license server。
 - action 参数不确定：先用原生 `actions` 和 `schema` action 查询。
+- 导出解析失败时，保留错误码、对象、计数和 `error["detail.diagnostic_path"]`。
+  该目录保存已生成的 URG 原文与未完成产物，不能当作成功 bundle；不要在定位前删除。
+  `URG_DETAIL_PARSE_INCOMPLETE` 时摘要成功不代表明细成功，也不能据残缺明细宣布无缺口。
+- `EDA_PROVENANCE_INVALID` 要看具体 message 和版本查询诊断；不能一概解释为 license 缺失。
+  MCP 与后来 source 环境的 CLI 可能使用不同环境，详见
+  [MCP 环境排障](../../xverif-admin/references/mcp/troubleshooting.md#coverage-工具来源校验)。
 - 大结果：设置 limit，必要时 `overflow:"to_file"` 或 output path。
 - MCP/LSF/session 问题：改用 `xverif-mcp` 对应 troubleshooting。
+
+## 输出目录
+
+相对输出路径以当前工作目录的 `.xverif/xcov_exports` 为根。`allow_absolute_path:true`
+只开放绝对路径写法，目标仍须位于默认根或 `XVERIF_XCOV_EXPORT_ROOTS` 指定的既存绝对
+目录中；它不会绕过允许根、`..` 或 symlink 检查。通常直接使用相对路径即可。
+functional/assert 导出使用命名子目录，例如 `functional/run1`，不要把允许根本身作为目标。
+
+## 多 case 与多 VDB
+
+`session.open.target.vdb` 只接受一个 VDB；`merged` 指该库内的测试集合，xcov 没有跨 VDB
+合并 action。并行任务各自保存 VDB，全部结束后由显式合并流程收集已验收的输入；不要读取
+仍在写入的库，也不要通过平均摘要百分比合并。重复 case/seed 应按验收清单去重。
+
+按相同 RTL、elaboration 参数和 coverage 配置分组合并，不把不同参数模型混成一个分母。
+同版本 URG 的用法如下（Bash，路径仅为示例）：
+
+```bash
+"$VCS_HOME/bin/urg" -full64 -strict \
+  -dir runs/case_a/coverage.vdb -dir runs/case_b/coverage.vdb \
+  -dbname merged/all_cases -noreport -log merge.log
+```
+
+这会生成 `merged.vdb`，`all_cases` 是合并测试名；不是 `merged/all_cases.vdb`。
+检查退出码、merge 日志和实际输出库后，再交给 xcov 打开。case 很多时可使用同版本 URG
+`-f` 支持的输入列表。合并只在所选任务结束后执行，不需要每个 case 后反复合并。
 
 ## 原生 exclusion worker
 

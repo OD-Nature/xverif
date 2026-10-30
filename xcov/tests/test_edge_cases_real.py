@@ -110,11 +110,20 @@ def test_zero_coverable_nodes_and_null_multi_metric_scores_are_legal(
             "args": {"scope": ZERO_SCOPE, "group_by": "covergroup"},
         })
     assert scope["ok"] is True, json.dumps(scope, ensure_ascii=False, indent=2)
-    assert scope["data"]["items"][0]["coverage_pct"] is not None
+    assert scope["data"]["items"][0]["coverage_pct"] is None
+    assert scope["data"]["items"][0]["line_pct"] is not None
+    assert scope["summary"]["analysis_complete"] is False
+    assert scope["warnings"]
     assert functional["ok"] is True, json.dumps(functional, ensure_ascii=False, indent=2)
     assert functional["data"]["items"]
-    assert all(row["coverable"] == 0 for row in functional["data"]["items"])
-    assert all(row["coverage_pct"] is None for row in functional["data"]["items"])
+    rows = {row["covergroup"].split("::")[-1]: row for row in functional["data"]["items"]}
+    # The instance option is zero weight, but its TYPE point has weight one.
+    assert rows["zero_weight_cg"]["coverage_pct"] == 50.0
+    assert (rows["zero_weight_cg"]["covered"], rows["zero_weight_cg"]["coverable"]) == (1, 2)
+    for name in ("all_ignored_cg", "empty_cg"):
+        assert rows[name]["coverable"] is rows[name]["coverage_pct"] is None
+    assert functional["summary"]["analysis_complete"] is False
+    assert functional["warnings"]
 
 
 def test_line_zero_over_n_expands_one_gap_per_coverage_object(
@@ -137,27 +146,35 @@ def test_line_zero_over_n_expands_one_gap_per_coverage_object(
 
 
 def test_navigation_renders_real_null_percentage_for_selected_and_child(
-    xverif_fixture: Any, tmp_path: Path,
+    xverif_fixture: Any, tmp_path: Path, monkeypatch: Any,
 ) -> None:
+    import os
     from xcov.code_export import navigation_payload, render_navigation_xout
 
-    resources = xverif_fixture("xcov.zero_coverable")
-    with _opened(resources / "zero_coverable.vdb", tmp_path, "edge-navigation") as (_, session):
-        real_zero = session.backend.scope_metrics()[ZERO_SCOPE]["functional"]
+    # Obtain an actual empty code metric; an empty functional TYPE no longer
+    # establishes zero bins and cannot stand in for an empty FSM metric.
+    resources = xverif_fixture("xcov.modinfo_edge_layouts")
+    monkeypatch.setattr(os, "environ", os.environ.copy())
+    monkeypatch.setenv("XVERIF_XCOV_EXPORT_ROOTS", str(tmp_path))
+    with _opened(resources / "edge_cases.vdb", tmp_path, "edge-navigation") as (dispatcher, session):
+        _, directory = _export(
+            dispatcher, session.session_id, tmp_path, BARE_SCOPE, ["fsm"], "navigation-fsm",
+        )
+        real_zero = _metric_payload(directory, "fsm")["coverage"]
     assert real_zero == {
-        "covered": 0, "coverable": 0, "missing": 0, "excluded": 0, "pct": None,
+        "covered": 0, "coverable": 0, "missing": 0, "pct": None,
     }
     selected_text = render_navigation_xout(
-        navigation_payload(ZERO_SCOPE, {ZERO_SCOPE: {"fsm": real_zero}}, [])
+        navigation_payload(BARE_SCOPE, {BARE_SCOPE: {"fsm": real_zero}}, [])
     )
     parent_text = render_navigation_xout(navigation_payload(
         "route_matrix",
-        {"route_matrix": {}, ZERO_SCOPE: {"fsm": real_zero}},
-        [ZERO_SCOPE],
+        {"route_matrix": {}, BARE_SCOPE: {"fsm": real_zero}},
+        [BARE_SCOPE],
     ))
     expected = "fsm: covered=0 coverable=0 missing=0 pct=null"
     assert expected in selected_text
-    assert ZERO_SCOPE in parent_text and expected in parent_text
+    assert BARE_SCOPE in parent_text and expected in parent_text
 
 
 def test_condition_number_term_layout_is_parsed_completely(

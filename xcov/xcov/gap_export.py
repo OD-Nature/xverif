@@ -110,7 +110,7 @@ def _parse_assert_gaps(text: str) -> List[Json]:
             raise XcovError(
                 "URG_DETAIL_PARSE_INCOMPLETE", "assertion gap count does not match URG summary",
                 metric="assert", category=category,
-                expected=int(expected.group(1)), parsed=len(category_rows),
+                expected_count=int(expected.group(1)), parsed=len(category_rows),
             )
         rows.extend(category_rows)
     return rows
@@ -179,6 +179,13 @@ def _parse_functional_gaps(text: str) -> List[Json]:
                     continue
                 if set(stripped) <= {"-", " "}:
                     break
+                if (summary.group(1) == "Cross"
+                        and stripped == f"User Defined Cross Bins for {object_name}"):
+                    # URG appends a separate user-bin table here, including
+                    # Excluded/Illegal bins that are not coverage gaps. The
+                    # summary total below still rejects any missing gap rows,
+                    # including uncovered user bins not present in this table.
+                    break
                 fields = stripped.split()
                 bin_parts = fields[:-numeric_columns]
                 bin_count = 1
@@ -214,7 +221,7 @@ def _parse_functional_gaps(text: str) -> List[Json]:
             if expected is not None and object_rows != expected:
                 raise XcovError(
                     "URG_DETAIL_PARSE_INCOMPLETE", "functional gap count does not match URG summary",
-                    metric="functional", object=object_name, expected=expected, parsed=object_rows,
+                    metric="functional", object=object_name, expected_count=expected, parsed=object_rows,
                 )
     # URG may emit both covergroup-type and group-instance views of the same
     # semantic bin. Preserve distinct scopes but remove exact duplicate views.

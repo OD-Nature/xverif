@@ -1,5 +1,33 @@
 version: xverif-fixture-registry.v1
 fixtures:
+  - id: xcov.functional_scores
+    build_capabilities: [make, vcs, npi]
+    source_dir: xcov/fixtures/functional_scores
+    inputs: [Makefile, functional_scores.sv]
+    builder:
+      argv: [make, fixture, "RUN_DIR={resources}"]
+      cwd: "{source}"
+      timeout_sec: 1200
+    outputs:
+      - {name: vdb, path: functional_scores.vdb, kind: dir}
+    probes:
+      - argv: [python3, "{repo}/testinfra/leaf/probe_fixture.py", --resources, "{resources}", --text-glob, functional_scores.vdb/.vdb_version]
+    tool_env: [VCS_HOME, VERDI_HOME]
+
+  - id: xcov.no_functional
+    build_capabilities: [make, vcs, npi]
+    source_dir: xcov/fixtures/no_functional
+    inputs: [Makefile, design.sv]
+    builder:
+      argv: [make, fixture, "RUN_DIR={resources}"]
+      cwd: "{source}"
+      timeout_sec: 1200
+    outputs:
+      - {name: vdb, path: no_functional.vdb, kind: dir}
+    probes:
+      - argv: [python3, "{repo}/testinfra/leaf/probe_fixture.py", --resources, "{resources}", --text-glob, no_functional.vdb/.vdb_version]
+    tool_env: [VCS_HOME, VERDI_HOME]
+
   - id: xcov.exclusion
     build_capabilities: [make, vcs, npi]
     source_dir: xcov/fixtures/exclusion

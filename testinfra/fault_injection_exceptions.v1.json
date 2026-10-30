@@ -7,6 +7,14 @@
     "xverif_mcp/tests/test_xdebug_session_action_guard.py": "非法 session/action 组合的拒绝路径故障注入"
   },
   "test_exceptions": {
+    "xcov/tests/test_urg_boundaries.py::test_code_only_cache_tracks_exact_artifacts_and_rebuilds_tampering": "缓存构建与篡改故障注入，验证合法可选报告与强制完整性检查",
+    "xcov/tests/test_urg_boundaries.py::test_version_probe_uses_full64_and_caches_success": "替换版本进程以验证 full64 参数与成功结果缓存，不启动厂商程序",
+    "xcov/tests/test_urg_boundaries.py::test_version_failure_preserves_exit_status_and_missing_markers": "版本查询非零退出和缺标识故障注入，验证原始诊断合同",
+    "xcov/tests/test_urg_boundaries.py::test_version_probe_exceptions_are_diagnostic_and_schema_valid": "版本进程启动失败及超时故障注入",
+    "xcov/tests/test_urg_boundaries.py::test_version_diagnostics_are_bounded_and_redact_credentials": "模拟敏感版本输出，验证诊断限长与脱敏",
+    "xcov/tests/test_xcov.py::test_diagnostic_filesystem_failure_never_masks_original_error": "诊断目录 rename/stat 权限错误故障注入，验证不覆盖原始解析错误",
+    "xcov/tests/test_xcov.py::test_export_parse_errors_survive_stdio_and_retain_report": "注入残缺 URG 报告，验证原始解析错误经 stdio/schema 保留且失败原文不丢失",
+    "xcov/tests/test_xcov.py::test_code_export_parse_failure_retains_raw_report": "注入不支持的 code report，验证失败报告保留且不发布成功 bundle",
     "xcov/tests/test_xcov.py::test_unresolved_export_gap_returns_schema_valid_error": "故障注入 NPI 未解析出排除目标，验证原始错误保留且响应符合 schema",
     "xcov/tests/test_npi_worker.py::test_worker_failure_reaps_child_without_restarting": "独立 NPI worker 启动、请求、关闭超时与崩溃故障注入，验证回收且不重启",
     "xcov/tests/test_urg_backend.py::test_npi_worker_exits_when_owner_is_killed": "杀死本测试创建的 owner，验证已初始化真实 NPI 的 worker 仍响应 parent-death 信号退出",

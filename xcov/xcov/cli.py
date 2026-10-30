@@ -128,7 +128,7 @@ def stdio_loop(dispatcher: Dispatcher) -> int:
                 }, separators=(",", ":")) + "\n")
                 log_transport_event(sid, "stdio.quit", True, {"request_id": rid})
                 return 0
-            rsp = dispatcher.dispatch(req)
+            rsp = dispatcher.dispatch(req, stdio=True)
         except XcovError as exc:
             raw_request_id = req.get("request_id")
             rid = (

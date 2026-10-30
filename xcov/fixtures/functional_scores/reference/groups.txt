@@ -1,0 +1,18 @@
+Testbench Group List
+
+Total Groups Coverage Summary
+SCORE  INST SCORE WEIGHT
+ 63.19  63.50     1
+
+
+Total groups in report: 8
+-------------------------------------------------------------------------------
+SCORE  INSTANCES WEIGHT GOAL   AT LEAST PER INSTANCE AUTO BIN MAX PRINT MISSING COMMENT NAME
+--     --        1      100    1        1            64           64                    functional_scores::zero_weight_cg
+--     --        1      100    1        1            64           64                    functional_scores::empty_cg
+ 25.00  25.00    1      100    1        1            64           64                    functional_scores::goals_cg
+ 37.50  35.00    1      100    1        1            64           64                    functional_scores::cross_goals_cg
+ 50.00 --        1      100    1        0            64           64                    functional_scores::type_only_cg
+ 66.67  75.00    1      100    1        1            64           64                    functional_scores::weighted_cg
+100.00  87.50    1      100    1        1            64           64                    functional_scores::instances::cg
+100.00  50.00    1      100    1        1            64           64                    functional_scores::merged_instances::cg

@@ -72,6 +72,8 @@ description: >
    同时报告 canonical 完整性字段并保留 action-specific status 与 unknowns。
 9. xcov exclusion 任务严格遵循“可选加载 exclusion、查询摘要、导出具体缺口、补激励或带
    reason 排除、复查、先导出 CSV 再导出 EL、最后关闭 session”的流程；详见 xcov reference。
+   功能分数与 bin 计数分开解释；摘要看子树、code 明细只看显式选择的实例。解析失败先保留
+   diagnostic_path 的原始报告，不能把摘要成功当作明细完整。多 VDB 须显式合并后再查询。
 
 ## 禁止事项
 

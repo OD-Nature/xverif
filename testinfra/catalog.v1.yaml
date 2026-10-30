@@ -103,10 +103,42 @@ suites:
         - xcov/tests/test_npi_worker.py
         - xcov/tests/test_urg_summary.py
         - xcov/tests/test_xcov.py
+        - xcov/tests/test_branch_warning.py
+        - xcov/tests/test_urg_boundaries.py
+        - xcov/tests/test_functional_scores.py
+        - xcov/tests/test_functional_gaps.py
     capabilities: [child_process]
     hermetic: false
     deterministic: true
     cost: {class: fast, estimate_sec: 3}
+
+  - id: xcov.functional_scores
+    owner: xcov
+    level: system
+    intent: [contract, semantics]
+    domains: [coverage]
+    runner: {kind: pytest, path: xcov/tests/test_functional_scores_real.py}
+    fixtures: [xcov.functional_scores]
+    capabilities: [child_process, npi]
+    hermetic: false
+    deterministic: true
+    gates: [regression, nightly]
+    cost: {class: medium, estimate_sec: 30}
+    timeouts: {execute_sec: 300, cleanup_sec: 20}
+
+  - id: xcov.urg_boundaries
+    owner: xcov
+    level: system
+    intent: [contract, semantics]
+    domains: [coverage]
+    runner: {kind: pytest, path: xcov/tests/test_urg_boundaries_real.py}
+    fixtures: [xcov.no_functional]
+    capabilities: [child_process, npi]
+    hermetic: false
+    deterministic: true
+    gates: [regression, nightly]
+    cost: {class: medium, estimate_sec: 30}
+    timeouts: {execute_sec: 300, cleanup_sec: 20}
 
   - id: xcov.exclusion_npi
     owner: xcov

@@ -51,6 +51,9 @@ REQUIRED_ARTIFACTS = (
     "groups.txt",
     "asserts.txt",
 )
+# URG omits these reports when the validated XML contains no corresponding
+# metric or typed objects. All present artifacts still require strict checks.
+CONDITIONAL_ARTIFACTS = {"groups.txt", "asserts.txt"}
 
 
 @dataclass(frozen=True)
@@ -64,6 +67,7 @@ class UrgSummaryIndex:
     xml_instances: Tuple[str, ...] = ()
     xml_instance_parent: Dict[str, Optional[str]] = field(default_factory=dict)
     xml_instance_children: Dict[str, Tuple[str, ...]] = field(default_factory=dict)
+    required_metric_artifacts: Tuple[str, ...] = ()
 
     @property
     def top_scopes(self) -> Tuple[Json, ...]:
@@ -89,7 +93,7 @@ class UrgSummaryIndex:
         return tuple(result)
 
 
-def validate_summary_artifacts(report_dir: str | Path) -> Dict[str, Path]:
+def _summary_artifact_paths(report_dir: str | Path) -> Dict[str, Path]:
     root = Path(report_dir)
     if not root.is_dir():
         raise XcovError(
@@ -100,7 +104,11 @@ def validate_summary_artifacts(report_dir: str | Path) -> Dict[str, Path]:
     paths = {name: root / name for name in REQUIRED_ARTIFACTS}
     missing = [
         name for name, path in paths.items()
-        if not path.is_file() or path.is_symlink()
+        if (
+            path.is_symlink()
+            or (path.exists() and not path.is_file())
+            or (not path.exists() and name not in CONDITIONAL_ARTIFACTS)
+        )
     ]
     empty = [
         name for name, path in paths.items()
@@ -114,6 +122,7 @@ def validate_summary_artifacts(report_dir: str | Path) -> Dict[str, Path]:
             missing=missing,
             empty=empty,
         )
+    paths = {name: path for name, path in paths.items() if path.is_file()}
     sizes = {name: path.stat().st_size for name, path in paths.items()}
     oversized = [name for name, size in sizes.items() if size > MAX_ARTIFACT_BYTES]
     total_size = sum(sizes.values())
@@ -128,10 +137,39 @@ def validate_summary_artifacts(report_dir: str | Path) -> Dict[str, Path]:
     return paths
 
 
+def _validate_metric_artifacts(paths: Dict[str, Path], index: UrgSummaryIndex) -> None:
+    needed = {
+        "groups.txt": "groups.txt" in index.required_metric_artifacts,
+        "asserts.txt": "asserts.txt" in index.required_metric_artifacts,
+    }
+    missing = [name for name, required in needed.items() if required and name not in paths]
+    if missing:
+        raise XcovError(
+            "URG_SUMMARY_INCOMPLETE",
+            "URG summary report is missing artifacts required by its XML coverage data",
+            report_dir=str(paths["session.xml"].parent),
+            missing=missing,
+            empty=[],
+        )
+
+
+def validate_summary_artifacts(
+    report_dir: str | Path, *, index: UrgSummaryIndex | None = None,
+) -> Dict[str, Path]:
+    paths = _summary_artifact_paths(report_dir)
+    if CONDITIONAL_ARTIFACTS - paths.keys():
+        if index is None:
+            index = _parse_xml(paths["session.xml"], _parse_tests(paths["tests.txt"]))
+        _validate_metric_artifacts(paths, index)
+    return paths
+
+
 def parse_urg_summary(report_dir: str | Path) -> UrgSummaryIndex:
-    paths = validate_summary_artifacts(report_dir)
+    paths = _summary_artifact_paths(report_dir)
     tests = _parse_tests(paths["tests.txt"])
-    return _parse_xml(paths["session.xml"], tests)
+    index = _parse_xml(paths["session.xml"], tests)
+    _validate_metric_artifacts(paths, index)
+    return index
 
 
 def _parse_tests(path: Path) -> Tuple[str, ...]:
@@ -181,6 +219,8 @@ def _parse_xml(xml_path: Path, tests: Tuple[str, ...]) -> UrgSummaryIndex:
     assertion_rows: List[Json] = []
     stack: List[Json] = []
     saw_old_coverage = False
+    empty_groups = False
+    required_metric_artifacts: set[str] = set()
 
     try:
         events = ET.iterparse(xml_path, events=("start", "end"))
@@ -190,15 +230,27 @@ def _parse_xml(xml_path: Path, tests: Tuple[str, ...]) -> UrgSummaryIndex:
                     saw_old_coverage = True
                 elif elem.tag == "scope":
                     stack.append(_scope_context(elem, stack))
+                    if stack[-1]["type"] in FUNCTIONAL_TYPES:
+                        required_metric_artifacts.add("groups.txt")
+                    elif stack[-1]["type"] in {"Assertion", "Cover Property"}:
+                        required_metric_artifacts.add("asserts.txt")
                 continue
 
             if elem.tag == "metdef" and elem.get("builtin") == "1":
                 name = _required_attr(elem, "name", xml_path)
                 if name not in metric_names:
                     metric_names.append(name)
+                if name in {"Group", "Point", "Cross"}:
+                    required_metric_artifacts.add("groups.txt")
+                elif name == "Assert":
+                    required_metric_artifacts.add("asserts.txt")
             elif elem.tag == "metric" and stack:
                 name = _required_attr(elem, "name", xml_path)
                 stack[-1]["metrics"][name] = _ratio(elem, xml_path)
+                if name in {"Group", "Point", "Cross"}:
+                    required_metric_artifacts.add("groups.txt")
+                elif name == "Assert":
+                    required_metric_artifacts.add("asserts.txt")
             elif elem.tag == "attr" and stack:
                 name = elem.get("type") or elem.get("name")
                 if not name:
@@ -208,13 +260,21 @@ def _parse_xml(xml_path: Path, tests: Tuple[str, ...]) -> UrgSummaryIndex:
                 if not stack:
                     raise _xml_error(xml_path, "scope stack underflow")
                 ctx = stack.pop()
-                _finish_scope(
-                    ctx,
-                    scope_rows,
-                    functional_rows,
-                    assertion_rows,
-                    xml_path,
-                )
+                if ctx["type"] == "Groups" and (ctx["attrs"] or ctx["metrics"]):
+                    required_metric_artifacts.add("groups.txt")
+                # A genuine code-only URG report retains a completely empty
+                # Groups container. Defer acceptance until the whole XML proves
+                # there is no Group metric or functional coverage elsewhere.
+                if ctx["type"] == "Groups" and len(elem) == 0 and not ctx["attrs"] and not ctx["metrics"]:
+                    empty_groups = True
+                else:
+                    _finish_scope(
+                        ctx,
+                        scope_rows,
+                        functional_rows,
+                        assertion_rows,
+                        xml_path,
+                    )
                 enforce_count("urg_ir_scopes", len(scope_rows), MAX_IR_SCOPES)
                 enforce_count(
                     "urg_typed_rows",
@@ -238,6 +298,8 @@ def _parse_xml(xml_path: Path, tests: Tuple[str, ...]) -> UrgSummaryIndex:
         raise _xml_error(xml_path, "session.xml contains no instance scopes")
     if not metric_names:
         raise _xml_error(xml_path, "session.xml contains no builtin metric definitions")
+    if empty_groups and "groups.txt" in required_metric_artifacts:
+        raise _xml_error(xml_path, "Groups scope is missing Group Summary")
 
     xml_instances = tuple(sorted(scope_rows))
     xml_instance_parent = {
@@ -284,6 +346,7 @@ def _parse_xml(xml_path: Path, tests: Tuple[str, ...]) -> UrgSummaryIndex:
         xml_instances=xml_instances,
         xml_instance_parent=xml_instance_parent,
         xml_instance_children=xml_instance_children,
+        required_metric_artifacts=tuple(sorted(required_metric_artifacts)),
     )
 
 
@@ -415,11 +478,17 @@ def _functional_row(ctx: Json, xml_path: Path) -> Optional[Json]:
         return None
     ratio = ctx["metrics"].get(metric_name)
     if ratio is None:
-        if ctx.get("group_instance_summary") == "0/0":
+        if scope_type in {"Covergroup Variant", "Coverage Instance"} and not ctx["attrs"] and not ctx["metrics"]:
+            # URG omits all TYPE metadata both for empty groups and for groups
+            # whose points all have weight zero. Those cases have different
+            # bin counts, so this XML cannot establish even a zero denominator.
+            # An empty INSTANCE also occurs under a fully scored TYPE when its
+            # option.weight differs from type_option.weight. It supplies no
+            # TYPE data and must not replace that parent's score or counts.
             ratio = {
-                "covered": 0,
-                "coverable": 0,
-                "missing": 0,
+                "covered": None,
+                "coverable": None,
+                "missing": None,
                 "excluded": 0,
                 "pct": None,
             }
@@ -454,6 +523,14 @@ def _functional_row(ctx: Json, xml_path: Path) -> Optional[Json]:
         "coverable": ratio["coverable"],
         "missing": ratio["missing"],
         "coverage_pct": score_pct,
+        "analysis_complete": ratio["coverable"] is not None,
+        # Verbose URG group ratios weight bin counts, while its ordinary
+        # group SCORE weights point/cross percentages. Preserve the TYPE
+        # weights so the latter can be recovered without another URG run.
+        "weight": (
+            _nonnegative_int(ctx["attrs"]["weight"], "weight", xml_path)
+            if "weight" in ctx["attrs"] else None
+        ),
         "status": [],
         "evidence": {},
     }
@@ -496,68 +573,160 @@ def _functional_full_name(ctx: Json) -> str:
 
 
 def _select_functional_summary_rows(rows: List[Json]) -> List[Json]:
-    instance_variants = {
-        row["variant"] for row in rows
-        if row["node_kind"] == "Coverage Instance"
-    }
-    selected: List[Json] = []
+    variants: Dict[str, Json] = {}
+    children: Dict[str, List[Json]] = {}
+    instance_variants = set()
     for row in rows:
         kind = row["node_kind"]
+        variant = row.get("variant")
+        if kind != "Groups Summary" and not isinstance(variant, str):
+            raise XcovError(
+                "URG_XML_CONTRACT_ERROR", "functional row is missing its TYPE identity",
+                scope_name=str(row.get("full_name", "")),
+            )
         if kind == "Covergroup Variant":
-            if row["variant"] not in instance_variants:
-                fallback = dict(row)
-                fallback["type"] = "npiCovCovergroup"
-                selected.append(fallback)
+            if variant in variants:
+                raise XcovError(
+                    "URG_XML_CONTRACT_ERROR", "duplicate functional TYPE variant",
+                    scope_name=variant,
+                )
+            variants[variant] = row
         elif kind == "Coverage Instance":
-            selected.append(row)
-        elif kind in {"Coverage Point", "Cross Coverage"}:
-            has_instance = bool(row.get("instance"))
-            if has_instance or row["variant"] not in instance_variants:
-                selected.append(row)
+            instance_variants.add(variant)
+        elif kind in {"Coverage Point", "Cross Coverage"} and not row.get("instance"):
+            children.setdefault(variant, []).append(row)
+    missing = (instance_variants | set(children)) - set(variants)
+    if missing:
+        raise XcovError(
+            "URG_XML_CONTRACT_ERROR", "functional summary requires a TYPE variant",
+            scope_name=str(sorted(missing)[0]),
+        )
+    selected: List[Json] = []
+    for variant, raw in variants.items():
+        direct = children.get(variant, [])
+        if raw.get("analysis_complete") is False:
+            if direct:
+                raise XcovError(
+                    "URG_XML_CONTRACT_ERROR", "unscored functional TYPE has unexpected point/cross rows",
+                    scope_name=variant,
+                )
+            group = dict(raw)
+            group["type"] = "npiCovCovergroup"
+            group["score_value"] = None
+            selected.append(group)
+            continue
+        if not direct and raw["coverable"]:
+            raise XcovError(
+                "URG_XML_CONTRACT_ERROR", "functional TYPE is missing point/cross rows",
+                scope_name=variant,
+            )
+        for row in [raw, *direct]:
+            if row.get("weight") is None:
+                raise XcovError(
+                    "URG_XML_CONTRACT_ERROR", "functional TYPE weight is missing",
+                    scope_name=row["full_name"], field="weight",
+                )
+        covered = sum(row["covered"] for row in direct)
+        coverable = sum(row["coverable"] for row in direct)
+        score_value = _weighted_functional_score(direct)
+        group = dict(raw)
+        group.update({
+            "type": "npiCovCovergroup",
+            "covered": covered,
+            "coverable": coverable,
+            "missing": coverable - covered,
+            "coverage_pct": round(score_value, 4) if score_value is not None else None,
+            "score_value": score_value,
+        })
+        selected.extend([group, *direct])
     return selected
+
+
+def _weighted_functional_score(rows: Iterable[Json]) -> Optional[float]:
+    """Keep precision until publication, including the point/cross ratios.
+
+    Ordinary URG TYPE scores weight point/cross bin percentages. XML Score
+    strings have already been rounded; using them (or a rounded group score)
+    before a second aggregation can change the final displayed fourth digit.
+    """
+    weight_sum = 0
+    weighted_score = 0.0
+    for row in rows:
+        weight = row["weight"]
+        if row["coverable"] and weight > 0:
+            weight_sum += weight
+            weighted_score += (100.0 * row["covered"] / row["coverable"]) * weight
+    return weighted_score / weight_sum if weight_sum else None
 
 
 def _attach_functional_scope_metrics(
     scope_metrics: Dict[str, Json],
     rows: List[Json],
 ) -> None:
-    by_scope: Dict[str, List[float]] = {}
-    ratio_by_scope: Dict[str, List[Json]] = {}
+    # TYPE lexical scopes may be packages or named blocks, not design instances.
+    # Keep their metrics without fabricating entries in scopes/xml_instances.
+    functional_scopes = {
+        str(row["scope"])
+        for row in rows
+        if row["type"] == "npiCovCovergroup" and row.get("scope")
+    }
+    # Accumulate each TYPE once and propagate through the nearest existing
+    # ancestor, including named blocks separated by absent intermediate nodes.
+    totals = {
+        scope: {"groups": 0, "covered": 0, "coverable": 0, "weight": 0, "score": 0.0, "unknown": 0}
+        for scope in set(scope_metrics) | functional_scopes
+    }
     for row in rows:
-        if row["node_kind"] == "Groups Summary":
-            scope = str(row["scope"])
-            if scope in scope_metrics:
-                scope_metrics[scope]["functional"] = {
-                    "covered": int(row["covered"]),
-                    "coverable": int(row["coverable"]),
-                    "missing": int(row["missing"]),
-                    "excluded": 0,
-                    "pct": (
-                        float(row["coverage_pct"])
-                        if row["coverage_pct"] is not None else None
-                    ),
-                }
-            continue
         if row["type"] != "npiCovCovergroup" or not row.get("scope"):
             continue
         scope = str(row["scope"])
-        if row["coverage_pct"] is not None:
-            by_scope.setdefault(scope, []).append(float(row["coverage_pct"]))
-        ratio_by_scope.setdefault(scope, []).append(row)
-    for scope, ratios in ratio_by_scope.items():
-        if scope not in scope_metrics:
+        total = totals[scope]
+        total["groups"] += 1
+        if row.get("analysis_complete") is False:
+            total["unknown"] += 1
             continue
-        percentages = by_scope.get(scope, [])
-        covered = sum(int(row["covered"]) for row in ratios)
-        coverable = sum(int(row["coverable"]) for row in ratios)
-        scope_metrics[scope]["functional"] = {
-            "covered": covered,
-            "coverable": coverable,
-            "missing": coverable - covered,
+        total["covered"] += row["covered"]
+        total["coverable"] += row["coverable"]
+        if row["score_value"] is not None and row["weight"] > 0:
+            total["weight"] += row["weight"]
+            total["score"] += row["score_value"] * row["weight"]
+    parents: Dict[str, str] = {}
+    for scope in totals:
+        parent = scope.rpartition(".")[0]
+        while parent and parent not in totals:
+            parent = parent.rpartition(".")[0]
+        parents[scope] = parent
+    children: Dict[str, List[str]] = {}
+    pending = []
+    for scope, parent in parents.items():
+        if parent in totals:
+            children.setdefault(parent, []).append(scope)
+        else:
+            pending.append(scope)
+    order = []
+    while pending:
+        scope = pending.pop()
+        order.append(scope)
+        pending.extend(children.get(scope, []))
+    for scope in reversed(order):
+        total = totals[scope]
+        if parents[scope] in totals:
+            parent_total = totals[parents[scope]]
+            for key, value in total.items():
+                parent_total[key] += value
+        if not total["groups"]:
+            continue
+        scope_metrics.setdefault(scope, {})["functional"] = {
+            "covered": None if total["unknown"] else total["covered"],
+            "coverable": None if total["unknown"] else total["coverable"],
+            "missing": None if total["unknown"] else total["coverable"] - total["covered"],
             "excluded": 0,
+            "analysis_complete": not bool(total["unknown"]),
+            "score_sum": None if total["unknown"] else total["score"],
+            "score_weight": None if total["unknown"] else total["weight"],
             "pct": (
-                round(sum(percentages) / len(percentages), 4)
-                if percentages else None
+                round(total["score"] / total["weight"], 4)
+                if total["weight"] and not total["unknown"] else None
             ),
         }
 

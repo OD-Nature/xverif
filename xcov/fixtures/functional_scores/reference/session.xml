@@ -1,0 +1,401 @@
+<session version="1.1" release="V-2023.12-SP2">
+  <hvp>
+    <datadef>
+      <metdef name="Line" type="ratio" aggregator="average" builtin="1" />
+      <metdef name="Cond" type="ratio" aggregator="average" builtin="1" />
+      <metdef name="Toggle" type="ratio" aggregator="average" builtin="1" />
+      <metdef name="FSM" type="ratio" aggregator="average" builtin="1" />
+      <metdef name="Branch" type="ratio" aggregator="average" builtin="1" />
+      <metdef name="Group" type="ratio" aggregator="average" builtin="1" />
+    </datadef>
+  </hvp>
+  <old_coverage>
+  <scope type="instance" name="functional_scores">
+    <metric name="Line" value="27/27" excl="0" />
+    <metric name="Cond" value="4/6" excl="0" />
+    <metric name="Toggle" value="1/6" excl="0" />
+    <metric name="Branch" value="4/6" excl="0" />
+  </scope>
+  <scope type="Groups" name="top">
+    <attr type="Group Summary" value="12/25" excl="0" />
+    <attr type="Group Instance Summary" value="19/38" excl="0" />
+    <scope type="Cover Group" name="functional_scores::weighted_cg">
+      <scope type="Covergroup Variant" name="functional_scores::weighted_cg">
+        <metric name="Group" value="2/3" excl="0" />
+        <attr name="Score" value="66.6667%" />
+        <attr name="Instances" value="75%" />
+        <attr name="goal" value="100.00" />
+        <attr name="weight" value="1" />
+        <attr name="at_least" value="1" />
+        <attr name="per_instance" value="1" />
+        <attr name="detect_overlap" value="1" />
+        <attr name="auto_bin_max" value="64" />
+        <attr name="cross_num_print_missing" value="64" />
+        <scope type="Coverage Point" name="hit" >
+          <metric name="Point" value="1/1" excl="0" />
+          <attr name="Score" value="100%" />
+          <attr name="goal" value="100.00" />
+          <attr name="weight" value="2" />
+          <attr name="at_least" value="1" />
+          <attr name="detect_overlap" value="1" />
+          <attr name="auto_bin_max" value="0" />
+        </scope>
+        <scope type="Coverage Point" name="miss" >
+          <metric name="Point" value="0/1" excl="0" />
+          <attr name="Score" value="0%" />
+          <attr name="goal" value="100.00" />
+          <attr name="weight" value="1" />
+          <attr name="at_least" value="1" />
+          <attr name="detect_overlap" value="1" />
+          <attr name="auto_bin_max" value="0" />
+        </scope>
+        <scope type="Coverage Point" name="zero_weight" >
+          <metric name="Point" value="0/1" excl="0" />
+          <attr name="Score" value="0%" />
+          <attr name="goal" value="100.00" />
+          <attr name="weight" value="0" />
+          <attr name="at_least" value="1" />
+          <attr name="detect_overlap" value="1" />
+          <attr name="auto_bin_max" value="0" />
+        </scope>
+        <scope type="Coverage Instance" name="weighted" >
+          <metric name="Group" value="3/4" excl="0" />
+          <attr name="Score" value="75%" />
+          <attr name="goal" value="100.00" />
+          <attr name="weight" value="1" />
+          <attr name="at_least" value="1" />
+          <attr name="per_instance" value="1" />
+          <attr name="detect_overlap" value="0" />
+          <attr name="auto_bin_max" value="64" />
+          <attr name="cross_num_print_missing" value="64" />
+          <scope type="Coverage Point" name="hit" >
+            <metric name="Point" value="1/1" excl="0" />
+            <attr name="Score" value="100%" />
+            <attr name="goal" value="100.00" />
+            <attr name="weight" value="3" />
+            <attr name="at_least" value="1" />
+            <attr name="detect_overlap" value="0" />
+            <attr name="auto_bin_max" value="0" />
+          </scope>
+          <scope type="Coverage Point" name="miss" >
+            <metric name="Point" value="0/1" excl="0" />
+            <attr name="Score" value="0%" />
+            <attr name="goal" value="100.00" />
+            <attr name="weight" value="1" />
+            <attr name="at_least" value="1" />
+            <attr name="detect_overlap" value="0" />
+            <attr name="auto_bin_max" value="0" />
+          </scope>
+          <scope type="Coverage Point" name="zero_weight" >
+            <metric name="Point" value="0/1" excl="0" />
+            <attr name="Score" value="0%" />
+            <attr name="goal" value="100.00" />
+            <attr name="weight" value="0" />
+            <attr name="at_least" value="1" />
+            <attr name="detect_overlap" value="0" />
+            <attr name="auto_bin_max" value="0" />
+          </scope>
+        </scope>
+      </scope>
+    </scope>
+    <scope type="Cover Group" name="functional_scores::goals_cg">
+      <scope type="Covergroup Variant" name="functional_scores::goals_cg">
+        <metric name="Group" value="1/4" excl="0" />
+        <attr name="Score" value="25%" />
+        <attr name="Instances" value="25%" />
+        <attr name="goal" value="100.00" />
+        <attr name="weight" value="1" />
+        <attr name="at_least" value="1" />
+        <attr name="per_instance" value="1" />
+        <attr name="detect_overlap" value="1" />
+        <attr name="auto_bin_max" value="64" />
+        <attr name="cross_num_print_missing" value="64" />
+        <scope type="Coverage Point" name="reached" >
+          <metric name="Point" value="1/2" excl="0" />
+          <attr name="Score" value="50%" />
+          <attr name="goal" value="100.00" />
+          <attr name="weight" value="1" />
+          <attr name="at_least" value="1" />
+          <attr name="detect_overlap" value="1" />
+          <attr name="auto_bin_max" value="0" />
+        </scope>
+        <scope type="Coverage Point" name="unreached" >
+          <metric name="Point" value="0/2" excl="0" />
+          <attr name="Score" value="0%" />
+          <attr name="goal" value="100.00" />
+          <attr name="weight" value="1" />
+          <attr name="at_least" value="1" />
+          <attr name="detect_overlap" value="1" />
+          <attr name="auto_bin_max" value="0" />
+        </scope>
+        <scope type="Coverage Instance" name="goals" >
+          <metric name="Group" value="1/4" excl="0" />
+          <attr name="Score" value="25%" />
+          <attr name="goal" value="100.00" />
+          <attr name="weight" value="1" />
+          <attr name="at_least" value="1" />
+          <attr name="per_instance" value="1" />
+          <attr name="detect_overlap" value="0" />
+          <attr name="auto_bin_max" value="64" />
+          <attr name="cross_num_print_missing" value="64" />
+          <scope type="Coverage Point" name="reached" >
+            <metric name="Point" value="1/2" excl="0" />
+            <attr name="Score" value="50%" />
+            <attr name="goal" value="100.00" />
+            <attr name="weight" value="1" />
+            <attr name="at_least" value="1" />
+            <attr name="detect_overlap" value="0" />
+            <attr name="auto_bin_max" value="0" />
+          </scope>
+          <scope type="Coverage Point" name="unreached" >
+            <metric name="Point" value="0/2" excl="0" />
+            <attr name="Score" value="0%" />
+            <attr name="goal" value="100.00" />
+            <attr name="weight" value="1" />
+            <attr name="at_least" value="1" />
+            <attr name="detect_overlap" value="0" />
+            <attr name="auto_bin_max" value="0" />
+          </scope>
+        </scope>
+      </scope>
+    </scope>
+    <scope type="Cover Group" name="functional_scores::cross_goals_cg">
+      <scope type="Covergroup Variant" name="functional_scores::cross_goals_cg">
+        <metric name="Group" value="4/12" excl="0" />
+        <attr name="Score" value="33.3333%" />
+        <attr name="Instances" value="31.25%" />
+        <attr name="goal" value="100.00" />
+        <attr name="weight" value="1" />
+        <attr name="at_least" value="1" />
+        <attr name="per_instance" value="1" />
+        <attr name="detect_overlap" value="1" />
+        <attr name="auto_bin_max" value="64" />
+        <attr name="cross_num_print_missing" value="64" />
+        <scope type="Coverage Point" name="left" >
+          <metric name="Point" value="1/2" excl="0" />
+          <attr name="Score" value="50%" />
+          <attr name="goal" value="100.00" />
+          <attr name="weight" value="1" />
+          <attr name="at_least" value="1" />
+          <attr name="detect_overlap" value="1" />
+          <attr name="auto_bin_max" value="0" />
+        </scope>
+        <scope type="Coverage Point" name="right" >
+          <metric name="Point" value="1/2" excl="0" />
+          <attr name="Score" value="50%" />
+          <attr name="goal" value="100.00" />
+          <attr name="weight" value="1" />
+          <attr name="at_least" value="1" />
+          <attr name="detect_overlap" value="1" />
+          <attr name="auto_bin_max" value="0" />
+        </scope>
+        <scope type="Cross Coverage" name="pair" >
+          <metric name="Cross" value="1/4" excl="0" />
+          <attr name="Score" value="25%" />
+          <attr name="goal" value="100.00" />
+          <attr name="weight" value="2" />
+          <attr name="at_least" value="1" />
+          <attr name="cross_num_print_missing" value="0" />
+        </scope>
+        <scope type="Coverage Instance" name="cross_goals" >
+          <metric name="Group" value="5/16" excl="0" />
+          <attr name="Score" value="31.25%" />
+          <attr name="goal" value="100.00" />
+          <attr name="weight" value="1" />
+          <attr name="at_least" value="1" />
+          <attr name="per_instance" value="1" />
+          <attr name="detect_overlap" value="0" />
+          <attr name="auto_bin_max" value="64" />
+          <attr name="cross_num_print_missing" value="64" />
+          <scope type="Coverage Point" name="left" >
+            <metric name="Point" value="1/2" excl="0" />
+            <attr name="Score" value="50%" />
+            <attr name="goal" value="100.00" />
+            <attr name="weight" value="1" />
+            <attr name="at_least" value="1" />
+            <attr name="detect_overlap" value="0" />
+            <attr name="auto_bin_max" value="0" />
+          </scope>
+          <scope type="Coverage Point" name="right" >
+            <metric name="Point" value="1/2" excl="0" />
+            <attr name="Score" value="50%" />
+            <attr name="goal" value="100.00" />
+            <attr name="weight" value="1" />
+            <attr name="at_least" value="1" />
+            <attr name="detect_overlap" value="0" />
+            <attr name="auto_bin_max" value="0" />
+          </scope>
+          <scope type="Cross Coverage" name="pair" >
+            <metric name="Cross" value="1/4" excl="0" />
+            <attr name="Score" value="25%" />
+            <attr name="goal" value="100.00" />
+            <attr name="weight" value="3" />
+            <attr name="at_least" value="1" />
+            <attr name="cross_num_print_missing" value="0" />
+          </scope>
+        </scope>
+      </scope>
+    </scope>
+    <scope type="Cover Group" name="functional_scores::type_only_cg">
+      <scope type="Covergroup Variant" name="functional_scores::type_only_cg">
+        <metric name="Group" value="1/2" excl="0" />
+        <attr name="Score" value="50%" />
+        <attr name="goal" value="100.00" />
+        <attr name="weight" value="1" />
+        <attr name="at_least" value="1" />
+        <attr name="per_instance" value="0" />
+        <attr name="detect_overlap" value="1" />
+        <attr name="auto_bin_max" value="64" />
+        <attr name="cross_num_print_missing" value="64" />
+        <scope type="Coverage Point" name="cp" >
+          <metric name="Point" value="1/2" excl="0" />
+          <attr name="Score" value="50%" />
+          <attr name="goal" value="100.00" />
+          <attr name="weight" value="1" />
+          <attr name="at_least" value="1" />
+          <attr name="detect_overlap" value="1" />
+          <attr name="auto_bin_max" value="0" />
+        </scope>
+      </scope>
+    </scope>
+    <scope type="Cover Group" name="functional_scores::zero_weight_cg">
+      <scope type="Covergroup Variant" name="functional_scores::zero_weight_cg">
+      </scope>
+    </scope>
+    <scope type="Cover Group" name="functional_scores::empty_cg">
+      <scope type="Covergroup Variant" name="functional_scores::empty_cg">
+      </scope>
+    </scope>
+    <scope type="Cover Group" name="functional_scores::instances::cg">
+      <scope type="Covergroup Variant" name="functional_scores::instances::cg">
+        <metric name="Group" value="2/2" excl="0" />
+        <attr name="Score" value="100%" />
+        <attr name="Instances" value="87.5%" />
+        <attr name="goal" value="100.00" />
+        <attr name="weight" value="1" />
+        <attr name="at_least" value="1" />
+        <attr name="per_instance" value="1" />
+        <attr name="detect_overlap" value="1" />
+        <attr name="auto_bin_max" value="64" />
+        <attr name="cross_num_print_missing" value="64" />
+        <scope type="Coverage Point" name="cp" >
+          <metric name="Point" value="2/2" excl="0" />
+          <attr name="Score" value="100%" />
+          <attr name="goal" value="100.00" />
+          <attr name="weight" value="1" />
+          <attr name="at_least" value="1" />
+          <attr name="detect_overlap" value="1" />
+          <attr name="auto_bin_max" value="0" />
+        </scope>
+        <scope type="Coverage Instance" name="second" >
+          <metric name="Group" value="1/2" excl="0" />
+          <attr name="Score" value="50%" />
+          <attr name="goal" value="100.00" />
+          <attr name="weight" value="1" />
+          <attr name="at_least" value="1" />
+          <attr name="per_instance" value="1" />
+          <attr name="detect_overlap" value="0" />
+          <attr name="auto_bin_max" value="64" />
+          <attr name="cross_num_print_missing" value="64" />
+          <scope type="Coverage Point" name="cp" >
+            <metric name="Point" value="1/2" excl="0" />
+            <attr name="Score" value="50%" />
+            <attr name="goal" value="100.00" />
+            <attr name="weight" value="1" />
+            <attr name="at_least" value="1" />
+            <attr name="detect_overlap" value="0" />
+            <attr name="auto_bin_max" value="0" />
+          </scope>
+        </scope>
+        <scope type="Coverage Instance" name="first" >
+          <metric name="Group" value="2/2" excl="0" />
+          <attr name="Score" value="100%" />
+          <attr name="goal" value="100.00" />
+          <attr name="weight" value="3" />
+          <attr name="at_least" value="1" />
+          <attr name="per_instance" value="1" />
+          <attr name="detect_overlap" value="0" />
+          <attr name="auto_bin_max" value="64" />
+          <attr name="cross_num_print_missing" value="64" />
+          <scope type="Coverage Point" name="cp" >
+            <metric name="Point" value="2/2" excl="0" />
+            <attr name="Score" value="100%" />
+            <attr name="goal" value="100.00" />
+            <attr name="weight" value="1" />
+            <attr name="at_least" value="1" />
+            <attr name="detect_overlap" value="0" />
+            <attr name="auto_bin_max" value="0" />
+          </scope>
+        </scope>
+      </scope>
+    </scope>
+    <scope type="Cover Group" name="functional_scores::merged_instances::cg">
+      <scope type="Covergroup Variant" name="functional_scores::merged_instances::cg">
+        <metric name="Group" value="2/2" excl="0" />
+        <attr name="Score" value="100%" />
+        <attr name="Instances" value="50%" />
+        <attr name="goal" value="100.00" />
+        <attr name="weight" value="1" />
+        <attr name="at_least" value="1" />
+        <attr name="per_instance" value="1" />
+        <attr name="detect_overlap" value="1" />
+        <attr name="auto_bin_max" value="64" />
+        <attr name="cross_num_print_missing" value="64" />
+        <scope type="Coverage Point" name="cp" >
+          <metric name="Point" value="2/2" excl="0" />
+          <attr name="Score" value="100%" />
+          <attr name="goal" value="100.00" />
+          <attr name="weight" value="1" />
+          <attr name="at_least" value="1" />
+          <attr name="detect_overlap" value="1" />
+          <attr name="auto_bin_max" value="0" />
+        </scope>
+        <scope type="Coverage Instance" name="merged_second" >
+          <metric name="Group" value="1/2" excl="0" />
+          <attr name="Score" value="50%" />
+          <attr name="goal" value="100.00" />
+          <attr name="weight" value="1" />
+          <attr name="at_least" value="1" />
+          <attr name="per_instance" value="1" />
+          <attr name="detect_overlap" value="0" />
+          <attr name="auto_bin_max" value="64" />
+          <attr name="cross_num_print_missing" value="64" />
+          <scope type="Coverage Point" name="cp" >
+            <metric name="Point" value="1/2" excl="0" />
+            <attr name="Score" value="50%" />
+            <attr name="goal" value="100.00" />
+            <attr name="weight" value="1" />
+            <attr name="at_least" value="1" />
+            <attr name="detect_overlap" value="0" />
+            <attr name="auto_bin_max" value="0" />
+          </scope>
+        </scope>
+        <scope type="Coverage Instance" name="merged_first" >
+          <metric name="Group" value="1/2" excl="0" />
+          <attr name="Score" value="50%" />
+          <attr name="goal" value="100.00" />
+          <attr name="weight" value="1" />
+          <attr name="at_least" value="1" />
+          <attr name="per_instance" value="1" />
+          <attr name="detect_overlap" value="0" />
+          <attr name="auto_bin_max" value="64" />
+          <attr name="cross_num_print_missing" value="64" />
+          <scope type="Coverage Point" name="cp" >
+            <metric name="Point" value="1/2" excl="0" />
+            <attr name="Score" value="50%" />
+            <attr name="goal" value="100.00" />
+            <attr name="weight" value="1" />
+            <attr name="at_least" value="1" />
+            <attr name="detect_overlap" value="0" />
+            <attr name="auto_bin_max" value="0" />
+          </scope>
+        </scope>
+      </scope>
+    </scope>
+  </scope>
+  <scope type="Asserts" name="top">
+  </scope>
+  <scope type="assert" name="Statistics">
+  </scope>
+  </old_coverage>
+</session>

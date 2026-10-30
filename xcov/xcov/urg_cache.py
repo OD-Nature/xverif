@@ -19,7 +19,6 @@ from .errors import XcovError
 from .provenance import resource_sha256
 from .urg_runner import UrgRunner
 from .urg_summary import (
-    REQUIRED_ARTIFACTS,
     UrgSummaryIndex,
     parse_urg_summary,
     validate_summary_artifacts,
@@ -28,7 +27,7 @@ from .urg_summary import (
 Json = Dict[str, Any]
 
 CACHE_SCHEMA_VERSION = "xcov.urg-summary-cache.v1"
-PARSER_SCHEMA_VERSION = "xcov.urg-summary-ir.v1"
+PARSER_SCHEMA_VERSION = "xcov.urg-summary-ir.v2"
 CACHE_CAPACITY_CONTRACT = "best_effort_soft_admission"
 FIXED_SUMMARY_OPTIONS = (
     "-xml_verbose", "-format", "text", "-show", "summary",
@@ -37,6 +36,12 @@ DEFAULT_MAX_BYTES = 20 * 1024 * 1024 * 1024
 DEFAULT_MAX_ENTRIES = 128
 ABANDONED_STAGING_SECONDS = 24 * 60 * 60
 KEY_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+VERSION_DIAGNOSTIC_MAX_CHARS = 2048
+_SENSITIVE_DIAGNOSTIC = re.compile(
+    r"license|token|secret|password|passwd|cookie|credential|authorization|"
+    r"bearer|api[_-]?key|\b\d+@[\w.-]+",
+    re.IGNORECASE,
+)
 
 
 def default_cache_root() -> Path:
@@ -54,12 +59,31 @@ def _file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _version_diagnostic_tail(output: str | bytes | None) -> str:
+    """Bound failed-tool diagnostics without publishing credential lines."""
+    if isinstance(output, bytes):
+        output = output.decode("utf-8", errors="replace")
+    text = output or ""
+    for name, value in os.environ.items():
+        if value and _SENSITIVE_DIAGNOSTIC.search(name):
+            text = text.replace(value, "<redacted>")
+            # License variables can contain multiple files/server endpoints.
+            for component in re.split(r"[:;]", value):
+                if len(component) >= 4:
+                    text = text.replace(component, "<redacted>")
+    lines = [
+        "<redacted: sensitive diagnostic>" if _SENSITIVE_DIAGNOSTIC.search(line) else line
+        for line in text.splitlines()
+    ]
+    return "\n".join(lines)[-VERSION_DIAGNOSTIC_MAX_CHARS:]
+
+
 @functools.lru_cache(maxsize=8)
 def _probe_urg(path_text: str, size_bytes: int, mtime_ns: int) -> Json:
     path = Path(path_text)
     try:
         completed = subprocess.run(
-            [path_text, "-version"],
+            [path_text, "-full64", "-version"],
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -68,9 +92,20 @@ def _probe_urg(path_text: str, size_bytes: int, mtime_ns: int) -> Json:
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
+        detail: Json = {
+            "operation": "urg.version",
+            "path": path_text,
+            "cause_type": type(exc).__name__,
+            "cause_message": _version_diagnostic_tail(str(exc)),
+            "stdout_tail": _version_diagnostic_tail(getattr(exc, "stdout", None)),
+            "stderr_tail": _version_diagnostic_tail(getattr(exc, "stderr", None)),
+        }
+        if isinstance(exc, subprocess.TimeoutExpired):
+            detail.update(failure_kind="timeout", timeout_seconds=20.0)
         raise XcovError(
             "EDA_PROVENANCE_INVALID",
             "failed to query the configured URG version",
+            **detail,
         ) from exc
     combined = completed.stdout + completed.stderr
     version_line = next(
@@ -78,19 +113,31 @@ def _probe_urg(path_text: str, size_bytes: int, mtime_ns: int) -> Json:
         None,
     )
     covdb_line = next(
-        (line.strip() for line in combined.splitlines() if line.startswith("CovDB version:")),
+        (line.strip() for line in combined.splitlines() if line.strip().startswith("CovDB version:")),
         None,
     )
-    if completed.returncode != 0 or not version_line or not covdb_line:
+    release = version_line.split("URG Version ", 1)[1].split("Copyright", 1)[0].strip() if version_line else ""
+    covdb_version = covdb_line.split(":", 1)[1].strip() if covdb_line else ""
+    missing = [
+        marker for marker, value in (("URG Version", release), ("CovDB version", covdb_version))
+        if not value
+    ]
+    if completed.returncode != 0 or missing:
         raise XcovError(
             "EDA_PROVENANCE_INVALID",
             "configured URG did not return a canonical version response",
+            operation="urg.version",
+            path=path_text,
+            returncode=completed.returncode,
+            missing=missing,
+            stdout_tail=_version_diagnostic_tail(completed.stdout),
+            stderr_tail=_version_diagnostic_tail(completed.stderr),
+            hint="URG must accept -full64 -version and return exit status 0 with non-empty URG and CovDB versions",
         )
-    release = version_line.split("URG Version ", 1)[1].split("Copyright", 1)[0].strip()
     return {
         "path": path_text,
         "release": release,
-        "covdb_version": covdb_line.split(":", 1)[1].strip(),
+        "covdb_version": covdb_version,
         "binary_sha256": _file_sha256(path),
         "version_output_sha256": hashlib.sha256(combined.encode("utf-8")).hexdigest(),
         "size_bytes": size_bytes,
@@ -136,8 +183,8 @@ def _identity_key(identity: Json) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
-def _artifact_metadata(report: Path) -> Json:
-    paths = validate_summary_artifacts(report)
+def _artifact_metadata(report: Path, *, index: UrgSummaryIndex | None = None) -> Json:
+    paths = validate_summary_artifacts(report, index=index)
     return {
         name: {
             "size_bytes": path.stat().st_size,
@@ -188,8 +235,8 @@ def _read_valid_entry(
     ):
         return None
     try:
-        artifacts = _artifact_metadata(entry / "report")
         index = parse_urg_summary(entry / "report")
+        artifacts = _artifact_metadata(entry / "report", index=index)
     except (OSError, XcovError):
         return None
     if artifacts != manifest.get("artifacts"):
@@ -376,7 +423,7 @@ def load_cached_urg_summary(
                     urg_execution=getattr(result, "scheduler", None),
                 )
             index = parse_urg_summary(report)
-            artifacts = _artifact_metadata(report)
+            artifacts = _artifact_metadata(report, index=index)
             manifest = {
                 "schema_version": CACHE_SCHEMA_VERSION,
                 "key": key,
@@ -393,7 +440,7 @@ def load_cached_urg_summary(
             )
             os.replace(manifest_tmp, stage / "manifest.json")
             (stage / "COMPLETE").write_text(key + "\n", encoding="ascii")
-            for artifact_name in REQUIRED_ARTIFACTS:
+            for artifact_name in artifacts:
                 _fsync_file(report / artifact_name)
             _fsync_file(stage / "manifest.json")
             _fsync_file(stage / "COMPLETE")
